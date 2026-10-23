@@ -1,0 +1,12 @@
+Microsoft Visual C++ Runtime (x64)
+Copyright Microsoft Corporation. All rights reserved.
+
+These unmodified proprietary runtime DLLs are redistributed for use with
+SynthScan. They are not licensed under SynthScan's GPL or other open-source
+licenses. No Microsoft installer is run on the user's machine.
+
+The official download and SHA-256 are pinned in vc_runtime.json. The build
+extracts only x64 minimum-runtime DLLs, used app-locally by Python and the
+native application. Microsoft licensing and redistribution information:
+https://learn.microsoft.com/en-us/cpp/windows/redistributing-visual-cpp-files
+https://visualstudio.microsoft.com/license-terms/

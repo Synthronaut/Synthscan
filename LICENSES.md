@@ -33,6 +33,9 @@ are SynthScan's; credits below identify the actual sources of reused material.
 - The Windows installer is built with unmodified Inno Setup 7.1.0, by Jordan
   Russell and Martijn Laan: https://jrsoftware.org/. Its compiler is a build-only
   dependency downloaded from a pinned official release with SHA-256 verification.
+- Microsoft Visual C++ x64 runtime DLLs are bundled app-locally, under Microsoft's
+  redistribution terms. See third_party/build_tools/vc_runtime_NOTICE.txt and
+  vc_runtime.json for notices and pinned provenance.
 - Game records, descriptions, artwork and test screenshots depict or describe
   Star Citizen content belonging to Cloud Imperium Games. Local extraction
   metadata distinguishes native records from imported reference annotations.

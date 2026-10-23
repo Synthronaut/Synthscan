@@ -46,7 +46,7 @@ def stage_source(destination):
     (destination/'tests').mkdir()
     for file in (ROOT/'tests').glob('*.py'):shutil.copy2(file,destination/'tests'/file.name)
     for name in ['bedrock','starbreaker','game_artwork','presentmon']:copy_tree(ROOT/'third_party'/name,destination/'third_party'/name)
-    for name in ['opencv_download.json','zstd_source.json']:
+    for name in ['opencv_download.json','zstd_source.json','vc_runtime.json','vc_runtime_NOTICE.txt']:
         target=destination/'third_party/build_tools'/name;target.parent.mkdir(parents=True,exist_ok=True)
         shutil.copy2(ROOT/'third_party/build_tools'/name,target)
     (destination/'data').mkdir()
@@ -119,12 +119,8 @@ def package(source,destination,runtime,native):
         str(source/'native/launcher.cpp'),'/Fo'+str(obj),'/Fe'+str(destination/'SynthScan.exe'),
         '/link','/SUBSYSTEM:WINDOWS','/LIBPATH:'+str(MSVC/'lib/x64'),'user32.lib'],env=env,check=True,cwd=destination)
     obj.unlink(missing_ok=True)
-    redist=MSVC.parent.parent.parent/'Redist/MSVC'/MSVC.name/'x64/Microsoft.VC142.CRT'
-    if not redist.exists():
-        choices=list((MSVC.parent.parent.parent/'Redist/MSVC').glob('*/x64/Microsoft.VC*.CRT'))
-        if not choices:raise FileNotFoundError('MSVC redistributable runtime missing')
-        redist=sorted(choices)[-1]
-    for file in redist.glob('*.dll'):shutil.copy2(file,target/file.name)
+    from tools.fetch_vc_runtime import bundle
+    bundle(destination)
     # Integrity checks cover everything that will be distributed (not private runtime files).
     archive_package(destination)
 
