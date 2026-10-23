@@ -93,6 +93,15 @@ def status(profile=PROFILE):
                 normalized = line.replace('\\\\', '/').replace('\\', '/').casefold()
                 if 'Local Trace Config loaded' in line and expected in normalized:
                     result['trace_ready'] = True
+                # Windows hosted runners and some installs use an 8.3 TEMP
+                # alias. Compare decoded paths after resolving both spellings.
+                try:
+                    control=json.loads(line)
+                    if (isinstance(control,dict) and control.get('event')=='Local Trace Config loaded'
+                            and isinstance(control.get('path'),str)
+                            and Path(control['path']).resolve()==(profile/'trace_filter.json').resolve()):
+                        result['trace_ready']=True
+                except (ValueError,OSError):pass
                 if parse_score_candidate(line):
                     result['numeric_score_candidates'] += 1
     if result['trace_ready']:
