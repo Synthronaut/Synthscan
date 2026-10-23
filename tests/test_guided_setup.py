@@ -8,6 +8,14 @@ from setup_status import reputation_view,error_message
 from reputation_notice import NoticeGate
 
 class GuidedSetupTests(unittest.TestCase):
+    def test_game_watcher_waits_for_first_run_instead_of_reopening_the_wizard(self):
+        from native_control import setup_busy,RecoveryPolicy
+        with patch('native_control.instance_running',return_value=True),patch('setup_status.ready',return_value=False):
+            self.assertTrue(setup_busy())
+            policy=RecoveryPolicy();self.assertFalse(policy.update({1},setup_busy(),False,now=100))
+        with patch('native_control.instance_running',return_value=True),patch('setup_status.ready',return_value=True):
+            self.assertFalse(setup_busy())
+
     def test_installer_startup_choice_starts_watcher_without_waiting_for_a_reboot(self):
         from community_startup import ensure_watcher
         with patch('community_startup.owns_shortcut',return_value=True),patch('app_lifecycle.instance_running',return_value=False),patch('community_startup.subprocess.Popen') as spawn:

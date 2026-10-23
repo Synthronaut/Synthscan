@@ -64,6 +64,11 @@ def read_quit(games):
         return float(data['at']) if set(data['game_pids'])==set(games) and data['reason']=='user' else 0
     except (OSError,ValueError,KeyError,TypeError):return 0
 
+def setup_busy():
+    if not instance_running('setup'):return False
+    from setup_status import ready
+    return not ready()
+
 def watch():
     lock=SingleInstance('watcher')
     if not lock.acquired:return
@@ -74,7 +79,7 @@ def watch():
         while True:
             try:
                 games=game_process_ids();running=native_running();ready=native_ready()
-                if policy.update(games,running,ready,read_quit(games)):
+                if policy.update(games,running or setup_busy(),ready,read_quit(games)):
                     process=launch(True);logging.info('Started native SynthScan pid=%s for game pids=%s',process.pid,sorted(games))
                 if running and not ready and policy.started_at and time.time()-policy.started_at>60:
                     last_error='Native application has not reported ready. Open SynthScan manually to inspect startup.'
