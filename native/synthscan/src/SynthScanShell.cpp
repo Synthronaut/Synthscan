@@ -57,7 +57,7 @@ std::filesystem::path startupLink(){wchar_t appdata[32768];DWORD n=GetEnvironmen
 bool spawnPython(const wchar_t* script,const std::vector<std::wstring>& args,HANDLE* result=nullptr){
     Json runtime=read(SCMiner::AppPaths::program()/L"native_runtime.json");
     auto py=wide(runtime.textOr("pythonw"));if(py.empty())return false;
-    std::wstring command=quoteArg(py)+L" "+quoteArg((root/script).wstring());for(auto& s:args)command+=L" "+quoteArg(s);
+    std::wstring command=quoteArg(py)+L" -B "+quoteArg((root/script).wstring());for(auto& s:args)command+=L" "+quoteArg(s);
     STARTUPINFOW si{sizeof(si)};PROCESS_INFORMATION pi{};
     if(!CreateProcessW(py.c_str(),command.data(),nullptr,nullptr,FALSE,CREATE_NO_WINDOW|BELOW_NORMAL_PRIORITY_CLASS,nullptr,root.c_str(),&si,&pi))return false;
     CloseHandle(pi.hThread);if(job&&std::wstring(script)==L"native_bridge.py")AssignProcessToJobObject(job,pi.hProcess);
@@ -375,13 +375,13 @@ LRESULT CALLBACK mainSubclass(HWND hwnd,UINT message,WPARAM w,LPARAM l,UINT_PTR,
     if(message==WM_COMMAND&&LOWORD(w)==31817&&pirate){snareAlerts=!snareAlerts;saveSettings();modeControls();return 0;}
     if(message==WM_COMMAND&&LOWORD(w)==1017){
         if(mining&&mining->isOverlayMode()){
-            HMENU mode=CreatePopupMenu();AppendMenuW(mode,MF_STRING|((pirate||quest)?0:MF_CHECKED),10,L"Mining HUD");AppendMenuW(mode,MF_STRING|(pirate?MF_CHECKED:0),11,L"Piracy HUD");AppendMenuW(mode,MF_STRING|(quest?MF_CHECKED:0),13,L"Missions HUD");AppendMenuW(mode,MF_STRING|(placementLocked?MF_CHECKED:0),12,L"Lock HUD position (click-through)");AppendMenuW(mode,MF_SEPARATOR,0,nullptr);AppendMenuW(mode,MF_STRING,4,L"Server log & interdiction history");AppendMenuW(mode,MF_STRING,6,L"Startup & HUD settings");
-            POINT at;GetCursorPos(&at);int choice=TrackPopupMenu(mode,TPM_RETURNCMD,at.x,at.y,0,hwnd,nullptr);DestroyMenu(mode);if(choice==12)togglePlacement();if(choice==13)setMode(2);if(choice==10||choice==11)setMode(choice==11);if(choice==4)workspace(2);if(choice==6)workspace(4);return 0;
+            HMENU mode=CreatePopupMenu();AppendMenuW(mode,MF_STRING|((pirate||quest)?0:MF_CHECKED),10,L"Mining HUD");AppendMenuW(mode,MF_STRING|(pirate?MF_CHECKED:0),11,L"Piracy HUD");AppendMenuW(mode,MF_STRING|(quest?MF_CHECKED:0),13,L"Missions HUD");AppendMenuW(mode,MF_STRING|(placementLocked?MF_CHECKED:0),12,L"Lock HUD position (click-through)");AppendMenuW(mode,MF_SEPARATOR,0,nullptr);AppendMenuW(mode,MF_STRING,4,L"Server log & interdiction history");AppendMenuW(mode,MF_STRING,6,L"Startup & HUD settings");AppendMenuW(mode,MF_STRING,14,L"Setup & reputation status");
+            POINT at;GetCursorPos(&at);int choice=TrackPopupMenu(mode,TPM_RETURNCMD,at.x,at.y,0,hwnd,nullptr);DestroyMenu(mode);if(choice==12)togglePlacement();if(choice==13)setMode(2);if(choice==10||choice==11)setMode(choice==11);if(choice==4)workspace(2);if(choice==6)workspace(4);if(choice==14)spawnPython(L"app_launcher.py",{L"--status"});return 0;
         }
-        HMENU menu=CreatePopupMenu();AppendMenuW(menu,MF_STRING,1,L"Keyboard shortcuts");AppendMenuW(menu,MF_STRING,2,L"Game library & artwork");AppendMenuW(menu,MF_STRING,3,L"Material picker");AppendMenuW(menu,MF_STRING,4,L"Server log");AppendMenuW(menu,MF_STRING,5,L"Review imported records");AppendMenuW(menu,MF_STRING,6,L"Startup & HUD settings");AppendMenuW(menu,MF_STRING,7,L"Show / hide HUD");AppendMenuW(menu,MF_STRING,8,L"Mining diary & personal records");AppendMenuW(menu,MF_STRING,9,L"Rock bookmarks & return test");
+        HMENU menu=CreatePopupMenu();AppendMenuW(menu,MF_STRING,1,L"Keyboard shortcuts");AppendMenuW(menu,MF_STRING,2,L"Game library & artwork");AppendMenuW(menu,MF_STRING,3,L"Material picker");AppendMenuW(menu,MF_STRING,4,L"Server log");AppendMenuW(menu,MF_STRING,5,L"Review imported records");AppendMenuW(menu,MF_STRING,6,L"Startup & HUD settings");AppendMenuW(menu,MF_STRING,7,L"Show / hide HUD");AppendMenuW(menu,MF_STRING,8,L"Mining diary & personal records");AppendMenuW(menu,MF_STRING,9,L"Rock bookmarks & return test");AppendMenuW(menu,MF_STRING,14,L"Setup & reputation status");
         AppendMenuW(menu,MF_SEPARATOR,0,nullptr);AppendMenuW(menu,MF_STRING|((pirate||quest)?0:MF_CHECKED),10,L"HUD mode: Mining");AppendMenuW(menu,MF_STRING|(pirate?MF_CHECKED:0),11,L"HUD mode: Piracy");
         AppendMenuW(menu,MF_STRING|(quest?MF_CHECKED:0),13,L"HUD mode: Missions");AppendMenuW(menu,MF_STRING|(placementLocked?MF_CHECKED:0),12,L"Lock HUD position (click-through)");POINT at;GetCursorPos(&at);int choice=TrackPopupMenu(menu,TPM_RETURNCMD,at.x,at.y,0,hwnd,nullptr);DestroyMenu(menu);
-        if(choice==12){togglePlacement();return 0;}
+        if(choice==14){spawnPython(L"app_launcher.py",{L"--status"});return 0;}if(choice==12){togglePlacement();return 0;}
         if(choice==13){setMode(2);return 0;}if(choice==10||choice==11){setMode(choice==11);return 0;}
         if(choice==1)return DefSubclassProc(hwnd,message,w,l);if(choice>=2&&choice<=6)workspace(choice-2);if(choice==7)showHud(!hudVisible);if(choice==8)SynthScanDiary::open();if(choice==9)SynthScanNav::open();return 0;
     }

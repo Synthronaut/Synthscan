@@ -25,6 +25,10 @@ crash upload, or automatic sharing service in this release.
 - Optional Windows timing/network diagnostics may request administrator access.
   Normal setup, reputation, game-log monitoring and OCR do not require it.
 
+The optional game-text permission repair grants your Windows identity modify
+access only to the English localization folder and user.cfg. It does not grant
+access to game executables or read account credentials.
+
 Local profile files are ordinary files protected by your Windows account's file
 permissions, not separately encrypted. People using the same Windows account,
 administrators, backups and malware may access those files. Use separate Windows

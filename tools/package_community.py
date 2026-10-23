@@ -13,7 +13,7 @@ import zipfile
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
-VERSION='0.1.0-alpha.1'
+VERSION='0.1.0-alpha.2'
 PRIVATE={'loginData.json','inventory.json','config.json','region_config.txt','owned_blueprints.txt',
     'blueprints_library.json','blueprints_favorites.json','reputation_snapshot.json','reputation_localization_state.json',
     'server_log.json','shard_history.json','uex_token.dat','uex_key.dat','portable.txt',
@@ -42,6 +42,7 @@ def stage_source(destination):
     for name in ['synthscan','mining_worker']:copy_tree(ROOT/'native'/name,destination/'native'/name)
     for name in ['synthscan-upstream.json','launcher.cpp']:shutil.copy2(ROOT/'native'/name,destination/'native'/name)
     copy_tree(ROOT/'tools',destination/'tools')
+    copy_tree(ROOT/'installer',destination/'installer')
     (destination/'tests').mkdir()
     for file in (ROOT/'tests').glob('*.py'):shutil.copy2(file,destination/'tests'/file.name)
     for name in ['bedrock','starbreaker','game_artwork','presentmon']:copy_tree(ROOT/'third_party'/name,destination/'third_party'/name)

@@ -203,7 +203,7 @@ def run(data_dir,owner):
     quests=Questing(directory,service.reader.log_path)
     from piracy_watch import PiracyReader
     piracy=PiracyReader(directory)
-    top_hud=subprocess.Popen([str(Path(sys.executable).with_name('pythonw.exe')),str(ROOT/'native_session_hud.py'),'--owner',str(owner)],
+    top_hud=subprocess.Popen([str(Path(sys.executable).with_name('pythonw.exe')),'-B',str(ROOT/'native_session_hud.py'),'--owner',str(owner)],
                              cwd=ROOT,creationflags=subprocess.CREATE_NO_WINDOW,stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
     try:
         while owner_alive(owner):

@@ -77,6 +77,34 @@ class Questing:
         self.error = ''; self.next_poll = 0; self.future = None
         self.pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix='questing-read')
         self.catalog = {}; self.catalog_by_title = {}; self.balance_names = {}; self.scopes = {}
+        self.label_stamp=None;self.label_retry_at=0
+
+    def sync_names(self,now):
+        from installation import RELEASE,reference_paths
+        if not RELEASE or now<self.label_retry_at:return
+        try:
+            ini=reference_paths()['game']/'Data/Localization/english/global.ini'
+            snapshot=self.directory/'reputation_snapshot.json'
+            stamp=(ini.stat().st_mtime_ns,snapshot.stat().st_mtime_ns)
+            if stamp==self.label_stamp:return
+            self.label_retry_at=now+2
+            from tools.sync_reputation_names import sync
+            from app_lifecycle import game_process_ids
+            previous={}
+            try:previous=read_shared_json(self.directory/'reputation_labels_status.json')
+            except (OSError,ValueError):pass
+            result=sync(True)
+            changed=result['changed']
+            written=now if changed else previous.get('labels_written_at',now)
+            pids=sorted(game_process_ids()) if changed else previous.get('written_game_pids',sorted(game_process_ids()))
+            publish_json(self.directory/'reputation_labels_status.json',dict(at=now,ok=True,
+                labels_written_at=written,written_game_pids=pids,**result))
+            self.label_stamp=(ini.stat().st_mtime_ns,snapshot.stat().st_mtime_ns)
+        except Exception as exc:
+            self.label_retry_at=now+3
+            help=('Windows blocked game-text updates. Open More → Setup & reputation, then choose Allow game-text access.'
+                  if isinstance(exc,PermissionError) else 'Waiting for your signed-in character and a fresh reputation response. If this persists, open More → Setup & reputation and choose Repair setup.')
+            publish_json(self.directory/'reputation_labels_status.json',dict(at=now,ok=False,help=help))
 
     def load_catalog(self):
         from game_records import GameRecords, walk_nodes
@@ -182,21 +210,13 @@ class Questing:
                 self.service, snapshot, mission_error = self.future.result()
                 publish_json(self.directory/'reputation_snapshot.json', snapshot)
                 self.read_at = snapshot['read_at']; self.error=mission_error
-                from installation import RELEASE
-                if RELEASE:
-                    try:
-                        from tools.sync_reputation_names import sync
-                        result=sync(True)
-                        publish_json(self.directory/'reputation_labels_status.json',dict(at=now,ok=True,**result))
-                    except Exception as exc:
-                        publish_json(self.directory/'reputation_labels_status.json',dict(at=now,ok=False,
-                            error='Labels unavailable ('+type(exc).__name__+'); check SynthStrings setup.'))
             except Exception as exc:
                 # Never publish RPC details, credentials or request metadata.
                 self.error = 'Account read unavailable ('+type(exc).__name__+')'
             self.future = None
         if enabled and game_running and not self.future and now >= self.next_poll:
             self.future=self.pool.submit(self.query);self.next_poll=now+30
+        if enabled and game_running:self.sync_names(now)
         active = [dict(m, **self.journal.get(m['id'],{})) for m in self.service
                   if m['state'] in (1,2,3) and self.journal.get(m['id'],{}).get('status','Accepted')=='Accepted'] if 0<=now-self.read_at<65 else []
         known={m['id'] for m in active}

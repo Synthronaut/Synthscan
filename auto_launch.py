@@ -25,7 +25,7 @@ def spawn(script, *args):
     startup = subprocess.STARTUPINFO()
     startup.dwFlags |= subprocess.STARTF_USESHOWWINDOW
     startup.wShowWindow = 0
-    return subprocess.Popen([python_windowless(), str(ROOT / script), *args], cwd=ROOT,
+    return subprocess.Popen([python_windowless(), '-B', str(ROOT / script), *args], cwd=ROOT,
                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                             creationflags=subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP,
                             startupinfo=startup)
@@ -45,7 +45,7 @@ def install():
         "$shell = New-Object -ComObject WScript.Shell",
         f"$link = $shell.CreateShortcut({literal(destination)})",
         f"$link.TargetPath = {literal(python_windowless())}",
-        f"$link.Arguments = {literal(subprocess.list2cmdline([str(ROOT / 'auto_launch.py'), '--watch']))}",
+        f"$link.Arguments = {literal(subprocess.list2cmdline(['-B', str(ROOT / 'auto_launch.py'), '--watch']))}",
         f"$link.WorkingDirectory = {literal(ROOT)}",
         "$link.Description = 'Start SynthScan when Star Citizen launches'",
         "$link.WindowStyle = 7",

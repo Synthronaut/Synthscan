@@ -22,9 +22,13 @@ jobs:
         run: python -B -m unittest discover -s tests -q
       - name: Package clean source and standalone app
         run: python -B tools/package_community.py --source out/public-source --package out/SynthScan-Windows-x64 --native dist/native
+      - name: Build guided Windows installer
+        run: python -B tools/build_installer.py --payload out/SynthScan-Windows-x64 --output out/installer
       - uses: actions/upload-artifact@v4
         with:
           name: SynthScan-Windows-x64
           path: |
             out/SynthScan-Windows-x64.zip
             out/SynthScan-Windows-x64.zip.sha256
+            out/installer/SynthScan-Setup-Windows-x64.exe
+            out/installer/SynthScan-Setup-Windows-x64.exe.sha256

@@ -29,12 +29,8 @@ def validate_binary():
 def launch(automatic=False):
     validate_binary()
     if RELEASE:
-        try:
-            paths=reference_paths()
-            active=json.loads((output_root()/'data/local_game_library.json').read_text(encoding='utf-8'))
-            ready=(paths['root']/'ready.json').exists() and active['provenance']['build']['BuildId']==paths['root'].name
-        except (OSError,ValueError,KeyError):ready=False
-        if not ready:
+        from setup_status import ready
+        if not ready():
             import sys
             return subprocess.Popen([str(Path(sys.executable).with_name('pythonw.exe')),'-I',str(ROOT/'app_launcher.py')],
                 cwd=ROOT,creationflags=subprocess.CREATE_NO_WINDOW)

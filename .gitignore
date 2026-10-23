@@ -14,6 +14,7 @@ __pycache__/
 /voice_cache/
 /native/synthscan-build/
 /third_party/build_tools/opencv412/
+/third_party/build_tools/innosetup/
 /third_party/build_tools/zstd-1.5.7/
 /third_party/build_tools/*.exe
 /third_party/build_tools/*.tar.gz

@@ -21,7 +21,10 @@ only on the build machine. Users download the complete release ZIP.
    OCR resources, app source, licenses, launcher and integrity manifest.
 
 The `Windows community build` workflow performs these steps on demand and uploads
-the resulting ZIP/checksum as workflow artifacts. Publication to Releases is a
+the resulting ZIP/checksum and guided installer as workflow artifacts. Build the
+installer locally with `python tools/build_installer.py --payload out/SynthScan-Windows-x64 --output out/installer`.
+The Inno Setup compiler is downloaded from its pinned official release and hash-checked.
+Publication to Releases is a
 separate deliberate step. Never upload the development folder directly.
 
 Corresponding modified GPL application source is `native/synthscan`; the earlier

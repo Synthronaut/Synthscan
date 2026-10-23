@@ -3864,7 +3864,7 @@ std::filesystem::path Application::locateGameLog() const {
     std::error_code ec;
     // 1. pinned by hand
     if (!gameLogOverride_.empty()) {
-        std::filesystem::path pinned(gameLogOverride_);
+        std::filesystem::path pinned=std::filesystem::u8path(gameLogOverride_);
         if (std::filesystem::exists(pinned, ec)) return pinned;
     }
 #ifdef _WIN32

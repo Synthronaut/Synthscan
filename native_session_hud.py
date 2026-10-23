@@ -90,6 +90,8 @@ def main():
                 self._last_rendered_key=None;return
             super().render_bar()
     root=tk.Tk();root.withdraw();ribbon=Ribbon(root);gate=AlertGate(started_at);alert=SnareAlertWindow(root,game_window_rect);activity=ActivityButton(root,DATA,args.owner);ribbon.activity_button=activity
+    from reputation_notice import ReputationNotice
+    reputation_notice=ReputationNotice(root,DATA,game_window_rect)
     def callback_error(kind,value,traceback):
         logging.error('HUD input callback failed',exc_info=(kind,value,traceback))
     root.report_callback_exception=callback_error
@@ -112,6 +114,7 @@ def main():
             enabled=piracy_alerts_enabled(settings,bool(game_window_rect()))
             notices=gate.consume(snapshot,args.owner,time.time(),enabled)
             alert.update(notices,ribbon.state.get('session_token'),enabled)
+            reputation_notice.poll()
             from telemetry_ipc import publish_json
             publish_json(DATA/'top_hud_status.json',dict(at=time.time(),pid=os.getpid(),owner_pid=args.owner,
                         visible=bool(ribbon._visible),geometry=ribbon._last_geometry,

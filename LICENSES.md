@@ -30,6 +30,9 @@ are SynthScan's; credits below identify the actual sources of reused material.
   The standalone application presentation timing helper, license and verified
   upstream release hash are in third_party/presentmon/. It is optional and is
   started only when the user requests the timing/network helper.
+- The Windows installer is built with unmodified Inno Setup 7.1.0, by Jordan
+  Russell and Martijn Laan: https://jrsoftware.org/. Its compiler is a build-only
+  dependency downloaded from a pinned official release with SHA-256 verification.
 - Game records, descriptions, artwork and test screenshots depict or describe
   Star Citizen content belonging to Cloud Imperium Games. Local extraction
   metadata distinguishes native records from imported reference annotations.

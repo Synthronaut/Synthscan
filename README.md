@@ -5,27 +5,35 @@ reputation labels, a server HUD, and Mining / Piracy / Missions activity tabs.
 
 ## Download and start
 
-Download **SynthScan-Windows-x64.zip** from
+Download **SynthScan-Setup-Windows-x64.exe** from
 [GitHub Releases](https://github.com/Synthronaut/Synthscan/releases).
-Choose the release ZIP, rather than GitHub's automatic source-code archive.
 
-1. Extract the **entire ZIP** into a folder you can write to, such as Documents/SynthScan.
-   Keep the runtime and other folders beside SynthScan.exe.
-2. Open **SynthScan.exe**. Python and the required libraries are included.
-3. Setup finds your Star Citizen channel, or asks you to select the folder with
-   Data.p4k. It reads your own game files to build item, artwork, blueprint,
-   mining and reputation references. First setup can take several minutes and
-   needs several GB of free space. References rebuild when the game build changes.
-4. Sign in and enter the game normally. No password is entered into SynthScan.
-5. Open **More → Startup & HUD settings** to enable launch with Star Citizen,
-   choose the HUD hotkey, and configure visibility/scanning. The default hotkey
-   is **Ctrl+Alt+H**. The server HUD's **HUD + / −** opens or closes the movable
-   activity HUD; its tabs select Mining, Piracy and Missions.
+1. Open the installer and choose **Install**. Python and app dependencies are included.
+2. Leave **Open SynthScan** selected. Setup detects your game and builds your local
+   references automatically. The progress screen explains what is happening.
+3. Enter Star Citizen normally. When your account has been verified, SynthScan
+   shows **Your reputation is ready — restart Star Citizen**. Fully restart the
+   game when convenient. SynthScan never closes the game for you.
 
-Keep the extracted folder in place after enabling automatic launch. To move or
-remove it, disable automatic launch first, then enable it from the new location.
-Settings and player records live under `%LOCALAPPDATA%/SynthScan`, separately from
-this download. An update does not replace that profile.
+Start Menu and desktop shortcuts are created. **Launch with Star Citizen** is
+selected by default; untick it in the installer or change it later under
+**More → Startup & HUD settings**. The default HUD hotkey is **Ctrl+Alt+H**.
+
+**More → Setup & reputation status** shows login, sync and restart status. It
+offers Retry, Repair setup, Choose game folder, and a Windows permission repair
+if game text is read-only. Normal setup requires no console commands, Python
+installation, configuration editing or JSON-file inspection. First setup can
+take several minutes and needs several GB of free disk space.
+
+Run a newer installer over the existing installation to upgrade. Your player
+records stay under `%LOCALAPPDATA%/SynthScan`; upgrades and uninstall keep them.
+Uninstall removes this installation's startup entry and restores reputation name
+edits when it can do so without overwriting someone else's changes.
+
+The ZIP remains available for advanced portable deployment. The installer is
+unsigned, so Windows may show its normal security prompt. Regular installation
+uses your Windows account without administrator access. A separate permission
+prompt appears only if you choose to repair access to game text files.
 
 ## Reputation beside corporation names
 
@@ -45,8 +53,8 @@ Returning to the menu or logging out is insufficient. Numbers visible in the gam
 remain a snapshot until the next full restart; the external Missions HUD can
 refresh balances while playing. Reputation polling works in every HUD mode.
 
-The private `native/reputation_labels_status.json` file under the local profile
-records whether labels were written. If account verification is unavailable, the
+The in-app **Setup & reputation status** screen shows whether labels were written.
+If account verification is unavailable, the
 app does not invent numbers. Setup and labels currently support English text.
 Existing third-party language packs are preserved by SynthStrings setup; review
 its setup message if marks cannot be installed. Reputation name edits preserve
