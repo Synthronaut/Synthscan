@@ -23,10 +23,10 @@ def ready():
                 and (output_root()/'data/local_game_library.json').exists())
     except (OSError,ValueError,KeyError,TypeError):return False
 
-def reputation_view(directory=PROFILE,now=None):
+def reputation_view(directory=PROFILE,now=None,session=None):
     now=time.time() if now is None else now
     status=read(directory/'reputation_labels_status.json')
-    session=read(directory/'session_state.json',limit=8*1024*1024)
+    if session is None:session=read(directory/'session_state.json',limit=8*1024*1024)
     running=bool(session.get('game_pids')) and 0<=now-session.get('written_at',0)<10
     if not running:
         return dict(state='waiting',title='Enter Star Citizen to sync your reputation',

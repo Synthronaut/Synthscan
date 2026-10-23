@@ -203,6 +203,9 @@ def run(data_dir,owner):
     quests=Questing(directory,service.reader.log_path)
     from piracy_watch import PiracyReader
     piracy=PiracyReader(directory)
+    from reputation_notice import NoticeGate
+    from setup_status import reputation_view
+    rep_notices=NoticeGate();rep_notice=''
     top_hud=subprocess.Popen([str(Path(sys.executable).with_name('pythonw.exe')),'-B',str(ROOT/'native_session_hud.py'),'--owner',str(owner)],
                              cwd=ROOT,creationflags=subprocess.CREATE_NO_WINDOW,stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
     try:
@@ -241,6 +244,10 @@ def run(data_dir,owner):
                     pirate_command.unlink(missing_ok=True)
                 from installation import RELEASE
                 state['questing']=quests.tick(RELEASE or quest_settings.get('hud_mode')=='questing',bool(games))
+                if RELEASE:
+                    rep_view=reputation_view(directory,time.time(),state)
+                    if rep_notices.consume(rep_view,games):rep_notice='restart:'+','.join(map(str,sorted(games)))
+                    state['reputation_notice']=rep_notice if rep_view['state']=='restart' else ''
                 state['fps_permission_required']=bool(games and not read_client_fps(time.time()))
                 if not publish_json(directory/'session_state.json',state):logging.warning('Session snapshot is temporarily locked; consumers will expire the old reading')
             except Exception:

@@ -42,6 +42,7 @@ std::set<std::string> favorites;
 std::unique_ptr<Gdiplus::Bitmap> icon;
 std::string lastState,summary="Session service starting",note;
 std::string controlCompleted="Startup registration updated.";
+std::string reputationNotice;
 std::filesystem::path root,data;
 double lastStateAt=0;
 double uiScale=1;
@@ -342,6 +343,15 @@ void timer(){
     double stamp=next.numberOr("written_at");
     bool fresh=stamp>0&&epoch()-stamp>=0&&epoch()-stamp<4;
     if(fresh){
+        const auto rep=next.textOr("reputation_notice");
+        if(!rep.empty()&&rep!=reputationNotice&&!testing){
+            reputationNotice=rep;
+            NOTIFYICONDATAW message=tray;message.uFlags=NIF_INFO;
+            message.dwInfoFlags=NIIF_INFO|NIIF_RESPECT_QUIET_TIME;
+            wcscpy_s(message.szInfoTitle,L"Your reputation numbers are ready");
+            wcscpy_s(message.szInfo,L"Fully restart Star Citizen when convenient to load the prepared numbers. Click to open setup and reputation status.");
+            Shell_NotifyIconW(NIM_MODIFY,&message);
+        }
         auto key=next.textOr("summary");if(key!=summary){summary=key;if(mining)InvalidateRect(mining->windowHandle(),nullptr,FALSE);}
         if(stamp!=lastStateAt){state=std::move(next);lastStateAt=stamp;note=state.textOr("note");
             SynthScanDiary::update(field(state,"diary"),field(state,"diary_result"),note);
@@ -357,6 +367,7 @@ void timer(){
     publishNativeStatus();
 }
 LRESULT CALLBACK hostProc(HWND hwnd,UINT message,WPARAM w,LPARAM l){
+    if(message==TRAY&&l==NIN_BALLOONUSERCLICK){spawnPython(L"app_launcher.py",{L"--status"});return 0;}
     if(message==WM_APP+42){activityControl();publishNativeStatus();return 0;}
     if(message==WM_TIMER){timer();return 0;}
     if(message==WM_HOTKEY&&w==HOTKEY){showHud(!hudVisible);return 0;}
