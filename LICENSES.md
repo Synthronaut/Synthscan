@@ -26,6 +26,10 @@ are SynthScan's; credits below identify the actual sources of reused material.
   third_party/bedrock/textline/.
 - StarBreaker v0.3.2: https://github.com/diogotr7/StarBreaker (MIT).
   Its license and pinned download provenance are in third_party/starbreaker/.
+- PresentMon v2.6.0: https://github.com/GameTechDev/PresentMon (MIT).
+  The standalone application presentation timing helper, license and verified
+  upstream release hash are in third_party/presentmon/. It is optional and is
+  started only when the user requests the timing/network helper.
 - Game records, descriptions, artwork and test screenshots depict or describe
   Star Citizen content belonging to Cloud Imperium Games. Local extraction
   metadata distinguishes native records from imported reference annotations.

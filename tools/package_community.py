@@ -16,12 +16,15 @@ sys.path.insert(0,str(ROOT))
 VERSION='0.1.0-alpha.1'
 PRIVATE={'loginData.json','inventory.json','config.json','region_config.txt','owned_blueprints.txt',
     'blueprints_library.json','blueprints_favorites.json','reputation_snapshot.json','reputation_localization_state.json',
-    'server_log.json','shard_history.json','uex_token.dat','uex_key.dat','portable.txt'}
+    'server_log.json','shard_history.json','uex_token.dat','uex_key.dat','portable.txt',
+    'native_runtime.json','workspace_library.json','launch_target.json','installation.json',
+    'reputation_names_preview.json','reputation_labels_status.json','setup_result.json',
+    'fabricator_scan_inbox.json','refinery_orders.json','crafting_recipes.json','mining_loadout.json'}
 IGNORED={'.git','__pycache__','.venv','node_modules','synthscan-build'}
 
 
 def copy_tree(source,destination):
-    def ignore(folder,names):return [n for n in names if n in IGNORED or n in PRIVATE or n.endswith(('.pyc','.pdb','.obj'))]
+    def ignore(folder,names):return [n for n in names if n in IGNORED or n in PRIVATE or n.endswith(('.pyc','.pdb','.obj','.log'))]
     shutil.copytree(source,destination,dirs_exist_ok=True,ignore=ignore)
 
 
@@ -41,7 +44,7 @@ def stage_source(destination):
     copy_tree(ROOT/'tools',destination/'tools')
     (destination/'tests').mkdir()
     for file in (ROOT/'tests').glob('*.py'):shutil.copy2(file,destination/'tests'/file.name)
-    for name in ['bedrock','starbreaker','game_artwork']:copy_tree(ROOT/'third_party'/name,destination/'third_party'/name)
+    for name in ['bedrock','starbreaker','game_artwork','presentmon']:copy_tree(ROOT/'third_party'/name,destination/'third_party'/name)
     for name in ['opencv_download.json','zstd_source.json']:
         target=destination/'third_party/build_tools'/name;target.parent.mkdir(parents=True,exist_ok=True)
         shutil.copy2(ROOT/'third_party/build_tools'/name,target)
@@ -70,6 +73,22 @@ def audit(destination):
             if re.search(r'\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,}|eyJ[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,})',text):
                 raise ValueError('Potential credential in '+str(relative))
     return len([p for p in files if p.is_file()])
+
+
+def archive_package(destination):
+    destination=Path(destination).resolve()
+    audit(destination)
+    integrity=destination/'release_integrity.json'
+    manifest={p.relative_to(destination).as_posix():hashlib.sha256(p.read_bytes()).hexdigest()
+              for p in sorted(destination.rglob('*')) if p.is_file() and p!=integrity}
+    integrity.write_text(json.dumps(dict(version=VERSION,files=manifest),indent=2),encoding='utf-8')
+    zip_path=destination.with_suffix('.zip')
+    with zipfile.ZipFile(zip_path,'w',zipfile.ZIP_DEFLATED,compresslevel=6) as archive:
+        for file in sorted(destination.rglob('*')):
+            if file.is_file():archive.write(file,Path('SynthScan')/file.relative_to(destination))
+    digest=hashlib.sha256(zip_path.read_bytes()).hexdigest()
+    zip_path.with_suffix('.zip.sha256').write_text(digest+'  '+zip_path.name+'\n',encoding='ascii')
+    print(json.dumps(dict(archive=str(zip_path),sha256=digest,bytes=zip_path.stat().st_size)))
 
 
 def package(source,destination,runtime,native):
@@ -106,17 +125,7 @@ def package(source,destination,runtime,native):
         redist=sorted(choices)[-1]
     for file in redist.glob('*.dll'):shutil.copy2(file,target/file.name)
     # Integrity checks cover everything that will be distributed (not private runtime files).
-    audit(destination)
-    manifest={p.relative_to(destination).as_posix():hashlib.sha256(p.read_bytes()).hexdigest()
-              for p in sorted(destination.rglob('*')) if p.is_file()}
-    (destination/'release_integrity.json').write_text(json.dumps(dict(version=VERSION,files=manifest),indent=2),encoding='utf-8')
-    zip_path=destination.with_suffix('.zip')
-    with zipfile.ZipFile(zip_path,'w',zipfile.ZIP_DEFLATED,compresslevel=6) as archive:
-        for file in sorted(destination.rglob('*')):
-            if file.is_file():archive.write(file,Path('SynthScan')/file.relative_to(destination))
-    digest=hashlib.sha256(zip_path.read_bytes()).hexdigest()
-    zip_path.with_suffix('.zip.sha256').write_text(digest+'  '+zip_path.name+'\n',encoding='ascii')
-    print(json.dumps(dict(archive=str(zip_path),sha256=digest,bytes=zip_path.stat().st_size)))
+    archive_package(destination)
 
 
 if __name__=='__main__':

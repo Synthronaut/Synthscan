@@ -15,9 +15,11 @@ import time
 
 from telemetry_ipc import publish_json
 
-BASE = Path(os.environ.get('LOCALAPPDATA', '.')) / 'SynthScan'
+from installation import ROOT,PROFILE
+BASE = PROFILE.parent
 LIVE_FRAMES = BASE / 'network-research/live-frames.json'
-PRESENTMON = BASE / 'tools/PresentMon-2.6.0-x64.exe'
+PRESENTMON = ROOT / 'third_party/presentmon/PresentMon-2.6.0-x64.exe'
+if not PRESENTMON.exists():PRESENTMON=BASE/'tools/PresentMon-2.6.0-x64.exe'
 
 
 def qpc_frequency():

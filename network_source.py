@@ -4,7 +4,8 @@ import os
 from pathlib import Path
 from telemetry_ipc import read_shared_json
 
-DEFAULT_PATH = Path(os.environ.get('LOCALAPPDATA', '.')) / 'SynthScan/network-research/live-network.json'
+from installation import PROFILE
+DEFAULT_PATH = PROFILE.parent / 'network-research/live-network.json'
 
 
 def read_network_ping(reader, now, path=DEFAULT_PATH):

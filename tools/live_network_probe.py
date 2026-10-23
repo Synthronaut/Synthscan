@@ -25,7 +25,8 @@ from telemetry_ipc import publish_json
 from frame_telemetry import PresentMonCollector
 from tools.analyze_game_network import Frame, udp
 
-LAB = Path(os.environ.get('LOCALAPPDATA', '.')) / 'SynthScan/network-research'
+from installation import PROFILE
+LAB = PROFILE.parent / 'network-research'
 LIVE = LAB / 'live-network.json'
 STOP = LAB / 'stop-live-network'
 
