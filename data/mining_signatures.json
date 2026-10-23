@@ -1,0 +1,338 @@
+{
+  "schema_version": 1,
+  "game_version_family": "4.10",
+  "upstream_commit": "8fd809d84ff614d466447dd8b370cee86a7822ce",
+  "source_url": "https://github.com/SC-Ravaxx/Bedrock/blob/8fd809d84ff614d466447dd8b370cee86a7822ce/include/MiningData.h",
+  "source_sha256": "6984d5001df13321a8db4976eddf5e2dc3ee725676db86e1084feedf8f49e405",
+  "provenance": "Bedrock's reviewed tables; source attributes signature facts to SCMDB/Strata. Not independently extracted from this installed game build.",
+  "scope": "Single mineral clusters and special families only. Mixed signatures are not inferred by this decoder.",
+  "max_signature": 250000,
+  "minerals": [
+    {
+      "name": "Quantainium",
+      "base_rs": 3170,
+      "rarity": "Legendary",
+      "max_count": 2,
+      "systems": [
+        "STANTON",
+        "PYRO",
+        "NYX"
+      ],
+      "category": "ship_mining"
+    },
+    {
+      "name": "Stileron",
+      "base_rs": 3185,
+      "rarity": "Legendary",
+      "max_count": 2,
+      "systems": [
+        "PYRO"
+      ],
+      "category": "ship_mining"
+    },
+    {
+      "name": "Savrilium",
+      "base_rs": 3200,
+      "rarity": "Legendary",
+      "max_count": 2,
+      "systems": [
+        "NYX"
+      ],
+      "category": "ship_mining"
+    },
+    {
+      "name": "Ouratite",
+      "base_rs": 3370,
+      "rarity": "Epic",
+      "max_count": 3,
+      "systems": [
+        "STANTON",
+        "PYRO"
+      ],
+      "category": "ship_mining"
+    },
+    {
+      "name": "Riccite",
+      "base_rs": 3385,
+      "rarity": "Epic",
+      "max_count": 3,
+      "systems": [
+        "PYRO"
+      ],
+      "category": "ship_mining"
+    },
+    {
+      "name": "Lindinium",
+      "base_rs": 3400,
+      "rarity": "Epic",
+      "max_count": 3,
+      "systems": [
+        "NYX"
+      ],
+      "category": "ship_mining"
+    },
+    {
+      "name": "Beryl",
+      "base_rs": 3540,
+      "rarity": "Rare",
+      "max_count": 4,
+      "systems": [
+        "STANTON",
+        "PYRO",
+        "NYX"
+      ],
+      "category": "ship_mining"
+    },
+    {
+      "name": "Taranite",
+      "base_rs": 3555,
+      "rarity": "Rare",
+      "max_count": 4,
+      "systems": [
+        "STANTON",
+        "PYRO",
+        "NYX"
+      ],
+      "category": "ship_mining"
+    },
+    {
+      "name": "Borase",
+      "base_rs": 3570,
+      "rarity": "Rare",
+      "max_count": 4,
+      "systems": [
+        "STANTON",
+        "PYRO",
+        "NYX"
+      ],
+      "category": "ship_mining"
+    },
+    {
+      "name": "Gold",
+      "base_rs": 3585,
+      "rarity": "Rare",
+      "max_count": 4,
+      "systems": [
+        "STANTON",
+        "PYRO",
+        "NYX"
+      ],
+      "category": "ship_mining"
+    },
+    {
+      "name": "Bexalite",
+      "base_rs": 3600,
+      "rarity": "Rare",
+      "max_count": 4,
+      "systems": [
+        "STANTON",
+        "PYRO",
+        "NYX"
+      ],
+      "category": "ship_mining"
+    },
+    {
+      "name": "Laranite",
+      "base_rs": 3825,
+      "rarity": "Uncommon",
+      "max_count": 5,
+      "systems": [
+        "STANTON",
+        "PYRO",
+        "NYX"
+      ],
+      "category": "ship_mining"
+    },
+    {
+      "name": "Aslarite",
+      "base_rs": 3840,
+      "rarity": "Uncommon",
+      "max_count": 5,
+      "systems": [
+        "STANTON",
+        "PYRO",
+        "NYX"
+      ],
+      "category": "ship_mining"
+    },
+    {
+      "name": "Titanium",
+      "base_rs": 3855,
+      "rarity": "Uncommon",
+      "max_count": 5,
+      "systems": [
+        "STANTON",
+        "PYRO",
+        "NYX"
+      ],
+      "category": "ship_mining"
+    },
+    {
+      "name": "Tungsten",
+      "base_rs": 3870,
+      "rarity": "Uncommon",
+      "max_count": 5,
+      "systems": [
+        "STANTON",
+        "PYRO",
+        "NYX"
+      ],
+      "category": "ship_mining"
+    },
+    {
+      "name": "Agricium",
+      "base_rs": 3885,
+      "rarity": "Uncommon",
+      "max_count": 5,
+      "systems": [
+        "STANTON",
+        "PYRO",
+        "NYX"
+      ],
+      "category": "ship_mining"
+    },
+    {
+      "name": "Torite",
+      "base_rs": 3900,
+      "rarity": "Uncommon",
+      "max_count": 5,
+      "systems": [
+        "STANTON",
+        "PYRO",
+        "NYX"
+      ],
+      "category": "ship_mining"
+    },
+    {
+      "name": "Hephaestanite",
+      "base_rs": 4180,
+      "rarity": "Common",
+      "max_count": 6,
+      "systems": [
+        "STANTON",
+        "PYRO",
+        "NYX"
+      ],
+      "category": "ship_mining"
+    },
+    {
+      "name": "Tin",
+      "base_rs": 4195,
+      "rarity": "Common",
+      "max_count": 6,
+      "systems": [
+        "STANTON",
+        "PYRO",
+        "NYX"
+      ],
+      "category": "ship_mining"
+    },
+    {
+      "name": "Quartz",
+      "base_rs": 4210,
+      "rarity": "Common",
+      "max_count": 6,
+      "systems": [
+        "STANTON",
+        "PYRO",
+        "NYX"
+      ],
+      "category": "ship_mining"
+    },
+    {
+      "name": "Corundum",
+      "base_rs": 4225,
+      "rarity": "Common",
+      "max_count": 6,
+      "systems": [
+        "STANTON",
+        "PYRO",
+        "NYX"
+      ],
+      "category": "ship_mining"
+    },
+    {
+      "name": "Copper",
+      "base_rs": 4240,
+      "rarity": "Common",
+      "max_count": 6,
+      "systems": [
+        "STANTON",
+        "PYRO",
+        "NYX"
+      ],
+      "category": "ship_mining"
+    },
+    {
+      "name": "Silicon",
+      "base_rs": 4255,
+      "rarity": "Common",
+      "max_count": 6,
+      "systems": [
+        "STANTON",
+        "PYRO",
+        "NYX"
+      ],
+      "category": "ship_mining"
+    },
+    {
+      "name": "Iron",
+      "base_rs": 4270,
+      "rarity": "Common",
+      "max_count": 6,
+      "systems": [
+        "STANTON",
+        "PYRO",
+        "NYX"
+      ],
+      "category": "ship_mining"
+    },
+    {
+      "name": "Aluminium",
+      "base_rs": 4285,
+      "rarity": "Common",
+      "max_count": 6,
+      "systems": [
+        "STANTON",
+        "PYRO",
+        "NYX"
+      ],
+      "category": "ship_mining"
+    },
+    {
+      "name": "Ice",
+      "base_rs": 4300,
+      "rarity": "Common",
+      "max_count": 6,
+      "systems": [
+        "STANTON",
+        "PYRO",
+        "NYX"
+      ],
+      "category": "ship_mining"
+    }
+  ],
+  "families": [
+    {
+      "name": "ROC Deposit",
+      "category": "roc",
+      "base_rs": 4000,
+      "max_count": 30,
+      "typical_min": 6
+    },
+    {
+      "name": "FPS Minable",
+      "category": "hand",
+      "base_rs": 3000,
+      "max_count": 50,
+      "typical_min": 6
+    },
+    {
+      "name": "Salvage",
+      "category": "salvage",
+      "base_rs": 2000,
+      "max_count": 30,
+      "typical_min": 2
+    }
+  ]
+}

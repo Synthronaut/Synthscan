@@ -1,0 +1,10 @@
+{
+  "url": "https://github.com/diogotr7/StarBreaker/releases/download/v0.3.2/starbreaker-cli-v0.3.2-windows-x86_64.zip",
+  "archive_sha256": "fafd65ca002b9c3bb88ce32199b2345affcdb358655c68c41d0e93574a5d8a3d",
+  "files": [
+    {
+      "name": "starbreaker.exe",
+      "sha256": "82439e45cd5337f058f06ded63ee633bea8de8e4d75525f5a083aa7955b91a10"
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+preset,name,system,kind,visible
+hpp_nyx_glaciemring,Glaciem Ring,Nyx,belt,1
+hpp_nyx_keegerbelt,Keeger Belt,Nyx,belt,1
+hpp_pyro_akirocluster,Akiro Cluster,Pyro,belt,0
+hpp_pyro_cool01,Pyro Belt (Cool 1),Pyro,belt,0
+hpp_pyro_cool02,Pyro Belt (Cool 2),Pyro,belt,0
+hpp_pyro_warm01,Pyro Belt (Warm 1),Pyro,belt,0
+hpp_pyro_warm02,Pyro Belt (Warm 2),Pyro,belt,0
+hpp_pyro_deepspaceasteroids,Pyro Deep Space Asteroids,Pyro,belt,1
+hpp_pyro1,Pyro I,Pyro,planet,1
+hpp_pyro2,Pyro II (Monox),Pyro,planet,1
+hpp_pyro3,Pyro III (Bloom),Pyro,planet,1
+hpp_pyro4,Pyro IV,Pyro,planet,1
+hpp_pyro5a,Pyro V-a (Ignis),Pyro,moon,1
+hpp_pyro5b,Pyro V-b (Vatra),Pyro,moon,1
+hpp_pyro5c,Pyro V-c (Adir),Pyro,moon,1
+hpp_pyro5d,Pyro V-d (Fairo),Pyro,moon,1
+hpp_pyro5e,Pyro V-e (Fuego),Pyro,moon,1
+hpp_pyro5f,Pyro V-f (Vuur),Pyro,moon,1
+hpp_pyro6,Pyro VI (Terminus),Pyro,planet,1
+hpp_aaronhalo,Aaron Halo,Stanton,belt,1
+hpp_stanton1b,Aberdeen,Stanton,moon,1
+hpp_stanton1a,Arial,Stanton,moon,1
+asteroidcluster_low_yield,Asteroid Cluster (Low Yield),Stanton,cluster,0
+asteroidcluster_medium_yield,Asteroid Cluster (Medium Yield),Stanton,cluster,0
+hpp_stanton4a,Calliope,Stanton,moon,1
+hpp_stanton2a,Cellin,Stanton,moon,1
+hpp_stanton4b,Clio,Stanton,moon,1
+hpp_stanton2b,Daymar,Stanton,moon,1
+hpp_stanton4c,Euterpe,Stanton,moon,1
+hpp_stanton1,Hurston,Stanton,planet,1
+hpp_stanton1d,Ita,Stanton,moon,1
+hpp_lagrange_occupied,Lagrange (Occupied),Stanton,lagrange,0
+hpp_lagrange_a,Lagrange A,Stanton,lagrange,1
+hpp_lagrange_b,Lagrange B,Stanton,lagrange,1
+hpp_lagrange_c,Lagrange C,Stanton,lagrange,1
+hpp_lagrange_d,Lagrange D,Stanton,lagrange,1
+hpp_lagrange_e,Lagrange E,Stanton,lagrange,1
+hpp_lagrange_f,Lagrange F,Stanton,lagrange,1
+hpp_lagrange_g,Lagrange G,Stanton,lagrange,0
+hpp_stanton3a,Lyria,Stanton,moon,1
+hpp_stanton1c,Magda,Stanton,moon,1
+hpp_shipgraveyard_001,Ship Graveyard,Stanton,special,0
+hpp_spacederelict_general,Space Derelict,Stanton,special,0
+hpp_stanton3b,Wala,Stanton,moon,1
+hpp_stanton2c,Yela,Stanton,moon,1
+hpp_stanton2c_belt,Yela Asteroid Belt,Stanton,belt,1
+hpp_stanton4,microTech,Stanton,planet,1

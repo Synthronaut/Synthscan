@@ -1,0 +1,15 @@
+{
+  "source": "SCMDB Resource Guide; also documented in Bedrock gen_locations.py",
+  "url": "https://scmdb.net/?page=mine",
+  "retrieved": "2026-10-21",
+  "aliases": [
+    {
+      "id": "curated:terminus-ring",
+      "name": "Terminus Ring",
+      "system": "Pyro",
+      "kind": "belt",
+      "source_preset": "hpp_stanton2c_belt",
+      "note": "SCMDB maps Terminus Ring to the Yela Asteroid Belt preset. This location association is community curation; numerical composition comes from the local source preset."
+    }
+  ]
+}

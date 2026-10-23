@@ -1,0 +1,10 @@
+The game records and artwork cached by SynthScan are extracted locally from
+the user's installed Star Citizen client. Game content is attributed to Cloud
+Imperium Games. Asset references, game build and hashes are retained in
+data/local_game_library.json. These assets are not SynthScan-created artwork.
+
+StarBreaker v0.3.2 is the extraction/conversion tool (MIT; see
+third_party/starbreaker/LICENSE). Its license does not cover CIG game content.
+
+resvg-py 0.5.0 performs local SVG rasterization during maintenance refreshes.
+Its license is copied alongside this notice as resvg-py-LICENSE.

@@ -1,0 +1,10 @@
+{
+  "source": "SCMDB public mining dataset and resource guide",
+  "url": "https://scmdb.net/data/mining_data-4.10.2-live.12913470.json",
+  "page": "https://scmdb.net/?page=mine",
+  "version": "4.10.2-live.12913470",
+  "retrieved": "2026-10-21",
+  "scope": "Human-readable names, system and location type only. Spawn groups, weights, compositions and qualities are extracted independently from the local game.",
+  "visibility": "Omit unlocated/internal presets by default, following the SCMDB resource guide and Bedrock's documented curation. Hidden presets remain inspectable; this is curation, not proof that a game record is unreachable.",
+  "excluded": "Three supplementary entries without preset GUIDs are not represented as local game-file facts."
+}

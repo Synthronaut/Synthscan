@@ -1,0 +1,383 @@
+[
+  {
+    "args": [
+      "C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\BuildTools\\VC\\Tools\\MSVC\\14.29.30133\\bin\\Hostx64\\x64\\cl.exe",
+      "/nologo",
+      "/std:c++20",
+      "/EHsc",
+      "/MD",
+      "/O2",
+      "/utf-8",
+      "/D_CRT_SECURE_NO_WARNINGS",
+      "/DNOMINMAX",
+      "/Gy",
+      "/IC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\vendor\\include",
+      "/IC:\\Users\\Dev\\Documents\\SynthScan\\third_party\\build_tools\\opencv412\\opencv\\build\\include",
+      "/c",
+      "C:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\vendor\\src\\EmbeddedData.cpp",
+      "/FoC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\build\\EmbeddedData.obj"
+    ],
+    "exit": 0,
+    "output": "EmbeddedData.cpp\n"
+  },
+  {
+    "args": [
+      "C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\BuildTools\\VC\\Tools\\MSVC\\14.29.30133\\bin\\Hostx64\\x64\\cl.exe",
+      "/nologo",
+      "/std:c++20",
+      "/EHsc",
+      "/MD",
+      "/O2",
+      "/utf-8",
+      "/D_CRT_SECURE_NO_WARNINGS",
+      "/DNOMINMAX",
+      "/Gy",
+      "/IC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\vendor\\include",
+      "/IC:\\Users\\Dev\\Documents\\SynthScan\\third_party\\build_tools\\opencv412\\opencv\\build\\include",
+      "/c",
+      "C:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\vendor\\src\\DxgiCapture.cpp",
+      "/FoC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\build\\DxgiCapture.obj"
+    ],
+    "exit": 0,
+    "output": "DxgiCapture.cpp\nC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\vendor\\include\\DxgiCapture.h(3): warning C4005: 'NOMINMAX': macro redefinition\nC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\vendor\\src\\DxgiCapture.cpp: note: see previous definition of 'NOMINMAX'\n"
+  },
+  {
+    "args": [
+      "C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\BuildTools\\VC\\Tools\\MSVC\\14.29.30133\\bin\\Hostx64\\x64\\cl.exe",
+      "/nologo",
+      "/std:c++20",
+      "/EHsc",
+      "/MD",
+      "/O2",
+      "/utf-8",
+      "/D_CRT_SECURE_NO_WARNINGS",
+      "/DNOMINMAX",
+      "/Gy",
+      "/IC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\vendor\\include",
+      "/IC:\\Users\\Dev\\Documents\\SynthScan\\third_party\\build_tools\\opencv412\\opencv\\build\\include",
+      "/c",
+      "C:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\vendor\\src\\GamePlaces.cpp",
+      "/FoC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\build\\GamePlaces.obj"
+    ],
+    "exit": 0,
+    "output": "GamePlaces.cpp\n"
+  },
+  {
+    "args": [
+      "C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\BuildTools\\VC\\Tools\\MSVC\\14.29.30133\\bin\\Hostx64\\x64\\cl.exe",
+      "/nologo",
+      "/std:c++20",
+      "/EHsc",
+      "/MD",
+      "/O2",
+      "/utf-8",
+      "/D_CRT_SECURE_NO_WARNINGS",
+      "/DNOMINMAX",
+      "/Gy",
+      "/IC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\vendor\\include",
+      "/IC:\\Users\\Dev\\Documents\\SynthScan\\third_party\\build_tools\\opencv412\\opencv\\build\\include",
+      "/c",
+      "C:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\vendor\\src\\GlyphReader.cpp",
+      "/FoC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\build\\GlyphReader.obj"
+    ],
+    "exit": 0,
+    "output": "GlyphReader.cpp\nC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\vendor\\src\\GlyphReader.cpp(21): warning C4005: 'NOMINMAX': macro redefinition\nC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\vendor\\src\\GlyphReader.cpp: note: see previous definition of 'NOMINMAX'\n"
+  },
+  {
+    "args": [
+      "C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\BuildTools\\VC\\Tools\\MSVC\\14.29.30133\\bin\\Hostx64\\x64\\cl.exe",
+      "/nologo",
+      "/std:c++20",
+      "/EHsc",
+      "/MD",
+      "/O2",
+      "/utf-8",
+      "/D_CRT_SECURE_NO_WARNINGS",
+      "/DNOMINMAX",
+      "/Gy",
+      "/IC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\vendor\\include",
+      "/IC:\\Users\\Dev\\Documents\\SynthScan\\third_party\\build_tools\\opencv412\\opencv\\build\\include",
+      "/c",
+      "C:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\vendor\\src\\MiniJson.cpp",
+      "/FoC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\build\\MiniJson.obj"
+    ],
+    "exit": 0,
+    "output": "MiniJson.cpp\n"
+  },
+  {
+    "args": [
+      "C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\BuildTools\\VC\\Tools\\MSVC\\14.29.30133\\bin\\Hostx64\\x64\\cl.exe",
+      "/nologo",
+      "/std:c++20",
+      "/EHsc",
+      "/MD",
+      "/O2",
+      "/utf-8",
+      "/D_CRT_SECURE_NO_WARNINGS",
+      "/DNOMINMAX",
+      "/Gy",
+      "/IC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\vendor\\include",
+      "/IC:\\Users\\Dev\\Documents\\SynthScan\\third_party\\build_tools\\opencv412\\opencv\\build\\include",
+      "/c",
+      "C:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\vendor\\src\\LoadoutReader.cpp",
+      "/FoC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\build\\LoadoutReader.obj"
+    ],
+    "exit": 0,
+    "output": "LoadoutReader.cpp\nC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\vendor\\include\\ScanPanel.h(3): warning C4005: 'NOMINMAX': macro redefinition\nC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\vendor\\src\\LoadoutReader.cpp: note: see previous definition of 'NOMINMAX'\n"
+  },
+  {
+    "args": [
+      "C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\BuildTools\\VC\\Tools\\MSVC\\14.29.30133\\bin\\Hostx64\\x64\\cl.exe",
+      "/nologo",
+      "/std:c++20",
+      "/EHsc",
+      "/MD",
+      "/O2",
+      "/utf-8",
+      "/D_CRT_SECURE_NO_WARNINGS",
+      "/DNOMINMAX",
+      "/Gy",
+      "/IC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\vendor\\include",
+      "/IC:\\Users\\Dev\\Documents\\SynthScan\\third_party\\build_tools\\opencv412\\opencv\\build\\include",
+      "/c",
+      "C:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\vendor\\src\\OCREngine.cpp",
+      "/FoC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\build\\OCREngine.obj"
+    ],
+    "exit": 0,
+    "output": "OCREngine.cpp\n"
+  },
+  {
+    "args": [
+      "C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\BuildTools\\VC\\Tools\\MSVC\\14.29.30133\\bin\\Hostx64\\x64\\cl.exe",
+      "/nologo",
+      "/std:c++20",
+      "/EHsc",
+      "/MD",
+      "/O2",
+      "/utf-8",
+      "/D_CRT_SECURE_NO_WARNINGS",
+      "/DNOMINMAX",
+      "/Gy",
+      "/IC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\vendor\\include",
+      "/IC:\\Users\\Dev\\Documents\\SynthScan\\third_party\\build_tools\\opencv412\\opencv\\build\\include",
+      "/c",
+      "C:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\vendor\\src\\RefineryTerminal.cpp",
+      "/FoC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\build\\RefineryTerminal.obj"
+    ],
+    "exit": 0,
+    "output": "RefineryTerminal.cpp\n"
+  },
+  {
+    "args": [
+      "C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\BuildTools\\VC\\Tools\\MSVC\\14.29.30133\\bin\\Hostx64\\x64\\cl.exe",
+      "/nologo",
+      "/std:c++20",
+      "/EHsc",
+      "/MD",
+      "/O2",
+      "/utf-8",
+      "/D_CRT_SECURE_NO_WARNINGS",
+      "/DNOMINMAX",
+      "/Gy",
+      "/IC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\vendor\\include",
+      "/IC:\\Users\\Dev\\Documents\\SynthScan\\third_party\\build_tools\\opencv412\\opencv\\build\\include",
+      "/c",
+      "C:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\vendor\\src\\RockContents.cpp",
+      "/FoC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\build\\RockContents.obj"
+    ],
+    "exit": 0,
+    "output": "RockContents.cpp\nC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\vendor\\include\\ScanPanel.h(3): warning C4005: 'NOMINMAX': macro redefinition\nC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\vendor\\src\\RockContents.cpp: note: see previous definition of 'NOMINMAX'\n"
+  },
+  {
+    "args": [
+      "C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\BuildTools\\VC\\Tools\\MSVC\\14.29.30133\\bin\\Hostx64\\x64\\cl.exe",
+      "/nologo",
+      "/std:c++20",
+      "/EHsc",
+      "/MD",
+      "/O2",
+      "/utf-8",
+      "/D_CRT_SECURE_NO_WARNINGS",
+      "/DNOMINMAX",
+      "/Gy",
+      "/IC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\vendor\\include",
+      "/IC:\\Users\\Dev\\Documents\\SynthScan\\third_party\\build_tools\\opencv412\\opencv\\build\\include",
+      "/c",
+      "C:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\vendor\\src\\ScanPanel.cpp",
+      "/FoC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\build\\ScanPanel.obj"
+    ],
+    "exit": 0,
+    "output": "ScanPanel.cpp\nC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\vendor\\include\\ScanPanel.h(3): warning C4005: 'NOMINMAX': macro redefinition\nC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\vendor\\src\\ScanPanel.cpp: note: see previous definition of 'NOMINMAX'\n"
+  },
+  {
+    "args": [
+      "C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\BuildTools\\VC\\Tools\\MSVC\\14.29.30133\\bin\\Hostx64\\x64\\cl.exe",
+      "/nologo",
+      "/std:c++20",
+      "/EHsc",
+      "/MD",
+      "/O2",
+      "/utf-8",
+      "/D_CRT_SECURE_NO_WARNINGS",
+      "/DNOMINMAX",
+      "/Gy",
+      "/IC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\vendor\\include",
+      "/IC:\\Users\\Dev\\Documents\\SynthScan\\third_party\\build_tools\\opencv412\\opencv\\build\\include",
+      "/c",
+      "C:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\vendor\\src\\ScreenCapture.cpp",
+      "/FoC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\build\\ScreenCapture.obj"
+    ],
+    "exit": 0,
+    "output": "ScreenCapture.cpp\nC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\vendor\\include\\ScreenCapture.h(3): warning C4005: 'NOMINMAX': macro redefinition\nC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\vendor\\src\\ScreenCapture.cpp: note: see previous definition of 'NOMINMAX'\n"
+  },
+  {
+    "args": [
+      "C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\BuildTools\\VC\\Tools\\MSVC\\14.29.30133\\bin\\Hostx64\\x64\\cl.exe",
+      "/nologo",
+      "/std:c++20",
+      "/EHsc",
+      "/MD",
+      "/O2",
+      "/utf-8",
+      "/D_CRT_SECURE_NO_WARNINGS",
+      "/DNOMINMAX",
+      "/Gy",
+      "/IC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\vendor\\include",
+      "/IC:\\Users\\Dev\\Documents\\SynthScan\\third_party\\build_tools\\opencv412\\opencv\\build\\include",
+      "/c",
+      "C:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\vendor\\src\\TextLineReader.cpp",
+      "/FoC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\build\\TextLineReader.obj"
+    ],
+    "exit": 0,
+    "output": "TextLineReader.cpp\nC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\vendor\\src\\TextLineReader.cpp(19): warning C4005: 'NOMINMAX': macro redefinition\nC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\vendor\\src\\TextLineReader.cpp: note: see previous definition of 'NOMINMAX'\n"
+  },
+  {
+    "args": [
+      "C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\BuildTools\\VC\\Tools\\MSVC\\14.29.30133\\bin\\Hostx64\\x64\\cl.exe",
+      "/nologo",
+      "/std:c++20",
+      "/EHsc",
+      "/MD",
+      "/O2",
+      "/utf-8",
+      "/D_CRT_SECURE_NO_WARNINGS",
+      "/DNOMINMAX",
+      "/Gy",
+      "/IC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\vendor\\include",
+      "/IC:\\Users\\Dev\\Documents\\SynthScan\\third_party\\build_tools\\opencv412\\opencv\\build\\include",
+      "/c",
+      "C:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\vendor\\src\\SignatureAnalyzer.cpp",
+      "/FoC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\build\\SignatureAnalyzer.obj"
+    ],
+    "exit": 0,
+    "output": "SignatureAnalyzer.cpp\n"
+  },
+  {
+    "args": [
+      "C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\BuildTools\\VC\\Tools\\MSVC\\14.29.30133\\bin\\Hostx64\\x64\\cl.exe",
+      "/nologo",
+      "/std:c++20",
+      "/EHsc",
+      "/MD",
+      "/O2",
+      "/utf-8",
+      "/D_CRT_SECURE_NO_WARNINGS",
+      "/DNOMINMAX",
+      "/Gy",
+      "/IC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\vendor\\include",
+      "/IC:\\Users\\Dev\\Documents\\SynthScan\\third_party\\build_tools\\opencv412\\opencv\\build\\include",
+      "/c",
+      "C:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\advice.cpp",
+      "/FoC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\build\\advice.obj"
+    ],
+    "exit": 0,
+    "output": "advice.cpp\nC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\vendor\\include\\ScreenCapture.h(3): warning C4005: 'NOMINMAX': macro redefinition\nC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\advice.cpp: note: see previous definition of 'NOMINMAX'\n"
+  },
+  {
+    "args": [
+      "C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\BuildTools\\VC\\Tools\\MSVC\\14.29.30133\\bin\\Hostx64\\x64\\cl.exe",
+      "/nologo",
+      "/std:c++20",
+      "/EHsc",
+      "/MD",
+      "/O2",
+      "/utf-8",
+      "/D_CRT_SECURE_NO_WARNINGS",
+      "/DNOMINMAX",
+      "/Gy",
+      "/IC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\vendor\\include",
+      "/IC:\\Users\\Dev\\Documents\\SynthScan\\third_party\\build_tools\\opencv412\\opencv\\build\\include",
+      "/c",
+      "C:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\engine.cpp",
+      "/FoC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\build\\engine.obj"
+    ],
+    "exit": 0,
+    "output": "engine.cpp\nC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\vendor\\include\\ScreenCapture.h(3): warning C4005: 'NOMINMAX': macro redefinition\nC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\engine.cpp: note: see previous definition of 'NOMINMAX'\n"
+  },
+  {
+    "args": [
+      "C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\BuildTools\\VC\\Tools\\MSVC\\14.29.30133\\bin\\Hostx64\\x64\\cl.exe",
+      "/nologo",
+      "/std:c++20",
+      "/EHsc",
+      "/MD",
+      "/O2",
+      "/utf-8",
+      "/D_CRT_SECURE_NO_WARNINGS",
+      "/DNOMINMAX",
+      "/Gy",
+      "/IC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\vendor\\include",
+      "/IC:\\Users\\Dev\\Documents\\SynthScan\\third_party\\build_tools\\opencv412\\opencv\\build\\include",
+      "/c",
+      "C:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\worker.cpp",
+      "/FoC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\build\\worker.obj"
+    ],
+    "exit": 0,
+    "output": "worker.cpp\nC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\vendor\\include\\ScreenCapture.h(3): warning C4005: 'NOMINMAX': macro redefinition\nC:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\worker.cpp: note: see previous definition of 'NOMINMAX'\n"
+  },
+  {
+    "args": [
+      "C:\\Program Files (x86)\\Windows Kits\\10\\bin\\10.0.19041.0\\x64\\rc.exe",
+      "/nologo",
+      "/fo",
+      "C:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\build\\worker.res",
+      "C:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\worker.rc"
+    ],
+    "exit": 0,
+    "output": ""
+  },
+  {
+    "args": [
+      "C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\BuildTools\\VC\\Tools\\MSVC\\14.29.30133\\bin\\Hostx64\\x64\\link.exe",
+      "/nologo",
+      "/OUT:C:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\build\\synthscan-mining.exe",
+      "/SUBSYSTEM:CONSOLE",
+      "/OPT:REF",
+      "C:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\build\\DxgiCapture.obj",
+      "C:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\build\\EmbeddedData.obj",
+      "C:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\build\\GamePlaces.obj",
+      "C:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\build\\GlyphReader.obj",
+      "C:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\build\\LoadoutReader.obj",
+      "C:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\build\\MiniJson.obj",
+      "C:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\build\\OCREngine.obj",
+      "C:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\build\\RefineryTerminal.obj",
+      "C:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\build\\RockContents.obj",
+      "C:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\build\\ScanPanel.obj",
+      "C:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\build\\ScreenCapture.obj",
+      "C:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\build\\SignatureAnalyzer.obj",
+      "C:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\build\\TextLineReader.obj",
+      "C:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\build\\advice.obj",
+      "C:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\build\\engine.obj",
+      "C:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\build\\worker.obj",
+      "C:\\Users\\Dev\\Documents\\SynthScan\\native\\mining_worker\\build\\worker.res",
+      "C:\\Users\\Dev\\Documents\\SynthScan\\third_party\\build_tools\\opencv412\\opencv\\build\\x64\\vc16\\lib\\opencv_world4120.lib",
+      "gdi32.lib",
+      "user32.lib",
+      "d3d11.lib",
+      "dxgi.lib",
+      "dwmapi.lib"
+    ],
+    "exit": 0,
+    "output": ""
+  }
+]

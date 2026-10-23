@@ -1,0 +1,4 @@
+GLYPHS RCDATA "vendor/resources/glyphs.bin"
+GLYPHS_MFD RCDATA "vendor/resources/glyphs_mfd.bin"
+TEXTLINE_MODEL RCDATA "vendor/resources/textline.onnx"
+TEXTLINE_KEYS RCDATA "vendor/resources/textline_keys.txt"
