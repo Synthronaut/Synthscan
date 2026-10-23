@@ -6,6 +6,7 @@ from native_control import RecoveryPolicy
 from native_workspace_data import migrate,plan_rows
 from native_bridge import SessionService
 from telemetry_core import utc_iso
+from installation import output_root
 
 class NativeRecoveryTests(unittest.TestCase):
     def test_failed_initialization_retries_then_stops(self):
@@ -59,6 +60,7 @@ class NativeProfileTests(unittest.TestCase):
             with self.assertRaises(ValueError):migrate(Path(d)/'native',root)
             self.assertEqual((root/'inventory.json').read_text(),'{broken')
 
+    @unittest.skipUnless((output_root()/'data/local_mining_catalog.json').exists(),'Requires a local game-reference extraction')
     def test_material_picker_reports_configured_weights_and_secondaries(self):
         rows=plan_rows(['Taranite'])
         self.assertTrue(rows)

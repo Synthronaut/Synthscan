@@ -4,8 +4,10 @@ import unittest
 
 from crafting_catalog import CraftingCatalog, get_catalog, quality_factor
 from mining_planner import get_mining_planner
+from installation import output_root
 
 
+@unittest.skipUnless((output_root()/'data/local_mining_catalog.json').exists(),'Requires a local game-reference extraction')
 class MiningPlannerTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -76,6 +78,7 @@ class MiningPlannerTests(unittest.TestCase):
         self.assertIn('community curation', row['location']['curated_alias']['note'])
 
 
+@unittest.skipUnless((output_root()/'data/local_game_catalog.json').exists(),'Requires a local game-reference extraction')
 class NativeRecipeTests(unittest.TestCase):
     def test_local_recipe_inputs_and_real_guid_are_available(self):
         bp = get_catalog().resolve('FR-76')
