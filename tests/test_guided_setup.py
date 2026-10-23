@@ -8,6 +8,18 @@ from setup_status import reputation_view,error_message
 from reputation_notice import NoticeGate
 
 class GuidedSetupTests(unittest.TestCase):
+    def test_permission_repair_refuses_linked_files_before_any_acl_change(self):
+        from game_text_access import grant
+        with tempfile.TemporaryDirectory() as d:
+            game=Path(d)/'game';(game/'Bin64').mkdir(parents=True)
+            for name in ['Data.p4k','build_manifest.id','Bin64/StarCitizen.exe']:(game/name).write_bytes(b'fixture')
+            original=Path(d)/'unrelated.txt';original.write_text('unrelated private file')
+            os.link(original,game/'user.cfg')
+            with patch('game_text_access.subprocess.run') as command:
+                with self.assertRaisesRegex(ValueError,'Linked'):grant(game,'S-1-5-21-123')
+                command.assert_not_called()
+            self.assertEqual(original.read_text(),'unrelated private file')
+
     def test_game_watcher_waits_for_first_run_instead_of_reopening_the_wizard(self):
         from native_control import setup_busy,RecoveryPolicy
         with patch('native_control.instance_running',return_value=True),patch('setup_status.ready',return_value=False):
