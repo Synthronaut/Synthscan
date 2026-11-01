@@ -19,6 +19,8 @@ bool hudLocked();
 void drawPiracy(Gdiplus::Graphics& g,float width,float height,float scale);
 void attach(SCMiner::MinerGUI* gui,std::function<bool(const std::string&)> confirm);
 void shutdown();
+void markUserExit();
+bool closeToTray();
 void workspace(int tab=0);
 int sessionHeight();
 void drawSession(Gdiplus::Graphics& g,float width,float top,float height,float scale);

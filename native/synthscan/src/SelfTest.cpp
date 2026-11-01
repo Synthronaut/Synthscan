@@ -36,6 +36,7 @@
 #include "MiniJson.h"
 #include "RefineryShare.h"
 #include "UexPrices.h"
+#include "RockValuation.h"
 #include "UexReports.h"
 #include "UexMarket.h"
 #include "Updater.h"
@@ -1045,6 +1046,7 @@ int runSelfTest() {
         const bool qualities = SCMiner::parseQuality("664", quality) && quality == 664 &&
                                SCMiner::parseQuality("S04", quality) && quality == 504 &&
                                SCMiner::parseQuality("1000", quality) && quality == 1000 &&
+                               SCMiner::parseQuality("644.", quality) && quality == 644 && !SCMiner::parseQuality("6.44", quality) &&
                                !SCMiner::parseQuality("1001", quality) && !SCMiner::parseQuality("", quality) &&
                                SCMiner::qualityOfOre("Iron", 664) && !SCMiner::qualityOfOre("Iron", 654) &&
                                !SCMiner::qualityOfOre("Iron", 0);
@@ -1278,6 +1280,65 @@ int runSelfTest() {
                            "full terminals, month-old prices, nought and the raw ore left out; a gateway goes by its "
                            "system, Levski by Delamar; Aluminium is UEX's Aluminum (got " +
                                std::to_string(q.size()) + " for Quantainium" + (why.empty() ? "" : ", " + why) + ")");
+    }
+
+    // Rock valuation: exact SCU fractions, inert exclusion, a single buyer
+    // for the load, actual refining yield, and quality-band buy ads only.
+    {
+        using SCMiner::RockPriceBook;using SCMiner::RockContents;
+        const long long now=1793499000;
+        const auto stamp=std::to_string(now);
+        const std::string commodities=R"json({"status":"ok","data":[{"id":5,"id_item":5852,"name":"Aluminum","is_raw":0,"is_available_live":1},{"id":6,"id_item":5853,"name":"Aluminum (Ore)","is_raw":1,"is_available_live":1}]})json";
+        const std::string terminals=R"({"status":"ok","data":[{"id":1,"name":"Raw Buyer","star_system_name":"Nyx","is_available_live":1},{"id":2,"name":"TDD","star_system_name":"Nyx","is_available_live":1}]})";
+        const auto raw="{\"status\":\"ok\",\"data\":[{\"id_commodity\":6,\"id_terminal\":1,\"price_sell\":100,\"price_buy\":999999,\"date_modified\":"+stamp+"}]}";
+        const auto refined="{\"status\":\"ok\",\"data\":[{\"id_commodity\":5,\"id_terminal\":2,\"price_sell\":1000,\"date_modified\":"+stamp+"}]}";
+        const auto market="{\"status\":\"ok\",\"data\":[{\"id_item\":5852,\"item_name\":\"Aluminum\",\"quality_tier\":7,\"operation\":\"buy\",\"currency\":\"UEC\",\"unit\":\"cscu\",\"listings_count\":3,\"price_avg\":\"200\",\"game_version\":\"4.10.2\",\"date_modified\":"+stamp+"}]}";
+        RockPriceBook book;std::string why;
+        bool read=book.read(commodities,terminals,raw,refined,market,now,"4.10.2",why);
+        RockContents c;c.whole=true;c.parts={{"Aluminium",false,10,960},{"Aluminium",false,20,350},{"",true,70,0}};
+        auto v=book.estimate(100,c,"Nyx",2,now);
+        // Levski's Aluminum factor is 1.08; 30 SCU * .45 * 1.08.
+        allPassed &= check(read&&v.scanned&&v.rawKnown&&v.refinedKnown&&std::abs(v.raw-3000)<.01&&
+            std::abs(v.refined-14580)<.05&&!v.feesKnown&&std::abs(v.player-97200)<.2&&std::abs(v.playerCoverage-1.0/3)<.001,
+            "rock value excludes inert, uses player sell quotes, refining yield, cSCU and partial quality coverage");
+        c.whole=false;allPassed &= check(!book.estimate(100,c,"Nyx",2,now).scanned,"unverified partial OCR never produces a rock valuation");c.whole=true;
+        RockContents partialScan;partialScan.partial=true;partialScan.parts={{"Bexalite",false,4.58f,597},{"Gold",false,3.65f,644},{"Borase",false,14.80f,584},{"Borase",false,63.47f,359},{"",true,13.38f,0}};
+        allPassed &= check(!SCMiner::contentsHold(partialScan)&&SCMiner::contentsEstimateReady(partialScan),"explicit near-complete OCR preserves its deficit and allows a labelled estimate");
+        partialScan.parts[0].percent=3.58f;allPassed &= check(!SCMiner::contentsEstimateReady(partialScan),"larger unread share cannot become a near-complete estimate");
+        partialScan.parts[0].percent=4.58f;partialScan.parts[1].ore.clear();allPassed &= check(!SCMiner::contentsEstimateReady(partialScan),"unknown material prevents even a labelled near-complete estimate");
+        allPassed &= check(!book.estimate(0,c,"Nyx",2,now).scanned&&!book.estimate(NAN,c,"Nyx",2,now).scanned&&
+            !book.estimate(100,c,"Nyx",99,now).scanned,"missing SCU, nonfinite readings and invalid methods have no valuation");
+        auto old=book.estimate(100,c,"Nyx",2,now+31ll*86400);
+        allPassed &= check(!old.rawKnown&&!old.refinedKnown&&old.playerCoverage==0,"terminal reports expire even while the app stays open");
+        RockPriceBook mismatch;mismatch.read(commodities,terminals,raw,refined,market,now,"4.11.0",why);
+        allPassed &= check(mismatch.estimate(100,c,"Nyx",2,now).playerCoverage==0,"player averages from another game patch are rejected");
+        RockPriceBook playerOnly;playerOnly.read(commodities,terminals,raw,"{}",market,now,"4.10.2",why);
+        auto independent=playerOnly.estimate(100,c,"Nyx",2,now);
+        allPassed &= check(!independent.refinedKnown&&independent.playerCoverage>0,"player valuation does not depend on an NPC refined quote");
+        for(const auto& pair : std::vector<std::pair<std::string,std::string>>{{"\"operation\":\"buy\"","\"operation\":\"sell\""},{"\"listings_count\":3","\"listings_count\":0"},{"\"unit\":\"cscu\"","\"unit\":\"crate\""},{"\"currency\":\"UEC\"","\"currency\":\"USD\""},{"\"listings_count\":3","\"listings_count\":2"}}) {
+            auto unsupported=market;unsupported.replace(unsupported.find(pair.first),pair.first.size(),pair.second);
+            RockPriceBook rejected;rejected.read(commodities,terminals,raw,refined,unsupported,now,"4.10.2",why);
+            allPassed &= check(rejected.estimate(100,c,"Nyx",2,now).playerCoverage==0,"unusable marketplace averages do not become player proceeds: "+pair.second);
+        }
+        allPassed &= check(RockPriceBook::qualityTier(0)==0&&RockPriceBook::qualityTier(499)==1&&
+            RockPriceBook::qualityTier(500)==2&&RockPriceBook::qualityTier(949)==6&&RockPriceBook::qualityTier(950)==7&&
+            RockPriceBook::qualityTier(1001)==0,"market quality tiers preserve the 499/500 and 949/950 boundaries");
+        // A second material has no common buyer: never add two best terminal
+        // prices and present the result as one achievable sale.
+        c.parts.push_back({"Gold",false,1,960});c.parts.back().percent=1;c.parts[2].percent=69;
+        auto missing=book.estimate(100,c,"Nyx",2,now);
+        allPassed &= check(!missing.rawKnown&&!missing.refinedKnown,"a missing material price is not treated as zero");
+    }
+
+    {
+        const auto file=std::filesystem::temp_directory_path()/"synthscan_ore_alias_test.ini";
+        using SCMiner::loadOreNameAliases;using SCMiner::snapOreName;
+        {std::ofstream f(file);f<<"items_commodities_aslarite_raw=ASL\nitems_commodities_agricium_ore=AGR\nitems_commodities_titanium=TITN\nitems_commodities_gold=SHARED\nitems_commodities_iron=SHARED\nitems_commodities_gold_desc=NOTANALIAS\n";}
+        loadOreNameAliases(file);
+        allPassed &= check(snapOreName("ASL")=="Aslarite"&&snapOreName("AGR")=="Agricium"&&
+            snapOreName("TITN")=="Titanium"&&snapOreName("SHARED").empty(),
+            "installed SynthStrings material aliases resolve exactly; shared names remain ambiguous");
+        std::error_code ec;std::filesystem::remove(file,ec);loadOreNameAliases(file);
     }
 
     // --- Reporting to UEX: the refinery a job was placed at - only where

@@ -1,5 +1,6 @@
 """Lifecycle for the full native app: readiness, bounded recovery and user quit."""
 import argparse,ctypes,hashlib,json,logging,os,subprocess,time
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from app_lifecycle import ROOT,SingleInstance,Signal,game_process_ids,instance_running,send_signal,kernel
 from refinery_orders import atomic_json
@@ -47,6 +48,10 @@ class RecoveryPolicy:
             self.games=games;self.attempts=0;self.next_try=0;self.started_at=None;self.suppressed=False;self.ready_since=None
         if quit_at and self.started_at and quit_at>=self.started_at:self.suppressed=True
         if ready:
+            # Reopening the app revokes an earlier quit. The old watcher kept
+            # suppression latched even after a successful manual restart.
+            if self.suppressed and not quit_at:
+                self.suppressed=False;self.started_at=now;self.ready_since=None
             # A genuinely ready app may later be reopened by hand; future crashes
             # get a fresh recovery budget, while a user exit stays suppressed.
             if self.ready_since is None:self.ready_since=now
@@ -61,6 +66,11 @@ class RecoveryPolicy:
 def read_quit(games):
     try:
         data=json.loads((DATA/'native_exit.json').read_text())
+        status=json.loads((DATA/'native_status.json').read_text())
+        # A marker from an older app instance cannot suppress recovery of a
+        # newer one, even when Star Citizen has stayed open throughout.
+        if data.get('pid') and data['pid']!=status.get('pid'):return 0
+        if float(data['at'])<float(status.get('at',0)):return 0
         return float(data['at']) if set(data['game_pids'])==set(games) and data['reason']=='user' else 0
     except (OSError,ValueError,KeyError,TypeError):return 0
 
@@ -73,14 +83,23 @@ def watch():
     lock=SingleInstance('watcher')
     if not lock.acquired:return
     stop=Signal('watcher-stop');policy=RecoveryPolicy();DATA.mkdir(parents=True,exist_ok=True)
-    logging.basicConfig(filename=DATA/'launcher.log',level=logging.INFO,format='%(asctime)s %(levelname)s %(message)s')
-    last_error=''
+    logger=logging.getLogger('synthscan.native_watcher');logger.setLevel(logging.INFO);logger.propagate=False
+    handler=RotatingFileHandler(DATA/'launcher.log',maxBytes=1024*1024,backupCount=2,encoding='utf-8')
+    handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(message)s'));logger.addHandler(handler)
+    logger.info('Recovery watcher started')
+    last_error='';process=None
     try:
         while True:
             try:
                 games=game_process_ids();running=native_running();ready=native_ready()
+                if process is not None and process.poll() is not None:
+                    code=process.returncode
+                    atomic_json(DATA/'native_process_exit.json',dict(at=time.time(),pid=process.pid,
+                        exit_code=code,exit_hex=f'0x{code & 0xffffffff:08X}',app_running=running))
+                    logger.info('Launched process pid=%s exited code=%s (0x%08X), app_running=%s',process.pid,code,code & 0xffffffff,running)
+                    process=None
                 if policy.update(games,running or setup_busy(),ready,read_quit(games)):
-                    process=launch(True);logging.info('Started native SynthScan pid=%s for game pids=%s',process.pid,sorted(games))
+                    process=launch(True);logger.info('Started native SynthScan pid=%s for game pids=%s',process.pid,sorted(games))
                 if running and not ready and policy.started_at and time.time()-policy.started_at>60:
                     last_error='Native application has not reported ready. Open SynthScan manually to inspect startup.'
                 elif policy.attempts>=3 and not running:last_error='Native startup failed three times; automatic retries stopped for this game run.'
@@ -88,9 +107,10 @@ def watch():
                 atomic_json(DATA/'watcher_status.json',dict(at=time.time(),running=True,app_running=running,ready=ready,
                             error=last_error,attempts=policy.attempts,voluntary_exit=policy.suppressed))
             except Exception as exc:
-                last_error=str(exc);logging.exception('Native game watcher poll failed')
+                last_error=str(exc);logger.exception('Native game watcher poll failed')
             if stop.wait(3):break
-    finally:stop.close();lock.close()
+    finally:
+        stop.close();lock.close();logger.removeHandler(handler);handler.close()
 
 def install():
     validate_binary();atomic_json(TARGET,dict(schema=1,target='native',binary=str(BINARY)))

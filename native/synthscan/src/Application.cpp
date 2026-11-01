@@ -595,6 +595,7 @@ bool Application::initialize() {
     // game's log - its backups are read one per tick from here on
     library_.load();
     library_.setGameLog(locateGameLog());
+    if(!library_.gameLog().empty())loadOreNameAliases(GameTexts::target(library_.gameLog().parent_path()));
 
     // Ask once, in the background, whether there is a newer version.
     // Nothing is downloaded by asking and nothing is installed without
@@ -662,93 +663,11 @@ bool Application::initialize() {
 void Application::run() {
     running_ = true;
 
-    std::cout << "Press 'L' for live mode or 'M' for manual input...\n" << std::endl;
+    std::cout << "Keyboard commands are disabled. Use the app buttons.\n" << std::endl;
 
     lastScanTime_ = std::chrono::steady_clock::now();
 
     while (running_) {
-        // Poll keyboard input
-        if (_kbhit()) {
-            int key = _getch();
-
-            switch (key) {
-                case 'l':
-                case 'L':
-                    toggleLiveMode();
-                    break;
-
-                case 'm':
-                case 'M': {
-                    // Pause live mode for manual input
-                    bool wasLive = liveModeActive_;
-                    liveModeActive_ = false;
-
-                    std::cout << "\nEnter signature value: ";
-                    int manualValue = 0;
-                    if (!(std::cin >> manualValue)) {
-                        std::cin.clear();
-                        std::cin.ignore(1024, '\n');
-                        manualValue = 0;
-                    }
-
-                    if (manualValue > 0) {
-                        std::string report = analyzer_.generateReport(manualValue);
-                        std::cout << report << std::endl;
-                    }
-
-                    // Resume live mode if it was active
-                    if (wasLive) {
-                        liveModeActive_ = true;
-                        std::cout << "\n[LIVE] mode resumed..." << std::endl;
-                    }
-                    break;
-                }
-
-                case 's':
-                case 'S':
-                    triggerScan();
-                    break;
-
-                case 'r':
-                case 'R':
-                    regionDetected_ = false;
-                    lastRecognizedSignature_ = 0;
-                    std::cout << "\nThe region will be re-detected on the next scan..." << std::endl;
-                    break;
-
-                case '+':
-                case '=':
-                    captureIntervalMs_ = (std::max)(100, captureIntervalMs_ - 100);
-                    std::cout << "\nScan interval: " << captureIntervalMs_ << "ms" << std::endl;
-                    break;
-
-                case '-':
-                case '_':
-                    captureIntervalMs_ = (std::min)(3000, captureIntervalMs_ + 100);
-                    std::cout << "\nScan interval: " << captureIntervalMs_ << "ms" << std::endl;
-                    break;
-
-                case 'q':
-                case 'Q':
-                case 27:  // ESC
-                    running_ = false;
-                    break;
-
-                case 0:
-                case 224: {
-                    // Function keys (extended key code)
-                    int fKey = _getch();
-                    if (fKey == 67) {  // F9
-                        triggerScan();
-                    }
-                    break;
-                }
-
-                default:
-                    break;
-            }
-        }
-
         // Live mode: automatic scan at a fixed interval
         if (liveModeActive_) {
             auto now = std::chrono::steady_clock::now();
@@ -1051,37 +970,6 @@ void Application::runWithGUI(HINSTANCE hInstance) {
         // Pump Windows messages
         if (!gui_->processMessages()) {
             break;
-        }
-
-        // Poll console input (when a console is attached)
-        if (_kbhit()) {
-            int key = _getch();
-
-            switch (key) {
-                case 'l':
-                case 'L':
-                    toggleLiveMode();
-                    gui_->setLiveModeActive(liveModeActive_);
-                    break;
-
-                case 's':
-                case 'S':
-                    triggerScan();
-                    break;
-
-                case 'r':
-                case 'R':
-                    regionDetected_ = false;
-                    lastRecognizedSignature_ = 0;
-                    std::cout << "The region will be re-detected..." << std::endl;
-                    break;
-
-                case 'q':
-                case 'Q':
-                case 27:
-                    running_ = false;
-                    break;
-            }
         }
 
         // The blueprint library follows the game's log
@@ -1979,7 +1867,7 @@ void Application::readContentsOnHud(const cv::Mat& frame, const ScanPanel& panel
                     thisRock ? "for this rock" : "for another mass than on view: dropped");
         if (thisRock) takeRockContents(read, rock);
     }
-    if (sameMassRead(rock.mass, contentsFor_)) return;   // read, and on view
+    if (sameMassRead(rock.mass, contentsFor_) && !contentsPartial_) return;   // read, and on view
     // Another mass than the list on view was read at. It may be that rock
     // still - with less of it left, or its mass read another way: the same
     // ore, where both looks named one, and the mass no more than a quarter
@@ -2039,7 +1927,7 @@ void Application::readContentsOnHud(const cv::Mat& frame, const ScanPanel& panel
 }
 
 void Application::takeRockContents(const RockContents& read, const RockStats& rock) {
-    if (!read.whole) return;
+    if (!contentsEstimateReady(read)) return;
     std::string key, words;
     char text[96];
     for (const RockPartRead& part : read.parts) {
@@ -2064,6 +1952,7 @@ void Application::takeRockContents(const RockContents& read, const RockStats& ro
     const bool said = contentsFor_ > 0 && key == contentsShown_;
     if (!said) logRockList("shown", rock.mass, rock.mass, &read, contentsTries_, "");
     contentsFor_ = rock.mass;
+    contentsPartial_ = read.partial;
     contentsOre_ = rock.ore;
     contentsShown_ = key;
     contentsTries_ = 0;
@@ -3555,22 +3444,11 @@ void Application::processScanLive() {
 }
 
 void Application::setupHotkey() {
-    // Register the hotkey (F9)
-    if (!RegisterHotKey(nullptr, 1, 0, hotkeyVkCode_)) {
-        std::cerr << "Warning: could not register the hotkey." << std::endl;
-    }
+    // Buttons and menus only; no keyboard registration.
 }
 
 #ifdef _WIN32
 LRESULT CALLBACK Application::KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
-    if (nCode >= 0 && wParam == WM_KEYDOWN) {
-        KBDLLHOOKSTRUCT* kbStruct = reinterpret_cast<KBDLLHOOKSTRUCT*>(lParam);
-
-        if (g_appInstance && kbStruct->vkCode == static_cast<DWORD>(g_appInstance->hotkeyVkCode_)) {
-            g_appInstance->triggerScan();
-        }
-    }
-
     return CallNextHookEx(nullptr, nCode, wParam, lParam);
 }
 #endif
@@ -4464,6 +4342,7 @@ void Application::pollLibrary() {
     if (library_.gameLog().empty() && ++libraryLooks_ % 15 == 0) {
         // The game may have started since - look again every half minute
         library_.setGameLog(locateGameLog());
+        if(!library_.gameLog().empty())loadOreNameAliases(GameTexts::target(library_.gameLog().parent_path()));
     }
     const bool changed = library_.poll();
     if (changed || !libraryPushed_) pushLibrary();
@@ -4501,6 +4380,7 @@ void Application::pollLibrary() {
     serviceGameTexts();
     keepGameTextsFresh();
     serviceUex();
+    serviceRockPrices();
     serviceUexReports();
     serviceUexMarket();
     // The same log, read for where the player is and what they fly
@@ -4624,8 +4504,14 @@ static void keepFile(const std::filesystem::path& file, const std::string& bytes
         out.write(bytes.data(), (std::streamsize)bytes.size());
         if (!out) return;
     }
+    // Windows rename does not replace an existing cache. Replace atomically
+    // so a refreshed quote does not leave the previous file forever.
+#ifdef _WIN32
+    MoveFileExW(fresh.c_str(),file.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH);
+#else
     std::error_code ec;
     std::filesystem::rename(fresh, file, ec);
+#endif
 }
 
 // The Ore Finder's prices, off the UI thread: two lists of a megabyte each,
@@ -4640,8 +4526,7 @@ Application::UexOutcome Application::loadUex(const std::filesystem::path& folder
     std::filesystem::create_directories(folder, ec);
     const std::filesystem::path pricesFile = folder / "prices.json";
     const std::filesystem::path terminalsFile = folder / "terminals.json";
-    std::vector<std::string> headers;
-    if (const std::string token = uexToken(); !token.empty()) headers.push_back("Authorization: Bearer " + token);
+    std::vector<std::string> headers; // Public price feeds need no token.
     const long long now = (long long)std::time(nullptr);
     // A token UEX no longer takes is answered 403, "Invalid bearer token.",
     // where the same question without one is answered in full - so a token
@@ -4746,7 +4631,7 @@ static std::string uexListCached(const std::filesystem::path& file, const char* 
     const long long age = secondsSinceWritten(file);
     if (!kept.empty() && age >= 0 && age < maxAge) return kept;
     std::vector<std::string> headers;
-    if (const std::string token = uexToken(); !token.empty()) headers.push_back("Authorization: Bearer " + token);
+    // Public GETs remain anonymous, independently of optional reporting keys.
     std::string body;
     bool fetched = httpsGet(std::string(UEX_API) + endpoint, headers, body, why);
     if (!fetched && !headers.empty() && (why == "the server answered 401" || why == "the server answered 403")) {
@@ -4763,6 +4648,34 @@ static std::string uexListCached(const std::filesystem::path& file, const char* 
         return body;
     }
     return kept;
+}
+
+std::shared_ptr<RockPriceBook> Application::loadRockPrices(const std::filesystem::path& folder,
+                                                         const std::string& version, std::string& note) {
+    std::error_code ec;std::filesystem::create_directories(folder,ec);
+    std::string why;
+    const auto commodities=uexListCached(folder/"commodities.json","commodities",86400,why);
+    const auto terminals=uexListCached(folder/"terminals.json","terminals",7*86400,why);
+    const auto raw=uexListCached(folder/"raw_prices.json","commodities_raw_prices_all",1800,why);
+    const auto refined=uexListCached(folder/"prices.json","commodities_prices_all",1800,why);
+    const auto market=uexListCached(folder/"market_averages.json","marketplace_prices_averages_all",3600,why);
+    auto book=std::make_shared<RockPriceBook>();
+    if (!book->read(commodities,terminals,raw,refined,market,(long long)std::time(nullptr),version,note)) return nullptr;
+    note=why;return book;
+}
+
+void Application::serviceRockPrices() {
+    if (!gui_) return;
+    if (rockPriceJob_.valid() && rockPriceJob_.wait_for(std::chrono::seconds(0))==std::future_status::ready) {
+        auto answer=rockPriceJob_.get();gui_->setRockPrices(answer.prices,answer.note);
+    }
+    if (!uexWanted_ || rockPriceJob_.valid() || !gui_->rockInView()) return;
+    const auto now=std::chrono::steady_clock::now();
+    if (rockPriceAsked_!=std::chrono::steady_clock::time_point{} && now-rockPriceAsked_<std::chrono::minutes(10)) return;
+    rockPriceAsked_=now;const auto folder=AppPaths::data()/"uex";
+    const int v=library_.liveGameVersion();
+    const std::string version=v>0?std::to_string(v/10000)+"."+std::to_string(v/100%100)+"."+std::to_string(v%100):"";
+    rockPriceJob_=std::async(std::launch::async,[folder,version](){RockPriceAnswer a;a.prices=loadRockPrices(folder,version,a.note);return a;});
 }
 
 std::string Application::uexTokenForProbe() { return uexToken(); }

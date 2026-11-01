@@ -18,6 +18,8 @@ jobs:
         run: python tools/fetch_build_dependencies.py
       - name: Compile native app
         run: python -B tools/build_native_app.py
+      - name: Native self-tests
+        run: python -B -c "import subprocess; subprocess.run(['dist/native/SynthScan.exe', '--selftest'], check=True, timeout=180)"
       - name: Unit tests
         run: python -B -m unittest discover -s tests -q
       - name: Package clean source and standalone app

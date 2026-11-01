@@ -19,9 +19,13 @@ crash upload, or automatic sharing service in this release.
 - The OCR overlay processes frames locally. Clipboard coordinates are read only
   when you arm coordinate capture. Explicit diary/bookmark exports include the
   information you choose to share; review those files before posting them.
-- Optional native UEX integration uses credentials you enter locally and contacts
-  that service. It is not needed for reputation or the HUD. No UEX credential or
-  refinery community service is configured in this distribution.
+- Mining valuations fetch public commodity, terminal and marketplace-average
+  lists from UEX over HTTPS without an account or token. Quotes are cached
+  locally. These requests do not send your rock scans, location, game credentials
+  or inventory. The normal network connection exposes your IP to UEX.
+  Set `uex=0` in the local native settings file to disable UEX requests.
+- Optional UEX account/reporting features use credentials you enter locally.
+  No UEX credential or refinery community service is bundled in this distribution.
 - Optional Windows timing/network diagnostics may request administrator access.
   Normal setup, reputation, game-log monitoring and OCR do not require it.
 

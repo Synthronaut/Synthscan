@@ -39,3 +39,5 @@ uex_key.dat
 portable.txt
 reputation_snapshot.json
 reputation_localization_state.json
+
+/native/mining_worker/build/

@@ -4116,8 +4116,21 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         report<<result.note;
         LocalFree(setupArgv);return result.written?0:2;
     }
+    for(int i=1;setupArgv&&i+3<setupArgc;i++)if(std::wstring(setupArgv[i])==L"--rock-price-check") {
+        // Read-only public-feed diagnostic. This is a synthetic scan, never
+        // an observation of the player's current rock or cargo.
+        std::string version;for(wchar_t c:std::wstring(setupArgv[i+3]))if(c<128)version+=(char)c;
+        std::string note;auto prices=SCMiner::Application::loadRockPrices(std::filesystem::path(setupArgv[i+1]),version,note);
+        SCMiner::RockContents contents;contents.whole=true;contents.parts={{"Gold",false,10,1000},{"Gold",false,20,350},{"",true,70,0}};
+        SCMiner::RockValue value;if(prices)value=prices->estimate(100,contents,"Stanton",2,(long long)std::time(nullptr));
+        std::ofstream report(std::filesystem::path(setupArgv[i+2]),std::ios::binary);
+        report<<"{\"anonymous\":true,\"loaded\":"<<(prices?"true":"false")<<",\"synthetic_test_scan\":true,\"raw_quote\":"<<(value.rawKnown?"true":"false")<<",\"refined_quote\":"<<(value.refinedKnown?"true":"false")<<",\"player_coverage\":"<<value.playerCoverage<<"}";
+        LocalFree(setupArgv);return prices&&value.rawKnown&&value.refinedKnown?0:2;
+    }
     if(setupArgv)LocalFree(setupArgv);
     for(int i=1;i+1<__argc;i++)if(std::string(__argv[i])=="--ui-test") {
+        // Interactive window fixtures are never run alongside the game.
+        if(SCMiner::ScreenCapture::gameWindow())return 4;
         setupConsole(true);return SynthScan::uiTest(__argv[i+1]);
     }
     // First thing of all, before any flag is looked at: bring across

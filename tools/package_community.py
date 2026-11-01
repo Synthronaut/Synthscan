@@ -13,14 +13,15 @@ import zipfile
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
-VERSION='0.1.0-alpha.2'
+VERSION='0.1.0-alpha.3'
 PRIVATE={'loginData.json','inventory.json','config.json','region_config.txt','owned_blueprints.txt',
     'blueprints_library.json','blueprints_favorites.json','reputation_snapshot.json','reputation_localization_state.json',
     'server_log.json','shard_history.json','uex_token.dat','uex_key.dat','portable.txt',
     'native_runtime.json','workspace_library.json','launch_target.json','installation.json',
-    'reputation_names_preview.json','reputation_labels_status.json','setup_result.json',
-    'fabricator_scan_inbox.json','refinery_orders.json','crafting_recipes.json','mining_loadout.json'}
-IGNORED={'.git','__pycache__','.venv','node_modules','synthscan-build'}
+    'reputation_names_preview.json','reputation_labels_status.json','blueprint_strings_status.json','setup_result.json',
+    'fabricator_scan_inbox.json','refinery_orders.json','crafting_recipes.json','mining_loadout.json',
+    'native_status.json','top_hud_status.json','session_state.json','credentials.json','.env'}
+IGNORED={'.git','__pycache__','.venv','node_modules','synthscan-build','build'}
 
 
 def copy_tree(source,destination):
@@ -36,7 +37,7 @@ def stage_source(destination):
     for file in ROOT.glob('*.py'):
         if file.name.startswith('test_') or file.name=='make_shortcut.py':continue
         shutil.copy2(file,destination/file.name)
-    for name in ['LICENSES.md','README.md','PRIVACY.md','SECURITY.md','BUILDING.md','requirements-release.lock','.gitignore']:
+    for name in ['LICENSES.md','README.md','CHANGELOG.md','PRIVACY.md','SECURITY.md','BUILDING.md','requirements-release.lock','.gitignore']:
         shutil.copy2(ROOT/name,destination/name)
     shutil.copy2(ROOT/'native/synthscan/LICENSE',destination/'LICENSE')
     for name in ['synthscan','mining_worker']:copy_tree(ROOT/'native'/name,destination/'native'/name)

@@ -38,3 +38,24 @@ class CommunityIsolationTests(unittest.TestCase):
             result=workspace.migrate(Path(folder)/'new-person')
             self.assertEqual(result['files'],{})
             self.assertFalse((Path(folder)/'new-person/legacy').exists())
+
+
+class SourcePackagingTests(unittest.TestCase):
+    def test_generated_worker_builds_and_live_status_are_not_copied(self):
+        from tools.package_community import copy_tree
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);source=root/'source';target=root/'public'
+            (source/'build').mkdir(parents=True)
+            (source/'build/worker.res').write_bytes(b'generated resource')
+            (source/'worker.cpp').write_text('int main(){}')
+            (source/'native_status.json').write_text('{"pid":42}')
+            copy_tree(source,target)
+            self.assertTrue((target/'worker.cpp').exists())
+            self.assertFalse((target/'build').exists())
+            self.assertFalse((target/'native_status.json').exists())
+
+    def test_live_status_and_credentials_are_rejected_even_if_manually_added(self):
+        for name in ['native_status.json','top_hud_status.json','session_state.json','credentials.json','.env']:
+            with self.subTest(name=name),tempfile.TemporaryDirectory() as directory:
+                root=Path(directory);(root/name).write_text('{}')
+                with self.assertRaisesRegex(ValueError,'Private file'):audit(root)

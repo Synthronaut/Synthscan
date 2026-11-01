@@ -6,6 +6,7 @@
 #include <deque>
 #include <string>
 #include <vector>
+#include <filesystem>
 
 #include "MiningAdvice.h"
 #include "OCREngine.h"
@@ -204,6 +205,7 @@ struct FigureLines {
                                       // one region's candidates against another's
 };
 std::vector<FigureLines> figureLineCandidates(const cv::Mat& frame, const cv::Rect& region, int most);
+std::vector<FigureLines> whiteFigureLineCandidates(const cv::Mat& frame, const cv::Rect& region, int most);
 
 // ...and those four lines read. The rows are given, not worked out from a
 // label column, so this serves both the shape reader's places and the ones
@@ -348,6 +350,9 @@ double glanceBar(const PanelSpot& spot);
 // has and written as the app writes it ("Ice"); empty when nothing is near
 // enough.
 std::string snapOreName(const std::string& read);
+// Resolve only unambiguous commodity aliases from this game's localization.
+// SynthStrings can display ASL/AGR/TITN instead of full material names.
+int loadOreNameAliases(const std::filesystem::path& localization);
 
 // ...and the same name read off its row by the second reader, snapped the
 // same way. The download carries no Tesseract data, so on a fresh install

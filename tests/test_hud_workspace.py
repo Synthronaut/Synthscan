@@ -88,6 +88,8 @@ class HUDPresentationTests(unittest.TestCase):
 
 class HUDWorkspaceTests(unittest.TestCase):
     def setUp(self):
+        from tests.gui_guard import require_game_closed
+        require_game_closed()
         self.root=tk.Tk();self.root.withdraw()
         self.temp=tempfile.TemporaryDirectory()
         self.patches=[]

@@ -39,7 +39,7 @@ def main():
     assert result['automatic_placement_loaded_without_activation'],result
     assert result['activity_topmost_restored_without_activation'],result
     assert result['activity_collapse_preserves_server_setting'] and result['activity_expand_restores_position_and_tab'] and result['activity_tabs_visible'],result
-    assert result['hud_drag_while_game_active'] and result['hud_lock_clickthrough'],result
+    assert result['hud_passive_while_game_active'] and result['hud_lock_clickthrough'],result
     if a.with_session_timeline:assert result['session_columns']==7 and result['session_rows']==3 and result['session_filter_route'],result
     service=SessionService(out/'spool_profile',out/'Game.log')
     try:

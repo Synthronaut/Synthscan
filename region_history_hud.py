@@ -1,4 +1,5 @@
 """Small no-activate region dropdown, reading existing session history only."""
+from overlay_input import input_blocked
 from datetime import datetime, timedelta, timezone
 import re
 import time
@@ -50,7 +51,7 @@ class RegionHistory:
         api=ctypes.windll.user32;api.GetParent.argtypes=[w.HWND];api.GetParent.restype=w.HWND
         hwnd=api.GetParent(window.winfo_id()) or window.winfo_id()
         api.GetWindowLongW.argtypes=[w.HWND,ctypes.c_int];api.SetWindowLongW.argtypes=[w.HWND,ctypes.c_int,ctypes.c_long]
-        api.SetWindowLongW(hwnd,-20,(api.GetWindowLongW(hwnd,-20)|0x80000|0x80|0x08000000)&~0x20)
+        api.SetWindowLongW(hwnd,-20,(api.GetWindowLongW(hwnd,-20)|0x80000|0x80|0x08000000)|0x20)
         # WS_EX_LAYERED alone does not make a window drawable. Windows requires
         # an initial alpha/color-key setting (or UpdateLayeredWindow). The
         # button later gets Tk opacity; the popup otherwise never did.
@@ -67,7 +68,9 @@ class RegionHistory:
         original=api.GetWindowLongPtrW(hwnd,-4)
         @proc_type
         def mouse_proc(handle,message,wp,lp):
-            if message==0x21:return 3  # WM_MOUSEACTIVATE / MA_NOACTIVATE (do not eat input)
+            if message==0x21:
+                guard=getattr(window,'input_guard',None)
+                return 4 if guard is None or guard() else 3  # protect gameplay; desktop edit remains non-activating
             return api.CallWindowProcW(original,handle,message,wp,lp)
         window._mouse_proc=mouse_proc
         api.SetWindowLongPtrW(hwnd,-4,ctypes.cast(mouse_proc,ctypes.c_void_p).value)
@@ -82,6 +85,7 @@ class RegionHistory:
         api.SetWindowPos(hwnd,w.HWND(-1),x,y,width,height,0x10|0x40)
 
     def press(self,event):
+        if input_blocked(self):self.origin=None;return
         self.origin=(event.x_root,event.y_root)
         self.last_input=dict(kind='press',x=event.x,y=event.y,at=time.time())
 
@@ -102,6 +106,7 @@ class RegionHistory:
         self.popup.withdraw();self.open=False
 
     def toggle(self):
+        if input_blocked(self):return
         if self.open:self.hide_popup();return
         if not self.visible:return
         rows=recent_visits(self.snapshot)
@@ -136,6 +141,7 @@ class RegionHistory:
         self.place(self.popup_hwnd,x,y,width,height);self.popup_rect=(x,y,width,height)
 
     def toggle_lock(self):
+        if input_blocked(self):return
         self.ribbon.server_bar_locked=not self.ribbon.server_bar_locked
         self.ribbon._save_preferences(dict(locked=self.ribbon.server_bar_locked))
         self.ribbon.set_editing(not self.ribbon.server_bar_locked)

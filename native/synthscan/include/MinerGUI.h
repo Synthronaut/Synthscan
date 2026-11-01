@@ -21,6 +21,7 @@
 #include "RefineryOrders.h"
 #include "TradeBook.h"
 #include "UexPrices.h"
+#include "RockValuation.h"
 #include "UexMarket.h"
 #include "NoteBook.h"
 #include "Reputation.h"
@@ -93,6 +94,7 @@ public:
     // ...and it is gone. Back to the signature view, without anyone clicking.
     void clearRock();
     bool rockInView() const { return rockInView_; }
+    void setRockPrices(std::shared_ptr<const RockPriceBook> prices, const std::string& note);
     // What that rock is made of, as the panel lists it under its figures
     // (RockContents.h): each part's share and its quality. Shown with the
     // rock and gone with it; a list without parts takes the last one off.
@@ -1152,6 +1154,9 @@ private:
     std::shared_ptr<const UexPrices> uexPrices_;
     long long uexFetchedAt_ = 0;
     std::string uexNote_;
+    std::shared_ptr<const RockPriceBook> rockPrices_;
+    std::string rockPriceNote_;
+    std::vector<std::wstring> rockValueLines() const;
     bool planPulse_ = false;          // the blink's beat
     // The Ore Finder's UEX tab: what players on the UEX marketplace buy and
     // sell the picked ore for, and at what quality; for the ground's two

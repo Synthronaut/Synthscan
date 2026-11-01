@@ -1,7 +1,8 @@
 # Building the Windows release
 
 Windows x64, CPython 3.14, Visual Studio C++ Build Tools and Windows SDK are needed
-only on the build machine. Users download the complete release ZIP.
+only on the build machine. Users normally download the guided Windows installer;
+the complete release ZIP is an alternative.
 
 1. Install MSVC C++ Build Tools (2019 or newer), Windows 10/11 SDK and Python 3.14
    with Tcl/Tk. `SYNTHSCAN_MSVC` can select a VC/Tools/MSVC version folder;
@@ -31,3 +32,6 @@ Corresponding modified GPL application source is `native/synthscan`; the earlier
 worker's source is `native/mining_worker`. Original copyright and component
 licenses remain in source and in downloadable builds. Game data is extracted from
 the recipient's own installation during setup.
+
+Interactive HUD/window fixtures must only run while Star Citizen is closed.
+The native --ui-test entry point refuses to run when the game window is present.

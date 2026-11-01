@@ -17,7 +17,7 @@ Download **SynthScan-Setup-Windows-x64.exe** from
 
 Start Menu and desktop shortcuts are created. **Launch with Star Citizen** is
 selected by default; untick it in the installer or change it later under
-**More → Startup & HUD settings**. The default HUD hotkey is **Ctrl+Alt+H**.
+**More → Startup & HUD settings**. SynthScan reserves no global hotkeys. Use the HUD buttons and tray menu.
 
 **More → Setup & reputation status** shows login, sync and restart status. It
 offers Retry, Repair setup, Choose game folder, and a Windows permission repair
@@ -62,10 +62,39 @@ other text and keep restoration backups locally.
 
 ## Included features and current limits
 
+The local development build includes scanned-rock value estimates in the mining
+HUD: raw terminal sale, modeled refined sale, and quality-band player buy-ad
+averages where suitable current quotes exist. No UEX account, token, or extra
+setup is needed. This addition has not yet been published in the community installer.
+Values assume 100% collection of the scanned SCU/composition, exclude inert, and
+are estimates rather than confirmed cargo/sales. Raw and refined totals each
+use one destination, preferring the current system. The selected refinery method
+is used; the modeled refinery is named. Fees are subtracted only where the model
+has complete cost data; otherwise the HUD explicitly says **before fees**.
+Transport costs, terminal capacity and actual collection losses are excluded.
+The refinery factors are the existing 4.10.0 reference model, pending fresh
+in-game calibration. Player estimates use same-patch active buy averages with
+at least three contributing listings in SCU/cSCU and a matching quality band.
+Partial market coverage is labeled **Player portion** and shows the percentage
+of refined ore priced. Missing, stale or incompatible quotes do not become zero.
+The expanded mining **Rows** view lists each material/quality separately, with
+raw SCU and model-estimated refined SCU, plus a separate inert amount. Material
+abbreviations in the installed SynthStrings file are resolved to full names.
+The detailed rock reader works from the mining scan panel; it does not require
+a radiation-signature hit before showing composition.
+When overlapping cockpit text leaves a small unread share, the HUD can show a
+**Partial OCR** estimate with the percentage read. Prices use only identified
+material amounts; the unread remainder is excluded. Unknown materials or a
+larger discrepancy keep valuation pending. Partial scans continue to be retried.
+
 - Native mining recognition, rock composition/quality, equipment advice, refining,
   blueprint tracking, mission text marks, and searchable game references.
 - Server/shard identity, region, session history, server hopping history, and a
-  compact activity overlay. Drag and lock controls are available in HUD settings.
+  compact activity overlay. During gameplay, the HUD body passes mouse input
+  through. Only the small ribbon **HUD +/−** and docked **−** collapse controls
+  accept clicks, without taking focus. To use menus or reposition the HUD,
+  switch out of the game and open SynthScan from the Windows tray. Returning to
+  the game restores input protection automatically. No hotkey is required.
 - The Piracy tab reads shard population, server population, server FPS and ping
   from the game's **visible DisplayInfo** panel using local OCR. Keep DisplayInfo
   enabled for those readings. Stale/unreadable values expire. These fields are

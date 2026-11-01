@@ -19,8 +19,15 @@ GAME=None
 
 
 def sync(apply=False):
+    from localization_lock import localization_lock
+    game=reference_paths()['game']
+    with localization_lock(game/'Data/Localization/english/global.ini'):
+        return _sync(apply)
+
+
+def _sync(apply=False):
     paths=reference_paths();game=paths['game']
-    snapshot=read_shared_json(DATA/'reputation_snapshot.json')
+    snapshot=read_shared_json(DATA/'reputation_snapshot.json',limit=1024*1024)
     if not 0<=time.time()-snapshot.get('read_at',0)<120:
         raise ValueError('Refresh reputation first; snapshot must be less than two minutes old')
     audit=json.loads(paths['audit'].read_text(encoding='utf-8'))

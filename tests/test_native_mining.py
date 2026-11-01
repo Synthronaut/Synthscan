@@ -244,6 +244,8 @@ class NativeRoutingTests(unittest.TestCase):
     def test_setup_page_builds_and_collects_actual_mole_head_positions(self):
         import tkinter as tk
         from mining_setup_ui import MiningSetupPage
+        from tests.gui_guard import require_game_closed
+        require_game_closed()
         root=tk.Tk();root.withdraw()
         app=SimpleNamespace(native_fit=fit('mole','thcn_helix_s2',3),native_reader_status='Offline test',native_rock=None,
                             native_detected_fit=None,top_hud=SimpleNamespace(state={}),is_scanning=False)

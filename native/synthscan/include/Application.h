@@ -26,6 +26,7 @@
 #include "RefineryOrders.h"
 #include "FrameRecorder.h"
 #include "UexPrices.h"
+#include "RockValuation.h"
 #include "UexReports.h"
 #include "RefineryShare.h"
 #include "UexMarket.h"
@@ -236,6 +237,7 @@ private:
     void clearRockView();                    // the rock off the view, and its list with it
     std::future<RockContents> contentsJob_;  // a reading under way
     float contentsJobMass_ = 0;              // ...and the rock it was asked for
+    bool contentsPartial_ = false;
     float contentsFor_ = 0;                  // the mass of the rock the view's list is of; 0: it has none
     std::string contentsOre_;                // ...and its ore
     std::string contentsShown_;              // ...and the list itself, as one line
@@ -371,11 +373,17 @@ public:
     // Whether the build carries an app token, for the self-test (the token
     // itself goes no further)
     static std::string uexTokenForProbe();
+    static std::shared_ptr<RockPriceBook> loadRockPrices(const std::filesystem::path& folder,
+                                                       const std::string& version, std::string& note);
     // ...and the marketplace's listings of one ore, told as lines - no
     // player's name in them
     static std::string uexMarketForProbe(const std::filesystem::path& folder, const std::string& ore);
 private:
     bool uexWanted_ = true;
+    struct RockPriceAnswer { std::shared_ptr<RockPriceBook> prices; std::string note; };
+    std::future<RockPriceAnswer> rockPriceJob_;
+    std::chrono::steady_clock::time_point rockPriceAsked_{};
+    void serviceRockPrices();
     bool uexPushed_ = false;                       // the window has been told whether it is on
     std::future<UexOutcome> uexJob_;               // the asking in flight, off the UI thread
     std::shared_ptr<const UexPrices> uexPrices_;

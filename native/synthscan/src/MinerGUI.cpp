@@ -1220,7 +1220,7 @@ void MinerGUI::toggleOverlayMode() {
         POINT at = {restoreRect_.left, restoreRect_.top};
         if (overlayPlaceKnown_ && overlayPlaceOnScreen(overlayPlace_, width)) at = overlayPlace_;
         at = overlayOnMonitor(at, width, height);
-        SetWindowPos(hwnd_, HWND_TOPMOST, at.x, at.y, width, height, SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+        SetWindowPos(hwnd_, HWND_TOPMOST, at.x, at.y, width, height, SWP_FRAMECHANGED | SWP_SHOWWINDOW | SWP_NOACTIVATE);
         // through to the game at once where it went to the overlay without
         // Bedrock in front
 #ifdef _WIN32
@@ -1279,8 +1279,8 @@ int MinerGUI::overlayHeight() const {
     if(SynthScan::piracyMode())return SynthScan::piracyHeight();
     // Two rows taller where a rock's ores stand one to a row: three of them,
     // and the verdict under them still in view
-    const int extra = overlayOreRows_ ? 34 : 0;
-    return (fitTitle().empty() ? 178 : 212) + extra + 30 + SynthScan::sessionHeight();
+    const int extra = overlayOreRows_ ? 17 * (int)(rockContents_.parts.size()+1) : 0;
+    return (fitTitle().empty() ? 178 : 212) + extra + 30 + SynthScan::sessionHeight() + (rockInView_?76:0);
 }
 
 // In the overlay's lower right corner while it shows a rock's ores, which
@@ -1718,7 +1718,7 @@ void MinerGUI::clearRock() {
 }
 
 void MinerGUI::setRockContents(const RockContents& contents) {
-    bool same = contents.parts.size() == rockContents_.parts.size();
+    bool same = contents.partial == rockContents_.partial && contents.whole == rockContents_.whole && contents.parts.size() == rockContents_.parts.size();
     for (size_t i = 0; same && i < contents.parts.size(); i++) {
         const RockPartRead& a = contents.parts[i];
         const RockPartRead& b = rockContents_.parts[i];
@@ -1854,10 +1854,40 @@ void MinerGUI::openUexTabForShot(const char* ore, const char* gem) {
 }
 
 float MinerGUI::rockStripHeight() const {
-    if (rockContents_.parts.empty() || !everRead_) return 0.0f;
+    if (!everRead_) return 0.0f;
     // a third line, the SCU of every part, once the panel has said the rock's;
     // and under it what a player on UEX pays for a part of 900 or more
-    return (rock_.scu > 0 ? scaleF(54) : scaleF(40)) + (rockMarketLine().empty() ? 0.0f : scaleF(16));
+    return (rockContents_.parts.empty()?0.0f:(rock_.scu > 0 ? scaleF(54) : scaleF(40))) + scaleF(16)*(float)rockValueLines().size();
+}
+
+void MinerGUI::setRockPrices(std::shared_ptr<const RockPriceBook> prices,const std::string& note) {
+    rockPrices_=std::move(prices);rockPriceNote_=note;
+    if(hwnd_)InvalidateRect(hwnd_,nullptr,FALSE);
+}
+
+std::vector<std::wstring> MinerGUI::rockValueLines() const {
+    if(!uexEnabled_ || !everRead_)return {};
+    if(!contentsEstimateReady(rockContents_) || rock_.scu<=0)return {L"VALUE: waiting for SCU and complete composition"};
+    if(!rockPrices_)return {rockPriceNote_.empty()?L"VALUE: loading public UEX prices...":L"VALUE: UEX prices unavailable; retrying automatically"};
+    const long long now=(long long)std::time(nullptr);
+    const auto v=rockPrices_->estimate(rock_.scu,rockContents_,currentSystem_,refineryMethod_,now);
+    if(!v.scanned)return {L"VALUE: waiting for a complete, valid rock scan"};
+    auto money=[](double n){wchar_t s[48];if(std::abs(n)>=1000000)std::swprintf(s,48,L"%.2fm",n/1000000);
+        else if(std::abs(n)>=1000)std::swprintf(s,48,L"%.1fk",n/1000);else std::swprintf(s,48,L"%.0f",n);return std::wstring(s);};
+    auto age=[now](long long at){long long h=std::max(0ll,(now-at)/3600);return h>=24?std::to_wstring(h/24)+L"d":std::to_wstring(h)+L"h";};
+    std::vector<std::wstring> out;
+    out.push_back(v.rawKnown?L"Raw ~"+money(v.raw)+L" aUEC · "+toW(v.rawTerminal)+L" · "+age(v.rawReported):L"Raw: no complete terminal quote");
+    out.push_back(v.refinedKnown?L"Refined ~"+money(v.refined-(v.feesKnown?v.fees:0))+L" aUEC "+(v.feesKnown?L"net":L"before fees")+L" · "+toW(v.refinedTerminal)+L" · "+age(v.refinedReported):L"Refined: no complete terminal quote");
+    if(v.playerCoverage>0)out.push_back(std::wstring(v.playerCoverage<0.999?L"Player portion ~":L"Player ~")+money(v.player)+L" aUEC · "+std::to_wstring((int)std::round(v.playerCoverage*100))+L"% priced · buy-ad average");
+    else out.push_back(L"Player: no matching active buy averages");
+    std::wstring basis=L"Whole-rock potential · 100% collection · UEX estimates";
+    if(v.refinery>=0)basis=L"100% collection · "+toW(REFINING_METHODS[v.method].name)+L" @ "+toW(REFINERIES[v.refinery].name);
+    if(rockContents_.partial) {
+        wchar_t coverage[120];std::swprintf(coverage,120,L"Partial OCR: %.2f%% read · values exclude unread remainder",rockContents_.sum);
+        basis=coverage;
+    }
+    out.push_back(basis);
+    return out;
 }
 
 // How much of the rock a part is, in SCU: the rock's SCU off the panel times
@@ -2003,16 +2033,11 @@ bool MinerGUI::processMessages() {
             return false;
         }
 
-        // The system-wide hotkey arrives as a thread message, so it is caught
-        // here rather than in the window procedure
-        if (msg.message == WM_HOTKEY && msg.wParam == HOTKEY_KEEP_RECORDING) {
-            if (keepRecordingCallback_) keepRecordingCallback_();
-            continue;
-        }
-        if (msg.message == WM_HOTKEY && msg.wParam == HOTKEY_SNAPSHOT) {
-            if (snapshotCallback_) snapshotCallback_();
-            continue;
-        }
+        // Buttons and menus own app actions. Escape and Alt+F4 must not
+        // close an app window if it receives focus during play.
+        if (msg.message == WM_HOTKEY) continue;
+        if ((msg.message == WM_KEYDOWN || msg.message == WM_SYSKEYDOWN) &&
+            (msg.wParam == VK_ESCAPE || (msg.wParam == VK_F4 && msg.message == WM_SYSKEYDOWN))) continue;
 
         // Ctrl+V inside the notebook, when what is on the clipboard is a
         // PICTURE. Text paste is left alone - that is the rich edit control's
@@ -2104,112 +2129,6 @@ bool MinerGUI::processMessages() {
             (msg.message == WM_KEYDOWN || msg.message == WM_KEYUP ||
              msg.message == WM_CHAR || msg.message == WM_SYSKEYDOWN);
 
-        // Window-level hotkeys (skip when typing into an edit control)
-
-        if (!typingHere && msg.message == WM_KEYDOWN &&
-            (msg.hwnd == hwnd_ || GetParent(msg.hwnd) == hwnd_)) {
-            // The first start's UEX offer has the keys while it is up: Esc
-            // skips it, and no other key opens anything behind it
-            if (uexWelcome_.step) {
-                if (msg.wParam == VK_ESCAPE) closeUexWelcome();
-                continue;
-            }
-            wchar_t cls[16] = {};
-            GetClassNameW(msg.hwnd, cls, 16);
-            const bool inEdit = _wcsicmp(cls, L"Edit") == 0;
-            // An amount being typed is an edit field in all but name:
-            // these shortcuts run BEFORE the window sees the key, so
-            // without this a stray letter opens another window in the
-            // middle of entering a figure.
-            const bool inAmount = (refineryTyping_ >= 0 && msg.hwnd == refinery_);
-
-            if (!inEdit && !inAmount) {
-                switch (msg.wParam) {
-                    case 'L':
-                        SendMessage(hwnd_, WM_COMMAND, MAKEWPARAM(ID_BTN_LIVEMODE, BN_CLICKED),
-                                    (LPARAM)btnLiveMode_);
-                        continue;
-                    case 'O':
-                        SendMessage(hwnd_, WM_COMMAND, MAKEWPARAM(ID_BTN_OVERLAY, BN_CLICKED),
-                                    (LPARAM)btnOverlay_);
-                        continue;
-                    case VK_F1:
-                        showKeys(!keysOpen_);
-                        continue;
-                    case VK_OEM_PLUS:
-                    case VK_ADD:
-                        if (GetKeyState(VK_CONTROL) & 0x8000) {
-                            stepUiScale(1);
-                            continue;
-                        }
-                        break;
-                    case VK_OEM_MINUS:
-                    case VK_SUBTRACT:
-                        if (GetKeyState(VK_CONTROL) & 0x8000) {
-                            stepUiScale(-1);
-                            continue;
-                        }
-                        break;
-                    case '0':
-                        if (GetKeyState(VK_CONTROL) & 0x8000) {
-                            setUiScale(100);
-                            continue;
-                        }
-                        break;
-                    case VK_DOWN:
-                    case VK_UP:
-                    case VK_NEXT:
-                    case VK_PRIOR:
-                    case VK_HOME:
-                    case VK_END:
-                        // The keys that mean the same as the wheel, while the
-                        // card is up; they do their usual work otherwise
-                        if (whatsNewOpen_) {
-                            const float page = whatsNewView_ - scaleF(24);
-                            if (msg.wParam == VK_HOME) scrollWhatsNew(-whatsNewContent_);
-                            else if (msg.wParam == VK_END) scrollWhatsNew(whatsNewContent_);
-                            else if (msg.wParam == VK_NEXT) scrollWhatsNew(page);
-                            else if (msg.wParam == VK_PRIOR) scrollWhatsNew(-page);
-                            else scrollWhatsNew(msg.wParam == VK_DOWN ? scaleF(40) : -scaleF(40));
-                            continue;
-                        }
-                        break;
-                    case VK_ESCAPE:
-                        if (whatsNewOpen_) {
-                            showWhatsNew(false);
-                            continue;
-                        }
-                        if (keysOpen_) {
-                            showKeys(false);
-                            continue;
-                        }
-                        if (aboutOpen_) {
-                            showAbout(false);
-                            continue;
-                        }
-                        break;
-                    case 'B':
-                        toggleCrafting();
-                        continue;
-                    case 'G':
-                        toggleGrind();
-                        continue;
-                    case 'N':
-                        toggleNotes();
-                        continue;
-                    case 'F':
-                        togglePlanner();
-                        continue;
-                    case 'R':
-                        toggleRefinery();
-                        continue;
-                    case 'Q':
-                        PostMessage(hwnd_, WM_CLOSE, 0, 0);
-                        continue;
-                }
-            }
-        }
-
         if (!typingHere && IsDialogMessage(hwnd_, &msg)) {
             continue;
         }
@@ -2290,14 +2209,19 @@ void MinerGUI::setOverlayZoomForShot(float zoom) {
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
-// An unlocked overlay accepts click-and-hold dragging even while the game
-// has focus. Locking it passes clicks through until SynthScan is activated.
+// Passive while another application has focus. An unlocked HUD may be
+// dragged only after the user explicitly activates SynthScan from the tray.
 void MinerGUI::updateClickThrough() {
 #ifdef _WIN32
     if (!hwnd_) return;
-    const bool through = overlayMode_ && !appActive_ && SynthScan::hudLocked();
+    if(!headless_) {
+        DWORD foreground=0;GetWindowThreadProcessId(GetForegroundWindow(),&foreground);
+        appActive_=foreground==GetCurrentProcessId();
+    }
+    const bool through = overlayMode_ && !appActive_;
     const LONG_PTR ex = GetWindowLongPtr(hwnd_, GWL_EXSTYLE);
-    const LONG_PTR want = through ? (ex | WS_EX_TRANSPARENT) : (ex & ~WS_EX_TRANSPARENT);
+    const LONG_PTR want = through ? (ex | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE)
+                                 : (ex & ~(WS_EX_TRANSPARENT | WS_EX_NOACTIVATE));
     if (want != ex) SetWindowLongPtr(hwnd_, GWL_EXSTYLE, want);
 #endif
 }
@@ -2871,7 +2795,15 @@ LRESULT MinerGUI::handleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
             updateClickThrough();
             break;
 
+        case WM_MOUSEACTIVATE:
+#ifdef _WIN32
+            if(overlayMode_&&!appActive_)return MA_NOACTIVATEANDEAT;
+#endif
+            break;
         case WM_NCHITTEST: {
+#ifdef _WIN32
+            if(overlayMode_&&!appActive_)return HTTRANSPARENT;
+#endif
             // In overlay mode the whole client area drags the window - which
             // is also why nothing drawn in it can be pressed, the update chip
             // included. It is the one exception: over the chip the client
@@ -2976,6 +2908,7 @@ LRESULT MinerGUI::handleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
         case WM_CLOSE:
             saveWindowPlace();
+            if (SynthScan::closeToTray()) return 0;
             isOpen_ = false;
             DestroyWindow(hwnd);
             return 0;
@@ -5264,7 +5197,7 @@ void MinerGUI::drawRockCard(Gdiplus::Graphics& g, int cw) {
                              Gdiplus::RectF(px + nameW.Width, sy + scaleF(1), partW - nameW.Width, scaleF(14)), &noWrap,
                              &yellowBrush);
             }
-            const std::wstring quality = std::to_wstring(part->quality);
+            const std::wstring quality = L"Q" + std::to_wstring(part->quality);
             Gdiplus::RectF qualityW;
             g.MeasureString(quality.c_str(), -1, &figureFont, Gdiplus::PointF(0, 0), &qualityW);
             std::swprintf(text, 48, L"%.2f %%", part->percent);
@@ -5296,12 +5229,13 @@ void MinerGUI::drawRockCard(Gdiplus::Graphics& g, int cw) {
         }
         // what a player on the UEX marketplace pays for the best part of
         // quality 900 or more
-        if (const std::wstring market = rockMarketLine(); !market.empty()) {
-            const float my = sy + (rock_.scu > 0 ? scaleF(54) : scaleF(40)) - scaleF(4);
+        const auto values=rockValueLines();
+        for(size_t vi=0;vi<values.size();++vi) {
+            const float my = sy + (rockContents_.parts.empty()?0.0f:(rock_.scu > 0 ? scaleF(54) : scaleF(40))) - scaleF(4) + scaleF(16)*(float)vi;
             Gdiplus::StringFormat trim;
             trim.SetFormatFlags(Gdiplus::StringFormatFlagsNoWrap);
             trim.SetTrimming(Gdiplus::StringTrimmingEllipsisCharacter);
-            g.DrawString(market.c_str(), -1, &smallFont, Gdiplus::RectF(left, my, right - left, scaleF(14)), &trim,
+            g.DrawString(values[vi].c_str(), -1, &smallFont, Gdiplus::RectF(left, my, right - left, scaleF(14)), &trim,
                          &accentBrush);
         }
         if (rest) {
@@ -13142,7 +13076,7 @@ void MinerGUI::drawKeysCard(Gdiplus::Graphics& g, int cw, int ch) {
     const float left = card.X + scaleF(16);
     const float right = card.GetRight() - scaleF(16);
     float y = card.Y + scaleF(14);
-    g.DrawString(L"Keys", -1, &markFont, Gdiplus::PointF(left, y), &textBrush);
+    g.DrawString(L"Controls", -1, &markFont, Gdiplus::PointF(left, y), &textBrush);
     g.DrawString(L"click anywhere to close", -1, &subFont,
                  Gdiplus::RectF(left, y + scaleF(8), right - left, scaleF(16)), &rightAlign, &faintBrush);
     y += scaleF(34);
@@ -13179,62 +13113,14 @@ void MinerGUI::drawKeysCard(Gdiplus::Graphics& g, int cw, int ch) {
         y += scaleF(18);
     };
 
-    group(L"WINDOWS");
-    row(L"F", L"Ore Finder", L"\u2013 pick an ore before the trip");
-    row(L"R", L"Refinery", L"\u2013 how much of a hold survives refining");
-    row(L"B", L"Blueprints", L"\u2013 every recipe, and what you own");
-    row(L"G", L"Grind Planner", L"\u2013 what is worth earning where you are");
-    row(L"N", L"Notes", L"\u2013 your own notebook");
-    row(L"O", L"Overlay", L"\u2013 the compact view, over the game");
+    group(L"MOUSE CONTROLS");
+    row(L"Click", L"Buttons", L" - scan, open tools and switch HUD tabs");
+    row(L"More", L"Settings", L" - startup, HUD and game references");
+    row(L"Tray", L"SynthScan", L" - open the app or exit explicitly");
+    row(L"HUD +", L"Activity", L" - expand or collapse the activity HUD");
+    group(L"KEYBOARD");
+    row(L"None", nullptr, L"no app hotkeys; normal text entry remains available");
 
-    group(L"SIZE");
-    row(L"Ctrl +", nullptr, L"everything bigger");
-    row(L"Ctrl -", nullptr, L"everything smaller");
-    row(L"Ctrl 0", nullptr, L"back to the standard size");
-
-    group(L"SCANNING");
-    row(L"L", nullptr, L"live scanning on and off");
-    row(L"S", nullptr, L"one scan, now");
-    row(L"+ -", nullptr, L"how often it scans");
-
-    group(L"ANY TIME, EVEN IN THE GAME");
-    row(L"Ctrl+Alt+S", nullptr, L"snapshot for a bug report, into debug\\");
-
-    group(L"CLOSING");
-    row(L"Esc", nullptr, L"closes the window you are in");
-    row(L"Q", nullptr, L"quits");
-
-    // The things that are only true inside one window, said once here rather
-    // than in four footers
-    y += scaleF(10);
-    hairline(g, left, y, right);
-    y += scaleF(12);
-    g.DrawString(L"INSIDE A WINDOW", -1, &groupFont, Gdiplus::PointF(left, y), &faintBrush);
-    y += scaleF(20);
-    // ...the window in the column of the keys, what it does in the column
-    // of what they do. A window with several lines is named on the first of
-    // them only: the same bright word three times over would be the loudest
-    // thing on the card.
-    const struct { const wchar_t* window; const wchar_t* what; } notes[] = {
-        {L"Blueprints", L"just type to search; arrow keys move the quality sliders"},
-        {L"Notes", L"just type to start one; drag a note onto another folder to move it"},
-        {L"Notes", L"Ctrl+V drops a picture from the clipboard into the note"},
-        {L"Notes", L"type an ore, a place or a recipe and press Enter to link it"},
-        {L"Ore Finder", L"F, B, N and O work here too"},
-    };
-    const wchar_t* named = nullptr;
-    for (const auto& line : notes) {
-        if (!named || wcscmp(named, line.window) != 0) {
-            g.DrawString(line.window, -1, &subFont, Gdiplus::PointF(left, y), &textBrush);
-            named = line.window;
-        }
-        g.DrawString(line.what, -1, &subFont, Gdiplus::PointF(descX, y), &dimBrush);
-        y += scaleF(18);
-    }
-
-    g.DrawString(L"game data 4.10", -1, &subFont,
-                 Gdiplus::RectF(left, card.GetBottom() - scaleF(22), right - left, scaleF(16)),
-                 &rightAlign, &faintBrush);
 }
 
 void MinerGUI::openAboutForShot() { showAbout(!aboutOpen_); }
@@ -13515,7 +13401,7 @@ void MinerGUI::drawWhatsNewCard(Gdiplus::Graphics& g, int cw, int ch) {
     group(L"ADDED");
     item(L"Startup and HUD controls");
     note(L"Open More, then Startup & HUD to set automatic launch,");
-    note(L"mining on launch and the global show/hide hotkey.");
+    note(L"mining on launch and HUD visibility.");
     gap(8);
     item(L"Your sessions and local game library");
     note(L"More opens shard visit history, cooldown notes, extracted artwork,");
@@ -13960,21 +13846,6 @@ void MinerGUI::drawCompactRock(Gdiplus::Graphics& g, int cw, int ch) {
         };
         std::stable_sort(rows.begin(), rows.end(),
                          [&](const OreRow& a, const OreRow& b) { return bestOf(a) > bestOf(b); });
-        if (overlayOreRows_ && rows.size() > 3) {
-            const size_t looked = (size_t)std::count_if(rows.begin(), rows.end(), [](const OreRow& r) { return r.wanted; });
-            size_t room = looked < 3 ? 3 - looked : 0;
-            std::vector<OreRow> kept;
-            for (const OreRow& r : rows) {
-                if (kept.size() == 3) break;
-                if (r.wanted) {
-                    kept.push_back(r);
-                } else if (room > 0) {
-                    kept.push_back(r);
-                    room--;
-                }
-            }
-            rows = kept;
-        }
         std::vector<std::wstring> names;
         for (const OreRow& row : rows) {
             std::wstring name = toW(row.ore);
@@ -14010,11 +13881,11 @@ void MinerGUI::drawCompactRock(Gdiplus::Graphics& g, int cw, int ch) {
             return widthOf(numberOf(p), numberFont) + (unit.empty() ? 0.0f : widthOf(unit, unitFont) - scaleF(2));
         };
         const auto partWidth = [&](const RockPartRead* p) {
-            return widthOf(std::to_wstring(p->quality), qualityFontOf(p)) + scaleF(4) + figureWidth(p);
+            return widthOf(L"Q" + std::to_wstring(p->quality), qualityFontOf(p)) + scaleF(4) + figureWidth(p);
         };
         const auto drawPart = [&](const RockPartRead* p, float x) {
             const bool beats = rockPartWanted(*p);
-            const std::wstring quality = std::to_wstring(p->quality);
+            const std::wstring quality = L"Q" + std::to_wstring(p->quality);
             const std::wstring number = numberOf(p), unit = unitOf(p);
             const Gdiplus::Font& qualityFont = qualityFontOf(p);
             const float qualityW = widthOf(quality, qualityFont), numberW = widthOf(number, numberFont);
@@ -14040,25 +13911,25 @@ void MinerGUI::drawCompactRock(Gdiplus::Graphics& g, int cw, int ch) {
             }
         };
         if (overlayOreRows_) {
-            float nameW = 0;
-            for (const std::wstring& name : names) nameW = (std::max)(nameW, widthOf(name, labelFont));
-            nameW += scaleF(8);
-            for (const OreRow& row : rows) {
-                float wide = nameW;
-                for (const RockPartRead* p : row.parts) wide += partWidth(p) + scaleF(12);
-                wantWidth(M + wide - scaleF(12) + M);
-            }
-            for (size_t i = 0; i < rows.size() && fits(step); i++) {
-                g.DrawString(names[i].c_str(), -1, &labelFont, Gdiplus::RectF(M, y, nameW, step + scaleF(2)), &oneLine,
-                             rows[i].wanted ? &accentBrush : &faintBrush);
-                float x = M + nameW;
-                for (const RockPartRead* p : rows[i].parts) {
-                    const float wide = partWidth(p);
-                    if (x + wide > M + rowW) break;   // a part goes on whole or not at all
-                    drawPart(p, x);
-                    x += wide + scaleF(12);
+            Gdiplus::Font oreFont(&textFamily(),scaleF(12),Gdiplus::FontStyleRegular,Gdiplus::UnitPixel);
+            RockValue value;
+            if(rockPrices_)value=rockPrices_->estimate(rock_.scu,rockContents_,currentSystem_,refineryMethod_,(long long)std::time(nullptr));
+            line(value.refinery>=0?L"MATERIAL / QUALITY / RAW → EST. REFINED SCU":L"MATERIAL / QUALITY / RAW VOLUME",infoFont,faintBrush);
+            for(const auto& row:rows)for(const auto* p:row.parts) {
+                wchar_t share[32];std::swprintf(share,32,L"%.2f %%",p->percent);
+                std::wstring refined;
+                if(value.refinery>=0)for(int m=0;m<REFINERY_MATERIAL_COUNT;m++) {
+                    if(RockPriceBook::material(REFINERY_MATERIALS[m])!=RockPriceBook::material(p->ore))continue;
+                    const auto result=refine(rock_.scu*p->percent,value.refinery,m,refineryMethod_);
+                    refined=L" → ~"+partScu(result.yield/100,100);
                 }
-                y += step;
+                const std::wstring text=toW(p->ore)+L"  Q"+std::to_wstring(p->quality)+L"  "+numberOf(p)+
+                    refined+(unitOf(p).empty()?L"":L" SCU")+L"  ("+share+L")";
+                line(text,oreFont,row.wanted?accentBrush:textBrush);
+            }
+            for(const auto& p:rockContents_.parts)if(p.inert) {
+                auto amount=partScu(rock_.scu,p.percent);
+                if(!amount.empty())line(L"Inert  "+amount+L" SCU · no sale value",infoFont,faintBrush);
             }
         } else {
             // On one line: an ore goes on whole or not at all, and while the
@@ -14109,6 +13980,8 @@ void MinerGUI::drawCompactRock(Gdiplus::Graphics& g, int cw, int ch) {
             y += step;
         }
     }
+
+    for(const auto& value : rockValueLines())line(value,infoFont,accentBrush);
 
     // the verdict, the way the full window puts it
     const RockVerdict v = rockVerdict();
@@ -19157,33 +19030,10 @@ void MinerGUI::releaseKeepHotkey() {
 // enough to sit in the pump: two API calls every five seconds, and only
 // while something is actually missing.
 void MinerGUI::ensureHotkeys() {
-    if (!hwnd_ || headless_) return;
-    const bool wantKeep = keepHotkeyWanted_;
-    if (snapshotHotkey_ && keepHotkey_ == wantKeep) return;
-
-    const auto now = std::chrono::steady_clock::now();
-    if (lastHotkeyTry_.time_since_epoch().count() != 0 &&
-        now - lastHotkeyTry_ < std::chrono::seconds(5)) return;
-    lastHotkeyTry_ = now;
-
-    if (!snapshotHotkey_) {
-        snapshotHotkey_ = RegisterHotKey(hwnd_, HOTKEY_SNAPSHOT,
-                                         MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, 'S') != 0;
-        // Said once on each change, not every five seconds
-        static bool complained = false;
-        if (snapshotHotkey_ && complained) {
-            std::cout << "[GUI] Ctrl+Alt+S is available again" << std::endl;
-            complained = false;
-        } else if (!snapshotHotkey_ && !complained) {
-            std::cerr << "[GUI] Ctrl+Alt+S is taken by another program - "
-                         "still asking" << std::endl;
-            complained = true;
-        }
-    }
-    if (wantKeep && !keepHotkey_) {
-        keepHotkey_ = RegisterHotKey(hwnd_, HOTKEY_KEEP_RECORDING,
-                                     MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, 'K') != 0;
-    }
+    if (hwnd_ && snapshotHotkey_) UnregisterHotKey(hwnd_, HOTKEY_SNAPSHOT);
+    if (hwnd_ && keepHotkey_) UnregisterHotKey(hwnd_, HOTKEY_KEEP_RECORDING);
+    snapshotHotkey_ = false;
+    keepHotkey_ = false;
 }
 
 void MinerGUI::setPlace(const std::string& line, const std::string& oreLocation, bool inSpace) {

@@ -8,6 +8,10 @@ def main():
     parser=argparse.ArgumentParser();parser.add_argument('--output',required=True);args=parser.parse_args()
     out=Path(args.output).resolve();out.mkdir(parents=True,exist_ok=True)
     import app_lifecycle,native_control,native_bridge,hud_controller,snare_alert_ui,native_session_hud,activity_hud,region_history_hud
+    if hud_controller.game_window_rect():
+        raise SystemExit('Close Star Citizen before running interactive HUD fixtures.')
+    import overlay_input
+    overlay_input.foreground_process_id=lambda:os.getpid()  # explicit edit context for the isolated fixture
     from refinery_orders import atomic_json
     profile=out/'ribbon_profile';profile.mkdir(exist_ok=True)
     native_control.DATA=profile

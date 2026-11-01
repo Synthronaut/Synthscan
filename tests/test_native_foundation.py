@@ -9,6 +9,26 @@ from telemetry_core import utc_iso
 from installation import output_root
 
 class NativeRecoveryTests(unittest.TestCase):
+    def test_old_quit_cannot_disable_recovery_after_manual_restart(self):
+        p=RecoveryPolicy();p.update({1},True,True,now=100)
+        self.assertFalse(p.update({1},False,False,quit_at=105,now=106))
+        self.assertTrue(p.suppressed)
+        self.assertFalse(p.update({1},True,True,quit_at=0,now=110))
+        self.assertFalse(p.suppressed)
+        self.assertTrue(p.update({1},False,False,quit_at=0,now=120))
+
+    def test_read_quit_ignores_marker_from_an_older_app(self):
+        import native_control
+        with tempfile.TemporaryDirectory() as d,patch.object(native_control,'DATA',Path(d)):
+            root=Path(d)
+            (root/'native_exit.json').write_text(json.dumps(dict(at=100,reason='user',game_pids=[1])))
+            (root/'native_status.json').write_text(json.dumps(dict(at=120,pid=10)))
+            self.assertEqual(native_control.read_quit({1}),0)
+            (root/'native_exit.json').write_text(json.dumps(dict(at=121,reason='user',game_pids=[1],pid=9)))
+            self.assertEqual(native_control.read_quit({1}),0)
+            (root/'native_exit.json').write_text(json.dumps(dict(at=121,reason='user',game_pids=[1],pid=10)))
+            self.assertEqual(native_control.read_quit({1}),121)
+
     def test_failed_initialization_retries_then_stops(self):
         p=RecoveryPolicy()
         self.assertTrue(p.update({1},False,False,now=100))

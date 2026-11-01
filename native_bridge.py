@@ -201,6 +201,8 @@ def run(data_dir,owner):
     service.navigation.start()
     from questing import Questing
     quests=Questing(directory,service.reader.log_path)
+    from blueprint_strings import BlueprintTextSync
+    blueprint_texts=BlueprintTextSync(directory,service.reader.log_path)
     from piracy_watch import PiracyReader
     piracy=PiracyReader(directory)
     from reputation_notice import NoticeGate
@@ -243,11 +245,13 @@ def run(data_dir,owner):
                         state['piracy_watch']=piracy.watch.view(time.time(),pirate_mode)
                     pirate_command.unlink(missing_ok=True)
                 from installation import RELEASE
-                state['questing']=quests.tick(RELEASE or quest_settings.get('hud_mode')=='questing',bool(games))
-                if RELEASE:
-                    rep_view=reputation_view(directory,time.time(),state)
-                    if rep_notices.consume(rep_view,games):rep_notice='restart:'+','.join(map(str,sorted(games)))
-                    state['reputation_notice']=rep_notice if rep_view['state']=='restart' else ''
+                # Reputation labels are a background feature in every HUD mode,
+                # including the development app used before packaging.
+                state['questing']=quests.tick(True,bool(games))
+                blueprint_texts.tick()
+                rep_view=reputation_view(directory,time.time(),state)
+                if rep_notices.consume(rep_view,games):rep_notice='restart:'+','.join(map(str,sorted(games)))
+                state['reputation_notice']=rep_notice if rep_view['state']=='restart' else ''
                 state['fps_permission_required']=bool(games and not read_client_fps(time.time()))
                 if not publish_json(directory/'session_state.json',state):logging.warning('Session snapshot is temporarily locked; consumers will expire the old reading')
             except Exception:

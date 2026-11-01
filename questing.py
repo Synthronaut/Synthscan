@@ -78,10 +78,11 @@ class Questing:
         self.pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix='questing-read')
         self.catalog = {}; self.catalog_by_title = {}; self.balance_names = {}; self.scopes = {}
         self.label_stamp=None;self.label_retry_at=0
+        self.game_running=False
 
     def sync_names(self,now):
-        from installation import RELEASE,reference_paths
-        if not RELEASE or now<self.label_retry_at:return
+        from installation import reference_paths
+        if now<self.label_retry_at:return
         try:
             ini=reference_paths()['game']/'Data/Localization/english/global.ini'
             snapshot=self.directory/'reputation_snapshot.json'
@@ -192,23 +193,30 @@ class Questing:
 
     def query(self):
         from game_account import OwnAccount
-        if not self.catalog:self.load_catalog()
         client=OwnAccount()
         try:
-            mission_error=''
+            # Balance refresh must not depend on mission/catalog availability.
+            snapshot=own_reputation(client)
+            errors=[]
+            if not self.catalog:
+                try:self.load_catalog()
+                except Exception as exc:errors.append('Reward catalog unavailable ('+type(exc).__name__+')')
             try: missions = own_missions(client)
             except Exception as exc:
-                missions=[];mission_error='Mission read unavailable ('+type(exc).__name__+')'
-            return missions, own_reputation(client), mission_error
+                missions=[];errors.append('Mission read unavailable ('+type(exc).__name__+')')
+            return missions, snapshot, '; '.join(errors)
         finally: client.close()
 
     def tick(self, enabled, game_running=True, now=None):
         now=time.time() if now is None else now
+        if game_running and not self.game_running:self.next_poll=0
+        self.game_running=game_running
         if game_running: self.poll_log()
         if self.future and self.future.done():
             try:
                 self.service, snapshot, mission_error = self.future.result()
-                publish_json(self.directory/'reputation_snapshot.json', snapshot)
+                if not publish_json(self.directory/'reputation_snapshot.json', snapshot):
+                    raise OSError('Could not publish refreshed reputation')
                 self.read_at = snapshot['read_at']; self.error=mission_error
             except Exception as exc:
                 # Never publish RPC details, credentials or request metadata.
@@ -216,7 +224,9 @@ class Questing:
             self.future = None
         if enabled and game_running and not self.future and now >= self.next_poll:
             self.future=self.pool.submit(self.query);self.next_poll=now+30
-        if enabled and game_running:self.sync_names(now)
+        # A final in-flight response can arrive just after the game exits.
+        # Write it before the next launch rather than waiting for login again.
+        if enabled:self.sync_names(now)
         active = [dict(m, **self.journal.get(m['id'],{})) for m in self.service
                   if m['state'] in (1,2,3) and self.journal.get(m['id'],{}).get('status','Accepted')=='Accepted'] if 0<=now-self.read_at<65 else []
         known={m['id'] for m in active}

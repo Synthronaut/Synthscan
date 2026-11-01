@@ -10,6 +10,36 @@ ACCEPT='<SHUDEvent_OnNotification> Added notification "Contract Accepted:  Deliv
 END='<EndMission> Ending mission for player. MissionId['+MID+'] CompletionType[Abandon] Reason[Player left]'
 
 class QuestingTest(unittest.TestCase):
+    def test_reputation_survives_catalog_and_mission_failures(self):
+        from unittest.mock import patch
+        with TemporaryDirectory() as d:
+            q=Questing(d,Path(d)/'missing.log')
+            try:
+                snapshot=dict(complete=True,own_character_verified=True,read_at=1000,records=[])
+                with patch('game_account.OwnAccount') as account,patch('questing.own_reputation',return_value=snapshot),patch.object(q,'load_catalog',side_effect=ValueError('fixture')),patch('questing.own_missions',side_effect=OSError('fixture')):
+                    missions,actual,error=q.query()
+                    self.assertEqual(actual,snapshot)
+                    self.assertEqual(missions,[])
+                    self.assertIn('catalog unavailable',error)
+                    account.return_value.close.assert_called_once()
+            finally:q.close()
+
+    def test_last_inflight_balance_is_written_after_game_exits(self):
+        from concurrent.futures import Future
+        from unittest.mock import patch
+        with TemporaryDirectory() as d:
+            q=Questing(d,Path(d)/'missing.log')
+            try:
+                snapshot=dict(complete=True,own_character_verified=True,read_at=1000,records=[])
+                q.future=Future();q.future.set_result(([],snapshot,''))
+                with patch.object(q,'sync_names') as sync,patch.object(q,'query') as query:
+                    q.tick(True,False,now=1001)
+                    sync.assert_called_once_with(1001)
+                    query.assert_not_called()
+                self.assertEqual(json.loads((Path(d)/'reputation_snapshot.json').read_text()),snapshot)
+                self.assertEqual(q.read_at,1000)
+            finally:q.close()
+
     def test_disabled_reader_never_starts_an_account_query(self):
         from unittest.mock import patch
         with TemporaryDirectory() as d:

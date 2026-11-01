@@ -43,6 +43,7 @@ std::unique_ptr<Gdiplus::Bitmap> icon;
 std::string lastState,summary="Session service starting",note;
 std::string controlCompleted="Startup registration updated.";
 std::string reputationNotice;
+bool userExitRequested=false;
 std::filesystem::path root,data;
 double lastStateAt=0;
 double uiScale=1;
@@ -76,13 +77,10 @@ void setMode(int value){
     saveSettings();modeControls();mining->refreshActivityLayout();
 }
 void applyHotkey(){
-    if(testing){hotkeyOK=true;return;}
-    UnregisterHotKey(host,HOTKEY);
-    UINT modifiers=hotkeyChoice==2?(MOD_CONTROL|MOD_SHIFT):(MOD_CONTROL|MOD_ALT);
-    UINT key=hotkeyChoice==0?'H':VK_F10;
-    hotkeyOK=RegisterHotKey(host,HOTKEY,modifiers|MOD_NOREPEAT,key)!=FALSE;
-    if(!hotkeyOK)note="HUD hotkey is already used by another app. Choose another combination in Settings.";
+    if(host)UnregisterHotKey(host,HOTKEY);
+    hotkeyOK=false;
 }
+
 void showHud(bool value){hudVisible=value;if(mining){if(value&&activityExpanded){ShowWindow(mining->windowHandle(),SW_SHOWNOACTIVATE);mining->keepOverlayAboveGame(true);}else mining->hide();}saveSettings();}
 void setActivityExpanded(bool value){
     activityExpanded=value;
@@ -182,10 +180,7 @@ void rebuild(int tab){
         SendMessageW(scanCheck,BM_SETCHECK,scanOnLaunch?BST_CHECKED:BST_UNCHECKED,0);SendMessageW(hudCheck,BM_SETCHECK,hudVisible?BST_CHECKED:BST_UNCHECKED,0);
         SendMessageW(sessionCheck,BM_SETCHECK,showSession?BST_CHECKED:BST_UNCHECKED,0);
         control(L"BUTTON",L"Snare Watch: sound + banner for logged interdiction reports",BS_AUTOCHECKBOX,28,284,720,24,311);SendDlgItemMessageW(panel,311,BM_SETCHECK,snareAlerts?BST_CHECKED:BST_UNCHECKED,0);
-        control(L"STATIC",L"Show / hide HUD hotkey",SS_LEFT,28,318,400,22,0);
-        hotkey=control(L"COMBOBOX",L"",CBS_DROPDOWNLIST|WS_VSCROLL,28,346,310,180,305);
-        for(auto value:{L"Ctrl + Alt + H",L"Ctrl + Alt + F10",L"Ctrl + Shift + F10"})SendMessageW(hotkey,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(value));
-        SendMessageW(hotkey,CB_SETCURSEL,hotkeyChoice,0);
+        control(L"STATIC",L"Keyboard shortcuts are disabled. Use buttons and menus.",SS_LEFT,28,318,760,44,0);
         control(L"BUTTON",L"Save startup & HUD settings",BS_PUSHBUTTON,28,390,300,34,306);
         control(L"BUTTON",L"Show / hide HUD now",BS_PUSHBUTTON,348,390,240,34,307);
         control(L"BUTTON",L"Open desktop view",BS_PUSHBUTTON,608,390,220,34,308);
@@ -193,7 +188,7 @@ void rebuild(int tab){
         control(L"BUTTON",L"Start network timing · Windows permission",BS_PUSHBUTTON,432,435,396,30,310);
         auto watcher=read(data/L"watcher_status.json");
         std::wstring explanation=L"Launching, scanning and showing the HUD are separate settings.\r\n";
-        explanation+=testing?L"Offline UI check; global hotkeys are disabled. ":hotkeyOK?L"HUD hotkey registered. ":L"HUD hotkey unavailable. ";
+        explanation+=L"No global hotkeys are registered. ";
         explanation+=wide(watcher.textOr("error"));
         explanation+=L"\r\nSnare Watch uses crime reports; unmonitored/friendly catches may be silent.\r\nServer FPS/population require a verified source.";
         if(flag(state,"fps_permission_required"))explanation+=L"\r\nUse the permission buttons above for player FPS/network timing.";
@@ -248,7 +243,6 @@ void saveOptions(){
     scanOnLaunch=SendMessageW(scanCheck,BM_GETCHECK,0,0)==BST_CHECKED;
     showSession=SendMessageW(sessionCheck,BM_GETCHECK,0,0)==BST_CHECKED;
     snareAlerts=SendDlgItemMessageW(panel,311,BM_GETCHECK,0,0)==BST_CHECKED;
-    hotkeyChoice=int(SendMessageW(hotkey,CB_GETCURSEL,0,0));if(hotkeyChoice<0||hotkeyChoice>2)hotkeyChoice=0;
     bool wantHud=SendMessageW(hudCheck,BM_GETCHECK,0,0)==BST_CHECKED;
     bool wantAuto=SendMessageW(autoCheck,BM_GETCHECK,0,0)==BST_CHECKED;
     showHud(wantHud);applyHotkey();saveSettings();
@@ -258,7 +252,7 @@ void saveOptions(){
         if(controlProcess){note="A startup change is already running.";return;}
         if(!spawnPython(L"native_control.py",{wantAuto?L"--install":L"--uninstall"},&controlProcess))note="Could not start the startup helper.";
         else{note="Applying startup registration…";controlCompleted="Startup registration updated.";}
-    }else note=hotkeyOK?"Settings saved.":"Settings saved; hotkey registration failed. Choose another combination.";
+    }else note="Settings saved.";
     InvalidateRect(mining->windowHandle(),nullptr,FALSE);SetWindowTextW(status,wide(note).c_str());
 }
 void handleAction(int id){
@@ -335,7 +329,7 @@ void publishNativeStatus(){
 void timer(){
     activityControl();
     static HWND previousForeground=nullptr;HWND foreground=GetForegroundWindow();
-    if(mining&&hudVisible&&activityExpanded)mining->keepOverlayAboveGame(foreground!=previousForeground);
+    if(mining){mining->updateClickThrough();if(hudVisible&&activityExpanded)mining->keepOverlayAboveGame(foreground!=previousForeground);}
     previousForeground=foreground;
     if(pirate||quest)modeControls();
     if(showHandle&&WaitForSingleObject(showHandle,0)==WAIT_OBJECT_0)desktop();
@@ -370,11 +364,16 @@ LRESULT CALLBACK hostProc(HWND hwnd,UINT message,WPARAM w,LPARAM l){
     if(message==TRAY&&l==NIN_BALLOONUSERCLICK){spawnPython(L"app_launcher.py",{L"--status"});return 0;}
     if(message==WM_APP+42){activityControl();publishNativeStatus();return 0;}
     if(message==WM_TIMER){timer();return 0;}
-    if(message==WM_HOTKEY&&w==HOTKEY){showHud(!hudVisible);return 0;}
-    if(message==TRAY){if(l==WM_LBUTTONDBLCLK){desktop();return 0;}if(l==WM_RBUTTONUP){HMENU menu=CreatePopupMenu();AppendMenuW(menu,MF_STRING,1,L"Open SynthScan");AppendMenuW(menu,MF_STRING,2,L"Show / hide HUD");AppendMenuW(menu,MF_STRING,3,L"Startup & HUD settings");AppendMenuW(menu,MF_STRING,4,L"Exit SynthScan");AppendMenuW(menu,MF_STRING|((pirate||quest)?0:MF_CHECKED),5,L"HUD mode: Mining");AppendMenuW(menu,MF_STRING|(pirate?MF_CHECKED:0),6,L"HUD mode: Piracy");AppendMenuW(menu,MF_STRING|(quest?MF_CHECKED:0),8,L"HUD mode: Missions");AppendMenuW(menu,MF_STRING|(placementLocked?MF_CHECKED:0),7,L"Lock HUD position (click-through)");POINT at;GetCursorPos(&at);SetForegroundWindow(hwnd);int choice=TrackPopupMenu(menu,TPM_RETURNCMD|TPM_RIGHTBUTTON,at.x,at.y,0,hwnd,nullptr);DestroyMenu(menu);if(choice==1)desktop();if(choice==2)showHud(!hudVisible);if(choice==3)workspace(4);if(choice==5||choice==6)setMode(choice==6);if(choice==8)setMode(2);if(choice==7)togglePlacement();if(choice==4&&mining)PostMessageW(mining->windowHandle(),WM_CLOSE,0,0);return 0;}}
+    if(message==WM_HOTKEY)return 0;
+    if(message==TRAY){if(l==WM_LBUTTONDBLCLK){desktop();return 0;}if(l==WM_RBUTTONUP){HMENU menu=CreatePopupMenu();AppendMenuW(menu,MF_STRING,1,L"Open SynthScan");AppendMenuW(menu,MF_STRING,2,L"Show / hide HUD");AppendMenuW(menu,MF_STRING,3,L"Startup & HUD settings");AppendMenuW(menu,MF_STRING,4,L"Exit SynthScan");AppendMenuW(menu,MF_STRING|((pirate||quest)?0:MF_CHECKED),5,L"HUD mode: Mining");AppendMenuW(menu,MF_STRING|(pirate?MF_CHECKED:0),6,L"HUD mode: Piracy");AppendMenuW(menu,MF_STRING|(quest?MF_CHECKED:0),8,L"HUD mode: Missions");AppendMenuW(menu,MF_STRING|(placementLocked?MF_CHECKED:0),7,L"Lock HUD position (click-through)");POINT at;GetCursorPos(&at);SetForegroundWindow(hwnd);int choice=TrackPopupMenu(menu,TPM_RETURNCMD|TPM_RIGHTBUTTON,at.x,at.y,0,hwnd,nullptr);DestroyMenu(menu);if(choice==1)desktop();if(choice==2)showHud(!hudVisible);if(choice==3)workspace(4);if(choice==5||choice==6)setMode(choice==6);if(choice==8)setMode(2);if(choice==7)togglePlacement();if(choice==4&&mining){markUserExit();PostMessageW(mining->windowHandle(),WM_CLOSE,0,0);}return 0;}}
     return DefWindowProcW(hwnd,message,w,l);
 }
 LRESULT CALLBACK mainSubclass(HWND hwnd,UINT message,WPARAM w,LPARAM l,UINT_PTR,DWORD_PTR){
+    if(message==WM_SYSCOMMAND&&(w&0xfff0)==0xf020){setActivityExpanded(false);return 0;}
+    if(message==WM_COMMAND&&l&&mining&&mining->isOverlayMode()) {
+        DWORD foreground=0;GetWindowThreadProcessId(GetForegroundWindow(),&foreground);
+        if(foreground!=GetCurrentProcessId())return 0; // stale physical button notification after returning to game
+    }
     if(message==WM_COMMAND&&LOWORD(w)==31812){togglePlacement();return 0;}
     if(message==WM_COMMAND&&(LOWORD(w)==31814||LOWORD(w)==31815)){
         if(pirate)write(data/L"piracy_command.json",obj({{"action",str(LOWORD(w)==31814?"toggle_wait":"reset_wait")},{"owner_pid",num(GetCurrentProcessId())},{"at",num(epoch())}}));return 0;
@@ -389,7 +388,7 @@ LRESULT CALLBACK mainSubclass(HWND hwnd,UINT message,WPARAM w,LPARAM l,UINT_PTR,
             HMENU mode=CreatePopupMenu();AppendMenuW(mode,MF_STRING|((pirate||quest)?0:MF_CHECKED),10,L"Mining HUD");AppendMenuW(mode,MF_STRING|(pirate?MF_CHECKED:0),11,L"Piracy HUD");AppendMenuW(mode,MF_STRING|(quest?MF_CHECKED:0),13,L"Missions HUD");AppendMenuW(mode,MF_STRING|(placementLocked?MF_CHECKED:0),12,L"Lock HUD position (click-through)");AppendMenuW(mode,MF_SEPARATOR,0,nullptr);AppendMenuW(mode,MF_STRING,4,L"Server log & interdiction history");AppendMenuW(mode,MF_STRING,6,L"Startup & HUD settings");AppendMenuW(mode,MF_STRING,14,L"Setup & reputation status");
             POINT at;GetCursorPos(&at);int choice=TrackPopupMenu(mode,TPM_RETURNCMD,at.x,at.y,0,hwnd,nullptr);DestroyMenu(mode);if(choice==12)togglePlacement();if(choice==13)setMode(2);if(choice==10||choice==11)setMode(choice==11);if(choice==4)workspace(2);if(choice==6)workspace(4);if(choice==14)spawnPython(L"app_launcher.py",{L"--status"});return 0;
         }
-        HMENU menu=CreatePopupMenu();AppendMenuW(menu,MF_STRING,1,L"Keyboard shortcuts");AppendMenuW(menu,MF_STRING,2,L"Game library & artwork");AppendMenuW(menu,MF_STRING,3,L"Material picker");AppendMenuW(menu,MF_STRING,4,L"Server log");AppendMenuW(menu,MF_STRING,5,L"Review imported records");AppendMenuW(menu,MF_STRING,6,L"Startup & HUD settings");AppendMenuW(menu,MF_STRING,7,L"Show / hide HUD");AppendMenuW(menu,MF_STRING,8,L"Mining diary & personal records");AppendMenuW(menu,MF_STRING,9,L"Rock bookmarks & return test");AppendMenuW(menu,MF_STRING,14,L"Setup & reputation status");
+        HMENU menu=CreatePopupMenu();AppendMenuW(menu,MF_STRING,2,L"Game library & artwork");AppendMenuW(menu,MF_STRING,3,L"Material picker");AppendMenuW(menu,MF_STRING,4,L"Server log");AppendMenuW(menu,MF_STRING,5,L"Review imported records");AppendMenuW(menu,MF_STRING,6,L"Startup & HUD settings");AppendMenuW(menu,MF_STRING,7,L"Show / hide HUD");AppendMenuW(menu,MF_STRING,8,L"Mining diary & personal records");AppendMenuW(menu,MF_STRING,9,L"Rock bookmarks & return test");AppendMenuW(menu,MF_STRING,14,L"Setup & reputation status");
         AppendMenuW(menu,MF_SEPARATOR,0,nullptr);AppendMenuW(menu,MF_STRING|((pirate||quest)?0:MF_CHECKED),10,L"HUD mode: Mining");AppendMenuW(menu,MF_STRING|(pirate?MF_CHECKED:0),11,L"HUD mode: Piracy");
         AppendMenuW(menu,MF_STRING|(quest?MF_CHECKED:0),13,L"HUD mode: Missions");AppendMenuW(menu,MF_STRING|(placementLocked?MF_CHECKED:0),12,L"Lock HUD position (click-through)");POINT at;GetCursorPos(&at);int choice=TrackPopupMenu(menu,TPM_RETURNCMD,at.x,at.y,0,hwnd,nullptr);DestroyMenu(menu);
         if(choice==14){spawnPython(L"app_launcher.py",{L"--status"});return 0;}if(choice==12){togglePlacement();return 0;}
@@ -444,7 +443,7 @@ void attach(SCMiner::MinerGUI* gui,std::function<bool(const std::string&)> confi
         LONG_PTR style=GetWindowLongPtrW(gui->windowHandle(),GWL_EXSTYLE);SetWindowLongPtrW(gui->windowHandle(),GWL_EXSTYLE,style|WS_EX_NOACTIVATE);
         if(!gui->isOverlayMode())gui->toggleOverlayMode();
         if((scanOnLaunch&&!pirate&&!quest)!=(text(GetDlgItem(gui->windowHandle(),1002))==L"Live on"))SendMessageW(gui->windowHandle(),WM_COMMAND,MAKEWPARAM(1002,BN_CLICKED),0);
-        modeControls();ShowWindow(gui->windowHandle(),hudVisible&&activityExpanded?SW_SHOWNOACTIVATE:SW_HIDE);SetWindowLongPtrW(gui->windowHandle(),GWL_EXSTYLE,GetWindowLongPtrW(gui->windowHandle(),GWL_EXSTYLE)&~WS_EX_NOACTIVATE);gui->keepOverlayAboveGame(true);
+        modeControls();ShowWindow(gui->windowHandle(),hudVisible&&activityExpanded?SW_SHOWNOACTIVATE:SW_HIDE);gui->updateClickThrough();gui->keepOverlayAboveGame(true);
     }
 }
 void workspace(int tab){
@@ -536,12 +535,19 @@ void drawSession(Gdiplus::Graphics& g,float width,float top,float height,float s
         auto location=state.textOr("location");if(!location.empty())second+=(second.empty()?"":" · ")+location;
     }else second="More → Startup & HUD settings";
     auto count=fresh?field(state,"cooldowns").items.size():0;if(count)second+=(second.empty()?"":" · ")+std::to_string(count)+" shard reminder(s)";
-    if(second.empty())second=(hotkeyChoice==0?"Ctrl+Alt+H":hotkeyChoice==1?"Ctrl+Alt+F10":"Ctrl+Shift+F10")+std::string(" · HUD visibility · More → Server log");
+    if(second.empty())second="Use HUD + / HUD - or the tray menu · More → Server log";
     g.DrawString(wide(second).c_str(),-1,&f,Gdiplus::RectF(10*scale,top+22*scale,width-20*scale,16*scale),&format,&muted);
+}
+void markUserExit(){userExitRequested=true;}
+bool closeToTray(){
+    if(userExitRequested)return false;
+    if(!testing)write(data/L"native_window_close.json",obj({{"at",num(epoch())},{"pid",num(GetCurrentProcessId())},{"action",str("hidden_to_tray")}}));
+    setActivityExpanded(false);
+    return true;
 }
 void shutdown(){
     SynthScanDiary::close();SynthScanNav::close();
-    if(attached&&!testing){Json exit=obj({{"at",num(epoch())},{"reason",str("user")},{"game_pids",field(state,"game_pids")}});write(data/L"native_exit.json",exit);}
+    if(attached&&!testing){Json exit=obj({{"at",num(epoch())},{"pid",num(GetCurrentProcessId())},{"reason",str(userExitRequested?"user":"shutdown")},{"game_pids",field(state,"game_pids")}});write(data/L"native_exit.json",exit);}
     if(host){KillTimer(host,1);UnregisterHotKey(host,HOTKEY);Shell_NotifyIconW(NIM_DELETE,&tray);}
     if(bridgeProcess){write(data/L"bridge_stop.json",obj({{"owner_pid",num(GetCurrentProcessId())}}));WaitForSingleObject(bridgeProcess,2000);}
     if(job)CloseHandle(job);job=nullptr;
@@ -564,13 +570,41 @@ int uiTest(const std::string& directory){
     Json result=obj({{"schema",num(1)},{"native_gui",boolean(true)},{"library_rows",num(double(field(library,"rows").items.size()))}});
     result.members.push_back({"automatic_placement_loaded_without_activation",boolean(startupPlacement)});
     result.members.push_back({"automatic_attach_starts_topmost_overlay",boolean(automaticOverlay)});
+    // Exercise real queued keyboard/dialog messages on this isolated fixture.
+    // Escape used to become IDCANCEL -> WM_CLOSE -> full application exit.
+    PostMessageW(gui.windowHandle(),WM_KEYDOWN,'Q',0);gui.processMessages();
+    bool plainQSurvives=gui.isOpen()&&IsWindow(gui.windowHandle());
+    bool overlayBeforeKeys=gui.isOverlayMode();int keyboardActions=0;
+    gui.setSnapshotCallback([&keyboardActions](){keyboardActions++;});
+    gui.setKeepRecordingCallback([&keyboardActions](){keyboardActions++;});
+    PostMessageW(gui.windowHandle(),WM_HOTKEY,1,0);
+    PostMessageW(gui.windowHandle(),WM_HOTKEY,2,0);
+    PostMessageW(gui.windowHandle(),WM_KEYDOWN,'O',0);
+    PostMessageW(gui.windowHandle(),WM_SYSKEYDOWN,VK_F4,0);
+    gui.processMessages();
+    result.members.push_back({"keyboard_actions_disabled",boolean(keyboardActions==0&&gui.isOpen()&&gui.isOverlayMode()==overlayBeforeKeys&&!gui.snapshotHotkeyHeld())});
+    PostMessageW(gui.windowHandle(),WM_KEYDOWN,VK_ESCAPE,0);gui.processMessages();
+    bool escapeSurvives=gui.isOpen()&&IsWindow(gui.windowHandle())&&!userExitRequested;
+    SendMessageW(gui.windowHandle(),WM_COMMAND,IDCANCEL,0);gui.processMessages();
+    bool cancelSurvives=gui.isOpen()&&IsWindow(gui.windowHandle())&&!userExitRequested;
+    SendMessageW(gui.windowHandle(),WM_CLOSE,0,0);
+    bool closeSurvives=gui.isOpen()&&IsWindow(gui.windowHandle())&&!IsWindowVisible(gui.windowHandle())&&!activityExpanded&&!userExitRequested;
+    setActivityExpanded(true);
+    bool restoredAfterClose=gui.isOpen()&&IsWindowVisible(gui.windowHandle())&&gui.isOverlayMode();
+    if(gui.isOverlayMode())gui.toggleOverlayMode();
+    result.members.push_back({"plain_q_does_not_quit",boolean(plainQSurvives)});
+    result.members.push_back({"escape_does_not_quit",boolean(escapeSurvives)});
+    result.members.push_back({"dialog_cancel_does_not_quit",boolean(cancelSurvives)});
+    result.members.push_back({"window_close_keeps_app_running",boolean(closeSurvives)});
+    result.members.push_back({"hud_restores_after_window_close",boolean(restoredAfterClose)});
     Json tabs=arr();
     SCMiner::RockStats sample;sample.mass=98000;sample.ore="Quantanium";
     for(int i=0;i<100;i++)observeMiningRock(sample,nullptr,"Stanton","Wala","MOLE",41002);
     endMiningRock();int encounters=0;for(auto& file:std::filesystem::directory_iterator(data/L"diary_inbox"))if(file.path().extension()==L".json")encounters++;
     result.members.push_back({"diary_native_encounters",num(encounters)});
     state=read(std::filesystem::u8path(directory)/"session_test_model.json");auto diaryModel=read(std::filesystem::u8path(directory)/"diary_test_model.json");bool editorRoute=false,shareRoute=false,navRoute=false,sessionRoute=false;int timelineColumns=0,timelineRows=0;
-    for(int tab=-2;tab<13;tab++){
+    const bool priceFixtures=std::filesystem::exists(std::filesystem::u8path(directory)/"pricing/commodities.json");
+    for(int tab=-2;tab<(priceFixtures?15:13);tab++){
         HWND target;
         if(tab==-2)target=gui.windowHandle();
         else if(tab==-1){gui.toggleOverlayMode();target=gui.windowHandle();}
@@ -621,11 +655,11 @@ int uiTest(const std::string& directory){
         else if(tab==9){state=obj({{"session_token",str("fixture")},{"identity",str("DEMO SHARD · US-EAST")},{"interdictions",obj({{"current",arr()},{"current_count",num(0)}})}});lastStateAt=epoch();target=gui.windowHandle();}
         else if(tab==10){SendMessageW(gui.windowHandle(),WM_COMMAND,31810,0);result.members.push_back({"mining_mode_restores_scanner",boolean(!piracyMode()&&text(GetDlgItem(gui.windowHandle(),1002))==L"Live on"&&read(data/L"native_settings.json").textOr("hud_mode")=="mining")});target=gui.windowHandle();
             if(placementLocked)togglePlacement();SendMessageW(target,WM_ACTIVATEAPP,FALSE,0);
-            bool unlocked=(GetWindowLongPtrW(target,GWL_EXSTYLE)&WS_EX_TRANSPARENT)==0;
-            POINT point{12,12};ClientToScreen(target,&point);bool caption=SendMessageW(target,WM_NCHITTEST,0,MAKELPARAM(point.x,point.y))==HTCAPTION;
+            bool unlocked=(GetWindowLongPtrW(target,GWL_EXSTYLE)&WS_EX_TRANSPARENT)!=0;
+            POINT point{12,12};ClientToScreen(target,&point);bool caption=SendMessageW(target,WM_NCHITTEST,0,MAKELPARAM(point.x,point.y))==HTTRANSPARENT;
             SendMessageW(target,WM_COMMAND,31812,0);bool locked=(GetWindowLongPtrW(target,GWL_EXSTYLE)&WS_EX_TRANSPARENT)!=0;
-            SendMessageW(target,WM_COMMAND,31812,0);bool unlockedAgain=(GetWindowLongPtrW(target,GWL_EXSTYLE)&WS_EX_TRANSPARENT)==0;
-            result.members.push_back({"hud_drag_while_game_active",boolean(unlocked&&caption&&unlockedAgain)});result.members.push_back({"hud_lock_clickthrough",boolean(locked&&!hudLocked())});
+            SendMessageW(target,WM_COMMAND,31812,0);bool unlockedAgain=(GetWindowLongPtrW(target,GWL_EXSTYLE)&WS_EX_TRANSPARENT)!=0;
+            result.members.push_back({"hud_passive_while_game_active",boolean(unlocked&&caption&&unlockedAgain)});result.members.push_back({"hud_lock_clickthrough",boolean(locked&&!hudLocked())});
         }
         else if(tab==11){
             Json questLines=arr();for(auto value:{"Configured payout: 12,000 aUEC","Mission participants: 2","Equal-split scenario: 6,000 aUEC each","Adagio / Standing: +100 base rep","Equal-split scenario: +50 rep each","Adagio: 249 / 800 verified"})questLines.items.push_back(str(value));
@@ -639,6 +673,30 @@ int uiTest(const std::string& directory){
             result.members.push_back({"questing_piracy_mining_resume",boolean(resumed&&questingMode()&&text(GetDlgItem(target,1002))==L"Next")});
         }
         else if(tab==12){state=read(std::filesystem::u8path(directory)/"piracy_test_model.json");lastStateAt=epoch();setMode(1);SendMessageW(gui.windowHandle(),WM_COMMAND,1002,0);target=gui.windowHandle();result.members.push_back({"piracy_details_expand",boolean(piracyDetails()&&IsWindowVisible(GetDlgItem(target,31814))&&IsWindowVisible(GetDlgItem(target,31817)))});}
+        else if(tab==13||tab==14){
+            setMode(0);if(tab==13&&!gui.isOverlayMode())gui.toggleOverlayMode();
+            if(tab==14&&gui.isOverlayMode())gui.toggleOverlayMode();
+            auto prices=std::make_shared<SCMiner::RockPriceBook>();std::string why;
+            auto cache=std::filesystem::u8path(directory)/"pricing";
+            bool loaded=prices->read(encode(read(cache/"commodities.json")),encode(read(cache/"terminals.json")),encode(read(cache/"raw_prices.json")),encode(read(cache/"prices.json")),encode(read(cache/"market_averages.json")),(long long)epoch(),"4.10.2",why);
+            gui.setUexPrices(true,nullptr,(long long)epoch(),"");gui.setRockPrices(loaded?prices:nullptr,why);
+            sample.ore="Gold";sample.mass=40000;sample.scu=100;gui.updateRock(sample);
+            SCMiner::RockContents contents;contents.whole=true;contents.parts={{"Gold",false,10,1000},{"Gold",false,20,350},{"",true,70,0}};gui.setRockContents(contents);
+            const auto captured=read(std::filesystem::u8path(directory)/"mining_frame_model.json");
+            if(!field(captured,"parts").items.empty()) {
+                sample.mass=(float)captured.numberOr("mass");sample.scu=(float)captured.numberOr("scu");sample.ore=captured.textOr("ore");
+                sample.resistance=(float)captured.numberOr("resistance");sample.instability=(float)captured.numberOr("instability");
+                gui.setCurrentSystem(captured.textOr("system"));
+                gui.updateRock(sample);contents.parts.clear();contents.whole=flag(captured,"whole");contents.partial=flag(captured,"partial");contents.sum=0;
+                for(const auto& p:field(captured,"parts").items)contents.parts.push_back({p.textOr("ore"),p.textOr("ore").empty(),(float)p.numberOr("percent"),(int)p.numberOr("quality")});
+                for(const auto& p:contents.parts)contents.sum+=p.percent;
+                gui.setRockContents(contents);
+            }
+            auto value=prices->estimate(sample.scu,contents,captured.textOr("system","Stanton"),2,(long long)epoch());
+            result.members.push_back({tab==13?"rock_price_live_payloads":"rock_price_full_layout",boolean(loaded&&value.rawKnown&&value.refinedKnown&&(!field(captured,"parts").items.empty()||value.playerCoverage>0))});
+            for(int frame=0;frame<8;frame++){gui.processMessages();InvalidateRect(gui.windowHandle(),nullptr,FALSE);UpdateWindow(gui.windowHandle());Sleep(20);}
+            target=gui.windowHandle();
+        }
         else{workspace(tab);target=panel;if(tab==2){timelineColumns=Header_GetItemCount(ListView_GetHeader(listing));timelineRows=ListView_GetItemCount(listing);SendMessageW(panel,WM_COMMAND,222,0);sessionRoute=read(data/L"workspace_command.json").textOr("action")=="session_view";}}
         gui.processMessages();UpdateWindow(target);
         RECT rc;GetClientRect(target,&rc);HDC dc=GetDC(target),mem=CreateCompatibleDC(dc);HBITMAP bm=CreateCompatibleBitmap(dc,rc.right,rc.bottom);auto old=SelectObject(mem,bm);
@@ -652,9 +710,12 @@ int uiTest(const std::string& directory){
     SendMessageW(scanCheck,BM_SETCHECK,BST_UNCHECKED,0);SendMessageW(hudCheck,BM_SETCHECK,BST_UNCHECKED,0);saveOptions();
     auto saved=read(data/L"native_settings.json");result.members.push_back({"snare_watch_setting",boolean(flag(saved,"snare_alerts",false))});bool persisted=!flag(saved,"scan_on_launch",true)&&!flag(saved,"show_hud",true);
     result.members.push_back({"settings_persisted",boolean(persisted)});
-    SendMessageW(host,WM_HOTKEY,HOTKEY,0);bool shown=IsWindowVisible(gui.windowHandle())!=FALSE;
-    SendMessageW(host,WM_HOTKEY,HOTKEY,0);bool hidden=IsWindowVisible(gui.windowHandle())==FALSE;
-    result.members.push_back({"hotkey_message_route",boolean(shown&&hidden)});
-    write(std::filesystem::u8path(directory)/"ui_test.json",result);shutdown();return field(library,"rows").items.empty()||!persisted||!shown||!hidden?3:0;
+    showHud(true);bool shown=IsWindowVisible(gui.windowHandle())!=FALSE;
+    showHud(false);bool hidden=IsWindowVisible(gui.windowHandle())==FALSE;
+    SendMessageW(host,WM_HOTKEY,HOTKEY,0);
+    bool hotkeyIgnored=!IsWindowVisible(gui.windowHandle())&&!hotkeyOK;
+    result.members.push_back({"mouse_visibility_route",boolean(shown&&hidden)});
+    result.members.push_back({"hotkey_messages_ignored",boolean(hotkeyIgnored)});
+    write(std::filesystem::u8path(directory)/"ui_test.json",result);shutdown();return field(library,"rows").items.empty()||!persisted||!shown||!hidden||!hotkeyIgnored?3:0;
 }
 }

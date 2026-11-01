@@ -32,6 +32,10 @@ def main():
     ui=subprocess.run([str(binary),'--ui-test',str(out)],env=env,capture_output=True,timeout=60)
     assert ui.returncode==0,ui.stderr
     result=json.loads((out/'ui_test.json').read_text(encoding='utf-8'))
+    for name in ['plain_q_does_not_quit','escape_does_not_quit','dialog_cancel_does_not_quit',
+                 'window_close_keeps_app_running','hud_restores_after_window_close',
+                 'keyboard_actions_disabled','hotkey_messages_ignored','mouse_visibility_route']:
+        assert result[name],name
     assert result['diary_native_encounters']==1,result
     assert result['diary_editor_route'] and result['diary_share_route'],result
     from PIL import Image,ImageStat

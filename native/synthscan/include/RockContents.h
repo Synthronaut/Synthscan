@@ -44,6 +44,7 @@ struct RockPartRead {
 
 struct RockContents {
     std::vector<RockPartRead> parts;   // in the panel's order
+    bool partial = false;    // verified identities; small unread share, labelled explicitly
     bool whole = false;      // every line made sense, and the shares add up to the rock
     float sum = 0;           // of the shares read
     std::string note;        // for the tools: why not, or how it was read
@@ -81,6 +82,8 @@ bool contentsFitRock(const std::string& rockOre, const RockContents& contents);
 // since the panel cuts each share off after its second place. Sets `whole`
 // and `sum`.
 bool contentsHold(RockContents& contents);
+// Named, game-valid rows suitable for an explicitly labelled partial estimate.
+bool contentsEstimateReady(const RockContents& contents);
 
 // The composition list of a panel whose label column was found (ScanPanel::
 // labels, labelScale). `rockOre` is the name the panel's own heading gave,

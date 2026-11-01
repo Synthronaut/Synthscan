@@ -163,6 +163,8 @@ class HudMergeTests(unittest.TestCase):
 
     def rendered_text(self):
         """Inspect the real canvas output, without showing a window."""
+        from tests.gui_guard import require_game_closed
+        require_game_closed()
         import tkinter as tk
         root = tk.Tk()
         root.withdraw()

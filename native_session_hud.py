@@ -34,7 +34,7 @@ def main():
     from hud_controller import TopTelemetryHUD
     from hud_controller import game_window_rect
     from hud_controller import get_monitor_by_id
-    from activity_hud import ActivityButton
+    from activity_hud import ActivityButton,ActivityCollapseButton
     from region_history_hud import RegionHistory
     from interdiction_watch import AlertGate,piracy_alerts_enabled
     from snare_alert_ui import SnareAlertWindow
@@ -64,6 +64,16 @@ def main():
             self.BAR_HEIGHT=24 if self.compact else 28;self._content_width=None;self.state={};self._last_rendered_key=None
             self.bar_win=None;self.bar_canvas=None;self.shard_tracker=ReadOnlyHistory()
             self.font=tkfont.Font(root=master,family='Consolas',size=9,weight='bold');self._init_windows()
+        def _drag_start(self,event):
+            from overlay_input import input_blocked
+            if not input_blocked(self):super()._drag_start(event)
+        def _drag_move(self,event):
+            from overlay_input import input_blocked
+            if not input_blocked(self):super()._drag_move(event)
+        def _drag_end(self,event):
+            from overlay_input import input_blocked
+            if input_blocked(self):self._drag_origin=None;return
+            super()._drag_end(event)
         def _place_bar(self):
             super()._place_bar()
             button=getattr(self,'activity_button',None)
@@ -89,34 +99,57 @@ def main():
                 self.bar_canvas.create_text(12,self.BAR_HEIGHT//2,anchor='w',text='SERVER INFORMATION UNAVAILABLE · waiting for session service',fill='#f59e0b',font=('Consolas',9,'bold'))
                 self._last_rendered_key=None;return
             super().render_bar()
-    root=tk.Tk();root.withdraw();ribbon=Ribbon(root);gate=AlertGate(started_at);alert=SnareAlertWindow(root,game_window_rect);activity=ActivityButton(root,DATA,args.owner);ribbon.activity_button=activity
+    root=tk.Tk();root.withdraw();ribbon=Ribbon(root);gate=AlertGate(started_at);alert=SnareAlertWindow(root,game_window_rect);activity=ActivityButton(root,DATA,args.owner);collapse=ActivityCollapseButton(root,DATA,args.owner);ribbon.activity_button=activity
     def callback_error(kind,value,traceback):
         logging.error('HUD input callback failed',exc_info=(kind,value,traceback))
     root.report_callback_exception=callback_error
     history=RegionHistory(root);ribbon.region_history=history
+    def protected_now():
+        from overlay_input import foreground_process_id,protect_game_input
+        return protect_game_input(foreground_process_id(),{os.getpid(),args.owner},bool(game_window_rect()))
+    for control in (ribbon,history,history.window,history.popup):control.input_guard=protected_now
+    def protect_input():
+        from overlay_input import set_passthrough
+        protected=protected_now()
+        history.input_protected=protected
+        if protected:
+            history.origin=None
+            if history.open:history.hide_popup('gameplay_input_protected')
+        api=ctypes.windll.user32
+        from ctypes import wintypes as w
+        api.GetParent.argtypes=[w.HWND];api.GetParent.restype=w.HWND
+        bar_hwnd=api.GetParent(ribbon.bar_win.winfo_id()) or ribbon.bar_win.winfo_id()
+        for hwnd in (bar_hwnd,history.hwnd,history.popup_hwnd):set_passthrough(hwnd,protected)
+        for hwnd in (activity.hwnd,collapse.hwnd):set_passthrough(hwnd,False)
+        return protected
     def poll():
         if not owner_alive(args.owner):root.destroy();return
+        protected=protect_input()  # independent of snapshot/JSON parsing failures
         try:
             snapshot=read_shared_json(DATA/'session_state.json',limit=8*1024*1024)
             settings=read_shared_json(DATA/'native_settings.json')
             ribbon.state=hud_state(snapshot,args.owner,time.time())
             ribbon.shard_tracker.snapshot=snapshot;history.snapshot=snapshot
             ribbon.enabled=bool(settings.get('show_hud',True) and settings.get('session_strip',True))
-            editable=not ribbon.server_bar_locked
+            editable=not ribbon.server_bar_locked and not protected
             if ribbon.editing!=editable:ribbon.set_editing(editable)
             ribbon._sync_visibility();ribbon.render_bar()
             try:native=read_shared_json(DATA/'native_status.json')
             except (OSError,ValueError):native={}
             activity.sync(ribbon,native,game_window_rect() or get_monitor_by_id(ribbon.game_monitor))
+            collapse.sync(ribbon,native,game_window_rect() or get_monitor_by_id(ribbon.game_monitor))
             history.follow(ribbon,game_window_rect() or get_monitor_by_id(ribbon.game_monitor))
             enabled=piracy_alerts_enabled(settings,bool(game_window_rect()))
             notices=gate.consume(snapshot,args.owner,time.time(),enabled)
             alert.update(notices,ribbon.state.get('session_token'),enabled)
+            # The HUD body stays passive; only the two non-activating
+            # collapse controls accept a deliberate bounded click.
+            protected=protect_input()
             from telemetry_ipc import publish_json
             publish_json(DATA/'top_hud_status.json',dict(at=time.time(),pid=os.getpid(),owner_pid=args.owner,
-                        visible=bool(ribbon._visible),geometry=ribbon._last_geometry,
+                        visible=bool(ribbon._visible),geometry=ribbon._last_geometry,input_protected=protected,
                         session_token=ribbon.state.get('session_token'),callsign=ribbon.state.get('callsign'),layout='ribbon',
-                        draggable=ribbon.editing,server_bar_locked=ribbon.server_bar_locked,position=ribbon.position,region_history_visible=history.visible,region_history_open=history.open,region_color=(getattr(ribbon,'region_hit',None) or {}).get('color'),region_text=(getattr(ribbon,'region_hit',None) or {}).get('text'),region_last_input=getattr(history,'last_input',None),region_transition=getattr(history,'last_transition',None),region_canvas_size=[history.canvas.winfo_width(),history.canvas.winfo_height()],region_geometry=history.geometry,region_popup_geometry=getattr(history,'popup_rect',None),activity_button_visible=activity.visible,activity_button_geometry=activity.geometry,activity_expanded=native.get('activity_expanded',True),snare_watch_enabled=enabled,snare_alerts_shown=alert.shown))
+                        draggable=ribbon.editing,server_bar_locked=ribbon.server_bar_locked,position=ribbon.position,region_history_visible=history.visible,region_history_open=history.open,region_color=(getattr(ribbon,'region_hit',None) or {}).get('color'),region_text=(getattr(ribbon,'region_hit',None) or {}).get('text'),region_last_input=getattr(history,'last_input',None),region_transition=getattr(history,'last_transition',None),region_canvas_size=[history.canvas.winfo_width(),history.canvas.winfo_height()],region_geometry=history.geometry,region_popup_geometry=getattr(history,'popup_rect',None),activity_button_visible=activity.visible,activity_button_geometry=activity.geometry,collapse_button_visible=collapse.visible,collapse_button_geometry=collapse.geometry,activity_expanded=native.get('activity_expanded',True),snare_watch_enabled=enabled,snare_alerts_shown=alert.shown))
         except (OSError,ValueError,TypeError,KeyError):
             ribbon.state=hud_state({},args.owner,time.time());ribbon.render_bar();alert.update([],None,False)
             logging.exception('Top HUD refresh failed')

@@ -89,11 +89,31 @@ class GuidedSetupTests(unittest.TestCase):
                 ini.write_text('annotated')
                 return dict(changed=True,names=1,requires_game_text_reload=True)
             try:
-                with patch('installation.RELEASE',True),patch('installation.reference_paths',return_value={'game':root}),patch('tools.sync_reputation_names.sync',side_effect=sync) as write,patch('app_lifecycle.game_process_ids',return_value={1}):
+                with patch('installation.RELEASE',False),patch('installation.reference_paths',return_value={'game':root}),patch('tools.sync_reputation_names.sync',side_effect=sync) as write,patch('app_lifecycle.game_process_ids',return_value={1}):
                     q.sync_names(100);q.sync_names(104);self.assertEqual(write.call_count,1)
                     ini.write_text('native blueprint update')
                     stamp=ini.stat().st_mtime_ns;os.utime(ini,ns=(stamp+1000000,stamp+1000000))
                     q.sync_names(108);self.assertEqual(write.call_count,2)
                     self.assertEqual(ini.read_text(),'annotated')
                     self.assertFalse(q.future)
+            finally:q.close()
+
+    def test_new_balances_rewrite_labels_and_next_game_process_clears_restart(self):
+        from questing import Questing
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);ini=root/'Data/Localization/english/global.ini';ini.parent.mkdir(parents=True);ini.write_text('old labels')
+            snapshot=root/'reputation_snapshot.json';snapshot.write_text('{}')
+            q=Questing(root,root/'Game.log')
+            def sync(_):
+                ini.write_text('new labels')
+                return dict(changed=True,names=14,requires_game_text_reload=True)
+            try:
+                with patch('installation.reference_paths',return_value={'game':root}),patch('tools.sync_reputation_names.sync',side_effect=sync) as write,patch('app_lifecycle.game_process_ids',return_value={1}):
+                    q.sync_names(100)
+                    snapshot.write_text('{"new_balance":true}')
+                    stamp=snapshot.stat().st_mtime_ns;os.utime(snapshot,ns=(stamp+1000000,stamp+1000000))
+                    q.sync_names(104)
+                    self.assertEqual(write.call_count,2)
+                self.assertEqual(reputation_view(root,105,dict(game_pids=[1],written_at=105))['state'],'restart')
+                self.assertEqual(reputation_view(root,105,dict(game_pids=[2],written_at=105))['state'],'ready')
             finally:q.close()

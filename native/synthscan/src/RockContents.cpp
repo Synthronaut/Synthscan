@@ -113,7 +113,7 @@ bool saysInert(const std::string& name) {
         const char up = (char)std::toupper((unsigned char)c);
         if (up >= 'A' && up <= 'Z') letters += up;
     }
-    return letters.find("NERT") != std::string::npos || letters.find("MATER") != std::string::npos;
+    return letters.find("NERT") != std::string::npos || letters.find("MATER") != std::string::npos || letters=="IMERT";
 }
 
 // The shares are cut off after the second place, not rounded: measured
@@ -151,7 +151,11 @@ bool parseShare(const std::string& text, float& percent) {
 }
 
 bool parseQuality(const std::string& text, int& quality) {
-    const std::string seen = numerals(text);
+    std::string seen = numerals(text);
+    // An isolated quality can acquire punctuation from the ground beside it.
+    // Strip only outer stops; a decimal inside the numeral remains invalid.
+    while(!seen.empty()&&seen.front()=='.')seen.erase(seen.begin());
+    while(!seen.empty()&&seen.back()=='.')seen.pop_back();
     if (seen.empty() || seen.size() > 4) return false;
     for (char c : seen) {
         if (c < '0' || c > '9') return false;
@@ -247,6 +251,23 @@ bool contentsHold(RockContents& contents) {
     contents.sum = (float)sum;
     contents.whole = named && sumIsTheRock(sum, contents.parts.size());
     return contents.whole;
+}
+
+bool contentsEstimateReady(const RockContents& contents) {
+    if(contents.whole)return true;
+    if(!contents.partial)return false;
+    double sum=0;bool inert=false;
+    if(contents.parts.size()<2)return false;
+    for(const auto& part:contents.parts) {
+        if(!std::isfinite(part.percent)||part.percent<=0||part.percent>100)return false;
+        sum+=part.percent;
+        if(part.inert){if(inert||part.quality!=0)return false;inert=true;}
+        else if(part.ore.empty()||bandOf(part.ore,part.quality)<0)return false;
+    }
+    // Never silently call this a whole rock: the HUD labels the coverage
+    // and the price excludes any unread remainder. Large OCR disagreements
+    // or missing rows still wait for another view.
+    return inert&&sum>=99.8&&sum<100.006;
 }
 
 cv::Rect rockContentsRegion(const ScanPanel& panel, const cv::Size& frame) {
@@ -601,8 +622,12 @@ bool readList(const cv::Mat& frame, const cv::Rect& region, const cv::Mat& ink, 
             cut++;
         }
         if (!parseShare(part.shareText, part.percent)) {
-            if (list.empty()) continue;
-            break;
+            // Yellow flight text over an orange percent sign can make it
+            // read as 94. A monochrome read often separates those strokes.
+            cv::Mat green;cv::extractChannel(frame(share),green,1);
+            const auto retry=lines.read(green);
+            if(retry.mean>=0.80&&parseShare(retry.text,part.percent))part.shareText=retry.text;
+            else {if (list.empty()) continue;break;}
         }
         // The quality: three or four numerals, one of the ore's values - no
         // ore's is under 262. Anything else is the inert rest's 0 or a quality
@@ -638,12 +663,46 @@ bool readList(const cv::Mat& frame, const cv::Rect& region, const cv::Mat& ink, 
         out.whole = false;
         return done(false, "a quality did not read" + table);
     }
+    // A terrain stroke just left of a share can become an extra leading
+    // numeral (5.75% -> 15.75%). Ask slightly inset/monochrome crops for
+    // alternatives only when the literal total fails. Accept a correction
+    // only if exactly ONE distinct combination accounts for the whole rock;
+    // no percentage is manufactured or normalized from the missing total.
+    if(!sumIsTheRock(sum,out.parts.size())&&list.size()==out.parts.size()) {
+        using Alternative=std::pair<float,std::string>;
+        std::vector<std::vector<Alternative>> options;
+        for(size_t i=0;i<list.size();i++) {
+            std::vector<Alternative> values={{out.parts[i].percent,out.parts[i].shareText}};
+            auto box=shareOf(*list[i]);
+            for(int inset:{(int)std::lround(4*u),(int)std::lround(8*u)}) {
+                auto cut=box;cut.x+=inset;cut.width-=inset;
+                if(cut.width<16)continue;
+                auto reading=lines.read(frame(cut));float value=0;
+                if(reading.mean<0.80||!parseShare(reading.text,value))continue;
+                bool duplicate=false;for(const auto& v:values)if(std::abs(v.first-value)<.001)duplicate=true;
+                if(!duplicate)values.push_back({value,reading.text});
+            }
+            options.push_back(values);
+        }
+        std::vector<size_t> choice(options.size()),winner;int solutions=0;
+        std::function<void(size_t,double)> solve=[&](size_t row,double total) {
+            if(solutions>1||total>100.006)return;
+            if(row==options.size()){if(sumIsTheRock(total,options.size())){solutions++;winner=choice;}return;}
+            for(size_t k=0;k<options[row].size();k++){choice[row]=k;solve(row+1,total+options[row][k].first);}
+        };
+        solve(0,0);
+        if(solutions==1)for(size_t i=0;i<winner.size();i++) {
+            out.parts[i].percent=options[i][winner[i]].first;out.parts[i].shareText=options[i][winner[i]].second;
+        }
+    }
     // The names: by the rock's kind where that fits, else read. Either way
     // the lines have to be a rock's of that kind - see contentsFitRock.
     auto holds = [&]() {
-        if (!contentsHold(out)) return false;
-        if (rockOre.empty() || contentsFitRock(rockOre, out)) return true;
-        out.whole = false;
+        const bool complete=contentsHold(out);
+        out.partial=!complete;
+        if(out.partial&&!contentsEstimateReady(out))out.partial=false;
+        if (rockOre.empty() || contentsFitRock(rockOre, out)) return complete;
+        out.whole = false;out.partial=false;
         return false;
     };
     if (!rockOre.empty() && nameContentsByRock(rockOre, out)) {
@@ -657,7 +716,43 @@ bool readList(const cv::Mat& frame, const cv::Rect& region, const cv::Mat& ink, 
         part.nameText = lines.read(frame(name)).text;
         // (a line with a quality that calls itself inert is no line of the list)
         if (!saysInert(part.nameText)) part.ore = snapOreName(part.nameText);
+        if(part.ore.empty()&&!part.inert&&name.width>70*u) {
+            // SynthStrings' short aliases need only the first word's room;
+            // flight instruments in the otherwise empty name cell are noise.
+            const auto shortName=lines.read(frame(cv::Rect(name.x,name.y,(int)std::lround(65*u),name.height)));
+            if(shortName.mean>=0.75) {
+                const auto ore=snapOreName(shortName.text);
+                if(qualityOfOre(ore,part.quality)){part.ore=ore;part.nameText=shortName.text;}
+            }
+        }
     }
+    // A unique quality in the extracted game table is another independent
+    // material identity, even when a flight instrument covers its name.
+    // Shared qualities (notably 1000) cannot supply a name.
+    for(auto& part:out.parts)if(!part.inert&&part.ore.empty()&&part.quality>0) {
+        std::string unique;int matches=0;
+        for(int b=0;b<ORE_BANDS_COUNT;b++)if(bandOf(ORE_BANDS[b].ore,part.quality)>=0){unique=ORE_BANDS[b].ore;matches++;}
+        if(matches==1)part.ore=unique;
+    }
+    // Resolve a shared quality only when every matching game-defined rock
+    // composition agrees. Known OCR names are constraints, not overwritten.
+    std::vector<std::string> agreed(out.parts.size());int matchingKinds=0;
+    std::vector<std::string> tried;
+    for(int k=0;k<ROCK_PART_COUNT;k++) {
+        const std::string kind=ROCK_PARTS[k].rock;
+        if(std::find(tried.begin(),tried.end(),kind)!=tried.end())continue;
+        tried.push_back(kind);RockContents candidate=out;
+        if(!nameContentsByRock(kind,candidate)||!contentsFitRock(kind,candidate))continue;
+        bool matches=true;
+        for(size_t i=0;i<out.parts.size();i++)if(!out.parts[i].ore.empty()&&out.parts[i].ore!=candidate.parts[i].ore)matches=false;
+        if(!matches)continue;
+        for(size_t i=0;i<out.parts.size();i++) {
+            if(matchingKinds==0)agreed[i]=candidate.parts[i].ore;
+            else if(agreed[i]!=candidate.parts[i].ore)agreed[i].clear();
+        }
+        matchingKinds++;
+    }
+    if(matchingKinds)for(size_t i=0;i<out.parts.size();i++)if(out.parts[i].ore.empty()&&!out.parts[i].inert)out.parts[i].ore=agreed[i];
     return done(holds(), "names read" + table);
 }
 

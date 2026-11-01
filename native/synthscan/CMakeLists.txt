@@ -206,6 +206,7 @@ set(CORE_SOURCES
     src/GameTexts.cpp
     src/MiniJson.cpp
     src/UexPrices.cpp
+    src/RockValuation.cpp
     src/UexReports.cpp
     src/UexMarket.cpp
 )
