@@ -33,7 +33,7 @@ HWND host=nullptr,panel=nullptr,listing=nullptr,detail=nullptr,search=nullptr,ki
 HWND autoCheck=nullptr,scanCheck=nullptr,hudCheck=nullptr,sessionCheck=nullptr,hotkey=nullptr,editName=nullptr,editReminder=nullptr,editMinutes=nullptr;
 HFONT font=nullptr,titleFont=nullptr;
 HBRUSH background=nullptr,card=nullptr;
-bool isAutomatic=false,testing=false,attached=false,hudVisible=true,scanOnLaunch=true,showSession=true,hotkeyOK=false,snareAlerts=true;
+bool isAutomatic=false,testing=false,attached=false,hudVisible=true,scanOnLaunch=true,showSession=true,hotkeyOK=false,snareAlerts=true,hangarTimer=false;
 bool pirateDetails=false,quest=false,pirate=false,miningResume=true,placementLocked=false,activityExpanded=true;
 std::string activityCommandId;
 int currentTab=0,hotkeyChoice=0,selected=-1;
@@ -65,7 +65,7 @@ bool spawnPython(const wchar_t* script,const std::vector<std::wstring>& args,HAN
     CloseHandle(pi.hThread);if(job&&std::wstring(script)==L"native_bridge.py")AssignProcessToJobObject(job,pi.hProcess);
     if(result)*result=pi.hProcess;else CloseHandle(pi.hProcess);return true;
 }
-void saveSettings(){settings=obj({{"scan_on_launch",boolean(scanOnLaunch)},{"show_hud",boolean(hudVisible)},{"session_strip",boolean(showSession)},{"snare_alerts",boolean(snareAlerts)},{"piracy_details",boolean(pirateDetails)},{"hud_mode",str(quest?"questing":pirate?"piracy":"mining")},{"mining_resume",boolean(miningResume)},{"hud_locked",boolean(placementLocked)},{"activity_expanded",boolean(activityExpanded)},{"hotkey",num(hotkeyChoice)}});if(!write(data/L"native_settings.json",settings))note="Could not save HUD settings.";}
+void saveSettings(){settings=obj({{"scan_on_launch",boolean(scanOnLaunch)},{"show_hud",boolean(hudVisible)},{"session_strip",boolean(showSession)},{"hangar_timer",boolean(hangarTimer)},{"snare_alerts",boolean(snareAlerts)},{"piracy_details",boolean(pirateDetails)},{"hud_mode",str(quest?"questing":pirate?"piracy":"mining")},{"mining_resume",boolean(miningResume)},{"hud_locked",boolean(placementLocked)},{"activity_expanded",boolean(activityExpanded)},{"hotkey",num(hotkeyChoice)}});if(!write(data/L"native_settings.json",settings))note="Could not save HUD settings.";}
 void togglePlacement(){placementLocked=!placementLocked;if(mining)mining->updateClickThrough();saveSettings();}
 void modeControls(){if(!mining)return;if(pirate)SetWindowTextW(GetDlgItem(mining->windowHandle(),31814),flag(field(state,"piracy_watch"),"waiting_active")?L"Pause wait":L"Start wait");if(pirate){SetWindowTextW(GetDlgItem(mining->windowHandle(),1002),pirateDetails?L"Details -":L"Details +");SetWindowTextW(GetDlgItem(mining->windowHandle(),31817),snareAlerts?L"Alerts on":L"Muted");}if(quest)SetWindowTextW(GetDlgItem(mining->windowHandle(),1002),L"Next");mining->placeOreRowsButton();for(int id:{31810,31811,31813})InvalidateRect(GetDlgItem(mining->windowHandle(),id),nullptr,FALSE);InvalidateRect(mining->windowHandle(),nullptr,FALSE);}
 void setMode(int value){
@@ -180,7 +180,9 @@ void rebuild(int tab){
         SendMessageW(scanCheck,BM_SETCHECK,scanOnLaunch?BST_CHECKED:BST_UNCHECKED,0);SendMessageW(hudCheck,BM_SETCHECK,hudVisible?BST_CHECKED:BST_UNCHECKED,0);
         SendMessageW(sessionCheck,BM_SETCHECK,showSession?BST_CHECKED:BST_UNCHECKED,0);
         control(L"BUTTON",L"Snare Watch: sound + banner for logged interdiction reports",BS_AUTOCHECKBOX,28,284,720,24,311);SendDlgItemMessageW(panel,311,BM_SETCHECK,snareAlerts?BST_CHECKED:BST_UNCHECKED,0);
-        control(L"STATIC",L"Keyboard shortcuts are disabled. Use buttons and menus.",SS_LEFT,28,318,760,44,0);
+        control(L"STATIC",L"Keyboard shortcuts are disabled. Use buttons and menus.",SS_LEFT,28,318,760,22,0);
+        control(L"BUTTON",L"Show Executive Hangar timer below server HUD (shared schedule)",BS_AUTOCHECKBOX,28,350,760,26,312);
+        SendDlgItemMessageW(panel,312,BM_SETCHECK,hangarTimer?BST_CHECKED:BST_UNCHECKED,0);
         control(L"BUTTON",L"Save startup & HUD settings",BS_PUSHBUTTON,28,390,300,34,306);
         control(L"BUTTON",L"Show / hide HUD now",BS_PUSHBUTTON,348,390,240,34,307);
         control(L"BUTTON",L"Open desktop view",BS_PUSHBUTTON,608,390,220,34,308);
@@ -243,6 +245,7 @@ void saveOptions(){
     scanOnLaunch=SendMessageW(scanCheck,BM_GETCHECK,0,0)==BST_CHECKED;
     showSession=SendMessageW(sessionCheck,BM_GETCHECK,0,0)==BST_CHECKED;
     snareAlerts=SendDlgItemMessageW(panel,311,BM_GETCHECK,0,0)==BST_CHECKED;
+    hangarTimer=SendDlgItemMessageW(panel,312,BM_GETCHECK,0,0)==BST_CHECKED;
     bool wantHud=SendMessageW(hudCheck,BM_GETCHECK,0,0)==BST_CHECKED;
     bool wantAuto=SendMessageW(autoCheck,BM_GETCHECK,0,0)==BST_CHECKED;
     showHud(wantHud);applyHotkey();saveSettings();
@@ -365,7 +368,7 @@ LRESULT CALLBACK hostProc(HWND hwnd,UINT message,WPARAM w,LPARAM l){
     if(message==WM_APP+42){activityControl();publishNativeStatus();return 0;}
     if(message==WM_TIMER){timer();return 0;}
     if(message==WM_HOTKEY)return 0;
-    if(message==TRAY){if(l==WM_LBUTTONDBLCLK){desktop();return 0;}if(l==WM_RBUTTONUP){HMENU menu=CreatePopupMenu();AppendMenuW(menu,MF_STRING,1,L"Open SynthScan");AppendMenuW(menu,MF_STRING,2,L"Show / hide HUD");AppendMenuW(menu,MF_STRING,3,L"Startup & HUD settings");AppendMenuW(menu,MF_STRING,4,L"Exit SynthScan");AppendMenuW(menu,MF_STRING|((pirate||quest)?0:MF_CHECKED),5,L"HUD mode: Mining");AppendMenuW(menu,MF_STRING|(pirate?MF_CHECKED:0),6,L"HUD mode: Piracy");AppendMenuW(menu,MF_STRING|(quest?MF_CHECKED:0),8,L"HUD mode: Missions");AppendMenuW(menu,MF_STRING|(placementLocked?MF_CHECKED:0),7,L"Lock HUD position (click-through)");POINT at;GetCursorPos(&at);SetForegroundWindow(hwnd);int choice=TrackPopupMenu(menu,TPM_RETURNCMD|TPM_RIGHTBUTTON,at.x,at.y,0,hwnd,nullptr);DestroyMenu(menu);if(choice==1)desktop();if(choice==2)showHud(!hudVisible);if(choice==3)workspace(4);if(choice==5||choice==6)setMode(choice==6);if(choice==8)setMode(2);if(choice==7)togglePlacement();if(choice==4&&mining){markUserExit();PostMessageW(mining->windowHandle(),WM_CLOSE,0,0);}return 0;}}
+    if(message==TRAY){if(l==WM_LBUTTONDBLCLK){desktop();return 0;}if(l==WM_RBUTTONUP){HMENU menu=CreatePopupMenu();AppendMenuW(menu,MF_STRING,1,L"Open SynthScan");AppendMenuW(menu,MF_STRING,2,L"Show / hide HUD");AppendMenuW(menu,MF_STRING,3,L"Startup & HUD settings");AppendMenuW(menu,MF_STRING,4,L"Exit SynthScan");AppendMenuW(menu,MF_STRING|((pirate||quest)?0:MF_CHECKED),5,L"HUD mode: Mining");AppendMenuW(menu,MF_STRING|(pirate?MF_CHECKED:0),6,L"HUD mode: Piracy");AppendMenuW(menu,MF_STRING|(quest?MF_CHECKED:0),8,L"HUD mode: Missions");AppendMenuW(menu,MF_STRING|(placementLocked?MF_CHECKED:0),7,L"Lock HUD position (click-through)");AppendMenuW(menu,MF_STRING|(hangarTimer?MF_CHECKED:0),9,L"Executive Hangar timer");POINT at;GetCursorPos(&at);SetForegroundWindow(hwnd);int choice=TrackPopupMenu(menu,TPM_RETURNCMD|TPM_RIGHTBUTTON,at.x,at.y,0,hwnd,nullptr);DestroyMenu(menu);if(choice==1)desktop();if(choice==2)showHud(!hudVisible);if(choice==3)workspace(4);if(choice==5||choice==6)setMode(choice==6);if(choice==8)setMode(2);if(choice==7)togglePlacement();if(choice==9){hangarTimer=!hangarTimer;saveSettings();if(panel&&currentTab==4)SendDlgItemMessageW(panel,312,BM_SETCHECK,hangarTimer?BST_CHECKED:BST_UNCHECKED,0);}if(choice==4&&mining){markUserExit();PostMessageW(mining->windowHandle(),WM_CLOSE,0,0);}return 0;}}
     return DefWindowProcW(hwnd,message,w,l);
 }
 LRESULT CALLBACK mainSubclass(HWND hwnd,UINT message,WPARAM w,LPARAM l,UINT_PTR,DWORD_PTR){
@@ -421,7 +424,7 @@ bool begin(bool value){
 void attach(SCMiner::MinerGUI* gui,std::function<bool(const std::string&)> confirm){
     mining=gui;confirmOwned=std::move(confirm);attached=true;uiScale=GetDpiForWindow(gui->windowHandle())/96.0;if(uiScale<.75)uiScale=1;data=SCMiner::AppPaths::data();
     Json runtime=read(SCMiner::AppPaths::program()/L"native_runtime.json");root=std::filesystem::u8path(runtime.textOr("workspace"));
-    settings=read(data/L"native_settings.json");scanOnLaunch=flag(settings,"scan_on_launch",true);hudVisible=flag(settings,"show_hud",true);activityExpanded=flag(settings,"activity_expanded",true);showSession=flag(settings,"session_strip",true);snareAlerts=flag(settings,"snare_alerts",true);pirate=settings.textOr("hud_mode")=="piracy";pirateDetails=flag(settings,"piracy_details",false);quest=settings.textOr("hud_mode")=="questing";miningResume=flag(settings,"mining_resume",scanOnLaunch);placementLocked=flag(settings,"hud_locked",false);gui->updateClickThrough();hotkeyChoice=int(settings.numberOr("hotkey"));if(hotkeyChoice<0||hotkeyChoice>2)hotkeyChoice=0;
+    settings=read(data/L"native_settings.json");scanOnLaunch=flag(settings,"scan_on_launch",true);hudVisible=flag(settings,"show_hud",true);activityExpanded=flag(settings,"activity_expanded",true);showSession=flag(settings,"session_strip",true);hangarTimer=flag(settings,"hangar_timer",false);snareAlerts=flag(settings,"snare_alerts",true);pirate=settings.textOr("hud_mode")=="piracy";pirateDetails=flag(settings,"piracy_details",false);quest=settings.textOr("hud_mode")=="questing";miningResume=flag(settings,"mining_resume",scanOnLaunch);placementLocked=flag(settings,"hud_locked",false);gui->updateClickThrough();hotkeyChoice=int(settings.numberOr("hotkey"));if(hotkeyChoice<0||hotkeyChoice>2)hotkeyChoice=0;
     library=read(SCMiner::AppPaths::program()/L"workspace_library.json");for(auto& value:read(data/L"workspace_favorites.json").items)favorites.insert(value.text);
     SynthScanDiary::initialize(gui->windowHandle(),data,testing,[](Json value){command(value);});
     SynthScanNav::initialize(gui->windowHandle(),testing,[](Json value){command(value);});

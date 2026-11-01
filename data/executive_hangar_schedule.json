@@ -1,0 +1,145 @@
+{
+  "schema": 1,
+  "source": "https://exec.xyxyll.com/",
+  "anchor_ms": 1793311269073,
+  "cycle_ms": 11100350,
+  "segments": [
+    {
+      "start_ms": 0,
+      "end_ms": 720023,
+      "phase": "open",
+      "lights": [
+        "green",
+        "green",
+        "green",
+        "green",
+        "green"
+      ]
+    },
+    {
+      "start_ms": 720023,
+      "end_ms": 1440046,
+      "phase": "open",
+      "lights": [
+        "green",
+        "green",
+        "green",
+        "green",
+        "empty"
+      ]
+    },
+    {
+      "start_ms": 1440046,
+      "end_ms": 2160069,
+      "phase": "open",
+      "lights": [
+        "green",
+        "green",
+        "green",
+        "empty",
+        "empty"
+      ]
+    },
+    {
+      "start_ms": 2160069,
+      "end_ms": 2880091,
+      "phase": "open",
+      "lights": [
+        "green",
+        "green",
+        "empty",
+        "empty",
+        "empty"
+      ]
+    },
+    {
+      "start_ms": 2880091,
+      "end_ms": 3600114,
+      "phase": "open",
+      "lights": [
+        "green",
+        "empty",
+        "empty",
+        "empty",
+        "empty"
+      ]
+    },
+    {
+      "start_ms": 3600114,
+      "end_ms": 3900123,
+      "phase": "reset",
+      "lights": [
+        "empty",
+        "empty",
+        "empty",
+        "empty",
+        "empty"
+      ]
+    },
+    {
+      "start_ms": 3900123,
+      "end_ms": 5340169,
+      "phase": "charging",
+      "lights": [
+        "red",
+        "red",
+        "red",
+        "red",
+        "red"
+      ]
+    },
+    {
+      "start_ms": 5340169,
+      "end_ms": 6780214,
+      "phase": "charging",
+      "lights": [
+        "green",
+        "red",
+        "red",
+        "red",
+        "red"
+      ]
+    },
+    {
+      "start_ms": 6780214,
+      "end_ms": 8220260,
+      "phase": "charging",
+      "lights": [
+        "green",
+        "green",
+        "red",
+        "red",
+        "red"
+      ]
+    },
+    {
+      "start_ms": 8220260,
+      "end_ms": 9660305,
+      "phase": "charging",
+      "lights": [
+        "green",
+        "green",
+        "green",
+        "red",
+        "red"
+      ]
+    },
+    {
+      "start_ms": 9660305,
+      "end_ms": 11100350,
+      "phase": "charging",
+      "lights": [
+        "green",
+        "green",
+        "green",
+        "green",
+        "red"
+      ]
+    }
+  ],
+  "source_modified": "2026-10-29",
+  "source_version": "2.2.32",
+  "source_sha256": "638d398b7dbbce6621852b48d380ebcf1f63e9cd0c624177018c3fc9850a619c",
+  "patch": "4.10.2-LIVE",
+  "server_build": "12974691"
+}

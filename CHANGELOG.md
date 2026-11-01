@@ -1,5 +1,13 @@
 # Changes
 
+## 0.1.0-alpha.4 — 2026-11-01
+
+- Optional shared PYAM Executive Hangar five-light timer under the server ribbon,
+  with predicted charging/open/reset phases, countdowns, public-source resync
+  and a passive display that does not consume gameplay input.
+- Toggle the timer in Startup & HUD settings or the tray menu. It defaults off
+  and uses the tracker’s published schedule, not a live hangar-availability feed.
+
 ## 0.1.0-alpha.3 — 2026-11-01
 
 - Preserve the app when closing its HUD; recover from unexpected exits. App-wide

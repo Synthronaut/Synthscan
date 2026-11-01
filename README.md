@@ -99,6 +99,12 @@ larger discrepancy keep valuation pending. Partial scans continue to be retried.
   from the game's **visible DisplayInfo** panel using local OCR. Keep DisplayInfo
   enabled for those readings. Stale/unreadable values expire. These fields are
   not obtained through a hidden game API.
+- Optional Executive Hangar strip: enable **Executive Hangar timer** in the
+  tray menu or **More → Startup & HUD settings**. Five lights and countdowns
+  follow the shared PYAM schedule alongside Mining/Piracy. Charging, usable
+  green-light time, and the all-off reset are separate phases. The strip is
+  read-only and click-through; it does not know which local hangar is available
+  or whether another crew has already claimed it. Source sync and patch are shown.
 - Missions observations and configured rewards. Party splits are estimates, not
   guaranteed awards. Only authenticated balances count as verified reputation.
 - Mining diary, personal records and deliberate share exports. Refinery/inventory

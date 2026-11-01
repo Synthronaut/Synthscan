@@ -35,6 +35,8 @@ def main():
     from hud_controller import game_window_rect
     from hud_controller import get_monitor_by_id
     from activity_hud import ActivityButton,ActivityCollapseButton
+    from executive_hangar import HangarScheduleService
+    from executive_hangar_hud import ExecutiveHangarHUD
     from region_history_hud import RegionHistory
     from interdiction_watch import AlertGate,piracy_alerts_enabled
     from snare_alert_ui import SnareAlertWindow
@@ -80,6 +82,8 @@ def main():
             if button:button.follow(self,game_window_rect() or get_monitor_by_id(self.game_monitor))
             history=getattr(self,'region_history',None)
             if history:history.follow(self,game_window_rect() or get_monitor_by_id(self.game_monitor))
+            hangar=getattr(self,'hangar_timer',None)
+            if hangar:hangar.follow(self,game_window_rect() or get_monitor_by_id(self.game_monitor))
         def _save_preferences(self, changes):
             from telemetry_ipc import publish_json
             try:preferences=read_shared_json(DATA/'ribbon_position.json')
@@ -104,6 +108,7 @@ def main():
         logging.error('HUD input callback failed',exc_info=(kind,value,traceback))
     root.report_callback_exception=callback_error
     history=RegionHistory(root);ribbon.region_history=history
+    hangar=ExecutiveHangarHUD(root);ribbon.hangar_timer=hangar;hangar_service=HangarScheduleService(DATA)
     def protected_now():
         from overlay_input import foreground_process_id,protect_game_input
         return protect_game_input(foreground_process_id(),{os.getpid(),args.owner},bool(game_window_rect()))
@@ -139,6 +144,13 @@ def main():
             activity.sync(ribbon,native,game_window_rect() or get_monitor_by_id(ribbon.game_monitor))
             collapse.sync(ribbon,native,game_window_rect() or get_monitor_by_id(ribbon.game_monitor))
             history.follow(ribbon,game_window_rect() or get_monitor_by_id(ribbon.game_monitor))
+            hangar_enabled=bool(settings.get('hangar_timer',False))
+            try:
+                hangar_view=hangar_service.tick(hangar_enabled)
+                hangar.sync(ribbon,hangar_enabled,hangar_view,game_window_rect() or get_monitor_by_id(ribbon.game_monitor))
+            except Exception:
+                logging.exception('Optional hangar timer refresh failed')
+                hangar.sync(ribbon,False,None,game_window_rect() or get_monitor_by_id(ribbon.game_monitor))
             enabled=piracy_alerts_enabled(settings,bool(game_window_rect()))
             notices=gate.consume(snapshot,args.owner,time.time(),enabled)
             alert.update(notices,ribbon.state.get('session_token'),enabled)
@@ -149,12 +161,12 @@ def main():
             publish_json(DATA/'top_hud_status.json',dict(at=time.time(),pid=os.getpid(),owner_pid=args.owner,
                         visible=bool(ribbon._visible),geometry=ribbon._last_geometry,input_protected=protected,
                         session_token=ribbon.state.get('session_token'),callsign=ribbon.state.get('callsign'),layout='ribbon',
-                        draggable=ribbon.editing,server_bar_locked=ribbon.server_bar_locked,position=ribbon.position,region_history_visible=history.visible,region_history_open=history.open,region_color=(getattr(ribbon,'region_hit',None) or {}).get('color'),region_text=(getattr(ribbon,'region_hit',None) or {}).get('text'),region_last_input=getattr(history,'last_input',None),region_transition=getattr(history,'last_transition',None),region_canvas_size=[history.canvas.winfo_width(),history.canvas.winfo_height()],region_geometry=history.geometry,region_popup_geometry=getattr(history,'popup_rect',None),activity_button_visible=activity.visible,activity_button_geometry=activity.geometry,collapse_button_visible=collapse.visible,collapse_button_geometry=collapse.geometry,activity_expanded=native.get('activity_expanded',True),snare_watch_enabled=enabled,snare_alerts_shown=alert.shown))
+                        draggable=ribbon.editing,server_bar_locked=ribbon.server_bar_locked,position=ribbon.position,region_history_visible=history.visible,region_history_open=history.open,region_color=(getattr(ribbon,'region_hit',None) or {}).get('color'),region_text=(getattr(ribbon,'region_hit',None) or {}).get('text'),region_last_input=getattr(history,'last_input',None),region_transition=getattr(history,'last_transition',None),region_canvas_size=[history.canvas.winfo_width(),history.canvas.winfo_height()],region_geometry=history.geometry,region_popup_geometry=getattr(history,'popup_rect',None),activity_button_visible=activity.visible,activity_button_geometry=activity.geometry,collapse_button_visible=collapse.visible,collapse_button_geometry=collapse.geometry,hangar_timer_visible=hangar.visible,hangar_timer_geometry=hangar.geometry,hangar_timer_phase=(hangar.view or {}).get('phase'),hangar_timer_lights=(hangar.view or {}).get('lights'),activity_expanded=native.get('activity_expanded',True),snare_watch_enabled=enabled,snare_alerts_shown=alert.shown))
         except (OSError,ValueError,TypeError,KeyError):
             ribbon.state=hud_state({},args.owner,time.time());ribbon.render_bar();alert.update([],None,False)
             logging.exception('Top HUD refresh failed')
         root.after(250,poll)
     try:poll();root.mainloop()
-    finally:lock.close()
+    finally:hangar_service.close();lock.close()
 
 if __name__=='__main__':main()

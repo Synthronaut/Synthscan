@@ -13,14 +13,14 @@ import zipfile
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
-VERSION='0.1.0-alpha.3'
+VERSION='0.1.0-alpha.4'
 PRIVATE={'loginData.json','inventory.json','config.json','region_config.txt','owned_blueprints.txt',
     'blueprints_library.json','blueprints_favorites.json','reputation_snapshot.json','reputation_localization_state.json',
     'server_log.json','shard_history.json','uex_token.dat','uex_key.dat','portable.txt',
     'native_runtime.json','workspace_library.json','launch_target.json','installation.json',
     'reputation_names_preview.json','reputation_labels_status.json','blueprint_strings_status.json','setup_result.json',
     'fabricator_scan_inbox.json','refinery_orders.json','crafting_recipes.json','mining_loadout.json',
-    'native_status.json','top_hud_status.json','session_state.json','credentials.json','.env'}
+    'executive_hangar_sync.json','native_status.json','top_hud_status.json','session_state.json','credentials.json','.env'}
 IGNORED={'.git','__pycache__','.venv','node_modules','synthscan-build','build'}
 
 
@@ -46,7 +46,7 @@ def stage_source(destination):
     copy_tree(ROOT/'installer',destination/'installer')
     (destination/'tests').mkdir()
     for file in (ROOT/'tests').glob('*.py'):shutil.copy2(file,destination/'tests'/file.name)
-    for name in ['bedrock','starbreaker','game_artwork','presentmon']:copy_tree(ROOT/'third_party'/name,destination/'third_party'/name)
+    for name in ['bedrock','starbreaker','game_artwork','presentmon','executive_hangar']:copy_tree(ROOT/'third_party'/name,destination/'third_party'/name)
     for name in ['opencv_download.json','zstd_source.json','vc_runtime.json','vc_runtime_NOTICE.txt']:
         target=destination/'third_party/build_tools'/name;target.parent.mkdir(parents=True,exist_ok=True)
         shutil.copy2(ROOT/'third_party/build_tools'/name,target)

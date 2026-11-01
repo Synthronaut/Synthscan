@@ -53,3 +53,8 @@ are SynthScan's; credits below identify the actual sources of reused material.
 Historical research reports retain source names so their findings are auditable.
 Renaming the product does not remove original authors' copyright notices or
 change the licenses of reused components.
+
+- Executive Hangar timer model: https://exec.xyxyll.com/app.js, Copyright (c)
+  2025 Xyxyll; website LICENSE copyright (c) 2026 Xyxyll. MIT License and source
+  attribution are retained in third_party/executive_hangar/. The schedule is an
+  estimate, independently rendered by SynthScan; remote scripts are never run.

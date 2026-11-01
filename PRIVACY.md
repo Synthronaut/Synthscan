@@ -24,6 +24,10 @@ crash upload, or automatic sharing service in this release.
   locally. These requests do not send your rock scans, location, game credentials
   or inventory. The normal network connection exposes your IP to UEX.
   Set `uex=0` in the local native settings file to disable UEX requests.
+- The optional Executive Hangar strip reads public timing definitions from
+  `https://exec.xyxyll.com/` over HTTPS when enabled and caches them locally.
+  Requests contain no account, shard, inventory or game credentials. The site
+  receives the normal connection IP. No remote JavaScript is executed.
 - Optional UEX account/reporting features use credentials you enter locally.
   No UEX credential or refinery community service is bundled in this distribution.
 - Optional Windows timing/network diagnostics may request administrator access.
