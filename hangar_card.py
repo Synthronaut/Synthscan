@@ -15,10 +15,10 @@ def card_svg(view,inventory=None,verification=None):
     sync=verification or dict(community_synced=False,reason='Waiting for a community timing sync')
     certain=bool(sync.get('community_synced'))
     phase=(view or {}).get('phase','waiting');lights=(view or {}).get('lights',['empty']*5)
-    label={'open':'CLOSES IN','charging':'OPENS IN','reset':'RESET ENDS IN','waiting':'AWAITING SYNC'}[phase]
+    label={'open':'CLOSES IN','charging':'OPENS IN','reset':'CLOSES IN','waiting':'AWAITING SYNC'}[phase]
     if not certain and view:label='EST. '+label
-    timer=countdown(view['remaining_ms']) if view else '— : —'
-    status={'open':'OPEN WINDOW','charging':'CHARGING','reset':'RESET','waiting':'SCHEDULE OFFLINE'}[phase]
+    timer=countdown(view['remaining_ms'],round_up=False,with_hours=False) if view else '— : —'
+    status={'open':'ONLINE','charging':'CHARGING','reset':'ALL LIGHTS OFF','waiting':'SCHEDULE OFFLINE'}[phase]
     colors={'green':'#76c9a5','red':'#cf7c7c','empty':'#252b35'}
     sets=None if (inventory or {}).get('unavailable') else (inventory or {}).get('complete_sets',0)
     sets_label='Sets —' if sets is None else str(sets)+' '+('set' if sets==1 else 'sets')+' ready'

@@ -32,11 +32,20 @@ class ExecutiveHangarTests(unittest.TestCase):
                 self.assertEqual(project(data,anchor+row['end_ms']-1)['lights'],row['lights'])
                 next_row=data['segments'][(i+1)%len(data['segments'])]
                 self.assertEqual(project(data,anchor+row['end_ms'])['lights'],next_row['lights'])
-    def test_blackout_is_reset_not_usable_open_time(self):
+    def test_all_off_segment_retains_the_websites_online_end_countdown(self):
         data=seed();view=project(data,data['anchor_ms']+3600114)
         self.assertEqual(view['phase'],'reset');self.assertEqual(view['lights'],['empty']*5)
-        self.assertEqual(view['remaining_ms'],300009);self.assertIsNone(view['closes_ms'])
+        self.assertEqual(view['remaining_ms'],300009);self.assertEqual(view['closes_ms'],data['anchor_ms']+3900123)
         self.assertEqual(view['next_open_ms'],data['anchor_ms']+11100350)
+    def test_primary_timer_matches_65_minute_website_boundary_not_last_green_light(self):
+        data=seed();anchor=data['anchor_ms']
+        start=project(data,anchor);self.assertEqual(start['remaining_ms'],3900123)
+        self.assertEqual(countdown(start['remaining_ms'],round_up=False,with_hours=False),'65:00')
+        self.assertEqual(countdown(project(data,anchor+20000)['remaining_ms'],round_up=False,with_hours=False),'64:40')
+        after_green=project(data,anchor+3600114);self.assertEqual(after_green['phase'],'reset')
+        self.assertEqual(countdown(after_green['remaining_ms'],round_up=False,with_hours=False),'05:00')
+        offline=project(data,anchor+3900123);self.assertEqual(offline['phase'],'charging')
+        self.assertEqual(countdown(offline['remaining_ms'],round_up=False,with_hours=False),'120:00')
     def test_charging_with_four_green_lights_is_still_closed(self):
         data=seed();view=project(data,data['anchor_ms']+data['segments'][-1]['start_ms'])
         self.assertEqual(view['phase'],'charging');self.assertEqual(view['lights'],['green']*4+['red'])

@@ -1,5 +1,12 @@
 # Changes
 
+## 0.1.0-alpha.7 — 2026-11-01
+
+- Match the source tracker's 65-minute ONLINE countdown. The earlier closing
+  countdown incorrectly targeted the 60-minute end of its green-light sequence.
+  Preserve the final five-minute all-lights-off segment and use the website's
+  minute/second formatting and rounding.
+
 ## 0.1.0-alpha.6 — 2026-11-01
 
 - Give Executive Hangars its own compact activity-HUD tab, with five lights,

@@ -13,7 +13,7 @@ import zipfile
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
-VERSION='0.1.0-alpha.6'
+VERSION='0.1.0-alpha.7'
 PRIVATE={'loginData.json','inventory.json','config.json','region_config.txt','owned_blueprints.txt',
     'blueprints_library.json','blueprints_favorites.json','reputation_snapshot.json','reputation_localization_state.json',
     'server_log.json','shard_history.json','uex_token.dat','uex_key.dat','portable.txt',

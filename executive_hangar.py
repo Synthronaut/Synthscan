@@ -90,17 +90,19 @@ def project(schedule,now_ms):
     now_ms=math.floor(now_ms);elapsed=now_ms-schedule['anchor_ms'];cycle=elapsed//schedule['cycle_ms'];position=elapsed%schedule['cycle_ms']
     start=schedule['anchor_ms']+cycle*schedule['cycle_ms']
     row=next(r for r in schedule['segments'] if position<r['end_ms'])
-    closes=start+next(r['start_ms'] for r in schedule['segments'] if r['phase']=='reset')
+    green_ends=start+next(r['start_ms'] for r in schedule['segments'] if r['phase']=='reset')
+    closes=start+next(r['start_ms'] for r in schedule['segments'] if r['phase']=='charging')
     next_open=start+schedule['cycle_ms']
-    phase=row['phase'];event=closes if phase=='open' else (row['end_ms']+start if phase=='reset' else next_open)
+    phase=row['phase'];event=closes if phase in ('open','reset') else next_open
     return dict(phase=phase,lights=list(row['lights']),next_light_ms=start+row['end_ms'],next_open_ms=next_open,
-                closes_ms=closes if phase=='open' else None,event_ms=event,remaining_ms=event-now_ms,
+                closes_ms=closes if phase in ('open','reset') else None,green_ends_ms=green_ends,event_ms=event,remaining_ms=event-now_ms,
                 light_remaining_ms=start+row['end_ms']-now_ms,now_ms=now_ms,
                 source_modified=schedule.get('source_modified',''),patch=schedule.get('patch',''),estimated=True)
 
 
-def countdown(milliseconds):
-    total=max(0,math.ceil(milliseconds/1000));hours,rest=divmod(total,3600);minutes,seconds=divmod(rest,60)
+def countdown(milliseconds,round_up=True,with_hours=True):
+    total=max(0,(math.ceil if round_up else math.floor)(milliseconds/1000));hours,rest=divmod(total,3600);minutes,seconds=divmod(rest,60)
+    if not with_hours:return f'{total//60:02}:{seconds:02}'
     return f'{hours:02}:{minutes:02}:{seconds:02}' if hours else f'{minutes:02}:{seconds:02}'
 
 
