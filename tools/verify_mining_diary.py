@@ -14,6 +14,14 @@ def main():
     args=parser.parse_args();out=Path(args.output).resolve();out.mkdir(parents=True,exist_ok=True)
     if (out/'data').exists():raise ValueError('Use a new output directory for each isolated run')
     binary=Path(args.binary).resolve()
+    from app_lifecycle import game_process_ids
+    if game_process_ids():raise RuntimeError('Close Star Citizen before running native UI fixtures.')
+    from hangar_card import card_svg
+    from executive_hangar import project
+    from executive_hangar_hud import render_png
+    schedule=json.loads((ROOT/'data/executive_hangar_schedule.json').read_text())
+    card=card_svg(project(schedule,schedule['anchor_ms']+6200000),dict(complete_sets=2),dict(community_synced=False,reason='Timing unverified for this patch'))
+    (out/'hangar_card.png').write_bytes(render_png(card,860,300))
     if not (binary.parent/'workspace_library.json').exists():shutil.copy2(ROOT/'dist/native/workspace_library.json',binary.parent/'workspace_library.json')
     diary=MiningDiary(out/'fixture_profile')
     try:
@@ -30,11 +38,13 @@ def main():
     (out/'selftest.json').write_text(json.dumps(dict(exit=r.returncode,passed=r.stdout.count('[PASS]'),stdout=r.stdout,stderr=r.stderr),indent=2),encoding='utf-8')
     assert r.returncode==0,r.stderr
     ui=subprocess.run([str(binary),'--ui-test',str(out)],env=env,capture_output=True,timeout=60)
-    assert ui.returncode==0,ui.stderr
+    assert ui.returncode==0,(ui.returncode,ui.stderr)
     result=json.loads((out/'ui_test.json').read_text(encoding='utf-8'))
     for name in ['plain_q_does_not_quit','escape_does_not_quit','dialog_cancel_does_not_quit',
                  'window_close_keeps_app_running','hud_restores_after_window_close',
                  'keyboard_actions_disabled','hotkey_messages_ignored','mouse_visibility_route']:
+        assert result[name],name
+    for name in ['hangars_tab_compact_and_pauses_scanner','hangars_blocks_mining_diary','hangars_mining_resume']:
         assert result[name],name
     assert result['diary_native_encounters']==1,result
     assert result['diary_editor_route'] and result['diary_share_route'],result

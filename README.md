@@ -99,17 +99,20 @@ larger discrepancy keep valuation pending. Partial scans continue to be retried.
   from the game's **visible DisplayInfo** panel using local OCR. Keep DisplayInfo
   enabled for those readings. Stale/unreadable values expire. These fields are
   not obtained through a hidden game API.
-- Optional Executive Hangar strip: enable **Executive Hangar timer** in the
-  tray menu or **More → Startup & HUD settings**. Five lights and countdowns
-  follow the shared PYAM schedule alongside Mining/Piracy. Charging, usable
-  green-light time, and the all-off reset are separate phases. The strip is
-  read-only and click-through; it does not know which local hangar is available
-  or whether another crew has already claimed it. Source sync and patch are shown.
+- **Hangars HUD tab**: select Hangars beside Mining/Piracy/Missions, from the
+  tray HUD-mode menu, or **Open Hangars HUD** in **Startup & HUD**. The compact
+  card shows five lights, the opening/closing countdown and a small complete-set
+  total. The earlier strip beneath the server bar has been replaced by this tab.
+  Game-build changes and CIG's announced server resets invalidate older timing.
+  The card shows **UNVERIFIED** and an estimated countdown until suitable revised
+  community timing arrives. Data refreshes automatically; no app update is needed
+  for timing changes. A successful download of unchanged old timing is not a new
+  sync. Unannounced resets and individual hangar claims cannot be inferred.
 - Compboard inventory: open **Compboard inventory** from the tray menu or
   **Startup & HUD**. Set quantities for boards 1–7 with +/− or typed counts.
   **Use one set** subtracts one of each only when a full set is available;
   **Undo last set** restores that use until counts are edited. Counts save on
-  this PC and appear on the click-through hangar strip. These are manual records;
+  this PC; the Hangars HUD shows the number of complete sets. These are manual records;
   the button does not operate the in-game hangar or claim a ship.
 - Missions observations and configured rewards. Party splits are estimates, not
   guaranteed awards. Only authenticated balances count as verified reputation.

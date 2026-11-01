@@ -1,5 +1,17 @@
 # Changes
 
+## 0.1.0-alpha.6 — 2026-11-01
+
+- Give Executive Hangars its own compact activity-HUD tab, with five lights,
+  an opening/closing countdown and a subtle complete-compboard-set total.
+- Detect installed game-build changes and announced server resets through CIG's
+  public status feed. Label unverified timing visibly; re-downloading unchanged
+  timing cannot clear a build-change warning. Revised community timing is applied
+  automatically without an application update.
+- Refresh the public schedule/status data every ten minutes while Hangars is
+  selected, or every two minutes while awaiting verification. Offline or stale
+  verification is labeled; this is not a direct read of hangar availability.
+
 ## 0.1.0-alpha.5 — 2026-11-01
 
 - Manual compboard inventory with seven saved quantities, +/− controls, typed

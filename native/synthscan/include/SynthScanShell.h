@@ -14,6 +14,8 @@ int piracyHeight();
 int activityFooterHeight();
 bool questingMode();
 bool activityMode();
+bool hangarsMode();
+void drawHangars(Gdiplus::Graphics& g,float width,float height,float scale);
 void drawQuesting(Gdiplus::Graphics& g,float width,float height,float scale);
 bool hudLocked();
 void drawPiracy(Gdiplus::Graphics& g,float width,float height,float scale);

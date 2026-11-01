@@ -24,7 +24,7 @@ crash upload, or automatic sharing service in this release.
   locally. These requests do not send your rock scans, location, game credentials
   or inventory. The normal network connection exposes your IP to UEX.
   Set `uex=0` in the local native settings file to disable UEX requests.
-- The optional Executive Hangar strip reads public timing definitions from
+- The optional Hangars HUD reads public timing definitions from
   `https://exec.xyxyll.com/` over HTTPS when enabled and caches them locally.
   Requests contain no account, shard, inventory or game credentials. The site
   receives the normal connection IP. No remote JavaScript is executed.
@@ -53,3 +53,8 @@ numbers are a snapshot for the last verified character, not a live in-game value
 Switching accounts requires a fresh verified read and a full game restart before
 the new labels are loaded. Separate game installations are recommended for shared
 PC accounts that need independent text files.
+
+The Hangars HUD also reads CIG’s public Persistent Universe status RSS feed to
+flag announced server resets. Requests to this feed and the public timer include
+no player, account, shard or inventory data. Verification state stays in the
+local player profile.

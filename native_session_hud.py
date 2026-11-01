@@ -36,7 +36,7 @@ def main():
     from hud_controller import get_monitor_by_id
     from activity_hud import ActivityButton,ActivityCollapseButton
     from executive_hangar import HangarScheduleService
-    from executive_hangar_hud import ExecutiveHangarHUD
+    from hangar_card import HangarPublisher
     from region_history_hud import RegionHistory
     from interdiction_watch import AlertGate,piracy_alerts_enabled
     from snare_alert_ui import SnareAlertWindow
@@ -82,8 +82,6 @@ def main():
             if button:button.follow(self,game_window_rect() or get_monitor_by_id(self.game_monitor))
             history=getattr(self,'region_history',None)
             if history:history.follow(self,game_window_rect() or get_monitor_by_id(self.game_monitor))
-            hangar=getattr(self,'hangar_timer',None)
-            if hangar:hangar.follow(self,game_window_rect() or get_monitor_by_id(self.game_monitor))
         def _save_preferences(self, changes):
             from telemetry_ipc import publish_json
             try:preferences=read_shared_json(DATA/'ribbon_position.json')
@@ -108,7 +106,7 @@ def main():
         logging.error('HUD input callback failed',exc_info=(kind,value,traceback))
     root.report_callback_exception=callback_error
     history=RegionHistory(root);ribbon.region_history=history
-    hangar=ExecutiveHangarHUD(root,DATA);ribbon.hangar_timer=hangar;hangar_service=HangarScheduleService(DATA)
+    hangar=HangarPublisher(DATA,args.owner);hangar_service=HangarScheduleService(DATA)
     def protected_now():
         from overlay_input import foreground_process_id,protect_game_input
         return protect_game_input(foreground_process_id(),{os.getpid(),args.owner},bool(game_window_rect()))
@@ -144,13 +142,12 @@ def main():
             activity.sync(ribbon,native,game_window_rect() or get_monitor_by_id(ribbon.game_monitor))
             collapse.sync(ribbon,native,game_window_rect() or get_monitor_by_id(ribbon.game_monitor))
             history.follow(ribbon,game_window_rect() or get_monitor_by_id(ribbon.game_monitor))
-            hangar_enabled=bool(settings.get('hangar_timer',False))
+            hangar_enabled=settings.get('hud_mode')=='hangars'
             try:
-                hangar_view=hangar_service.tick(hangar_enabled)
-                hangar.sync(ribbon,hangar_enabled,hangar_view,game_window_rect() or get_monitor_by_id(ribbon.game_monitor))
+                hangar.tick(hangar_service,hangar_enabled)
             except Exception:
                 logging.exception('Optional hangar timer refresh failed')
-                hangar.sync(ribbon,False,None,game_window_rect() or get_monitor_by_id(ribbon.game_monitor))
+                pass
             enabled=piracy_alerts_enabled(settings,bool(game_window_rect()))
             notices=gate.consume(snapshot,args.owner,time.time(),enabled)
             alert.update(notices,ribbon.state.get('session_token'),enabled)

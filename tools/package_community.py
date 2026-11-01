@@ -13,14 +13,15 @@ import zipfile
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
-VERSION='0.1.0-alpha.5'
+VERSION='0.1.0-alpha.6'
 PRIVATE={'loginData.json','inventory.json','config.json','region_config.txt','owned_blueprints.txt',
     'blueprints_library.json','blueprints_favorites.json','reputation_snapshot.json','reputation_localization_state.json',
     'server_log.json','shard_history.json','uex_token.dat','uex_key.dat','portable.txt',
     'native_runtime.json','workspace_library.json','launch_target.json','installation.json',
     'reputation_names_preview.json','reputation_labels_status.json','blueprint_strings_status.json','setup_result.json',
     'fabricator_scan_inbox.json','refinery_orders.json','crafting_recipes.json','mining_loadout.json',
-    'executive_hangar_sync.json','compboard_inventory.sqlite3','compboard_inventory.sqlite3-journal',
+    'executive_hangar_sync.json','executive_hangar_verification.json','hangar_hud.json','hangar_hud.png','hangar_hud.png.tmp',
+    'compboard_inventory.sqlite3','compboard_inventory.sqlite3-journal',
     'compboard_inventory.sqlite3-wal','compboard_inventory.sqlite3-shm',
     'native_status.json','top_hud_status.json','session_state.json','credentials.json','.env'}
 IGNORED={'.git','__pycache__','.venv','node_modules','synthscan-build','build'}

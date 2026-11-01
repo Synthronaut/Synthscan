@@ -1072,6 +1072,7 @@ void MinerGUI::createControls() {
     CreateWindowW(L"BUTTON",L"Mining",btnStyle,0,0,10,10,hwnd_,(HMENU)31810,hInstance_,nullptr);
     CreateWindowW(L"BUTTON",L"Piracy",btnStyle,0,0,10,10,hwnd_,(HMENU)31811,hInstance_,nullptr);
     CreateWindowW(L"BUTTON",L"Missions",btnStyle,0,0,10,10,hwnd_,(HMENU)31813,hInstance_,nullptr);
+    CreateWindowW(L"BUTTON",L"Hangars",btnStyle,0,0,10,10,hwnd_,(HMENU)31818,hInstance_,nullptr);
     CreateWindowW(L"BUTTON",L"Start wait",btnStyle,0,0,10,10,hwnd_,(HMENU)31814,hInstance_,nullptr);
     CreateWindowW(L"BUTTON",L"Reset",btnStyle,0,0,10,10,hwnd_,(HMENU)31815,hInstance_,nullptr);
     CreateWindowW(L"BUTTON",L"Alerts on",btnStyle,0,0,10,10,hwnd_,(HMENU)31817,hInstance_,nullptr);
@@ -1124,12 +1125,14 @@ void MinerGUI::layoutControls() {
         MoveWindow(btnLiveMode_, cw - z(scale(8)) - z(scale(46)) - z(scale(4)) - z(scale(58)), btnY,
                    z(scale(58)), btnH, TRUE);
         MoveWindow(btnKeys_,cw-z(scale(8+46+4+58+4+52)),btnY,z(scale(52)),btnH,TRUE);
-        for(int i=0;i<3;i++){HWND tab=GetDlgItem(hwnd_,i==2?31813:31810+i);ShowWindow(tab,SW_SHOW);if(SynthScan::piracyMode())MoveWindow(tab,z(scale(90+i*78)),z(scale(8)),z(scale(74)),z(scale(20)),TRUE);else MoveWindow(tab,z(scale(8+i*100)),rc.bottom-z(scale(27)),z(scale(96)),z(scale(22)),TRUE);}
+        for(int i=0;i<4;i++){HWND tab=GetDlgItem(hwnd_,i==3?31818:i==2?31813:31810+i);ShowWindow(tab,SW_SHOWNOACTIVATE);if(SynthScan::piracyMode())MoveWindow(tab,z(scale(90+i*78)),z(scale(8)),z(scale(74)),z(scale(20)),TRUE);else {int gap=z(scale(4)),margin=z(scale(8)),width=(cw-margin*2-gap*3)/4;MoveWindow(tab,margin+i*(width+gap),rc.bottom-z(scale(27)),width,z(scale(22)),TRUE);}}
+        ShowWindow(btnLiveMode_,SynthScan::hangarsMode()?SW_HIDE:SW_SHOWNOACTIVATE);
+        if(SynthScan::hangarsMode())MoveWindow(btnKeys_,cw-z(scale(8+46+4+52)),btnY,z(scale(52)),btnH,TRUE);
         placeOreRowsButton();
         return;
     }
 
-    ShowWindow(GetDlgItem(hwnd_,31810),SW_HIDE);ShowWindow(GetDlgItem(hwnd_,31811),SW_HIDE);ShowWindow(GetDlgItem(hwnd_,31813),SW_HIDE);
+    ShowWindow(GetDlgItem(hwnd_,31810),SW_HIDE);ShowWindow(GetDlgItem(hwnd_,31811),SW_HIDE);ShowWindow(GetDlgItem(hwnd_,31813),SW_HIDE);ShowWindow(GetDlgItem(hwnd_,31818),SW_HIDE);ShowWindow(btnLiveMode_,SW_SHOW);
     SetWindowTextW(btnKeys_,L"More");
     for (HWND h : fullOnly) ShowWindow(h, SW_SHOW);
     placeOreRowsButton();
@@ -1265,7 +1268,7 @@ void MinerGUI::toggleOverlayMode() {
 // it holds, the verdict's three lines and the gadget - and under either
 // the ship on a line of its own. Without a ship to name, 178. (212: three
 // matches, "no exact match" over them and the ship under them.)
-int MinerGUI::overlayBaseWidth() const {return SynthScan::piracyMode()?600:OVERLAY_WIDTH;}
+int MinerGUI::overlayBaseWidth() const {return SynthScan::hangarsMode()?430:SynthScan::piracyMode()?600:OVERLAY_WIDTH;}
 
 void MinerGUI::refreshActivityLayout(){
     if(!overlayMode_||!hwnd_)return;
@@ -1275,6 +1278,7 @@ void MinerGUI::refreshActivityLayout(){
 }
 
 int MinerGUI::overlayHeight() const {
+    if(SynthScan::hangarsMode())return 150+30;
     if(SynthScan::questingMode())return 350+30+SynthScan::sessionHeight();
     if(SynthScan::piracyMode())return SynthScan::piracyHeight();
     // Two rows taller where a rock's ores stand one to a row: three of them,
@@ -14094,6 +14098,7 @@ void MinerGUI::drawCompactShip(Gdiplus::Graphics& g, int cw, int ch, float above
 }
 
 void MinerGUI::drawCompact(Gdiplus::Graphics& g, int cw, int ch) {
+    if(SynthScan::hangarsMode()){SynthScan::drawHangars(g,float(cw),float(ch),scaleF(1));wantHeight(scaleF(150));return;}
     if(SynthScan::questingMode()){SynthScan::drawQuesting(g,float(cw),float(ch),scaleF(1));wantHeight(scaleF(350));return;}
     if(SynthScan::piracyMode()){SynthScan::drawPiracy(g,float(cw),float(ch),scaleF(1));wantHeight(scaleF(float(SynthScan::piracyHeight())));return;}
     Gdiplus::Font sigFont(&numeralFamily(), scaleF(26), Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
@@ -14326,7 +14331,7 @@ void MinerGUI::paintOwnerButton(Gdiplus::Graphics& g, const DRAWITEMSTRUCT* dis)
         g.DrawString(label, -1, &font, face, &centred, &ink);
         return;
     }
-    const bool on = (id == ID_BTN_AUTO_REGION && regionAuto_) || (id==31810&&!SynthScan::activityMode()) || (id==31811&&SynthScan::piracyMode()) || (id==31813&&SynthScan::questingMode());
+    const bool on = (id == ID_BTN_AUTO_REGION && regionAuto_) || (id==31810&&!SynthScan::activityMode()) || (id==31811&&SynthScan::piracyMode()) || (id==31813&&SynthScan::questingMode()) || (id==31818&&SynthScan::hangarsMode());
     drawButton(g, face, label, font, on ? ButtonKind::Selected : ButtonKind::Secondary, pressed, radius);
     // The work orders that are done, waiting at their refinery: a green
     // badge with their number at the button's right end

@@ -60,7 +60,7 @@ def hangar_svg(view,inventory=None):
 def render_png(svg,width=None,height=None):
     import resvg_py
     fonts=Path(os.environ.get('WINDIR','C:/Windows'))/'Fonts'
-    files=[str(fonts/name) for name in ['segoeui.ttf','seguisb.ttf','consola.ttf','consolab.ttf'] if (fonts/name).exists()]
+    files=[str(fonts/name) for name in ['segoeui.ttf','segoeuil.ttf','seguisb.ttf','consola.ttf','consolab.ttf'] if (fonts/name).exists()]
     return resvg_py.svg_to_bytes(svg_string=svg,font_files=files,skip_system_fonts=bool(files),width=width,height=height)
 
 

@@ -111,7 +111,11 @@ def fetch_schedule():
         if len(raw)>262144:raise ValueError('Timer response exceeds limit')
         return raw.decode('utf-8-sig')
     script=read('app.js');page=read('')
-    return parse_source(script,page)
+    result=parse_source(script,page)
+    from hangar_reset_feed import fetch_resets
+    try:result['reset_check']=fetch_resets()
+    except Exception:result['reset_check']=dict(ok=False)
+    return result
 
 
 class HangarScheduleService:
@@ -128,7 +132,7 @@ class HangarScheduleService:
                 if not math.isfinite(stamp) or stamp<0:raise ValueError('Invalid cached timestamp')
                 self.schedule=candidate;self.fetched_at=stamp;break
             except (OSError,ValueError,TypeError,KeyError):continue
-    def tick(self,enabled,now=None):
+    def tick(self,enabled,now=None,refresh_interval=21600,force_refresh=False,retry_interval=300):
         now=time.time() if now is None else now
         if self.future and self.future.done():
             try:
@@ -138,7 +142,7 @@ class HangarScheduleService:
             except Exception as exc:
                 self.cached=True;self.note=type(exc).__name__
             self.future=None
-        if enabled and self.future is None and not -60<=now-self.fetched_at<21600 and now-self.attempted_at>=300:
+        if enabled and self.future is None and (force_refresh or not -60<=now-self.fetched_at<refresh_interval) and now-self.attempted_at>=retry_interval:
             self.attempted_at=now
             if self.pool is None:self.pool=ThreadPoolExecutor(max_workers=1,thread_name_prefix='hangar-schedule')
             self.future=self.pool.submit(self.fetcher)
