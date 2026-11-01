@@ -43,6 +43,10 @@ administrators, backups and malware may access those files. Use separate Windows
 accounts to isolate different people on one PC. Different PCs do not exchange data
 through SynthScan. Do not publish your profile folder, game login files or raw logs.
 
+Manual compboard quantities are saved in `compboard_inventory.sqlite3` under the
+local player profile. They are not uploaded, synchronized to another PC or
+included in community packages. Reading the hangar HUD does not change counts.
+
 English localization modifications live in the selected game's folder and are
 therefore shared by people who share that exact game installation. Corporation
 numbers are a snapshot for the last verified character, not a live in-game value.

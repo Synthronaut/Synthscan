@@ -1,5 +1,12 @@
 # Changes
 
+## 0.1.0-alpha.5 — 2026-11-01
+
+- Manual compboard inventory with seven saved quantities, +/− controls, typed
+  counts, complete-set totals, atomic set deductions and undo of the last use.
+- Show board quantities and complete sets on the passive Executive Hangar strip.
+  Open inventory controls from the tray menu or Startup & HUD settings.
+
 ## 0.1.0-alpha.4 — 2026-11-01
 
 - Optional shared PYAM Executive Hangar five-light timer under the server ribbon,

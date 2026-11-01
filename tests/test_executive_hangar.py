@@ -107,4 +107,4 @@ class ExecutiveHangarTests(unittest.TestCase):
         import io
         from PIL import Image
         data=seed();png=render_png(hangar_svg(project(data,data['anchor_ms'])))
-        image=Image.open(io.BytesIO(png));self.assertEqual(image.size,(430,70));self.assertEqual(png[:8],b'\x89PNG\r\n\x1a\n')
+        image=Image.open(io.BytesIO(png));self.assertEqual(image.size,(430,94));self.assertEqual(png[:8],b'\x89PNG\r\n\x1a\n')

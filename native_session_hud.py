@@ -108,7 +108,7 @@ def main():
         logging.error('HUD input callback failed',exc_info=(kind,value,traceback))
     root.report_callback_exception=callback_error
     history=RegionHistory(root);ribbon.region_history=history
-    hangar=ExecutiveHangarHUD(root);ribbon.hangar_timer=hangar;hangar_service=HangarScheduleService(DATA)
+    hangar=ExecutiveHangarHUD(root,DATA);ribbon.hangar_timer=hangar;hangar_service=HangarScheduleService(DATA)
     def protected_now():
         from overlay_input import foreground_process_id,protect_game_input
         return protect_game_input(foreground_process_id(),{os.getpid(),args.owner},bool(game_window_rect()))

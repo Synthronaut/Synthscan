@@ -7,7 +7,7 @@
 [Setup]
 AppId={{6278A3F4-6738-4AE9-84CF-12B477780C20}
 AppName=SynthScan
-AppVersion=0.1.0-alpha.4
+AppVersion=0.1.0-alpha.5
 AppPublisher=Synthronaut
 AppPublisherURL=https://github.com/Synthronaut/Synthscan
 AppSupportURL=https://github.com/Synthronaut/Synthscan/issues

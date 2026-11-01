@@ -2,10 +2,10 @@
 from datetime import datetime
 from html import escape
 from pathlib import Path
-import os,re
+import os,re,time
 from executive_hangar import countdown
 
-WIDTH,HEIGHT=430,70
+WIDTH,HEIGHT=430,94
 COLORS={'green':'#4ade80','red':'#fb7185','empty':'#111827'}
 
 
@@ -17,7 +17,7 @@ def hangar_position(bar,bounds,width=WIDTH,height=HEIGHT):
     return int(x),int(max(top,min(y,bottom-height))),width,height
 
 
-def hangar_svg(view):
+def hangar_svg(view,inventory=None):
     if view is None:
         title='PYAM · WAITING';primary='Schedule unavailable';lights=['empty']*5;secondary='Waiting for timer sync';footer='Schedule estimate · no hangar availability feed'
     else:
@@ -33,7 +33,7 @@ def hangar_svg(view):
         if view.get('refresh_error'):footer='Saved schedule · sync '+date+' · refresh pending'
     accent='#4ade80' if view is not None and view['phase']=='open' else '#fbbf24'
     svg=[f'<svg xmlns="http://www.w3.org/2000/svg" width="{WIDTH}" height="{HEIGHT}" viewBox="0 0 {WIDTH} {HEIGHT}">',
-         '<rect x="0.5" y="0.5" width="429" height="69" rx="6" fill="#0b111a" stroke="#334155"/>',
+         f'<rect x="0.5" y="0.5" width="429" height="{HEIGHT-1}" rx="6" fill="#0b111a" stroke="#334155"/>',
          f'<text x="12" y="19" fill="{accent}" font-family="Segoe UI" font-weight="600" font-size="12">{escape(title)}</text>',
          f'<text x="418" y="19" text-anchor="end" fill="#e2e8f0" font-family="Consolas" font-size="13">{escape(primary)}</text>']
     for i,color in enumerate(lights):
@@ -41,7 +41,19 @@ def hangar_svg(view):
         svg.append(f'<circle cx="{x}" cy="39" r="7" fill="{COLORS[color]}" stroke="{stroke}"/>')
         svg.append(f'<text x="{x}" y="42" text-anchor="middle" font-family="Consolas" font-size="8" font-weight="bold" fill="{ink}">{i+1}</text>')
     svg.extend([f'<text x="151" y="43" fill="#cbd5e1" font-family="Consolas" font-size="12">{escape(secondary)}</text>',
-                f'<text x="12" y="61" fill="#94a3b8" font-family="Segoe UI" font-size="10">{escape(footer)}</text>','</svg>'])
+                f'<text x="12" y="61" fill="#94a3b8" font-family="Segoe UI" font-size="10">{escape(footer)}</text>',
+                '<path d="M10 68H420" stroke="#263446"/>'])
+    if inventory is not None and inventory.get('unavailable'):
+        svg.append('<text x="12" y="84" fill="#fbbf24" font-family="Segoe UI" font-size="10">Board counts unavailable · open Compboard inventory</text>')
+    else:
+        counts=(inventory or {}).get('counts',[0]*7);sets=min(counts)
+        svg.append('<text x="12" y="84" fill="#94a3b8" font-family="Segoe UI" font-size="9">Boards</text>')
+        for i,n in enumerate(counts):
+            x=50+i*43;ink='#a7f3d0' if n else '#94a3b8';fill='#12332c' if n else '#1b2635'
+            svg.extend([f'<rect x="{x}" y="73" width="39" height="16" rx="3" fill="{fill}"/>',
+                        f'<text x="{x+19.5}" y="84" text-anchor="middle" fill="{ink}" font-family="Consolas" font-size="9">{i+1}:{n}</text>'])
+        svg.append(f'<text x="418" y="84" text-anchor="end" fill="#e2e8f0" font-family="Consolas" font-size="10">{sets} '+('set' if sets==1 else 'sets')+'</text>')
+    svg.append('</svg>')
     return ''.join(svg)
 
 
@@ -53,7 +65,7 @@ def render_png(svg,width=None,height=None):
 
 
 class ExecutiveHangarHUD:
-    def __init__(self,root):
+    def __init__(self,root,directory=None):
         import tkinter as tk
         import ctypes
         from ctypes import wintypes as w
@@ -68,6 +80,7 @@ class ExecutiveHangarHUD:
         api.SetLayeredWindowAttributes.argtypes=[w.HWND,w.DWORD,w.BYTE,w.DWORD];api.SetLayeredWindowAttributes(self.hwnd,0,240,2)
         api.SetWindowDisplayAffinity.argtypes=[w.HWND,w.DWORD];api.SetWindowDisplayAffinity(self.hwnd,0x11)
         self.visible=False;self.geometry=None;self.last_svg=None;self.image=None;self.item=None;self.view=None
+        self.directory=directory;self.inventory=None;self.inventory_checked=-float('inf')
     def follow(self,ribbon,bounds):
         if not self.visible:return
         import ctypes
@@ -85,7 +98,12 @@ class ExecutiveHangarHUD:
         if not visible:
             if self.visible:self.window.withdraw()
             self.visible=False;return
-        svg=hangar_svg(view);target=hangar_position((0,0,WIDTH,0),bounds)[2:];key=(svg,target)
+        if self.directory is not None and time.monotonic()-self.inventory_checked>=1:
+            from compboard_inventory import read_inventory
+            self.inventory_checked=time.monotonic()
+            try:self.inventory=read_inventory(self.directory)
+            except Exception:self.inventory={'unavailable':True}
+        svg=hangar_svg(view,self.inventory);target=hangar_position((0,0,WIDTH,0),bounds)[2:];key=(svg,target)
         if key!=self.last_svg:
             import tkinter as tk
             self.image=tk.PhotoImage(master=self.window,data=render_png(svg,*target),format='png')

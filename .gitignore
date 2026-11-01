@@ -1,4 +1,5 @@
 __pycache__/
+compboard_inventory.sqlite3*
 *.pyc
 *.log
 *.obj
