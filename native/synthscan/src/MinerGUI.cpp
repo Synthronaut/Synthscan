@@ -9978,6 +9978,44 @@ void MinerGUI::setOwnedBlueprints(std::vector<std::string> stamps, const std::st
     if (grind_) InvalidateRect(grind_, nullptr, TRUE);
 }
 
+void MinerGUI::toggleBlueprintOwned(int blueprint) {
+    if (blueprint < 0 || blueprint >= CRAFT_BLUEPRINT_COUNT) return;
+    if ((int)owned_.size() < CRAFT_BLUEPRINT_COUNT) owned_.resize(CRAFT_BLUEPRINT_COUNT);
+    const bool now = owned_[blueprint].empty();
+    owned_[blueprint] = now ? "by hand" : "";
+    if (ownedToggleCallback_) ownedToggleCallback_(blueprint, now);
+}
+
+// Exercise the production paint-generated click targets and ownership callback
+// without creating a window or sending mouse/keyboard messages.
+bool blueprintOwnershipChecklistSelfTest() {
+    MinerGUI gui;
+    Gdiplus::GdiplusStartupInput startup;
+    if (Gdiplus::GdiplusStartup(&gui.gdiplusToken_, &startup, nullptr) != Gdiplus::Ok) return false;
+    Gdiplus::Bitmap bitmap(8, 8, PixelFormat32bppPARGB);
+    Gdiplus::Graphics graphics(&bitmap);
+    for (int scroll : {0, 10, 100}) {
+        gui.craftScroll_ = scroll;gui.craftHits_.clear();gui.paintCraftingList(graphics, 1200, 900);
+        auto box = std::find_if(gui.craftHits_.begin(), gui.craftHits_.end(), [](const auto& hit){return hit.kind == 17;});
+        if (box == gui.craftHits_.end()) return false;
+        const int blueprint = box->value;
+        auto actionAt = [&](float x, float y) {
+            for (const auto& hit : gui.craftHits_) if (hit.rect.Contains(x,y)) return std::make_pair(hit.kind,hit.value);
+            return std::make_pair(-1,-1);
+        };
+        const float y = box->rect.Y + box->rect.Height/2;
+        if (actionAt(box->rect.X+box->rect.Width/2,y) != std::make_pair(17,blueprint)) return false;
+        if (actionAt(box->rect.GetRight()+gui.scaleF(5),y) != std::make_pair(1,blueprint)) return false;
+        int calls=0;bool last=false;
+        gui.setOwnedToggleCallback([&](int id,bool have){if(id==blueprint){calls++;last=have;}});
+        gui.toggleBlueprintOwned(blueprint);
+        if (!gui.isOwned(blueprint)||!last||calls!=1||gui.craftOpen_!=-1||gui.craftScroll_!=scroll) return false;
+        gui.toggleBlueprintOwned(blueprint);
+        if (gui.isOwned(blueprint)||last||calls!=2||gui.craftOpen_!=-1||gui.craftScroll_!=scroll) return false;
+    }
+    return true;
+}
+
 void MinerGUI::setRanks(std::vector<Standing> standings, bool known, int fromVersion) {
     ranks_ = std::move(standings);
     ranksKnown_ = known;
@@ -11012,6 +11050,10 @@ void MinerGUI::paintCraftingList(Gdiplus::Graphics& g, int cw, int ch) {
         // A tick box first: filled when the library has it, empty when not,
         // so the list reads as the checklist it is
         {
+            // Register before the row's open-recipe target. The full left
+            // gutter is a generous ownership target, including the small box.
+            Gdiplus::RectF ownership(rx, ry, inset + scaleF(16), row.Height);
+            craftHits_.push_back({ownership, 17, index});
             Gdiplus::RectF box(rx + inset, ry + scaleF(4), scaleF(11), scaleF(11));
             if (isOwned(index)) {
                 fillRoundRect(g, box, scaleF(3), COL_ACCENT);
@@ -11025,7 +11067,7 @@ void MinerGUI::paintCraftingList(Gdiplus::Graphics& g, int cw, int ch) {
                     Gdiplus::PointF(box.X + scaleF(8.3f), box.Y + scaleF(3.3f))};
                 g.DrawLines(&tick, mark, 3);
             } else {
-                strokeRoundRect(g, box, scaleF(3), tint(COL_TEXT, 50));
+                strokeRoundRect(g, box, scaleF(3), tint(COL_TEXT, isHot(hoverCraft_, ownership) ? 150 : 50));
             }
         }
         const std::wstring name = toW(bp.name);
@@ -12822,14 +12864,7 @@ LRESULT MinerGUI::handleCraftingMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
                 } else if (hit.kind == 28) {
                     craftFactionPick_ = (hit.value == 1);
                 } else if (hit.kind == 17) {
-                    // Flip it here at once, then tell the app so the file follows
-                    const int b = hit.value;
-                    if (b >= 0 && b < CRAFT_BLUEPRINT_COUNT) {
-                        if ((int)owned_.size() < CRAFT_BLUEPRINT_COUNT) owned_.resize(CRAFT_BLUEPRINT_COUNT);
-                        const bool now = owned_[b].empty();
-                        owned_[b] = now ? "by hand" : "";
-                        if (ownedToggleCallback_) ownedToggleCallback_(b, now);
-                    }
+                    toggleBlueprintOwned(hit.value);
                 } else if (hit.kind == 14) {
                     craftSourceOpen_ = -1;
                 } else if (hit.kind == 13) {

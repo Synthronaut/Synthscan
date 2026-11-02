@@ -61,6 +61,7 @@ struct FrostCache {
 
 // Forward declaration
 class MinerGUI;
+bool blueprintOwnershipChecklistSelfTest();
 
 // Global instance for the window procedure
 inline MinerGUI* g_guiInstance = nullptr;
@@ -699,6 +700,8 @@ public:
     bool typeAmountForShot(int material, const wchar_t* digits);          // ...and a hold with something in it
 
 private:
+    friend bool blueprintOwnershipChecklistSelfTest();
+    void toggleBlueprintOwned(int blueprint);
     HWND hwnd_ = nullptr;
     HINSTANCE hInstance_ = nullptr;
     bool isOpen_ = false;

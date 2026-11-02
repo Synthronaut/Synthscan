@@ -1,7 +1,7 @@
 # SynthScan
 
 A Windows companion for Star Citizen: mining assistance, blueprints, SynthStrings,
-reputation labels, a server HUD, and Mining / Piracy / Missions activity tabs.
+reputation labels, a server HUD, and Mining / Piracy / Missions / Hangars activity tabs.
 
 ## Download and start
 

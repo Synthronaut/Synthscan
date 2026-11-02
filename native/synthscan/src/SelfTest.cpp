@@ -58,6 +58,10 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+
+#ifdef _WIN32
+namespace SCMiner { bool blueprintOwnershipChecklistSelfTest(); }
+#endif
 #include <functional>
 #include <iomanip>
 #include <iostream>
@@ -4819,6 +4823,10 @@ int runSelfTest() {
     }
 #endif  // _WIN32: the HDR path is Desktop Duplication, which has no Linux side
 
+#ifdef _WIN32
+    allPassed &= check(SCMiner::blueprintOwnershipChecklistSelfTest(),
+                       "Blueprint list checkbox toggles ownership without opening details or resetting scroll; names still open recipes");
+#endif
     std::cout << "\n=== Self-test " << (allPassed ? "PASSED" : "FAILED") << " ===\n" << std::endl;
     return allPassed ? 0 : 1;
 }

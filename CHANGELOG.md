@@ -1,5 +1,14 @@
 # Changes
 
+## 0.1.0-alpha.8 — 2026-11-02
+
+- Make blueprint-list checkboxes toggle ownership directly and save through the
+  existing manual-ownership path, without opening item details. Clicking the
+  name still opens the recipe. Keep the list/scroll position and provide a more
+  generous checkbox target with hover feedback.
+- Add a window-free regression check against the production list hit targets,
+  including scrolled rows, ownership callbacks and name-versus-checkbox routing.
+
 ## 0.1.0-alpha.7 — 2026-11-01
 
 - Match the source tracker's 65-minute ONLINE countdown. The earlier closing
