@@ -54,7 +54,7 @@ def stage_source(destination):
         shutil.copy2(ROOT/name,destination/name)
     shutil.copy2(ROOT/'native/synthscan/LICENSE',destination/'LICENSE')
     for name in ['synthscan','mining_worker']:copy_tree(ROOT/'native'/name,destination/'native'/name)
-    for name in ['synthscan-upstream.json','launcher.cpp']:shutil.copy2(ROOT/'native'/name,destination/'native'/name)
+    for name in ['synthscan-upstream.json','launcher.cpp','launcher.rc']:shutil.copy2(ROOT/'native'/name,destination/'native'/name)
     copy_tree(ROOT/'tools',destination/'tools')
     copy_tree(ROOT/'installer',destination/'installer')
     (destination/'tests').mkdir()
@@ -70,6 +70,7 @@ def stage_source(destination):
     (destination/'docs').mkdir(exist_ok=True)
     shutil.copy2(ROOT/'docs/material-quality-values.md',destination/'docs/material-quality-values.md')
     shutil.copy2(ROOT/'assets/snare_watch.wav',destination/'assets/snare_watch.wav')
+    copy_tree(ROOT/'assets/branding',destination/'assets/branding')
     if (ROOT/'.github').exists():copy_tree(ROOT/'.github',destination/'.github')
     (destination/'release.json').write_text(json.dumps(dict(version=VERSION,channel='community-alpha',updater_schema=1,setup_schema=1)),encoding='utf-8')
     audit(destination)
@@ -131,10 +132,13 @@ def package(source,destination,runtime,native):
     env['INCLUDE']=';'.join(map(str,[MSVC/'include',SDK/'Include'/SDK_VERSION/'ucrt',SDK/'Include'/SDK_VERSION/'shared',SDK/'Include'/SDK_VERSION/'um']))
     env['LIB']=';'.join(map(str,[MSVC/'lib/x64',SDK/'Lib'/SDK_VERSION/'ucrt/x64',SDK/'Lib'/SDK_VERSION/'um/x64']))
     obj=destination/'launcher.obj'
+    resource=destination/'launcher.res'
+    subprocess.run([str(SDK/'bin'/SDK_VERSION/'x64/rc.exe'),'/nologo','/fo',str(resource),str(source/'native/launcher.rc')],env=env,check=True,cwd=source/'native')
     subprocess.run([str(MSVC/'bin/Hostx64/x64/cl.exe'),'/nologo','/std:c++17','/EHsc','/MT','/O2',
-        str(source/'native/launcher.cpp'),'/Fo'+str(obj),'/Fe'+str(destination/'SynthScan.exe'),
+        str(source/'native/launcher.cpp'),str(resource),'/Fo'+str(obj),'/Fe'+str(destination/'SynthScan.exe'),
         '/link','/SUBSYSTEM:WINDOWS','/LIBPATH:'+str(MSVC/'lib/x64'),'user32.lib'],env=env,check=True,cwd=destination)
     obj.unlink(missing_ok=True)
+    resource.unlink(missing_ok=True)
     from tools.fetch_vc_runtime import bundle
     bundle(destination)
     # Integrity checks cover everything that will be distributed (not private runtime files).

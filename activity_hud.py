@@ -205,6 +205,6 @@ class ActivityQuickControls(ActivityCollapseButton):
         self.canvas.create_rectangle(0,0,23,self.height-1,fill='#101722',outline='#334155')
         self.canvas.create_text(12,self.height//2,text='·' if pending=='set_activity_expanded' else '−',fill='#cbd5e1' if ready else '#64748b',font=('Consolas',9,'bold'))
         self.canvas.create_rectangle(self.AFK_LEFT,0,self.WIDTH-1,self.height-1,fill='#12251f' if armed else '#101722',outline='#397d66' if armed else '#334155')
-        self.canvas.create_text((self.AFK_LEFT+self.WIDTH)//2,self.height//2,text=label,fill='#f0b35b' if error else '#8ee2bd' if armed and ready else '#cbd5e1' if ready else '#64748b',font=('Consolas',9,'bold'))
+        self.canvas.create_text((self.AFK_LEFT+self.WIDTH)//2,self.height//2,text=label,fill='#77cfff' if error else '#8ee2bd' if armed and ready else '#cbd5e1' if ready else '#64748b',font=('Consolas',9,'bold'))
         detail=f"on — {afk.get('status','waiting')} — {int(afk.get('nudges',0))} pulses sent; click to turn off" if armed else 'off — click to turn on'
         self.window.title('Collapse HUD / AFK mouse jiggler: '+detail)

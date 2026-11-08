@@ -109,7 +109,7 @@ SC_BORDER_DIM   = "#2c323e"   # Subtle beveled steel casing frame border
 SC_BORDER_MED   = "#3f4756"   # Medium brushed alloy bevel
 SC_TEXT_BRIGHT  = "#f8fafc"   # Crisp polished silver/white readout
 SC_TEXT_CYAN    = "#d0d7e2"   # Satin aluminum primary instrumentation text
-SC_TEXT_AMBER   = "#d99b43"   # Warm industrial tungsten gold / quantum ore
+SC_TEXT_AMBER   = "#62ccff"   # Warm industrial tungsten gold / quantum ore
 SC_TEXT_GREEN   = "#48bb78"   # Calibrated avionics green (online/complete)
 SC_TEXT_RED     = "#e05260"   # Precision hazard coral-crimson (alert/insufficient)
 SC_TEXT_MUTED   = "#7e889b"   # Machined titanium secondary technical label
@@ -461,7 +461,7 @@ class SynthScanApp:
         emblem = tk.Canvas(brand_box, width=36, height=36, bg=SC_BG_HEADER, highlightthickness=0)
         emblem.pack(side="left", padx=(0, 10))
         emblem.create_polygon(18, 3, 33, 11, 33, 25, 18, 33, 3, 25, 3, 11, outline="#657388", fill="#222731", width=2)
-        emblem.create_oval(13, 13, 23, 23, outline="#d99b43", width=1.5)
+        emblem.create_oval(13, 13, 23, 23, outline="#62ccff", width=1.5)
         emblem.create_line(18, 2, 18, 10, fill="#8896aa", width=1)
         emblem.create_line(18, 26, 18, 34, fill="#8896aa", width=1)
 
@@ -1882,7 +1882,7 @@ class SynthScanApp:
                 fg_color="#38404f" if is_fav else "transparent",
                 border_width=1 if is_fav else 0,
                 border_color="#657388" if is_fav else SC_BG_CARD,
-                text_color="#fbbf24" if is_fav else SC_TEXT_MUTED
+                text_color="#62ccff" if is_fav else SC_TEXT_MUTED
             )
 
     def refresh_blueprints_ui(self):
@@ -1911,8 +1911,8 @@ class SynthScanApp:
             # Gold star favorite toggle button
             is_fav = bp.get("is_favorite", False)
             star_char = "★" if is_fav else "☆"
-            star_fg = "#fbbf24" if is_fav else "#64748b"
-            star_hover = "#f59e0b" if is_fav else "#94a3b8"
+            star_fg = "#62ccff" if is_fav else "#64748b"
+            star_hover = "#62ccff" if is_fav else "#94a3b8"
 
             tk.Button(
                 title_row,

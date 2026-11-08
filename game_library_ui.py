@@ -3,7 +3,7 @@ import customtkinter as ctk
 from crafting_catalog import get_catalog
 from game_library import ArtworkImages, get_game_library
 
-BG, CARD, TEXT, MUTED, GOLD = '#181b22', '#1e222a', '#f8fafc', '#929eb1', '#d99b43'
+BG, CARD, TEXT, MUTED, GOLD = '#181b22', '#1e222a', '#f8fafc', '#929eb1', '#62ccff'
 
 
 def label(parent, text, size=13, color=TEXT):

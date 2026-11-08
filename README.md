@@ -3,6 +3,11 @@
 A Windows companion for Star Citizen: mining assistance, blueprints, SynthStrings,
 reputation labels, a server HUD, and Mining / Piracy / Missions / Hangars / Finder activity tabs.
 
+The desktop and HUD use a navy/cyan theme and an original spacecraft/scanner
+brand mark. The same multi-size icon is embedded in the application, tray,
+bootstrap launcher and installer; desktop shortcuts use that artwork. The
+editable SVG lives in `assets/branding/synthscan.svg`.
+
 **More → Dock HUD top right** puts the pop-out flush with the game viewport's
 top-right edge. Turn off **Lock HUD position** to drag it elsewhere; the saved
 placement preserves the nearer screen edge across tab sizes and restarts.

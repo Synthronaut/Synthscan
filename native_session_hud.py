@@ -130,7 +130,7 @@ def main():
         def render_bar(self):
             if self.state.get('connection_status')=='unavailable':
                 self.bar_canvas.delete('all');self.bar_canvas.create_rectangle(0,0,self.bar_width,self.BAR_HEIGHT,fill='#070a0f',outline='#1e293b')
-                self.bar_canvas.create_text(12,self.BAR_HEIGHT//2,anchor='w',text='SERVER INFORMATION UNAVAILABLE · waiting for session service',fill='#f59e0b',font=('Consolas',9,'bold'))
+                self.bar_canvas.create_text(12,self.BAR_HEIGHT//2,anchor='w',text='SERVER INFORMATION UNAVAILABLE · waiting for session service',fill='#62ccff',font=('Consolas',9,'bold'))
                 self._last_rendered_key=None;return
             super().render_bar()
     root=tk.Tk();root.withdraw();ribbon=Ribbon(root);gate=AlertGate(started_at);alert=SnareAlertWindow(root,game_window_rect);activity=ActivityButton(root,DATA,args.owner);collapse=ActivityQuickControls(root,DATA,args.owner);ribbon.activity_button=activity

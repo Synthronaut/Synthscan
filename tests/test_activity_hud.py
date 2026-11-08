@@ -126,7 +126,7 @@ class ActivityHUDTests(unittest.TestCase):
         for armed,status,pending,label,color in [
             (False,'off',None,'AFK ○','#cbd5e1'),
             (True,'waiting for inactivity',None,'AFK ●','#8ee2bd'),
-            (False,'error (input not sent)',None,'AFK !','#f0b35b'),
+            (False,'error (input not sent)',None,'AFK !','#77cfff'),
             (False,'off',{'action':'set_afk_armed'},'AFK ·','#cbd5e1')]:
             button=self.control(ActivityQuickControls);button.canvas=Mock();button.window=Mock()
             button.status['afk_jiggler']=dict(armed=armed,status=status);button.pending=pending

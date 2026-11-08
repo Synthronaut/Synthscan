@@ -1,4 +1,5 @@
 """Explicit opt-in contract prompt helper; ordinary Win32 input only."""
+from branding import window_icon
 import argparse,ctypes,json,time,logging
 from ctypes import wintypes as w
 from pathlib import Path
@@ -29,7 +30,7 @@ def main():
     class Input(ctypes.Structure):_fields_=[('type',w.DWORD),('payload',Payload)]
     api.SendInput.argtypes=[w.UINT,ctypes.POINTER(Input),ctypes.c_int];api.SendInput.restype=w.UINT
     api.MapVirtualKeyW.argtypes=[w.UINT,w.UINT];api.MapVirtualKeyW.restype=w.UINT
-    root=tk.Tk();root.withdraw();root.title('SynthScan — Contract shares');root.geometry('540x280')
+    root=tk.Tk();window_icon(root);root.withdraw();root.title('SynthScan — Contract shares');root.geometry('540x280')
     try:settings=acceptance_settings(read_shared_json(DATA/'contract_share_preferences.json'))
     except (OSError,ValueError):settings=acceptance_settings({})
     switches={kind:tk.BooleanVar(value=value) for kind,value in settings.items()}

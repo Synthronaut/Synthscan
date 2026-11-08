@@ -49,6 +49,7 @@ def install():
         f"$link.WorkingDirectory = {literal(ROOT)}",
         "$link.Description = 'Start SynthScan when Star Citizen launches'",
         "$link.WindowStyle = 7",
+        f"$link.IconLocation = {literal(str(ROOT / 'assets/branding/SynthScan-Blue.ico')+',0')}",
         "$link.Save()",
     ])
     from installation import RELEASE,INSTALL_ROOT
@@ -57,6 +58,7 @@ def install():
         script=script.replace(f"$link.TargetPath = {literal(python_windowless())}",f"$link.TargetPath = {literal(str(INSTALL_ROOT/'SynthScan.exe'))}")
         script=script.replace(f"$link.Arguments = {literal(subprocess.list2cmdline(['-B', str(ROOT / 'auto_launch.py'), '--watch']))}","$link.Arguments = '--watch'")
         script=script.replace(f"$link.WorkingDirectory = {literal(ROOT)}",f"$link.WorkingDirectory = {literal(INSTALL_ROOT)}")
+        script=script.replace(f"$link.IconLocation = {literal(str(ROOT/'assets/branding/SynthScan-Blue.ico')+',0')}",f"$link.IconLocation = {literal(str(INSTALL_ROOT/'SynthScan.exe')+',0')}")
     subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
                    check=True, creationflags=subprocess.CREATE_NO_WINDOW, capture_output=True, text=True)
     if not instance_running("watcher"):

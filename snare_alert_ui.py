@@ -6,9 +6,9 @@ import time
 WIDTH,HEIGHT=640,108
 
 def paint_alert(canvas,events):
-    canvas.delete('all');canvas.create_rectangle(1,1,WIDTH-1,HEIGHT-1,fill='#10151e',outline='#f5ad42',width=2)
-    canvas.create_rectangle(1,1,8,HEIGHT-1,fill='#f5ad42',outline='#f5ad42')
-    canvas.create_text(24,27,anchor='w',text='INTERDICTION REPORTED',fill='#ffc66d',font=('Bahnschrift',-23,'bold'))
+    canvas.delete('all');canvas.create_rectangle(1,1,WIDTH-1,HEIGHT-1,fill='#10151e',outline='#62ccff',width=2)
+    canvas.create_rectangle(1,1,8,HEIGHT-1,fill='#62ccff',outline='#62ccff')
+    canvas.create_text(24,27,anchor='w',text='INTERDICTION REPORTED',fill='#9ce2ff',font=('Bahnschrift',-23,'bold'))
     names=', '.join(e['target'] for e in events[:2])
     if len(events)>2:names+=' +'+str(len(events)-2)+' more'
     if len(names)>58:names=names[:55]+'…'

@@ -76,7 +76,7 @@ def render_original_bar(self):
             sfps_bg = "#042312"
             sfps_bdr = "#16a34a"
         else:
-            sfps_col = "#f59e0b"
+            sfps_col = "#62ccff"
             sfps_bg = "#261805"
             sfps_bdr = "#d97706"
 
@@ -96,7 +96,7 @@ def render_original_bar(self):
         if ping < 100:
             ping_col = "#22c55e"
         elif ping < 200:
-            ping_col = "#f59e0b"
+            ping_col = "#62ccff"
         else:
             ping_col = "#ff2e55"
 
@@ -106,7 +106,7 @@ def render_original_bar(self):
         rst_col = "#64748b"
     else:
         rst_txt = str(rst)
-        rst_col = "#22c55e" if rst == 0 else ("#f59e0b" if rst <= 2 else "#ff2e55")
+        rst_col = "#22c55e" if rst == 0 else ("#62ccff" if rst <= 2 else "#ff2e55")
 
     # Live Server Population & Shard Population
     shard_pop = s.get("shard_pop") if is_connected else None
@@ -123,7 +123,7 @@ def render_original_bar(self):
             if shard_pop < 85:
                 pop_col = "#38bdf8"
             elif shard_pop < 98:
-                pop_col = "#f59e0b"
+                pop_col = "#62ccff"
             else:
                 pop_col = "#ef4444"
         else:
@@ -206,7 +206,7 @@ def render_original_bar(self):
 
     # Segment B: Server Callsign / Shard Identifier
     if s.get('feed_status'):
-        label=c.create_text(x,cy,text=s['feed_status'],anchor='w',fill='#f59e0b',font=('Consolas',8,'bold'))
+        label=c.create_text(x,cy,text=s['feed_status'],anchor='w',fill='#62ccff',font=('Consolas',8,'bold'))
         bounds=c.bbox(label);x=_sep((bounds[2]+8) if bounds else x+180)
     lbl_id = c.create_text(x, cy, text="SERVER:", anchor="w", fill="#64748b", font=("Consolas", 8, "bold"))
     bbox = c.bbox(lbl_id)

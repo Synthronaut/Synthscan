@@ -19,7 +19,7 @@ std::function<void(const std::string&)> action;
 Json overview;std::string identity,lastAction;bool connected=false,previous=false,sessionChosen=false;
 std::string activePage="home";
 float scale=1;
-const Gdiplus::Color BG(255,15,16,19),SIDE(255,19,21,25),CARD(255,24,26,30),BORDER(255,44,47,54),INK(255,238,239,241),MUTED(255,160,166,176),ACCENT(255,238,178,70);
+const Gdiplus::Color BG(255,15,16,19),SIDE(255,19,21,25),CARD(255,24,26,30),BORDER(255,44,47,54),INK(255,238,239,241),MUTED(255,160,166,176),ACCENT(255,98,204,255);
 struct Button {HWND hwnd;int id;std::wstring label;std::string action;bool navigation;};
 std::vector<Button> buttons;
 void rounded(Gdiplus::Graphics& g,Gdiplus::RectF r,Gdiplus::Color color,float radius=10){
@@ -69,7 +69,7 @@ void paintButton(const DRAWITEMSTRUCT& item){
     const auto& b=*found;Gdiplus::Graphics g(item.hDC);g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);g.SetTextRenderingHint(Gdiplus::TextRenderingHintClearTypeGridFit);
     bool selected=(b.navigation&&b.action==activePage)||(b.id==210&&!previous)||(b.id==211&&previous);
     g.Clear(b.navigation?SIDE:BG);Gdiplus::RectF r(0,0,float(item.rcItem.right),float(item.rcItem.bottom));
-    rounded(g,r,(item.itemState&ODS_SELECTED)?Gdiplus::Color(255,58,50,34):selected?Gdiplus::Color(255,43,38,29):CARD,7);
+    rounded(g,r,(item.itemState&ODS_SELECTED)?Gdiplus::Color(255,25,64,91):selected?Gdiplus::Color(255,20,43,63):CARD,7);
     if(b.navigation&&selected)rounded(g,{0,7*scale,3*scale,r.Height-14*scale},ACCENT,1);
     const bool tile=b.id>=200&&b.id<=203;
     std::wstring label=b.label;auto cut=label.find(L'\n');
@@ -84,8 +84,9 @@ void paint(){
         g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);g.SetTextRenderingHint(Gdiplus::TextRenderingHintClearTypeGridFit);
         float width=r.right/scale,height=r.bottom/scale,main=width-248,col=(main-16)/2;
         Gdiplus::SolidBrush side(SIDE);g.FillRectangle(&side,0.f,0.f,200*scale,float(r.bottom));
-        rounded(g,{24*scale,29*scale,32*scale,32*scale},ACCENT,8);
-        words(g,L"S",33,30,24,30,21,BG,true);words(g,L"SynthScan",66,29,130,31,20,INK,true);
+        static HICON logo=LoadIconW(GetModuleHandleW(nullptr),MAKEINTRESOURCEW(IDI_APPICON));
+        HDC iconDC=g.GetHDC();DrawIconEx(iconDC,int(24*scale),int(29*scale),logo,int(32*scale),int(32*scale),0,nullptr,DI_NORMAL);g.ReleaseHDC(iconDC);
+        words(g,L"SynthScan",66,29,130,31,20,INK,true);
         words(g,L"YOUR VERSE, CONNECTED",24,73,164,20,9,MUTED,true);
         words(g,L"LOCAL PROFILE",24,height-66,164,20,9,ACCENT,true);
         words(g,L"Your records stay on this PC",24,height-45,166,30,10,MUTED);

@@ -13,7 +13,7 @@ namespace {
 HWND parent=nullptr,win=nullptr;HFONT font=nullptr,title=nullptr;HBRUSH bg=nullptr,input=nullptr;
 Json model;std::function<void(Json)> send;bool testing=false,busy=false;double scale=1;
 std::string bodyKey,markKey;
-constexpr COLORREF BG=RGB(20,23,29),CARD=RGB(29,33,41),TEXT=RGB(233,237,241),GOLD=RGB(218,160,79);
+constexpr COLORREF BG=RGB(20,23,29),CARD=RGB(29,33,41),TEXT=RGB(233,237,241),GOLD=RGB(98,204,255);
 int px(int n){return int(n*scale+.5);}
 std::string text(int id){HWND h=GetDlgItem(win,id);int n=GetWindowTextLengthW(h);std::wstring s(n+1,0);GetWindowTextW(h,s.data(),n+1);s.resize(n);return utf8(s);}
 void label(int id,std::string s){std::wstring w;for(auto c:wide(s)){if(c==L'\n')w+=L'\r';w+=c;}SetDlgItemTextW(win,id,w.c_str());}

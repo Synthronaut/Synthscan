@@ -1,4 +1,5 @@
 """Guided first run and in-app setup/reputation status for the installed app."""
+from branding import window_icon
 import sys
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parent))
@@ -23,6 +24,7 @@ def selected_game(folder):
 
 class SetupWindow:
     def __init__(self,window,status_only=False):
+        window_icon(window)
         self.window=window;self.busy=False;self.messages=queue.Queue();self.status_only=status_only;self.initial=not ready()
         window.title('SynthScan — Setup & reputation');window.geometry('760x500');window.minsize(720,480)
         style=ttk.Style(window);style.theme_use('clam')

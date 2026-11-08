@@ -1,4 +1,5 @@
 """Readable source freshness and a manual check without blocking the HUD."""
+from branding import window_icon
 from pathlib import Path
 import time
 import uuid
@@ -16,7 +17,7 @@ def main():
     lock=SingleInstance('data-update-window')
     if not lock.acquired:return
     PROFILE.mkdir(parents=True,exist_ok=True)
-    window=tk.Tk();window.title('SynthScan — Data updates');window.geometry('850x720');window.minsize(720,560)
+    window=tk.Tk();window_icon(window);window.title('SynthScan — Data updates');window.geometry('850x720');window.minsize(720,560)
     style=ttk.Style(window);style.theme_use('clam')
     style.configure('.',background='#101820',foreground='#e5edf3',font=('Segoe UI',10))
     window.configure(bg='#101820')

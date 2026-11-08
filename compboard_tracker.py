@@ -1,4 +1,5 @@
 """Explicitly opened desktop controls; no game input, hotkeys or always-on-top UI."""
+from branding import window_icon
 import logging
 import sqlite3
 import tkinter as tk
@@ -135,7 +136,7 @@ def main():
     if not lock.acquired:
         send_signal('compboard-inventory-show');return
     show = Signal('compboard-inventory-show')
-    root = tk.Tk();root.withdraw()
+    root = tk.Tk();window_icon(root);root.withdraw()
     try:
         tracker = CompboardTracker(root, DATA)
         def poll():

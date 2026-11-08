@@ -41,7 +41,7 @@ constexpr int SEARCH_ID=43101;
 constexpr UINT_PTR LOADING_TIMER=2;
 void pollDetails();
 // Same palette as MinerGUI's other activity tabs.
-const Gdiplus::Color BG(255,15,16,19),CARD(255,24,26,30),BORDER(255,44,47,54),INK(255,238,239,241),MUTED(255,160,166,176),ACCENT(255,238,178,70);
+const Gdiplus::Color BG(255,15,16,19),CARD(255,24,26,30),BORDER(255,44,47,54),INK(255,238,239,241),MUTED(255,160,166,176),ACCENT(255,98,204,255);
 void repaint(){if(window)InvalidateRect(window,nullptr,FALSE);}
 std::wstring normalize(const std::wstring& text){
     std::wstring result,word;

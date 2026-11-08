@@ -1,4 +1,5 @@
 """Destination-first daylight planning. Opened explicitly; never controls the game."""
+from branding import window_icon
 from datetime import datetime
 import logging
 from pathlib import Path
@@ -170,7 +171,7 @@ class DaylightPlanner:
             self.row,self.result = row,result
             label = 'DAYLIGHT' if result['daylight'] else 'NIGHT'
             if result['continuous']:label += ' · no crossing this rotation'
-            self.state.configure(text=label+' on arrival',foreground='#e4c28b' if result['daylight'] else '#b5c7e2')
+            self.state.configure(text=label+' on arrival',foreground='#8edcff' if result['daylight'] else '#b5c7e2')
             self.arrival_label.configure(text=local_stamp(at)+' · estimated')
             for key,widget,title in [('sunrise',self.sunrise,'Sunrise'),('sunset',self.sunset,'Sunset')]:
                 event = result[key]
@@ -185,7 +186,7 @@ class DaylightPlanner:
             self.draw_timeline()
         except (ValueError,TypeError,OSError,StopIteration) as exc:
             self.result = None
-            self.state.configure(text=str(exc),foreground='#e4c28b')
+            self.state.configure(text=str(exc),foreground='#8edcff')
             self.sunrise.configure(text='');self.sunset.configure(text='');self.windows.configure(text='')
             self.timeline.delete('all')
 
@@ -198,7 +199,7 @@ class DaylightPlanner:
         windows = [(start,end)] if result['continuous']=='daylight' else result['windows']
         for left,right in windows:
             left,right = max(start,left),min(end,right)
-            if right > left:self.timeline.create_rectangle((left-start)/span*width,7,(right-start)/span*width,29,fill='#c6a36a',outline='')
+            if right > left:self.timeline.create_rectangle((left-start)/span*width,7,(right-start)/span*width,29,fill='#397da8',outline='')
         for fraction in (0,.25,.5,.75,1):
             x = fraction*width
             self.timeline.create_line(x,30,x,34,fill='#95a0ad')
@@ -270,7 +271,7 @@ def main():
     lock = SingleInstance(name)
     if not lock.acquired:send_signal(name+'-show');return
     show = Signal(name+'-show')
-    root = tk.Tk();root.withdraw()
+    root = tk.Tk();window_icon(root);root.withdraw()
     try:
         DaylightPlanner(root,DATA)
         embedded=None

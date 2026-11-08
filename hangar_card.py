@@ -32,7 +32,7 @@ def card_svg(view,inventory=None,verification=None):
          '<path d="M18 34H42" stroke="#a28c65" stroke-width="1"/>',
          '<path d="M32 68H176" stroke="#303745" stroke-width="1"/>']
     if not certain:
-        out.append('<rect x="224" y="11" width="82" height="18" rx="4" fill="#332a1e" stroke="#736044" stroke-width=".5"/><text x="265" y="23" text-anchor="middle" fill="#dfbc87" font-family="Segoe UI" font-size="8" letter-spacing=".8">UNVERIFIED</text>')
+        out.append('<rect x="224" y="11" width="82" height="18" rx="4" fill="#142c40" stroke="#37658a" stroke-width=".5"/><text x="265" y="23" text-anchor="middle" fill="#9cdbff" font-family="Segoe UI" font-size="8" letter-spacing=".8">UNVERIFIED</text>')
     for i,color in enumerate(lights):
         x=32+i*36;ink=colors[color]
         if color=='green' and certain:out.append(f'<circle cx="{x}" cy="68" r="23" fill="url(#glow)"/>')
@@ -44,7 +44,7 @@ def card_svg(view,inventory=None,verification=None):
                 f'<text x="18" y="104" fill="#8895a4" font-family="Segoe UI" font-size="8" letter-spacing="1.7">{escape(status)}</text>',
                 '<path d="M18 116H412" stroke="#3b3a36" stroke-opacity=".60"/>',
                 f'<text x="18" y="136" fill="#b2a68f" font-family="Segoe UI" font-size="10">{escape(sets_label)}</text>',
-                f'<text x="412" y="136" text-anchor="end" fill="'+('#768395' if certain else '#d0aa74')+'" font-family="Segoe UI" font-size="9">'+escape(footer)+'</text>',
+                f'<text x="412" y="136" text-anchor="end" fill="'+('#768395' if certain else '#8bcfff')+'" font-family="Segoe UI" font-size="9">'+escape(footer)+'</text>',
                 '</svg>'])
     return ''.join(out)
 

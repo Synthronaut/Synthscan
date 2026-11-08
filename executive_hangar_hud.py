@@ -31,7 +31,7 @@ def hangar_svg(view,inventory=None):
         patch=view.get('patch','').removesuffix('-LIVE')
         footer='Schedule estimate · sync '+date+(' · '+patch if patch else '')
         if view.get('refresh_error'):footer='Saved schedule · sync '+date+' · refresh pending'
-    accent='#4ade80' if view is not None and view['phase']=='open' else '#fbbf24'
+    accent='#4ade80' if view is not None and view['phase']=='open' else '#62ccff'
     svg=[f'<svg xmlns="http://www.w3.org/2000/svg" width="{WIDTH}" height="{HEIGHT}" viewBox="0 0 {WIDTH} {HEIGHT}">',
          f'<rect x="0.5" y="0.5" width="429" height="{HEIGHT-1}" rx="6" fill="#0b111a" stroke="#334155"/>',
          f'<text x="12" y="19" fill="{accent}" font-family="Segoe UI" font-weight="600" font-size="12">{escape(title)}</text>',
@@ -44,7 +44,7 @@ def hangar_svg(view,inventory=None):
                 f'<text x="12" y="61" fill="#94a3b8" font-family="Segoe UI" font-size="10">{escape(footer)}</text>',
                 '<path d="M10 68H420" stroke="#263446"/>'])
     if inventory is not None and inventory.get('unavailable'):
-        svg.append('<text x="12" y="84" fill="#fbbf24" font-family="Segoe UI" font-size="10">Board counts unavailable · open Compboard inventory</text>')
+        svg.append('<text x="12" y="84" fill="#62ccff" font-family="Segoe UI" font-size="10">Board counts unavailable · open Compboard inventory</text>')
     else:
         counts=(inventory or {}).get('counts',[0]*7);sets=min(counts)
         svg.append('<text x="12" y="84" fill="#94a3b8" font-family="Segoe UI" font-size="9">Boards</text>')

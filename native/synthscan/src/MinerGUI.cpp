@@ -96,8 +96,8 @@ namespace {
 
 
 // Color palette (dark theme)
-// Graphite, one amber accent, hairlines instead of frames. Colour only
-// where it says something: amber for the value and the choice, green for a
+// Graphite, one cyan accent, hairlines instead of frames. Colour only
+// where it says something: cyan for the value and the choice, green for a
 // lock, red for the live dot, the rarity tints on the rarity word.
 // Three steps of surface - the window, a card on it, something raised on
 // the card - each a clear step apart, and a hairline that only just shows:
@@ -110,13 +110,13 @@ const Gdiplus::Color COL_HOVER(46, 50, 58);       // under the pointer
 const Gdiplus::Color COL_TEXT(238, 239, 241);
 const Gdiplus::Color COL_TEXT_DIM(160, 166, 176);
 const Gdiplus::Color COL_TEXT_FAINT(108, 115, 127);
-const Gdiplus::Color COL_ACCENT(238, 178, 70);
-const Gdiplus::Color COL_ACCENT_HI(250, 196, 98);  // the amber under the pointer
-const Gdiplus::Color COL_ORANGE(238, 178, 70);
+const Gdiplus::Color COL_ACCENT(98,204,255);
+const Gdiplus::Color COL_ACCENT_HI(163,229,255);  // the blue under the pointer
+const Gdiplus::Color COL_ORANGE(98,204,255);
 const Gdiplus::Color COL_GREEN(96, 202, 132);
 const Gdiplus::Color COL_RED(234, 94, 86);
-const Gdiplus::Color COL_YELLOW(224, 186, 92);
-const Gdiplus::Color COL_ACCENT_INK(28, 20, 6);    // words on an amber face
+const Gdiplus::Color COL_YELLOW(119,207,255);
+const Gdiplus::Color COL_ACCENT_INK(7,24,40);    // words on a blue face
 
 // Frosted glass: the body of a sheet lying over the window lets the blurred
 // window show through it, and a rim of light runs round its edge

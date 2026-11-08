@@ -90,7 +90,7 @@ def main():
         (OUT/'native_runtime.json').write_text(json.dumps(dict(workspace=str(ROOT),pythonw=str(Path(sys.executable).with_name('pythonw.exe'))),indent=2))
         shutil.copy2(ZSTD_SOURCE.parent/'LICENSE',OUT/'LICENSE-zstd')
         manifest=dict(upstream=json.loads((ROOT/'native/synthscan-upstream.json').read_text())['commit'],
-                      source_files={p.relative_to(SOURCE).as_posix():digest(p) for p in files+list((SOURCE/'include').glob('*.h'))+[SOURCE/'resources/bedrock.rc']},
+                      source_files={p.relative_to(SOURCE).as_posix():digest(p) for p in files+list((SOURCE/'include').glob('*.h'))+[SOURCE/'resources/bedrock.rc',SOURCE/'resources/synthscan.ico']},
                       binary_files={p.name:digest(p) for p in OUT.glob('*') if p.suffix in ('.exe','.dll')},toolchain=dict(msvc=str(MSVC),sdk=VERSION),
                       zstd=json.loads((ROOT/'third_party/build_tools/zstd_source.json').read_text()))
         (OUT/'build_manifest.json').write_text(json.dumps(manifest,indent=2))

@@ -509,7 +509,7 @@ class EvidenceHealth:
                 status, label = "STANDBY", "OFFLINE"
             self.stall_start_ts = None
         elif connection_status == "recovering":
-            status, label, color = "RECOVERING", "SERVER RECOVERING", "#f59e0b"
+            status, label, color = "RECOVERING", "SERVER RECOVERING", "#62ccff"
             reasons.append("Game reported a server recovery state")
         elif sfps is not None:
             if sfps <= 0.5:
@@ -523,7 +523,7 @@ class EvidenceHealth:
                     status, label, color = "SLOW", "SERVER: VERY SLOW", "#ef4444"
                     alert = True
                 elif sfps < 15:
-                    status, label, color = "SLOW", "SERVER: SLOW", "#f59e0b"
+                    status, label, color = "SLOW", "SERVER: SLOW", "#62ccff"
                 else:
                     status, label, color = "OBSERVED", "SERVER: RESPONDING", "#48bb78"
                 reasons.append(f"Observed server rate {sfps:.1f} FPS; other services may still have problems")
@@ -536,7 +536,7 @@ class EvidenceHealth:
         elif is_in_server and ping_ms is not None and ping_ms >= 250:
             reasons.append(f"Game latency is high ({ping_ms:.0f} ms)")
             if status in ("UNKNOWN", "OBSERVED"):
-                status, label, color = "LATENCY", "NET: HIGH LATENCY", "#f59e0b"
+                status, label, color = "LATENCY", "NET: HIGH LATENCY", "#62ccff"
         if restarts is not None and restarts > 0:
             reasons.append(f"Game reports {int(restarts)} server restart(s); this alone does not predict another failure")
         should_voice = alert and now - self.last_voice_alert_ts >= 90

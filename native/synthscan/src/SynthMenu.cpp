@@ -42,7 +42,7 @@ bool message(UINT message,WPARAM,LPARAM l,LRESULT& result){
         HBRUSH fill=selected?CreateSolidBrush(RGB(46,50,58)):background;FillRect(item->hDC,&item->rcItem,fill);if(selected)DeleteObject(fill);
         if(data.separator){HPEN pen=CreatePen(PS_SOLID,1,RGB(44,47,54));auto old=SelectObject(item->hDC,pen);int y=(item->rcItem.top+item->rcItem.bottom)/2;MoveToEx(item->hDC,item->rcItem.left+int(12*scale),y,nullptr);LineTo(item->hDC,item->rcItem.right-int(12*scale),y);SelectObject(item->hDC,old);DeleteObject(pen);}
         else{
-            SetBkMode(item->hDC,TRANSPARENT);SetTextColor(item->hDC,disabled?RGB(100,106,116):selected?RGB(238,178,70):RGB(238,239,241));auto old=SelectObject(item->hDC,font);
+            SetBkMode(item->hDC,TRANSPARENT);SetTextColor(item->hDC,disabled?RGB(100,106,116):selected?RGB(98,204,255):RGB(238,239,241));auto old=SelectObject(item->hDC,font);
             RECT text=item->rcItem;text.left+=int(31*scale);text.right-=int(26*scale);DrawTextW(item->hDC,data.text.c_str(),-1,&text,DT_SINGLELINE|DT_VCENTER|DT_LEFT|DT_NOPREFIX);
             RECT mark=item->rcItem;mark.left+=int(10*scale);mark.right=mark.left+int(15*scale);
             if(item->itemState&ODS_CHECKED)DrawTextW(item->hDC,L"✓",-1,&mark,DT_SINGLELINE|DT_VCENTER|DT_LEFT);

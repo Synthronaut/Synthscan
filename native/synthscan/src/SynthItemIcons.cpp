@@ -6,7 +6,7 @@ namespace {
 void draw(Gdiplus::Graphics& g,FinderItems::Icon icon){
     using namespace Gdiplus;using I=FinderItems::Icon;
     Color color(255,134,195,221);
-    if(icon==I::Ammo||icon==I::Blueprint)color=Color(255,225,186,112);
+    if(icon==I::Ammo||icon==I::Blueprint)color=Color(255,119,207,255);
     if(icon==I::Commodity||icon==I::Consumable)color=Color(255,119,201,166);
     if(icon==I::Collectible||icon==I::Clothing||icon==I::Paint)color=Color(255,186,164,218);
     Pen p(color,1.6f);p.SetLineJoin(LineJoinRound);p.SetStartCap(LineCapRound);p.SetEndCap(LineCapRound);

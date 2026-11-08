@@ -105,7 +105,7 @@ double lastStateAt=0;
 double uiScale=1;
 int px(int value){return int(std::lround(value*uiScale));}
 constexpr int HOTKEY=31001,TRAY=WM_APP+41;
-constexpr COLORREF BG=RGB(20,23,29),CARD=RGB(29,33,41),TEXT=RGB(233,237,241),MUTED=RGB(149,160,173),GOLD=RGB(218,160,79);
+constexpr COLORREF BG=RGB(20,23,29),CARD=RGB(29,33,41),TEXT=RGB(233,237,241),MUTED=RGB(149,160,173),GOLD=RGB(98,204,255);
 double epoch(){return std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count();}
 std::wstring lower(std::wstring value){for(auto& c:value)c=std::towlower(c);return value;}
 std::wstring text(HWND h){int n=GetWindowTextLengthW(h);std::wstring s(n+1,0);GetWindowTextW(h,s.data(),n+1);s.resize(n);return s;}
@@ -494,7 +494,7 @@ LRESULT CALLBACK panelProc(HWND hwnd,UINT message,WPARAM w,LPARAM l){
         auto header=reinterpret_cast<NMHDR*>(l);
         if(currentTab==0&&header->hwndFrom==listing&&header->code==LVN_COLUMNCLICK){auto column=reinterpret_cast<NMLISTVIEW*>(l)->iSubItem;if(column>=0&&column<3){directorySortDescending=column==directorySortColumn?!directorySortDescending:false;directorySortColumn=column;listRows();InvalidateRect(ListView_GetHeader(listing),nullptr,FALSE);}return 0;}
         if(header->hwndFrom==listing&&header->code==LVN_ITEMCHANGED)selection();
-        if(header->hwndFrom==listing&&header->code==NM_CUSTOMDRAW){auto draw=reinterpret_cast<NMLVCUSTOMDRAW*>(l);if(draw->nmcd.dwDrawStage==CDDS_PREPAINT)return CDRF_NOTIFYITEMDRAW;if(draw->nmcd.dwDrawStage==CDDS_ITEMPREPAINT){bool chosen=(ListView_GetItemState(listing,int(draw->nmcd.dwItemSpec),LVIS_SELECTED)&LVIS_SELECTED)!=0;draw->clrText=TEXT;draw->clrTextBk=chosen?RGB(76,58,32):CARD;draw->nmcd.uItemState&=~CDIS_SELECTED;return CDRF_NEWFONT;}}
+        if(header->hwndFrom==listing&&header->code==NM_CUSTOMDRAW){auto draw=reinterpret_cast<NMLVCUSTOMDRAW*>(l);if(draw->nmcd.dwDrawStage==CDDS_PREPAINT)return CDRF_NOTIFYITEMDRAW;if(draw->nmcd.dwDrawStage==CDDS_ITEMPREPAINT){bool chosen=(ListView_GetItemState(listing,int(draw->nmcd.dwItemSpec),LVIS_SELECTED)&LVIS_SELECTED)!=0;draw->clrText=TEXT;draw->clrTextBk=chosen?RGB(25,58,82):CARD;draw->nmcd.uItemState&=~CDIS_SELECTED;return CDRF_NEWFONT;}}
         return 0;
     }
     case WM_CLOSE:ShowWindow(hwnd,SW_HIDE);return 0;
@@ -810,7 +810,7 @@ void drawQuesting(Gdiplus::Graphics& g,float width,float height,float scale){
     line("Configured rewards / splits are estimates",323,10,&muted);
 }
 void drawPiracy(Gdiplus::Graphics& g,float width,float height,float scale){
-    Gdiplus::SolidBrush ink(Gdiplus::Color(255,233,237,241)),gold(Gdiplus::Color(255,245,173,66)),muted(Gdiplus::Color(255,149,160,173)),green(Gdiplus::Color(255,83,208,159));
+    Gdiplus::SolidBrush ink(Gdiplus::Color(255,233,237,241)),gold(Gdiplus::Color(255,98,204,255)),muted(Gdiplus::Color(255,149,160,173)),green(Gdiplus::Color(255,83,208,159));
     Gdiplus::Pen border(Gdiplus::Color(255,54,62,73));
     g.DrawRectangle(&border,.5f,.5f,width-1,height-1);
     auto text=[&](const std::string& value,float x,float y,float size,Gdiplus::Brush* brush,float span){
@@ -874,7 +874,7 @@ void drawSession(Gdiplus::Graphics& g,float width,float top,float height,float s
     Gdiplus::StringFormat format;format.SetFormatFlags(Gdiplus::StringFormatFlagsNoWrap);format.SetTrimming(Gdiplus::StringTrimmingEllipsisCharacter);
     auto refinery=refineryNotice();
     if(!refinery.empty()){
-        Gdiplus::SolidBrush accent(Gdiplus::Color(255,238,178,70));
+        Gdiplus::SolidBrush accent(Gdiplus::Color(255,98,204,255));
         g.DrawString(wide(refinery).c_str(),-1,&f,Gdiplus::RectF(10*scale,top+(showSession?44:3)*scale,width-20*scale,16*scale),&format,&accent);
     }
     if(!showSession)return;

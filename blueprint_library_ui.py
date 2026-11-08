@@ -11,7 +11,7 @@ from screen_readers import read_image, fabricator_candidates
 from game_library import ArtworkImages
 
 BG, CARD, EDGE = '#181b22', '#1e222a', '#2c323e'
-TEXT, MUTED, ACCENT, GOLD, GREEN = '#f8fafc', '#929eb1', '#b9cbe1', '#d99b43', '#48bb78'
+TEXT, MUTED, ACCENT, GOLD, GREEN = '#f8fafc', '#929eb1', '#b9cbe1', '#62ccff', '#48bb78'
 
 
 class BlueprintLibraryPage(ctk.CTkFrame):

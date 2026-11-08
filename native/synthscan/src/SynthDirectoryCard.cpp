@@ -12,7 +12,7 @@ namespace {
 using namespace SynthScan;
 struct Model {Json item,shops;bool favorite=false;int scroll=0,total=0;};
 std::map<HWND,Model> models;
-const Gdiplus::Color BG(255,19,22,28),CARD(255,27,31,38),INK(255,237,240,244),MUTED(255,151,163,178),GOLD(255,238,178,70),LINE(255,48,56,68);
+const Gdiplus::Color BG(255,19,22,28),CARD(255,27,31,38),INK(255,237,240,244),MUTED(255,151,163,178),GOLD(255,98,204,255),LINE(255,48,56,68);
 const Gdiplus::Color GREEN(255,92,215,162),RED(255,245,127,130);
 void text(Gdiplus::Graphics& g,const std::string& value,float x,float y,float width,float height,float size,Gdiplus::Color color,bool bold=false){
     Gdiplus::Font font(L"Segoe UI",size,bold?Gdiplus::FontStyleBold:Gdiplus::FontStyleRegular,Gdiplus::UnitPixel);

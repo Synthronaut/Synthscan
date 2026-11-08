@@ -23,6 +23,7 @@ MinVersion=10.0
 DisableDirPage=yes
 DisableProgramGroupPage=yes
 WizardStyle=modern
+SetupIconFile=..\native\synthscan\resources\synthscan.ico
 UninstallDisplayIcon={app}\SynthScan.exe
 OutputDir={#Output}
 OutputBaseFilename=SynthScan-Setup-Windows-x64
