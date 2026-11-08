@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-from item_directory import ItemDirectoryService, SHOP_TTL, shop_rows, shop_text, source_lines,vehicle_rows,fetch_shops,is_component,lookup_identity
+from item_directory import ItemDirectoryService, SHOP_TTL, shop_rows, shop_text, shop_view, source_lines,vehicle_rows,fetch_shops,is_component,lookup_identity
 from native_workspace_data import library_export
 
 A='082c2ffb-1c54-45e5-90bf-f411d9a06425'
@@ -35,6 +35,18 @@ class Pool:
 
 
 class DirectoryTests(unittest.TestCase):
+    def test_shop_cards_keep_price_identity_location_and_patch(self):
+        row=dict(price=34398000,location='Stanton → ArcCorp → Area 18 → Astro Armada - Area 18',game_version='4.10.1',reported_at=80)
+        view=shop_view(dict(item_id='vehicle-1',checked_at=100,rows=[row]),'4.10.2',101)
+        self.assertEqual(view['rows'][0]['price'],34398000)
+        self.assertEqual(view['rows'][0]['shop'],'Astro Armada')
+        self.assertEqual(view['rows'][0]['place'],'ArcCorp · Area 18')
+        self.assertTrue(view['rows'][0]['different_patch'])
+        self.assertIn('Reported',view['rows'][0]['reported_label'])
+        self.assertFalse(view['stale'])
+        self.assertTrue(shop_view(dict(checked_at=100,rows=[row]),'4.10.2',101,error='offline')['stale'])
+        self.assertEqual(shop_view(None,'4.10.2',101)['rows'],[])
+
     def test_location_omits_system_and_repeated_terminal_city_including_old_cache(self):
         raw=dict(listing(),planet_name='ArcCorp',city_name='Area 18',space_station_name='',terminal_name='Astro Armada - Area 18')
         rows=shop_rows(dict(status='ok',data=[raw]));self.assertEqual(rows[0]['location'],'ArcCorp → Area 18 → Astro Armada')

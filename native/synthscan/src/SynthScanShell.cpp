@@ -5,6 +5,7 @@
 #include "SynthFinderHUD.h"
 #include "SynthHome.h"
 #include "SynthPages.h"
+#include "SynthDirectoryCard.h"
 #include "SynthMenu.h"
 #include "SynthJson.h"
 #include "SynthDiaryUI.h"
@@ -46,6 +47,7 @@ std::string directoryRowId,directoryItemId,directoryRequestId,directoryText,libr
 std::future<Json> libraryJob;
 int currentTab=0,hotkeyChoice=0,selected=-1;
 Json state,settings,library;std::vector<Json> visible;
+Json directoryShops;
 std::set<std::string> favorites;
 std::unique_ptr<Gdiplus::Bitmap> icon,hangarImage;
 std::string lastState,summary="Session service starting",note;
@@ -226,12 +228,13 @@ void listRows(){
         int index=0;for(int i=0;i<int(visible.size());i++)if(visible[i].textOr("id")==prior){index=i;break;}
         ListView_SetItemState(listing,index,LVIS_SELECTED|LVIS_FOCUSED,LVIS_SELECTED|LVIS_FOCUSED);ListView_EnsureVisible(listing,index,FALSE);
     }else{
-        SetWindowTextW(detail,L"No matches. Change the search or filters.");directoryRowId.clear();directoryItemId.clear();directoryRequestId.clear();directoryText.clear();
+        if(currentTab==0)SynthDirectoryCard::update(detail,obj({}),obj({}),false);else SetWindowTextW(detail,L"No matches. Change the search or filters.");directoryRowId.clear();directoryItemId.clear();directoryRequestId.clear();directoryText.clear();
     }
     if(currentTab==2){auto count=int(field(state,"session_log").numberOr("count"));auto offset=int(field(state,"session_log").numberOr("offset"));auto label=std::to_string(visible.empty()?0:offset+1)+"–"+std::to_string(offset+int(visible.size()))+" of "+std::to_string(count)+" visits · times UTC+08:00";SetDlgItemTextW(panel,227,wide(label).c_str());EnableWindow(GetDlgItem(panel,225),offset>0);EnableWindow(GetDlgItem(panel,226),offset+100<count);}
-    SetWindowTextW(status,wide(std::to_string(visible.size())+" of "+std::to_string(matched)+" matches"+(matched>visible.size()?" · Narrow your search":"")+" · "+note).c_str());
+    SetWindowTextW(status,wide(std::to_string(visible.size())+" of "+std::to_string(matched)+" matches"+(matched>visible.size()?" · Narrow your search":"")+(currentTab==0?"":" · "+note)).c_str());
 }
 void renderDirectoryDetail(const Json& row){
+    if(currentTab==0){SynthDirectoryCard::update(detail,row,directoryShops,favorites.count(row.textOr("id"))!=0);return;}
     std::string body=row.textOr("detail");
     if(currentTab==0&&!row.textOr("item_id").empty())body=row.textOr("name")+"\n\n"+directoryText+"\n\n"+body;
     if(favorites.count(row.textOr("id")))body="★ Favorite\n\n"+body;
@@ -245,11 +248,13 @@ void selection(){
         if(directoryRowId!=row.textOr("id")||directoryItemId!=row.textOr("item_id")){
             directoryRowId=row.textOr("id");directoryItemId=row.textOr("item_id");directoryRequestId=std::to_string(GetTickCount64())+":"+directoryRowId;
             directoryText="IN-GAME PURCHASE LOCATIONS — UEX Corp\nChecking shops in the background…";
+            directoryShops=obj({{"loading",boolean(true)}});
             if(!testing)write(data/L"item_directory_request.json",obj({{"owner_pid",num(GetCurrentProcessId())},{"at",num(epoch())},{"request_id",str(directoryRequestId)},{"row_id",str(directoryRowId)},{"item_id",field(row,"item_id")}}));
         }
-    }else{directoryRowId.clear();directoryItemId.clear();directoryRequestId.clear();directoryText.clear();}
+    }else{directoryRowId.clear();directoryItemId.clear();directoryRequestId.clear();directoryText.clear();directoryShops=obj({});}
     renderDirectoryDetail(row);icon.reset();
     if(currentTab==0)EnableWindow(GetDlgItem(panel,228),row.textOr("kind")!="Ship"&&row.textOr("kind")!="Vehicle"&&!row.textOr("item_id").empty());
+    if(currentTab==0)EnableWindow(GetDlgItem(panel,211),row.textOr("kind")=="Material");
     if(currentTab==2&&editReminder&&GetFocus()!=editReminder)SetWindowTextW(editReminder,wide(row.textOr("notes")).c_str());
     auto path=row.textOr("icon");if(!path.empty())icon=std::make_unique<Gdiplus::Bitmap>(wide(path).c_str());
     InvalidateRect(panel,nullptr,FALSE);
@@ -339,7 +344,7 @@ void rebuild(int tab){
     const wchar_t* columns[]={L"Name",L"Type / weight",L"Category / region"};
     const wchar_t* sessionColumns[]={L"Joined",L"Left / observed",L"Region",L"Shard",L"Shard label",L"Duration",L"Visit"};int sessionWidths[]={160,160,85,65,130,85,100};
     for(int i=0;i<(tab==2?7:3);i++){LVCOLUMNW c{};c.mask=LVCF_TEXT|LVCF_WIDTH;c.pszText=const_cast<wchar_t*>(tab==2?sessionColumns[i]:columns[i]);c.cx=px(tab==2?sessionWidths[i]:(i==0?390:200));ListView_InsertColumn(listing,i,&c);}
-    detail=control(L"EDIT",L"Select an entry",ES_MULTILINE|ES_READONLY|ES_AUTOVSCROLL|WS_VSCROLL,100,355,740,184,205);
+    detail=tab==0?SynthDirectoryCard::create(panel,205,px(20),px(355),px(820),px(184)):control(L"EDIT",L"Select an entry",ES_MULTILINE|ES_READONLY|ES_AUTOVSCROLL|WS_VSCROLL,100,355,740,184,205);
     if(tab==0){control(L"BUTTON",L"Favorite / unfavorite",BS_PUSHBUTTON,20,551,190,30,210);control(L"BUTTON",L"Mine this material",BS_PUSHBUTTON,224,551,190,30,211);control(L"BUTTON",L"Blueprints for this item",BS_PUSHBUTTON,428,551,240,30,228);}
     if(tab==1)control(L"BUTTON",L"Find mining destinations",BS_PUSHBUTTON,20,551,240,30,212);
     if(tab==2){
@@ -549,7 +554,7 @@ void pollItemDirectory(){
     if(panel&&IsWindowVisible(panel)&&currentTab==0&&selected>=0&&selected<int(visible.size())){
         auto result=read(data/L"item_directory_detail.json",512*1024);
         if(result.numberOr("owner_pid")==GetCurrentProcessId()&&result.textOr("request_id")==directoryRequestId&&result.textOr("row_id")==visible[selected].textOr("id")&&result.textOr("item_id")==visible[selected].textOr("item_id")){
-            auto next=result.textOr("text");if(!next.empty()&&next!=directoryText){directoryText=std::move(next);renderDirectoryDetail(visible[selected]);}
+            auto next=result.textOr("text");if(!next.empty()&&(next!=directoryText||encode(result)!=encode(directoryShops))){directoryText=std::move(next);directoryShops=result;renderDirectoryDetail(visible[selected]);}
         }
     }
 }

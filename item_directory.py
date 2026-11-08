@@ -148,6 +148,23 @@ def fetch_shops(identifier):
     return dict(item_id=identifier, checked_at=time.time(), rows=rows, source='UEX Corp')
 
 
+def shop_view(cached, current_patch, now, error=''):
+    """Presentation fields for native shop cards, retaining source dates and prices."""
+    if not cached:return dict(rows=[], checked_label='', stale=False)
+    checked=stamp(cached.get('checked_at'))
+    ttl=VEHICLE_TTL if str(cached.get('item_id','')).startswith('vehicle-') else SHOP_TTL
+    rows=[]
+    for row in sorted(cached.get('rows', []), key=lambda r: (patch(r.get('game_version')) != current_patch, r['price'], r['location'])):
+        parts=compact_location(row['location']).split(' → ')
+        version=patch(row.get('game_version'))
+        different=bool(current_patch and version and version!=current_patch)
+        rows.append(dict(row,shop=parts[-1],place=' · '.join(parts[:-1]) or 'Location not reported',
+                         reported_label='Reported '+date(row.get('reported_at')),
+                         patch_label='Patch '+str(row.get('game_version') or 'unknown')+(' · different patch' if different else ''),
+                         different_patch=different))
+    return dict(rows=rows,checked_label=date(checked),stale=bool(error or not 0<=now-checked<ttl))
+
+
 def shop_text(cached, current_patch, now, error=''):
     lines = ['IN-GAME PURCHASE LOCATIONS — UEX Corp']
     if not cached:
@@ -332,6 +349,7 @@ class ItemDirectoryService:
                       item_id=identifier, loading=bool((not cached or not 0 <= age < ttl) and not self.errors.get(identifier)),
                       error=bool(self.errors.get(identifier)),
                       text=shop_text(cached, self.current_patch, now, self.errors.get(identifier, '')))
+        result.update(shop_view(cached,self.current_patch,now,self.errors.get(identifier,'')))
         if result != self.last_result:
             publish_json(self.directory / 'item_directory_detail.json', result)
             self.last_result = result
