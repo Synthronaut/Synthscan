@@ -2,6 +2,8 @@
 #include "SynthJson.h"
 #include "resource.h"
 #include "SynthPages.h"
+#include "SynthGlass.h"
+#include <commctrl.h>
 #include "SynthCapturePrivacy.h"
 #include <gdiplus.h>
 #include <dwmapi.h>
@@ -62,30 +64,41 @@ void layout(){
     SynthPages::place(int(218*scale),int(110*scale),int((width-234)*scale),std::max(1,int(r.bottom)-int(124*scale)),activePage!="home");
     InvalidateRect(window,nullptr,FALSE);
 }
+LRESULT CALLBACK navigationHover(HWND hwnd,UINT m,WPARAM w,LPARAM l,UINT_PTR,DWORD_PTR){
+    if(m==WM_MOUSEMOVE&&!GetPropW(hwnd,L"SynthGlass.Hot")){SetPropW(hwnd,L"SynthGlass.Hot",HANDLE(1));TRACKMOUSEEVENT track{sizeof(track),TME_LEAVE,hwnd,0};TrackMouseEvent(&track);InvalidateRect(hwnd,nullptr,FALSE);}
+    if(m==WM_MOUSELEAVE){RemovePropW(hwnd,L"SynthGlass.Hot");InvalidateRect(hwnd,nullptr,FALSE);}
+    if(m==WM_NCDESTROY){RemovePropW(hwnd,L"SynthGlass.Hot");RemoveWindowSubclass(hwnd,navigationHover,1);}
+    return DefSubclassProc(hwnd,m,w,l);
+}
 void add(int id,const wchar_t* label,const char* command,bool navigation){
     HWND child=CreateWindowExW(0,L"BUTTON",label,WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_OWNERDRAW,0,0,10,10,window,reinterpret_cast<HMENU>(INT_PTR(id)),GetModuleHandleW(nullptr),nullptr);
+    SetWindowSubclass(child,navigationHover,1,0);
     buttons.push_back({child,id,label,command,navigation});
 }
 void paintButton(const DRAWITEMSTRUCT& item){
     auto found=std::find_if(buttons.begin(),buttons.end(),[&](const auto& b){return b.id==int(item.CtlID);});if(found==buttons.end())return;
     const auto& b=*found;Gdiplus::Graphics g(item.hDC);g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);g.SetTextRenderingHint(Gdiplus::TextRenderingHintClearTypeGridFit);
     bool selected=(b.navigation&&b.action==activePage)||(b.id==210&&!previous)||(b.id==211&&previous);
-    g.Clear(b.navigation?SIDE:BG);Gdiplus::RectF r(0,0,float(item.rcItem.right),float(item.rcItem.bottom));
-    rounded(g,r,(item.itemState&ODS_SELECTED)?Gdiplus::Color(255,25,64,91):selected?Gdiplus::Color(255,20,43,63):CARD,7);
-    if(b.navigation&&selected)rounded(g,{0,7*scale,3*scale,r.Height-14*scale},ACCENT,1);
+    g.Clear(b.navigation?SIDE:BG);
+    if(b.navigation){RECT at{},root{};GetWindowRect(item.hwndItem,&at);MapWindowPoints(nullptr,window,reinterpret_cast<POINT*>(&at),2);GetClientRect(window,&root);Gdiplus::LinearGradientBrush rail(Gdiplus::PointF(0,14*scale-at.top),Gdiplus::PointF(0,float(root.bottom)-14*scale-at.top),Gdiplus::Color(255,28,35,47),Gdiplus::Color(255,19,25,35));g.FillRectangle(&rail,0,0,item.rcItem.right,item.rcItem.bottom);}
+    Gdiplus::RectF r(0,0,float(item.rcItem.right),float(item.rcItem.bottom));
+    bool hot=(item.itemState&ODS_HOTLIGHT)!=0||GetPropW(item.hwndItem,L"SynthGlass.Hot")!=nullptr;
+    if(!b.navigation||selected||hot)SynthGlass::panel(g,{1,1,r.Width-2,r.Height-2},selected,hot||bool(item.itemState&ODS_SELECTED),9*scale);
     const bool tile=b.id>=200&&b.id<=203;
     std::wstring label=b.label;auto cut=label.find(L'\n');
-    words(g,label.substr(0,cut),tile?16:14,tile?16:8,r.Width/scale-28,26,tile?15:12,selected||tile?ACCENT:INK,true);
+    if(b.navigation){SynthGlass::rounded(g,{8*scale,(r.Height-24*scale)/2,24*scale,24*scale},Gdiplus::Color(38,154,185,206),7*scale);SynthGlass::icon(g,b.action,{12*scale,(r.Height-16*scale)/2,16*scale,16*scale},selected?SynthGlass::Accent:SynthGlass::Muted);
+        SynthGlass::text(g,label,{40*scale,0,r.Width-47*scale,r.Height},11.5f*scale,selected?SynthGlass::Ink:SynthGlass::Muted,selected);
+    }else words(g,label.substr(0,cut),16,tile?16:3,r.Width/scale-28,tile?26:24,tile?15:12,INK,true);
     if(cut!=std::wstring::npos)words(g,label.substr(cut+1),16,45,r.Width/scale-28,28,11,MUTED);
-    if(item.itemState&ODS_FOCUS){Gdiplus::Pen pen(ACCENT);g.DrawRectangle(&pen,2.f,2.f,r.Width-5,r.Height-5);}
+    if(item.itemState&ODS_FOCUS){Gdiplus::Pen pen(Gdiplus::Color(100,161,205,208));Gdiplus::GraphicsPath focus;SynthGlass::shape(focus,{2,2,r.Width-5,r.Height-5},8*scale);g.DrawPath(&pen,&focus);}
 }
 void paint(){
     PAINTSTRUCT ps{};HDC dc=BeginPaint(window,&ps);RECT r{};GetClientRect(window,&r);
     if(r.right>0&&r.bottom>0){
-        Gdiplus::Bitmap bitmap(r.right,r.bottom,PixelFormat32bppPARGB);Gdiplus::Graphics g(&bitmap);g.Clear(BG);
+        Gdiplus::Bitmap bitmap(r.right,r.bottom,PixelFormat32bppPARGB);Gdiplus::Graphics g(&bitmap);g.Clear(BG);SynthGlass::ambient(g,{0,0,float(r.right),float(r.bottom)});
         g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);g.SetTextRenderingHint(Gdiplus::TextRenderingHintClearTypeGridFit);
         float width=r.right/scale,height=r.bottom/scale,main=width-248,col=(main-16)/2;
-        Gdiplus::SolidBrush side(SIDE);g.FillRectangle(&side,0.f,0.f,200*scale,float(r.bottom));
+        Gdiplus::SolidBrush side(SIDE);g.FillRectangle(&side,0.f,0.f,200*scale,float(r.bottom));SynthGlass::panel(g,{12*scale,14*scale,188*scale,float(r.bottom)-28*scale},false,false,18*scale);
         static HICON logo=LoadIconW(GetModuleHandleW(nullptr),MAKEINTRESOURCEW(IDI_APPICON));
         HDC iconDC=g.GetHDC();DrawIconEx(iconDC,int(24*scale),int(29*scale),logo,int(32*scale),int(32*scale),0,nullptr,DI_NORMAL);g.ReleaseHDC(iconDC);
         words(g,L"SynthScan",66,29,130,31,20,INK,true);
@@ -97,7 +110,7 @@ void paint(){
         std::wstring heading=L"Home";
         for(const auto& button:buttons)if(button.navigation&&button.action==activePage)heading=button.label;
         words(g,heading,224,30,main,40,29,INK,true);
-        words(g,activePage=="home"?L"Find your next upgrade. See what you've accomplished.":L"",224,76,main,28,13,MUTED);
+        words(g,activePage=="home"?L"Find your next upgrade. See what you've accomplished.":activePage=="people"?L"A familiar face in a very large universe.":L"",224,76,main,28,13,MUTED);
         if(activePage=="home"){
         words(g,L"SESSION RECAP",224,241,main-260,24,11,ACCENT,true);
         const Json& session=field(overview,previous?"previous":"current");

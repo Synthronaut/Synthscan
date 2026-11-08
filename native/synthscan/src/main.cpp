@@ -4130,6 +4130,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         LocalFree(setupArgv);return prices&&value.rawKnown&&value.refinedKnown?0:2;
     }
     if(setupArgv)LocalFree(setupArgv);
+    for(int i=1;i+1<__argc;i++)if(std::string(__argv[i])=="--people-style-preview") {
+        // GDI+ bitmap only: no HWND, foreground change, capture or game input.
+        return SynthCompanion::stylePreview(std::filesystem::u8path(__argv[i+1]));
+    }
     for(int i=1;i+1<__argc;i++)if(std::string(__argv[i])=="--companion-preview") {
         setupConsole(true);return SynthCompanion::preview(std::filesystem::u8path(__argv[i+1]));
     }

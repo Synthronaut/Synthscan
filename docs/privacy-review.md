@@ -10,7 +10,7 @@ capture-path measurement on one SDR machine, not a full scan-latency or HDR-hard
 qualification.
 
 Two separately compiled local builds produced the same unsigned SynthScan.exe:
-`008ae70e621dff0e8557a4c9f9415afa9320d72215d3fc3434902eddb5737ca7`.
+`ba84ccd8f6b84657be1cd87984a9db5bb7663ea29f1539580d931f9c7100de97`.
 This is local repeatability evidence, not an independent audit or a cross-machine
 reproduction. It does not identify an older public installer. A new distribution
 must carry its own corresponding hashes and validation report.
@@ -111,10 +111,15 @@ measuring parity on the real mining, loadout and terminal fixtures. The current
 window boundary and absence of image-upload calls are useful protections, but
 are not equivalent to OS network denial.
 
-An independent reviewer, a trusted publisher signing identity and a successful
-CI attestation run are external release steps. None is manufactured by local
-selftests or by this document. Do not advertise them as completed without the
-corresponding report, certificate and build evidence.
+The public CI build and provenance workflow has passed for the initial privacy
+hardening commit 7a4b466:
+https://github.com/Synthronaut/Synthscan/actions/runs/42490813289
+Each later release needs evidence for its own commit and artifact.
+
+An independent reviewer and a trusted publisher signing identity remain external
+release requirements. Neither is manufactured by local selftests, CI provenance
+or this document. Do not advertise them as completed without the corresponding
+report and certificate.
 
 Primary references:
 - https://learn.microsoft.com/en-us/windows/win32/api/windows.graphics.capture.interop/nf-windows-graphics-capture-interop-igraphicscaptureiteminterop-createforwindow
