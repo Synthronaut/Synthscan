@@ -9,6 +9,9 @@
 #include <cstdlib>
 #include <fstream>
 #include <sstream>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 namespace SCMiner {
 
@@ -460,7 +463,7 @@ bool RefineryOrderBook::noteCollected(const std::string& station, const Refinery
         }
     }
     if (candidates != 1) return false;   // none yet, or no telling which
-    orders_.erase(orders_.begin() + gone);
+    if(!collect(static_cast<size_t>(gone),now))return false;
     toCollect_--;
     return true;
 }
@@ -513,6 +516,13 @@ bool RefineryOrderBook::remove(size_t index) {
     orders_.erase(orders_.begin() + static_cast<std::ptrdiff_t>(index));
     return true;
 }
+bool RefineryOrderBook::collect(size_t index,long long when) {
+    if(index>=orders_.size()||when<=0)return false;
+    auto order=orders_[index];if(order.completed<=0&&order.due>when)return false;
+    for(const auto& part:order.parts)if(part.quality<1||part.quality>1000||part.yield<0)return false;
+    order.collected=when;collections_.push_back(order);
+    orders_.erase(orders_.begin()+static_cast<std::ptrdiff_t>(index));return true;
+}
 
 std::vector<RefineryOrder> RefineryOrderBook::sorted() const {
     std::vector<RefineryOrder> out = orders_;
@@ -524,28 +534,35 @@ std::vector<RefineryOrder> RefineryOrderBook::sorted() const {
 // joined by semicolons, then when it was seen done and when it went to UEX:
 //   order  Levski  1  1759775562  1759776004  1759775600  Pyrometric Chromalysis  194.00  442  Iron (Ore)|874|235|484  0  0
 bool RefineryOrderBook::save(const std::filesystem::path& file) const {
-    std::ofstream out(file, std::ios::trunc);
+    auto temporary=file;temporary+=".tmp";
+    std::ofstream out(temporary, std::ios::trunc);
     if (!out) return false;
     out << "bedrock refinery orders 1\n";
-    for (const RefineryOrder& o : orders_) {
+    std::vector<RefineryOrder> saved=orders_;saved.insert(saved.end(),collections_.begin(),collections_.end());
+    for (const RefineryOrder& o : saved) {
         char cost[32];
         std::snprintf(cost, sizeof(cost), "%.2f", o.cost);
-        out << "order\t" << o.station << "\t" << o.number << "\t" << o.placed << "\t" << o.due << "\t" << o.seen << "\t"
+        out << (o.collected>0?"collected\t":"order\t") << o.station << "\t" << o.number << "\t" << o.placed << "\t" << o.due << "\t" << o.seen << "\t"
             << o.method << "\t" << cost << "\t" << o.seconds << "\t";
         for (size_t i = 0; i < o.parts.size(); i++) {
             if (i) out << ";";
             out << o.parts[i].material << "|" << o.parts[i].quality << "|" << o.parts[i].yield << "|"
                 << o.parts[i].quantity;
         }
-        out << "\t" << o.completed << "\t" << o.handed << "\n";
+        out << "\t" << o.completed << "\t" << o.handed << "\t" << o.collected << "\n";
     }
-    return static_cast<bool>(out);
+    out.flush();bool ok=static_cast<bool>(out);out.close();if(!ok)return false;
+#ifdef _WIN32
+    return MoveFileExW(temporary.c_str(),file.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH)!=FALSE;
+#else
+    std::error_code error;std::filesystem::rename(temporary,file,error);return !error;
+#endif
 }
 
 bool RefineryOrderBook::load(const std::filesystem::path& file) {
     std::ifstream in(file);
     if (!in) return false;
-    std::vector<RefineryOrder> read;
+    std::vector<RefineryOrder> read,stock;
     std::string line;
     while (std::getline(in, line)) {
         if (!line.empty() && line.back() == '\r') line.pop_back();
@@ -553,7 +570,7 @@ bool RefineryOrderBook::load(const std::filesystem::path& file) {
         std::stringstream ss(line);
         std::string cell;
         while (std::getline(ss, cell, '\t')) f.push_back(cell);
-        if (f.size() < 10 || f[0] != "order") continue;
+        if (f.size() < 10 || (f[0] != "order"&&f[0]!="collected")) continue;
         RefineryOrder o;
         o.station = f[1];
         o.number = std::atoi(f[2].c_str());
@@ -577,10 +594,12 @@ bool RefineryOrderBook::load(const std::filesystem::path& file) {
         }
         if (f.size() > 10) o.completed = std::atoll(f[10].c_str());
         if (f.size() > 11) o.handed = std::atoll(f[11].c_str());
+        if (f.size() > 12) o.collected = std::atoll(f[12].c_str());
         if (o.station.empty() || o.parts.empty() || o.due <= 0) continue;
-        read.push_back(o);
+        if(f[0]=="collected"&&o.collected>0)stock.push_back(o);else if(f[0]=="order")read.push_back(o);
     }
     orders_ = read;
+    collections_=stock;
     return true;
 }
 

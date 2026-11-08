@@ -9,6 +9,9 @@
 #include "SelfTest.h"
 #include "SignatureTiming.h"
 #include "OverlayPlacement.h"
+#include "FinderLayout.h"
+#include "FinderItems.h"
+#include "HudVisibility.h"
 #include "OverlayInput.h"
 #include "AfkNudge.h"
 
@@ -1042,6 +1045,10 @@ int runSelfTest() {
         pickup.take("Checkmate", emptied, t0 + 431);
         const bool lastOff = pickup.orders().size() == 1 && pickup.orders()[0].completed == 0 &&
                              pickup.orders()[0].parts[0].material == "Gold (Ore)";
+          const auto stockFile=SCMiner::AppPaths::file("selftest_refinery_stock.txt");SCMiner::RefineryOrderBook stockReload;
+          const auto stockCount=pickup.collections().size();const bool savedStock=stockCount==2&&pickup.save(stockFile)&&stockReload.load(stockFile)&&stockReload.collections().size()==2&&stockReload.orders().size()==1;
+          const bool noEarlyStock=!pickup.collect(0,t0+431)&&pickup.collections().size()==stockCount;
+          allPassed &= check(savedStock&&noEarlyStock&&stockReload.collections()[0].yieldTotal()==pickup.collections()[0].yieldTotal(),"Terminal-confirmed collections retain exact material output in stock receipts across restart; running orders cannot become stock");
         allPassed &= check(bothDone && notWithoutNotice && notOnOneLook && notWhenUnsure && firstOff && oneEach && lastOff,
                            "work orders done and collected: COMPLETED marks them done; under WORK ORDER DELIVERED "
                            "the one the list no longer shows comes off on the second look - one for each notice, "
@@ -5053,6 +5060,18 @@ int runSelfTest() {
     allPassed &= check(SCMiner::blueprintOwnershipChecklistSelfTest(),
                        "Blueprint list checkbox toggles ownership without opening details or resetting scroll; names still open recipes");
 #endif
+    {
+        allPassed &= check(!HudVisibility::shouldShow(true,true,false,false)&&HudVisibility::shouldShow(true,true,true,false)&&HudVisibility::shouldShow(true,true,false,true)&&!HudVisibility::shouldShow(false,true,true,true)&&!HudVisibility::shouldShow(true,false,true,true),"HUD auto-visibility requires the game; an explicit preview works without it and disabled/collapsed HUDs stay hidden");
+        auto normal=FinderLayout::calculate(1000,780),large=FinderLayout::calculate(1800,1150),compact=FinderLayout::calculate(720,650);
+        allPassed &= check(!normal.sideBySide&&large.sideBySide&&large.details.height>normal.details.height&&large.details.width>normal.details.width/2,"Finder uses available height and switches to side-by-side results/details on wide windows");
+        bool fits=true;for(auto size:std::vector<std::pair<int,int>>{{720,650},{1000,780},{1250,800},{1800,1150},{2400,1300}}){auto layout=FinderLayout::calculate(size.first,size.second);fits=fits&&layout.results.height>=150&&layout.details.height>=200&&layout.details.y+layout.details.height<layout.actions&&layout.details.x+layout.details.width<=size.first-20;}
+        allPassed &= check(fits&&compact.details.height>=200,"Finder content and actions fit compact, normal, and maximized page sizes");
+        allPassed &= check(FinderLayout::compare(28009800,28009800,29484000)==FinderLayout::Deal::Lowest&&FinderLayout::compare(29484000,28009800,29484000)==FinderLayout::Deal::Higher&&FinderLayout::compare(1984500,1984500,1984500)==FinderLayout::Deal::Neutral&&FinderLayout::compare(0,0,0)==FinderLayout::Deal::Neutral,"Finder highlights cheaper offers green and higher offers red; equal or absent prices stay neutral");
+        using Icon=FinderItems::Icon;
+        allPassed &= check(FinderItems::classify("Ship","Ships","","Crusader M2 Hercules")==Icon::Ship&&FinderItems::classify("Item","Equipment & other items","Usable","M2 Hercules Starlifter Plushie")==Icon::Collectible,"Finder distinguishes an actual ship from a plush collectible with the same ship name");
+        allPassed &= check(FinderItems::classify("Item","Armor & clothing","Char_Armor_Torso","ORC torso")==Icon::Armor&&FinderItems::classify("Item","Armor & clothing","Char_Clothing_Torso_1","shirt")==Icon::Clothing&&FinderItems::classify("Item","Weapons & ammunition","WeaponPersonal","C54")==Icon::Gun&&FinderItems::classify("Item","Weapons & ammunition","WeaponMagazine","C54 magazine")==Icon::Ammo,"Finder separates armor, clothing, personal weapons and ammunition using game item types");
+        allPassed &= check(FinderItems::classify("Component","Weapons & ammunition","WeaponGun","ship cannon")==Icon::ShipGun&&FinderItems::classify("Component","Ship components","Shield","FR-86")==Icon::Component&&FinderItems::classify("Material","Materials & commodities","Resource","Copper")==Icon::Commodity&&FinderItems::classify("Item","Consumables","Drink","water")==Icon::Consumable&&FinderItems::classify("Blueprint","Weapons","WeaponPersonal","C54")==Icon::Blueprint,"Finder distinguishes ship weapons, components, commodities, consumables and blueprint records");
+    }
     std::cout << "\n=== Self-test " << (allPassed ? "PASSED" : "FAILED") << " ===\n" << std::endl;
     return allPassed ? 0 : 1;
 }

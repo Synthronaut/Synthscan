@@ -938,7 +938,7 @@ void Application::runWithGUI(HINSTANCE hInstance) {
         const auto& all = refineryOrders_.orders();
         for (size_t i = 0; i < all.size(); i++) {
             if (all[i].station == done.station && all[i].number == done.number && all[i].due == done.due) {
-                refineryOrders_.remove(i);
+                if(!refineryOrders_.collect(i,(long long)std::time(nullptr)))break;
                 refineryOrders_.save(AppPaths::file(REFINERY_ORDERS_FILE));
                 std::cout << "\n[refinery] " << done.station << ": work order " << done.number << " collected" << std::endl;
                 break;
@@ -1014,7 +1014,7 @@ void Application::runWithGUI(HINSTANCE hInstance) {
             gui_->updateResults(0,{},-1.0,false);
         }
         // ...and a refinery's terminal, at a station that has one
-        if(scanAvailable)lookForRefinery();
+        if(!usingInterface&&(scanAvailable||SynthScan::activityMode()))lookForRefinery();
         handRefineryOrdersToUex();
         serviceRefineryShare();
 
@@ -4105,6 +4105,7 @@ void Application::lookForRefinery() {
     // on foot anywhere, since the log may name only the system (logged in at
     // Levski, it says "Nyx" and no place). In a seat no terminal is in reach,
     // and the scan has the picture to itself.
+    if(ScreenCapture::gameWindow()!=GetForegroundWindow())return;
     const std::string station = refineryStationAt(gameState_.place(), gameState_.system());
     if (station.empty() && gameState_.inSeat()) return;
     const auto now = std::chrono::steady_clock::now();
@@ -4390,6 +4391,7 @@ void Application::keepRefineryNotes(const std::vector<std::string>& lines) {
 
 void Application::pushRefineryOrders() {
     if (gui_) gui_->setRefineryOrders(refineryOrders_.sorted());
+    if (gui_) gui_->setRefineryCollections(refineryOrders_.collections());
 }
 
 void Application::pollLibrary() {

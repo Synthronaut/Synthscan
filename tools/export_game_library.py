@@ -135,6 +135,9 @@ def export_entries(store, assets):
                              has_geometry=any(n.get('_Type_')=='SGeometryResourceParams' for n in components),
                              inventory_micro_scu=attach.get('inventoryOccupancyVolume', {}).get('microSCU'),
                              component_types=sorted({n.get('_Type_', '') for n in components}))
+                if typ=='WeaponGun' and '/ships/' in entry['record']:
+                    from weapon_stats import extract
+                    entry['weapon_stats']=extract(store,raw)
                 entries.append(entry)
             except (KeyError, ValueError, OSError) as exc:
                 failures.append(dict(record=path.relative_to(store.root).as_posix(), error=str(exc)))
@@ -161,7 +164,7 @@ def export(store, source, destination, manifest):
     assets, asset_failures = export_assets(source, destination, manifest['Data']['BuildId'])
     entries, skipped, failures = export_entries(store, assets)
     return dict(schema=1, entries=entries, assets=assets, provenance=dict(
-        build=manifest['Data'], source='Installed Game2.dcb and Data.p4k via StarBreaker v0.3.2',
+        build=manifest['Data'],weapon_stats_schema=1, source='Installed Game2.dcb and Data.p4k via StarBreaker v0.3.2',
         tool_url='https://github.com/diogotr7/StarBreaker/releases/tag/v0.3.2',
         copyright='Game records and artwork: Cloud Imperium Games. Local extraction; no redistribution grant implied.',
         entries=len(entries), with_static_artwork=sum(bool(e['artwork']) for e in entries),

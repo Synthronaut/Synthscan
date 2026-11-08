@@ -18532,6 +18532,7 @@ void MinerGUI::placeRefinery() {
 // The work orders the refinery's terminal showed (Application::lookForRefinery):
 // a card each, the soonest done first - where, what comes out of it, and when
 void MinerGUI::paintRefineryOrders(Gdiplus::Graphics& g, int cw, int ch, float top) {
+    const auto& orders=refineryStockView_?refineryCollections_:refineryOrders_;
     Gdiplus::Font smallFont(&textFamily(), scaleF(10), Gdiplus::FontStyleBold, Gdiplus::UnitPixel);
     Gdiplus::Font subFont(&textFamily(), scaleF(9), Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
     Gdiplus::Font rowFont(&textFamily(), scaleF(12), Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
@@ -18579,25 +18580,25 @@ void MinerGUI::paintRefineryOrders(Gdiplus::Graphics& g, int cw, int ch, float t
 
     float y = top + scaleF(18);
     const float footY = (float)ch - scaleF(24);
-    g.DrawString(L"YOUR WORK ORDERS", -1, &smallFont, Gdiplus::PointF(M, y), &faintBrush);
-    if (refineryOrders_.empty()) {
+    g.DrawString(refineryStockView_?L"COLLECTED STOCK RECEIPTS":L"YOUR WORK ORDERS", -1, &smallFont, Gdiplus::PointF(M, y), &faintBrush);
+    if (orders.empty()) {
         Gdiplus::RectF text(M, y + scaleF(24), (float)cw - 2 * M, scaleF(60));
-        g.DrawString(L"None yet. Open a refinery's REFINEMENT CENTER with SynthScan running: the work orders it shows "
-                     L"are read off the screen and listed here, with what comes out of them and when.",
+        g.DrawString(refineryStockView_?L"No confirmed collections recorded yet. Collect an order at the terminal, or mark an actually collected order using Collected.":L"Open a refinery terminal with the game focused. SynthScan reads setup quotes and confirmed work orders automatically.",
                      -1, &rowFont, text, nullptr, &dimBrush);
     } else {
         int ready = 0;
-        for (const RefineryOrder& o : refineryOrders_) ready += o.due <= now ? 1 : 0;
-        std::wstring count = std::to_wstring(refineryOrders_.size() - ready) + L" running";
-        if (ready > 0) count += L"  ·  " + std::to_wstring(ready) + L" done";
+        for (const RefineryOrder& o : orders) ready += o.due <= now ? 1 : 0;
+        std::wstring count = std::to_wstring(orders.size() - ready) + L" running";
+        if (ready > 0) count += L"  ·  " + std::to_wstring(ready) + L" ready / estimated";
+        if(refineryStockView_)count=std::to_wstring(orders.size())+L" collected batches";
         g.DrawString(count.c_str(), -1, &subFont, Gdiplus::RectF(M, y, (float)cw - 2 * M, scaleF(14)), &rightMid,
                      &faintBrush);
         y += scaleF(22);
         const float cardH = scaleF(70), gap = scaleF(8);
-        for (size_t i = 0; i < refineryOrders_.size(); i++) {
-            const RefineryOrder& o = refineryOrders_[i];
+        for (size_t i = 0; i < orders.size(); i++) {
+            const RefineryOrder& o = orders[i];
             if (y + cardH > footY - scaleF(18)) {
-                const std::wstring more = L"+" + std::to_wstring(refineryOrders_.size() - i) + L" more";
+                const std::wstring more = L"+" + std::to_wstring(orders.size() - i) + L" more";
                 g.DrawString(more.c_str(), -1, &subFont, Gdiplus::RectF(M, y, (float)cw - 2 * M, scaleF(14)), &rightMid,
                              &faintBrush);
                 break;
@@ -18616,8 +18617,7 @@ void MinerGUI::paintRefineryOrders(Gdiplus::Graphics& g, int cw, int ch, float t
             // when - and since when only where the terminal said so: an order
             // first read COMPLETED was done before anyone looked
             const bool sinceKnown = !(o.completed > 0 && o.due >= o.completed);
-            const std::wstring when = done ? (sinceKnown ? L"done  ·  since " + clock(o.due) : std::wstring(L"done"))
-                                           : L"done in " + span(o.due - now) + L"  ·  " + clock(o.due);
+            const std::wstring when = refineryStockView_?L"Collected · "+clock(o.collected):o.completed>0?L"Completed at terminal":done?L"Estimated ready · check terminal":L"Estimated ready in "+span(o.due-now);
             g.DrawString(when.c_str(), -1, &statusFont, Gdiplus::RectF(x0, card.Y + scaleF(6), w, scaleF(20)), &rightMid,
                          done ? &goodBrush : &accentBrush);
             // what comes out: material, its quality in its rarity's colour, SCU -
@@ -18655,14 +18655,13 @@ void MinerGUI::paintRefineryOrders(Gdiplus::Graphics& g, int cw, int ch, float t
             g.DrawString(how.c_str(), -1, &subFont, Gdiplus::RectF(x0, card.Y + scaleF(48), w - scaleF(96), scaleF(16)),
                          &leftMid, &dimBrush);
             const Gdiplus::RectF collected(card.X + card.Width - in - scaleF(82), card.Y + scaleF(46), scaleF(82), scaleF(20));
-            drawButton(g, collected, L"Collected", buttonFont, ButtonKind::Ghost, isHot(hoverRef_, collected),
+            if(!refineryStockView_&&done){drawButton(g, collected, L"Collected", buttonFont, ButtonKind::Ghost, isHot(hoverRef_, collected),
                        scaleF(R_CONTROL));
-            refHits_.push_back({collected, 9, (int)i});
+            refHits_.push_back({collected, 9, (int)i});}
             y += cardH + gap;
         }
     }
-    g.DrawString(L"read off the REFINEMENT CENTER while you stand at it  ·  collected there, an order comes off by "
-                 L"itself  ·  \"Collected\" takes one off by hand",
+    g.DrawString(L"Confirmed collections are recorded as stock receipts; collection is separate from estimated completion.",
                  -1, &subFont, Gdiplus::PointF(M, footY), &faintBrush);
 }
 
@@ -18731,6 +18730,8 @@ LRESULT MinerGUI::handleRefineryMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
             EndPaint(hwnd, &ps);
             return 0;
         }
+        case WM_MOUSEWHEEL:
+            if(!refineryOrdersView_){refineryStationOffset_=std::max(0,refineryStationOffset_-GET_WHEEL_DELTA_WPARAM(wParam)/WHEEL_DELTA*2);InvalidateRect(hwnd,nullptr,FALSE);return 0;}break;
         case WM_MOUSEMOVE:
             trackHover(hwnd, hoverRef_, lParam);
             return 0;
@@ -18755,6 +18756,7 @@ LRESULT MinerGUI::handleRefineryMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
             }
             for (const auto& hit : refHits_) {
                 if (!hit.rect.Contains(px, py)) continue;
+                if(hit.kind<=7)refineryStationOffset_=0;
                 // Anything but the field being typed in ends the typing first,
                 // so a click never both commits and does something else with
                 // a figure that is only half entered
@@ -18775,12 +18777,13 @@ LRESULT MinerGUI::handleRefineryMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
                     }
                 } else if (hit.kind == 1) {
                     refinerySystem_ = SYSTEM_KEYS[hit.value];
-                    refineryOrdersView_ = false;
+                    refineryOrdersView_ = false;refineryStockView_=false;refineryStationOffset_=0;
                 } else if (hit.kind == 8) {
-                    refineryOrdersView_ = true;
+                    refineryOrdersView_ = true;refineryStockView_=false;
                     refineryMethodOpen_ = false;
                     // the minutes count down while the view is up
                     SetTimer(hwnd, REFINERY_TICK, 20000, nullptr);
+                } else if(hit.kind==11){refineryOrdersView_=true;refineryStockView_=true;
                 } else if (hit.kind == 9) {
                     if (hit.value >= 0 && hit.value < (int)refineryOrders_.size() && onRefineryOrderDone_) {
                         const RefineryOrder done = refineryOrders_[hit.value];
@@ -18978,7 +18981,7 @@ void MinerGUI::paintRefinery(HDC hdc) {
 
         const float M = (float)scale(MARGIN);
         g.FillRectangle(&accentBrush, M, (float)scale(18), scaleF(8), scaleF(8));
-        g.DrawString(L"Refinery", -1, &markFont, Gdiplus::PointF(M + scaleF(14), (float)scale(8)), &textBrush);
+        g.DrawString(refineryOrdersView_?L"Refinery records":L"Refinery yield planner", -1, &markFont, Gdiplus::PointF(M + scaleF(14), (float)scale(8)), &textBrush);
         // The box that shares the refineries' workloads with other players
         // (RefineryShare), drawn as the Blueprints window draws its box: a
         // quiet button carrying its tick. Only where the build can share.
@@ -19009,7 +19012,7 @@ void MinerGUI::paintRefinery(HDC hdc) {
         }
         g.DrawString(refineryOrdersView_
                          ? L"the work orders a refinery's terminal showed you · what comes out of them, and when"
-                         : L"tick what is in the hold, set how much, pick a method · the stations sort themselves by yield",
+                         : L"Estimates for the SCU you enter · these station results are not stored ore or actual work orders",
                      -1, &subFont,
                      Gdiplus::RectF(M + scaleF(15), (float)scale(36), (std::max)(scaleF(40), subRight - M - scaleF(15)),
                                     scaleF(14)),
@@ -19051,6 +19054,8 @@ void MinerGUI::paintRefinery(HDC hdc) {
             const float tabW = measured.Width + scaleF(16) + (ready > 0 ? scaleF(12) : 0.0f);
             Gdiplus::RectF tab((float)cw - M - tabW, tabY, tabW, tabH);
             Gdiplus::RectF words(tab.X, tab.Y - scaleF(2), tab.Width - (ready > 0 ? scaleF(12) : 0.0f), tab.Height);
+            Gdiplus::RectF stockTab(tab.X-scaleF(132),tabY,scaleF(124),tabH);
+            g.DrawString(L"Collected stock",-1,&tabFont,stockTab,&centred,refineryStockView_?&goodBrush:&dimBrush);refHits_.push_back({stockTab,11,0});
             g.DrawString(label.c_str(), -1, &tabFont, words, &centred,
                          (refineryOrdersView_ || isHot(hoverRef_, tab)) ? &textBrush : &dimBrush);
             if (ready > 0) {
@@ -19133,7 +19138,7 @@ void MinerGUI::paintRefinery(HDC hdc) {
         };
 
         // ---- left: the hold -------------------------------------------------
-        g.DrawString(L"IN THE HOLD", -1, &smallFont, Gdiplus::PointF(M, listTop), &faintBrush);
+        g.DrawString(L"INPUT ORE · ENTER SCU", -1, &smallFont, Gdiplus::PointF(M, listTop), &faintBrush);
         if (!refineryPicked_.empty()) {
             Gdiplus::RectF clear(M + leftW - scaleF(50), listTop - scaleF(4), scaleF(50), scaleF(20));
             drawButton(g, clear, L"Clear", buttonFont, ButtonKind::Ghost, isHot(hoverRef_, clear),
@@ -19251,6 +19256,8 @@ void MinerGUI::paintRefinery(HDC hdc) {
             int station;
             float yieldScu, cost, seconds;
             bool complete;   // every factor known, nothing assumed
+            std::wstring breakdown;
+            float benefit=0;
         };
         std::vector<Row> rows;
         for (int s = 0; s < REFINERY_COUNT; s++) {
@@ -19260,6 +19267,9 @@ void MinerGUI::paintRefinery(HDC hdc) {
             for (int m : refineryPicked_) {
                 const float cscu = refineryAmountOf(m) * CSCU_PER_SCU;
                 const RefiningResult r = refine(cscu, s, m, refineryMethod_);
+                std::wstringstream part;part<<toW(shortName(REFINERY_MATERIALS[m]))<<L" "<<std::fixed<<std::setprecision(2)<<r.yield/CSCU_PER_SCU<<L" SCU";
+                if(!row.breakdown.empty())row.breakdown+=L"  ·  ";row.breakdown+=part.str();
+                int bonus=refineryYield(s,m);if(bonus!=REFINERY_NONE)row.benefit+=refineryAmountOf(m)*bonus;
                 row.yieldScu += r.yield / CSCU_PER_SCU;
                 row.cost += r.cost;
                 // A work order runs its materials one after another
@@ -19273,15 +19283,18 @@ void MinerGUI::paintRefinery(HDC hdc) {
         // empty hold would only invent an order.
         if (!refineryPicked_.empty()) {
             std::stable_sort(rows.begin(), rows.end(), [](const Row& a, const Row& b) {
+                auto tier=[](float v){return v>0.0001f?2:v<-.0001f?0:1;};if(tier(a.benefit)!=tier(b.benefit))return tier(a.benefit)>tier(b.benefit);
                 if (std::abs(a.yieldScu - b.yieldScu) > 0.0005f) return a.yieldScu > b.yieldScu;
                 return a.cost < b.cost;   // same yield, cheaper wins
             });
         }
 
         float ry = listTop + scaleF(22);
-        const float srowH = scaleF(30);
+        float srowH=scaleF(refineryPicked_.empty()?30:68);
+        if(!refineryPicked_.empty())for(const auto& row:rows){Gdiplus::RectF measured;g.MeasureString(row.breakdown.c_str(),-1,&subFont,Gdiplus::RectF(0,0,rw,scaleF(1000)),&measured);srowH=std::max(srowH,scaleF(38)+measured.Height);}
         const int fit = (std::max)(0, (int)(((float)ch - scaleF(58) - ry) / srowH));
-        const int shown = (std::min)(fit, (int)rows.size());
+        refineryStationOffset_=std::clamp(refineryStationOffset_,0,std::max(0,int(rows.size())-fit));
+        const int shown = (std::min)(fit, (int)rows.size()-refineryStationOffset_);
         const bool more = (int)rows.size() > shown;
         {
             const float cardTop = listTop - scaleF(12);
@@ -19293,7 +19306,7 @@ void MinerGUI::paintRefinery(HDC hdc) {
         }
 
         g.DrawString(refineryPicked_.empty() ? L"WHAT EACH STATION IS GOOD AT"
-                                             : L"WHAT THE HOLD COMES TO",
+                                             : L"ESTIMATED REFINED OUTPUT",
                      -1, &smallFont, Gdiplus::PointF(rx, listTop), &faintBrush);
         std::wstring scope = (refinerySystem_ == "ALL") ? L"all systems" : toW(refinerySystem_);
         scope += L"  ·  " + std::to_wstring((int)rows.size()) + L" stations";
@@ -19301,7 +19314,7 @@ void MinerGUI::paintRefinery(HDC hdc) {
         g.DrawString(scope.c_str(), -1, &subFont, scopeRect, &rightAlign, &faintBrush);
 
         for (int i = 0; i < shown; i++) {
-            const Row& row = rows[i];
+            const Row& row = rows[i+refineryStationOffset_];
             const Refinery& st = REFINERIES[row.station];
             Gdiplus::RectF band(rx - scaleF(8), ry, rw + scaleF(16), srowH);
             // The station the hold does best at is the answer the window is
@@ -19310,7 +19323,8 @@ void MinerGUI::paintRefinery(HDC hdc) {
             if (isHot(hoverRef_, band)) fillRoundRect(g, band, scaleF(R_CONTROL), COL_HOVER);
             else if (winner) fillRoundRect(g, band, scaleF(R_CONTROL), tint(COL_ACCENT, 16));
 
-            g.DrawString(toW(st.name).c_str(), -1, &stationFont, Gdiplus::PointF(rx, ry + scaleF(1)), &textBrush);
+            Gdiplus::SolidBrush yieldBrush(refineryPicked_.empty()?COL_TEXT:row.benefit>0.0001f?COL_GREEN:row.benefit<-.0001f?COL_RED:COL_TEXT);
+            g.DrawString(toW(st.name).c_str(), -1, &stationFont, Gdiplus::PointF(rx, ry + scaleF(1)), &yieldBrush);
             // ...and beside it its workload as last seen, by the player or by
             // other players: what the game's surcharge goes by
             const auto seen = refineryWorkloads_.find(st.name);
@@ -19362,7 +19376,7 @@ void MinerGUI::paintRefinery(HDC hdc) {
             } else {
                 // The bill and the wait. The yield itself is the big figure
                 // on the right, because that is what the choice is about.
-                sub = money(row.cost) + L" aUEC   ·   " + duration(row.seconds);
+                sub = row.complete?money(row.cost) + L" aUEC   ·   " + duration(row.seconds):L"Cost / duration unavailable";
                 if (!row.complete) {
                     // Eight of the twenty refineries have a published yield
                     // and nothing else. Saying so beats printing a cost that
@@ -19371,6 +19385,7 @@ void MinerGUI::paintRefinery(HDC hdc) {
                 }
             }
             g.DrawString(sub.c_str(), -1, &subFont, Gdiplus::PointF(rx, ry + scaleF(16)), &dimBrush);
+            if(!row.breakdown.empty())g.DrawString(row.breakdown.c_str(),-1,&subFont,Gdiplus::RectF(rx,ry+scaleF(34),rw,srowH-scaleF(36)),nullptr,&textBrush);
             if (refinerySystem_ == "ALL") {
                 Gdiplus::RectF sys(rx, ry + scaleF(16), rw - scaleF(2), scaleF(14));
                 g.DrawString(toW(st.system).c_str(), -1, &subFont, sys, &rightAlign, &faintBrush);
@@ -19381,13 +19396,13 @@ void MinerGUI::paintRefinery(HDC hdc) {
                 out << std::fixed << std::setprecision(row.yieldScu < 10.0f ? 2 : 1)
                     << row.yieldScu << L" SCU";
                 Gdiplus::RectF at(rx, ry + scaleF(1), rw, srowH);
-                Gdiplus::SolidBrush best(i == 0 ? COL_ACCENT : COL_TEXT);
+                Gdiplus::SolidBrush best(row.benefit>0.0001f?COL_GREEN:row.benefit<-.0001f?COL_RED:COL_TEXT);
                 g.DrawString(out.str().c_str(), -1, &totalFont, at, &rightAlign, &best);
             }
             ry += srowH;
         }
         if (more) {
-            std::wstring moreText = L"+" + std::to_wstring((int)rows.size() - shown) + L" more";
+            std::wstring moreText=L"Stations "+std::to_wstring(refineryStationOffset_+1)+L"–"+std::to_wstring(refineryStationOffset_+shown)+L" / "+std::to_wstring(rows.size())+L" · scroll for more";
             Gdiplus::RectF r(rx, ry, rw, scaleF(12));
             g.DrawString(moreText.c_str(), -1, &subFont, r, &rightAlign, &faintBrush);
         }
@@ -19405,13 +19420,15 @@ void MinerGUI::paintRefinery(HDC hdc) {
         Gdiplus::RectF fr(M, fy, (float)cw - 2 * M, scaleF(16));
         g.DrawString(L"game data 4.10", -1, &subFont, fr, &rightAlign, &faintBrush);
 
+        const Gdiplus::RectF help(M+scaleF(304),scaleF(13),scaleF(20),scaleF(20));
+        Gdiplus::Pen infoPen(COL_TEXT_DIM);g.DrawEllipse(&infoPen,help);g.DrawString(L"i",-1,&subFont,help,&centred,&dimBrush);
         // The work orders' view takes everything under the tabs: the
         // calculator is drawn and then covered, its places to click with it
         if (refineryOrdersView_) {
             const float top = tabY + tabH + scaleF(1);
             g.FillRectangle(&bgBrush, 0.0f, top, (float)cw, (float)ch - top);
             refHits_.erase(std::remove_if(refHits_.begin(), refHits_.end(),
-                                          [](const RefHit& h) { return h.kind != 1 && h.kind != 8 && h.kind != 10; }),
+                                          [](const RefHit& h) { return h.kind != 1 && h.kind != 8 && h.kind != 10 && h.kind != 11; }),
                            refHits_.end());
             paintRefineryOrders(g, cw, ch, top);
         }
@@ -19422,6 +19439,11 @@ void MinerGUI::paintRefinery(HDC hdc) {
         // its top edge, the way the sheets have it, so it reads as lying on
         // top. Its hits go in last, and the click handler looks at them
         // first for as long as the list is down.
+        if(isHot(hover,help)){
+            Gdiplus::RectF tip(M,scaleF(52),std::min(scaleF(680),float(cw)-2*M),scaleF(78));
+            fillRoundRect(g,tip,scaleF(8),COL_CARD);strokeRoundRect(g,tip,scaleF(8),COL_BORDER);
+            g.DrawString(L"Yield planner: forecasts from the SCU you enter, not stored ore. Green = station bonus; white = neutral; red = penalty. Actual terminal jobs are in Work orders. Confirmed collections are kept in Collected stock.",-1,&stationFont,Gdiplus::RectF(tip.X+scaleF(12),tip.Y+scaleF(10),tip.Width-scaleF(24),tip.Height-scaleF(16)),nullptr,&textBrush);
+        }
         hoverRef_ = hover;
         if (refineryMethodOpen_) {
             const float rowH = scaleF(26), pad = scaleF(6);

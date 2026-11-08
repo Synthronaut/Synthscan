@@ -34,6 +34,7 @@ def migrate(data_dir,root=ROOT):
     return report
 
 def library_export(destination,game=None,catalog=None,extra_rows=()):
+    from directory_audit import display_name,validate
     from crafting_catalog import get_catalog
     from game_library import get_game_library
     from item_directory import source_lines,is_component
@@ -55,11 +56,14 @@ def library_export(destination,game=None,catalog=None,extra_rows=()):
                 unlock_source=bp.get('unlock_source','Older bundled reference')))
         return result
     for blueprint in c.items:
+        if not display_name(blueprint.get('name')):continue
         if blueprint.get('item_id'):by_item.setdefault(blueprint['item_id'],[]).append(blueprint)
         for slot in blueprint['slots']:material_uses.setdefault(slot['material'],set()).add(blueprint['name'])
     rows=[]
+    public_blueprints=[b for b in c.items if display_name(b.get('name'))]
+    excluded=[dict(id=b.get('id'),reason='Unresolved blueprint display name',native_tag=b.get('native_tag','')) for b in c.items if not display_name(b.get('name'))]
     for e in g.entries:
-        if e.get('internal'):continue
+        if e.get('internal') or not display_name(e.get('name')):continue
         icon=g.image_path(e)
         linked=by_item.get(e['id'],[])
         details=f"{e['name']}\n{e['category']} · {e['type']}\n\nCRAFTING & BLUEPRINTS\n"
@@ -73,9 +77,10 @@ def library_export(destination,game=None,catalog=None,extra_rows=()):
             uses=sorted(material_uses.get(e['name'],[]))
             details+='\n\nUsed to craft:\n'+'\n'.join(uses)
         rows.append(dict(id=e['id'],item_id=e['id'] if e['kind']=='Item' else '',name=e['name'],kind='Component' if is_component(e) else e['kind'],category=e['category'],detail=details+catalog_label,icon=str(icon) if icon else '',
-                         finder_blueprints=finder_blueprints(linked),
+                         finder_blueprints=finder_blueprints(linked),item_type=e.get('type',''),item_record=e.get('record',''),weapon_stats=e.get('weapon_stats',{}),
                          search=' '.join([e['name'],e['category'],e['type'],e.get('manufacturer',''),*[m.get(k,'') for b in linked for m in c.sources(b) for k in ('title','faction','system')]])))
-    for b in c.items:
+    game_by_id={e['id']:e for e in g.entries}
+    for b in public_blueprints:
         details=f"{b['name']}\n{b['category']} · {b['type']} · Size {b.get('size','?')} · Grade {b.get('grade','?')}\n\nBLUEPRINT UNLOCK SOURCES\n"
         details+='\n'.join(source_lines(b,c,briefings=True))+'\n'
         details+=f"\nCRAFTING RECIPE\nCraft time: {b['seconds']:g} seconds\nRecipe: {b.get('recipe_source','Reference table')}\n"
@@ -88,11 +93,13 @@ def library_export(destination,game=None,catalog=None,extra_rows=()):
         details+='\nDESCRIPTION\n'+b.get('description','')+'\n'
         image=g.image_path(g.resolve(b.get('item_id','')))
         rows.append(dict(id=b['id'],item_id=b.get('item_id',''),name=b['name'],kind='Blueprint',category=b['category'],detail=details+catalog_label,icon=str(image) if image else '',
-                         finder_blueprints=finder_blueprints([b]),
+                         finder_blueprints=finder_blueprints([b]),weapon_stats=game_by_id.get(b.get('item_id'),{}).get('weapon_stats',{}),
                          search=c.search_text.get(b['id'],b['name'])))
-    rows.extend(extra_rows)
+    for row in extra_rows:
+        if display_name(row.get('name')):rows.append(row)
+        else:excluded.append(dict(id=row.get('id'),reason='Unresolved external display name'))
     rows.sort(key=lambda e:(e['name'].casefold(),e['id']))
-    atomic_json(destination,dict(schema=2,build=g.data['provenance'].get('build'),rows=rows))
+    atomic_json(destination,dict(schema=2,build=g.data['provenance'].get('build'),rows=rows,audit=validate(rows),excluded_records=excluded))
     return len(rows)
 
 def plan_rows(targets,system='All',family='Ship'):

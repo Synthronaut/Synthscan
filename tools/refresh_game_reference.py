@@ -60,7 +60,7 @@ def main():
     records, localizations = work/'records', work/'localization'
     log = []
     try:
-        filters = ['**/{crafting,mining,resourcetypedatabase,entities/scitem,scitemmanufacturer}/**',
+        filters = ['**/{crafting,mining,resourcetypedatabase,entities/scitem,scitemmanufacturer,ammoparams}/**',
                    '**/{harvestable,entities/mineable,entities/ui}/**',
                    '**/{reputation,factions,missionbroker,missiondata,characternamedata,contracts,reputationvaluesettings,sreputationglobalcontextbbparams,journalentry,lawsystem}/**']
         for pattern in filters:

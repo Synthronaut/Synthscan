@@ -223,6 +223,8 @@ def build_workspace(destination):
     try:
         library_export(temporary, game=game, catalog=crafting,extra_rows=vehicles.get('rows',[]))
         value=enrich_directory(json.loads(temporary.read_text(encoding='utf-8')),directory_rows(Path(destination).parent),crafting.data.get('material_qualities') or bundled())
+        from directory_audit import validate
+        value['audit']=validate(value['rows'])
         if not publish_json(destination,value):raise OSError('Could not publish item directory')
     finally:temporary.unlink(missing_ok=True)
     return dict(schema=1, revision=hashlib.sha256(Path(destination).read_bytes()).hexdigest(),

@@ -35,6 +35,7 @@ struct RefineryOrder {
     long long seen = 0;          // ...when a terminal last showed it
     long long completed = 0;     // ...when a terminal showed it COMPLETED; 0 not yet
     long long handed = 0;        // ...when it went to the UEX report (Application); 0 not yet
+    long long collected = 0;     // confirmed collection, retained as a stock receipt
     int missing = 0;             // looks since "WORK ORDER DELIVERED" that did not show it (not saved)
     int yieldTotal() const;      // cSCU
     // All a report to UEX needs: the method, the bill, the time, when it was
@@ -73,6 +74,8 @@ public:
     std::vector<std::string> takeNotes();
     // Collected, or not wanted in the list any more
     bool remove(size_t index);
+    bool collect(size_t index,long long when);
+    const std::vector<RefineryOrder>& collections() const { return collections_; }
     // Gone to the UEX report: not again
     bool markHanded(size_t index, long long when);
     // Whether an order is done by now: only then is "WORK ORDER DELIVERED"
@@ -94,6 +97,7 @@ public:
 
 private:
     std::vector<RefineryOrder> orders_;
+    std::vector<RefineryOrder> collections_;
     // The reading before, which the next has to agree with
     RefineryScreen last_;
     std::string lastStation_;

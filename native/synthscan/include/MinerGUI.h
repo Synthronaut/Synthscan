@@ -128,6 +128,7 @@ public:
     // soonest done first, for the Refinery window's own view of them; and
     // who is told when one is ticked off as collected
     void setRefineryOrders(std::vector<RefineryOrder> orders);
+    void setRefineryCollections(std::vector<RefineryOrder> orders){refineryCollections_=std::move(orders);if(refinery_)InvalidateRect(refinery_,nullptr,FALSE);}
     void setRefineryOrderDoneCallback(std::function<void(const RefineryOrder&)> done) {
         onRefineryOrderDone_ = std::move(done);
     }
@@ -1311,6 +1312,9 @@ private:
     // The work orders' view, under the tabs where the calculator otherwise is
     std::vector<RefineryOrder> refineryOrders_;
     bool refineryOrdersView_ = false;
+    bool refineryStockView_=false;
+    int refineryStationOffset_=0;
+    std::vector<RefineryOrder> refineryCollections_;
     std::function<void(const RefineryOrder&)> onRefineryOrderDone_;
     void paintRefineryOrders(Gdiplus::Graphics& g, int cw, int ch, float top);
     // The finished ones, shown as a badge on the main window's Refinery

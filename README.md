@@ -16,6 +16,32 @@ the first verified balance read in that run. Missed history is not reconstructed
 from configured rewards. **Live on/off** controls automatic mining screen reading;
 the other background tools continue to work.
 
+Finder expands with the desktop: wide windows put results beside purchase details;
+narrower windows stack them. Inline item icons preserve the existing type/category
+labels. Click a result-column header to sort ascending or descending. Different
+shop prices use green for the lowest listed price and red for higher prices;
+equal prices stay neutral. Ship-weapon detail cards show available stock direct-hit
+alpha, nominal RPM, calculated full-rate burst DPS, projectile speed, and
+separate distortion damage. Unsupported firing models show unavailable values.
+These are game-file base values, not sustained damage or crafted-item bonuses.
+Directory publication validates display names, unique row IDs, categories, and
+linked recipe quantities; unresolved unnamed recipes remain diagnostic records
+and are excluded from search. Updating an older extractor triggers a background
+reference rebuild while the game is closed.
+
+The **Refinery** page starts with a yield planner, not stored ore. Enter each raw
+material's SCU to compare estimated total output and the material breakdown at
+each station. Green/white/red indicate positive/neutral/negative station yield
+bonuses. **Work orders** contains orders read from the game terminal; **Collected
+stock** retains confirmed collection receipts with quantities and qualities.
+These receipts record output collected, not a continuously reconciled cargo
+inventory after subsequent sales or transfers. Estimated completion alone never
+adds stock. Terminal OCR runs in every HUD mode while the game is being viewed.
+
+Automatic HUD display requires the game window; the launcher alone does not show
+it. Explicit HUD buttons or the tray's Show HUD action can preview it without the
+game. That preview lasts for this app run and ends when an observed game closes.
+
 Confirmed refinery-completion notifications are retained in a small Mining HUD
 line and on Home until dismissed. This records the game's notice; it does not
 claim that the ore is still uncollected. Reading a terminal remains necessary

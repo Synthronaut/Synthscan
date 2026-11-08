@@ -6,6 +6,9 @@
 #include "SynthHome.h"
 #include "SynthPages.h"
 #include "SynthDirectoryCard.h"
+#include "FinderLayout.h"
+#include "SynthItemIcons.h"
+#include "HudVisibility.h"
 #include "SynthMenu.h"
 #include "SynthJson.h"
 #include "SynthDiaryUI.h"
@@ -42,12 +45,15 @@ HFONT font=nullptr,titleFont=nullptr;
 HBRUSH background=nullptr,card=nullptr;
 bool isAutomatic=false,testing=false,attached=false,hudVisible=true,scanOnLaunch=true,showSession=true,hotkeyOK=false,snareAlerts=true,hangars=false,finder=false;
 bool pirateDetails=false,quest=false,pirate=false,miningResume=true,placementLocked=false,activityExpanded=true;
+bool manualHudPreview=false;
 std::string activityCommandId;
 std::string directoryRowId,directoryItemId,directoryRequestId,directoryText,libraryRevision,libraryLoadingRevision,relatedItemId;
 std::future<Json> libraryJob;
 int currentTab=0,hotkeyChoice=0,selected=-1;
 Json state,settings,library;std::vector<Json> visible;
 Json directoryShops;
+HIMAGELIST directoryIcons=nullptr;
+int directorySortColumn=-1;bool directorySortDescending=false;
 std::set<std::string> favorites;
 std::unique_ptr<Gdiplus::Bitmap> icon,hangarImage;
 std::string lastState,summary="Session service starting",note;
@@ -130,8 +136,9 @@ void applyHotkey(){
     hotkeyOK=false;
 }
 
-void showHud(bool value){if(!value)SynthFinder::sync(false);hudVisible=value;if(mining){if(value&&activityExpanded){ShowWindow(mining->windowHandle(),SW_SHOWNOACTIVATE);mining->keepOverlayAboveGame(true);}else mining->hide();}saveSettings();}
+void showHud(bool value){if(!value)SynthFinder::sync(false);manualHudPreview=value&&!SCMiner::ScreenCapture::gameWindow();hudVisible=value;if(mining){if(HudVisibility::shouldShow(value,activityExpanded,SCMiner::ScreenCapture::gameWindow()!=nullptr,manualHudPreview)){ShowWindow(mining->windowHandle(),SW_SHOWNOACTIVATE);mining->keepOverlayAboveGame(true);}else mining->hide();}saveSettings();}
 void setActivityExpanded(bool value){
+    if(value&&!SCMiner::ScreenCapture::gameWindow())manualHudPreview=true;
     activityExpanded=value;if(!value)SynthFinder::sync(false);
     if(mining){if(value&&hudVisible){if(!mining->isOverlayMode()){auto window=mining->windowHandle();bool hadNoActivate=(GetWindowLongPtrW(window,GWL_EXSTYLE)&WS_EX_NOACTIVATE)!=0;SetWindowLongPtrW(window,GWL_EXSTYLE,GetWindowLongPtrW(window,GWL_EXSTYLE)|WS_EX_NOACTIVATE);mining->toggleOverlayMode();if(!hadNoActivate)SetWindowLongPtrW(window,GWL_EXSTYLE,GetWindowLongPtrW(window,GWL_EXSTYLE)&~WS_EX_NOACTIVATE);}ShowWindow(mining->windowHandle(),SW_SHOWNOACTIVATE);mining->keepOverlayAboveGame(true);}else mining->hide();}
     saveSettings();
@@ -194,7 +201,13 @@ HWND control(const wchar_t* cls,const wchar_t* label,DWORD style,int x,int y,int
 }
 void addRow(const Json& row){
     int index=int(visible.size());visible.push_back(row);
-    auto name=wide(row.textOr("name"));LVITEMW item{};item.mask=LVIF_TEXT;item.iItem=index;item.pszText=name.data();ListView_InsertItem(listing,&item);
+    auto name=wide(row.textOr("name"));LVITEMW item{};item.mask=LVIF_TEXT;item.iItem=index;item.pszText=name.data();
+    if(currentTab==0){
+        auto type=row.textOr("item_type");
+        if(type.empty()){auto notes=row.textOr("detail");auto first=notes.find('\n');if(first!=std::string::npos){auto line=notes.substr(first+1,notes.find('\n',first+1)-first-1);auto separator=line.find(" · ");if(separator!=std::string::npos)type=line.substr(separator+4);}}
+        item.mask|=LVIF_IMAGE;item.iImage=int(FinderItems::classify(row.textOr("kind"),row.textOr("category"),type,row.textOr("name"),row.textOr("item_record")));
+    }
+    ListView_InsertItem(listing,&item);
     auto k=wide(row.textOr("kind")),c=wide(row.textOr("category"));ListView_SetItemText(listing,index,1,k.data());ListView_SetItemText(listing,index,2,c.data());
     if(currentTab==2){const char* keys[]={"joined_local","left_local","kind","shard_id","name","duration","visit"};for(int col=0;col<7;col++){auto value=wide(row.textOr(keys[col]));ListView_SetItemText(listing,index,col,value.data());}}
 }
@@ -204,13 +217,15 @@ void listRows(){
     SendMessageW(listing,WM_SETREDRAW,FALSE,0);ListView_DeleteAllItems(listing);visible.clear();selected=-1;icon.reset();
     std::wstring query=lower(text(search)),type=text(kind),cat=text(category);
     size_t matched=0;
+    std::vector<const Json*> candidates;
     auto append=[&](const Json& row){
+        if(currentTab==0){auto name=wide(row.textOr("name"));if(name.empty()||std::all_of(name.begin(),name.end(),[](wchar_t c){return std::iswspace(c)!=0;}))return;}
         if(currentTab==0&&!relatedItemId.empty()&&row.textOr("item_id")!=relatedItemId)return;
         if(!query.empty()&&relatedItemId.empty()){auto hay=lower(wide(row.textOr("search",row.textOr("name")+" "+row.textOr("detail"))));std::wistringstream terms(query);std::wstring term;while(terms>>term)if(hay.find(term)==std::wstring::npos)return;}
         if(currentTab==0&&type==L"Favorites"&&!favorites.count(row.textOr("id")))return;
         if(currentTab==0&&type!=L"All"&&type!=L"Favorites"&&wide(row.textOr("kind"))!=type&&!(type==L"Item"&&row.textOr("kind")=="Component"))return;
         if(currentTab==0&&cat!=L"All categories"&&wide(row.textOr("category"))!=cat)return;
-        ++matched;if(currentTab!=0||visible.size()<300)addRow(row);
+        ++matched;if(currentTab==0)candidates.push_back(&row);else addRow(row);
     };
     if(currentTab==0)for(auto& row:field(library,"rows").items)append(row);
     if(currentTab==1)for(auto& row:field(state,"plans").items)append(row);
@@ -222,6 +237,16 @@ void listRows(){
         for(auto& item:inbox.members)append(obj({{"id",str(item.first)},{"name",str(item.second.textOr("name"))},{"kind",str("Screen observation")},{"category",str("Unconfirmed")},{"detail",str(encode(item.second))}}));
         Json inv=read(data/L"legacy/inventory.json");
         for(auto& item:field(inv,"totals").members)append(obj({{"id",str(item.first)},{"name",str(item.first)},{"kind",str("Legacy cargo")},{"category",str("Imported snapshot")},{"detail",str("Preserved legacy inventory total: "+encode(item.second)+" SCU. This is a saved record, not a current cargo scan.\n\n"+encode(inv))}}));
+    }
+    if(currentTab==0){
+        if(directorySortColumn>=0){
+            struct Entry {const Json* row;std::wstring key,name;};std::vector<Entry> ordered;
+            const char* key=directorySortColumn==0?"name":directorySortColumn==1?"kind":"category";
+            for(auto row:candidates)ordered.push_back({row,lower(wide(row->textOr(key))),lower(wide(row->textOr("name")))});
+            std::stable_sort(ordered.begin(),ordered.end(),[](const Entry& a,const Entry& b){if(a.key!=b.key)return directorySortDescending?a.key>b.key:a.key<b.key;if(a.name!=b.name)return a.name<b.name;return a.row->textOr("id")<b.row->textOr("id");});
+            candidates.clear();for(auto& entry:ordered)candidates.push_back(entry.row);
+        }
+        for(size_t i=0;i<std::min(size_t(300),candidates.size());++i)addRow(*candidates[i]);
     }
     SendMessageW(listing,WM_SETREDRAW,TRUE,0);InvalidateRect(listing,nullptr,TRUE);
     if(!visible.empty()){
@@ -264,14 +289,33 @@ LRESULT CALLBACK headerPaint(HWND hwnd,UINT message,WPARAM w,LPARAM l,UINT_PTR,D
     if(message==WM_PAINT||message==WM_PRINTCLIENT){
         PAINTSTRUCT ps{};HDC dc=message==WM_PAINT?BeginPaint(hwnd,&ps):reinterpret_cast<HDC>(w);
         RECT rc;GetClientRect(hwnd,&rc);FillRect(dc,&rc,card);SetBkMode(dc,TRANSPARENT);SetTextColor(dc,MUTED);SelectObject(dc,font);
-        for(int i=0;i<Header_GetItemCount(hwnd);i++){RECT cell;Header_GetItemRect(hwnd,i,&cell);wchar_t label[200]{};HDITEMW item{};item.mask=HDI_TEXT;item.pszText=label;item.cchTextMax=200;Header_GetItem(hwnd,i,&item);cell.left+=px(8);DrawTextW(dc,label,-1,&cell,DT_SINGLELINE|DT_VCENTER|DT_NOPREFIX);}
+        for(int i=0;i<Header_GetItemCount(hwnd);i++){
+            RECT cell;Header_GetItemRect(hwnd,i,&cell);wchar_t label[200]{};HDITEMW item{};item.mask=HDI_TEXT;item.pszText=label;item.cchTextMax=200;Header_GetItem(hwnd,i,&item);
+            int x=cell.right-px(13),y=(cell.top+cell.bottom)/2;cell.left+=px(8);if(currentTab==0)cell.right-=px(24);DrawTextW(dc,label,-1,&cell,DT_SINGLELINE|DT_VCENTER|DT_NOPREFIX|DT_END_ELLIPSIS);
+            if(currentTab==0){HPEN pen=CreatePen(PS_SOLID,px(1),i==directorySortColumn?GOLD:MUTED);auto old=SelectObject(dc,pen);
+                auto arrow=[&](int cy,bool down){MoveToEx(dc,x-px(4),cy+(down?-px(2):px(2)),nullptr);LineTo(dc,x,cy+(down?px(2):-px(2)));LineTo(dc,x+px(4),cy+(down?-px(2):px(2)));};
+                if(i==directorySortColumn)arrow(y,directorySortDescending);else{arrow(y-px(4),false);arrow(y+px(4),true);}SelectObject(dc,old);DeleteObject(pen);
+            }
+        }
         if(message==WM_PAINT)EndPaint(hwnd,&ps);return 0;
     }
     return DefSubclassProc(hwnd,message,w,l);
 }
+void layoutDirectory(){
+    if(currentTab!=0||!panel||!listing||!detail||!search||!kind||!category)return;
+    RECT rect{};GetClientRect(panel,&rect);float scale=GetDpiForWindow(panel)/96.f;
+    auto layout=FinderLayout::calculate(int(rect.right/scale),int(rect.bottom/scale));
+    auto move=[&](HWND child,const FinderLayout::Box& box){MoveWindow(child,int(box.x*scale),int(box.y*scale),int(box.width*scale),int(box.height*scale),TRUE);};
+    move(search,layout.query);move(kind,layout.type);move(category,layout.category);move(listing,layout.results);move(detail,layout.details);
+    int available=int(layout.results.width*scale)-GetSystemMetrics(SM_CXVSCROLL);
+    ListView_SetColumnWidth(listing,0,available*54/100);ListView_SetColumnWidth(listing,1,available*18/100);ListView_SetColumnWidth(listing,2,available*28/100);
+    const int actions[]={210,211,228};for(int i=0;i<3;++i)move(GetDlgItem(panel,actions[i]),{20+i*208,layout.actions,i==2?240:196,32});
+    move(status,{20,layout.footer,int(rect.right/scale)-40,22});
+}
 void rebuild(int tab){
     currentTab=tab;selected=-1;icon.reset();relatedItemId.clear();
     HWND child=GetWindow(panel,GW_CHILD);while(child){HWND next=GetWindow(child,GW_HWNDNEXT);DestroyWindow(child);child=next;}
+    if(directoryIcons){ImageList_Destroy(directoryIcons);directoryIcons=nullptr;}
     listing=detail=search=kind=category=nullptr;
     const wchar_t* names[]={L"Item directory",L"Material picker",L"Server log",L"Review & imports",L"Startup & HUD"};
     for(int i=0;i<5;i++)control(L"BUTTON",names[i],BS_PUSHBUTTON,18+i*168,62,160,30,100+i);
@@ -338,7 +382,8 @@ void rebuild(int tab){
         SendMessageW(category,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(L"All categories"));
     }
     SendMessageW(kind,CB_SETCURSEL,0,0);if(tab!=2)SendMessageW(category,CB_SETCURSEL,0,0);else{const auto& f=field(field(state,"session_log"),"filters");SetWindowTextW(search,wide(f.textOr("query")).c_str());SetWindowTextW(category,wide(f.textOr("date_from")).c_str());SetDlgItemTextW(panel,221,wide(f.textOr("date_to")).c_str());auto region=wide(f.textOr("region"));int found=int(SendMessageW(kind,CB_FINDSTRINGEXACT,-1,(LPARAM)region.c_str()));if(found>=0)SendMessageW(kind,CB_SETCURSEL,found,0);}
-    listing=control(WC_LISTVIEWW,L"",LVS_REPORT|LVS_SINGLESEL|LVS_SHOWSELALWAYS|WS_TABSTOP,20,155,820,tab==2?155:188,204);
+    listing=control(WC_LISTVIEWW,L"",LVS_REPORT|LVS_SINGLESEL|LVS_SHOWSELALWAYS|LVS_SHAREIMAGELISTS|WS_TABSTOP,20,155,820,tab==2?155:188,204);
+    if(tab==0){directoryIcons=SynthItemIcons::create(GetDpiForWindow(panel));ListView_SetImageList(listing,directoryIcons,LVSIL_SMALL);}
     ListView_SetExtendedListViewStyle(listing,LVS_EX_FULLROWSELECT|LVS_EX_DOUBLEBUFFER);ListView_SetBkColor(listing,CARD);ListView_SetTextBkColor(listing,CARD);ListView_SetTextColor(listing,TEXT);
     SetWindowSubclass(ListView_GetHeader(listing),headerPaint,1,0);
     const wchar_t* columns[]={L"Name",L"Type / weight",L"Category / region"};
@@ -360,7 +405,7 @@ void rebuild(int tab){
         control(L"BUTTON",L"Current shard cooldown (min)",BS_PUSHBUTTON,586,551,250,28,218);
     }
     if(tab==3){control(L"BUTTON",L"Confirm selected blueprint owned",BS_PUSHBUTTON,20,551,300,30,213);control(L"BUTTON",L"Scan fabricator screen",BS_PUSHBUTTON,340,551,250,30,214);}
-    listRows();
+    listRows();layoutDirectory();
 }
 void saveOptions(){
     scanOnLaunch=SendMessageW(scanCheck,BM_GETCHECK,0,0)==BST_CHECKED;
@@ -442,10 +487,12 @@ void handleAction(int id){
 }
 LRESULT CALLBACK panelProc(HWND hwnd,UINT message,WPARAM w,LPARAM l){
     switch(message){
+    case WM_SIZE:layoutDirectory();return 0;
     case WM_COMMAND:{int id=LOWORD(w),code=HIWORD(w);if((id==201&&code==EN_CHANGE)||(id==202&&code==CBN_SELCHANGE)||(id==203&&code==CBN_SELCHANGE)){relatedItemId.clear();if(currentTab==0||currentTab==2||currentTab==3)SetTimer(hwnd,2,180,nullptr);return 0;}handleAction(id);return 0;}
     case WM_TIMER:if(w==2){KillTimer(hwnd,2);listRows();}return 0;
     case WM_NOTIFY:{
         auto header=reinterpret_cast<NMHDR*>(l);
+        if(currentTab==0&&header->hwndFrom==listing&&header->code==LVN_COLUMNCLICK){auto column=reinterpret_cast<NMLISTVIEW*>(l)->iSubItem;if(column>=0&&column<3){directorySortDescending=column==directorySortColumn?!directorySortDescending:false;directorySortColumn=column;listRows();InvalidateRect(ListView_GetHeader(listing),nullptr,FALSE);}return 0;}
         if(header->hwndFrom==listing&&header->code==LVN_ITEMCHANGED)selection();
         if(header->hwndFrom==listing&&header->code==NM_CUSTOMDRAW){auto draw=reinterpret_cast<NMLVCUSTOMDRAW*>(l);if(draw->nmcd.dwDrawStage==CDDS_PREPAINT)return CDRF_NOTIFYITEMDRAW;if(draw->nmcd.dwDrawStage==CDDS_ITEMPREPAINT){bool chosen=(ListView_GetItemState(listing,int(draw->nmcd.dwItemSpec),LVIS_SELECTED)&LVIS_SELECTED)!=0;draw->clrText=TEXT;draw->clrTextBk=chosen?RGB(76,58,32):CARD;draw->nmcd.uItemState&=~CDIS_SELECTED;return CDRF_NEWFONT;}}
         return 0;
@@ -559,6 +606,12 @@ void pollItemDirectory(){
     }
 }
 void timer(){
+    static bool previousGame=false;bool game=SCMiner::ScreenCapture::gameWindow()!=nullptr;
+    if(previousGame&&!game)manualHudPreview=false;previousGame=game;
+    if(mining&&mining->isOverlayMode()){
+        bool wanted=HudVisibility::shouldShow(hudVisible,activityExpanded,game,manualHudPreview);
+        if(bool(IsWindowVisible(mining->windowHandle()))!=wanted)ShowWindow(mining->windowHandle(),wanted?SW_SHOWNOACTIVATE:SW_HIDE);
+    }
     if(panel&&IsWindowVisible(panel)&&currentTab==6)InvalidateRect(panel,nullptr,FALSE);
     if(panel&&IsWindowVisible(panel)&&currentTab==5){
         auto watcher=read(data/L"contract_share_status.json");
@@ -700,9 +753,9 @@ void attach(SCMiner::MinerGUI* gui,std::function<bool(const std::string&)> confi
     if(isAutomatic){
         gui->restoreOverlayPlacement();
         LONG_PTR style=GetWindowLongPtrW(gui->windowHandle(),GWL_EXSTYLE);SetWindowLongPtrW(gui->windowHandle(),GWL_EXSTYLE,style|WS_EX_NOACTIVATE);
-        if(!gui->isOverlayMode())gui->toggleOverlayMode();
+        if(!gui->isOverlayMode())gui->toggleOverlayMode(false);
         if((scanOnLaunch&&!pirate&&!quest&&!hangars&&!finder)!=(text(GetDlgItem(gui->windowHandle(),1002))==L"Live on"))SendMessageW(gui->windowHandle(),WM_COMMAND,MAKEWPARAM(1002,BN_CLICKED),0);
-        modeControls();ShowWindow(gui->windowHandle(),hudVisible&&activityExpanded?SW_SHOWNOACTIVATE:SW_HIDE);gui->updateClickThrough();gui->keepOverlayAboveGame(true);
+        modeControls();ShowWindow(gui->windowHandle(),HudVisibility::shouldShow(hudVisible,activityExpanded,SCMiner::ScreenCapture::gameWindow()!=nullptr,false)?SW_SHOWNOACTIVATE:SW_HIDE);gui->updateClickThrough();gui->keepOverlayAboveGame(true);
     }else if(!testing){desktop();}
 }
 void workspace(int tab){
@@ -852,7 +905,7 @@ void shutdown(){
     if(bridgeProcess){write(data/L"bridge_stop.json",obj({{"owner_pid",num(GetCurrentProcessId())}}));WaitForSingleObject(bridgeProcess,2000);}
     if(job)CloseHandle(job);job=nullptr;
     if(bridgeProcess)CloseHandle(bridgeProcess);if(controlProcess)CloseHandle(controlProcess);
-    if(panel)DestroyWindow(panel);panel=nullptr;if(host)DestroyWindow(host);host=nullptr;
+    if(panel)DestroyWindow(panel);panel=nullptr;if(directoryIcons)ImageList_Destroy(directoryIcons);directoryIcons=nullptr;if(host)DestroyWindow(host);host=nullptr;
     if(font)DeleteObject(font);if(titleFont)DeleteObject(titleFont);if(background)DeleteObject(background);if(card)DeleteObject(card);
     if(readyHandle)CloseHandle(readyHandle);if(showHandle)CloseHandle(showHandle);if(mutexHandle)CloseHandle(mutexHandle);
     readyHandle=showHandle=mutexHandle=nullptr;attached=false;mining=nullptr;

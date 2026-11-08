@@ -1,5 +1,6 @@
 #include "SynthDirectoryCard.h"
 #include "SynthJson.h"
+#include "FinderLayout.h"
 #include <gdiplus.h>
 #include <windowsx.h>
 #include <algorithm>
@@ -12,6 +13,7 @@ using namespace SynthScan;
 struct Model {Json item,shops;bool favorite=false;int scroll=0,total=0;};
 std::map<HWND,Model> models;
 const Gdiplus::Color BG(255,19,22,28),CARD(255,27,31,38),INK(255,237,240,244),MUTED(255,151,163,178),GOLD(255,238,178,70),LINE(255,48,56,68);
+const Gdiplus::Color GREEN(255,92,215,162),RED(255,245,127,130);
 void text(Gdiplus::Graphics& g,const std::string& value,float x,float y,float width,float height,float size,Gdiplus::Color color,bool bold=false){
     Gdiplus::Font font(L"Segoe UI",size,bold?Gdiplus::FontStyleBold:Gdiplus::FontStyleRegular,Gdiplus::UnitPixel);
     Gdiplus::SolidBrush brush(color);Gdiplus::StringFormat format;format.SetTrimming(Gdiplus::StringTrimmingEllipsisCharacter);
@@ -22,20 +24,38 @@ void rounded(Gdiplus::Graphics& g,float x,float y,float width,float height){
     Gdiplus::SolidBrush b(CARD);g.FillPath(&b,&p);Gdiplus::Pen pen(LINE);g.DrawPath(&pen,&p);
 }
 std::string price(double value){std::ostringstream out;out<<std::fixed<<std::setprecision(0)<<value;auto result=out.str();for(int at=int(result.size())-3;at>0;at-=3)result.insert(at,",");return result;}
+std::string statValue(const Json& mode,const char* key){auto value=mode.find(key);if(!value||value->kind!=Json::Kind::Number)return "—";std::ostringstream out;out<<std::fixed<<std::setprecision(2)<<value->number;auto s=out.str();while(!s.empty()&&s.back()=='0')s.pop_back();if(!s.empty()&&s.back()=='.')s.pop_back();return s;}
 void paint(HWND window){
     PAINTSTRUCT ps{};HDC dc=BeginPaint(window,&ps);RECT r{};GetClientRect(window,&r);auto& m=models[window];
     if(r.right>0&&r.bottom>0){
         Gdiplus::Bitmap bitmap(r.right,r.bottom,PixelFormat32bppPARGB);Gdiplus::Graphics g(&bitmap);g.Clear(BG);
-        float scale=GetDpiForWindow(window)/96.f;g.ScaleTransform(scale,scale);g.TranslateTransform(0,-float(m.scroll));g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);g.SetTextRenderingHint(Gdiplus::TextRenderingHintClearTypeGridFit);
+        float scale=GetDpiForWindow(window)/96.f;m.scroll=std::clamp(m.scroll,0,std::max(0,m.total-int(r.bottom/scale)));g.ScaleTransform(scale,scale);g.TranslateTransform(0,-float(m.scroll));g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);g.SetTextRenderingHint(Gdiplus::TextRenderingHintClearTypeGridFit);
         float width=r.right/scale,pad=16,y=12;
         if(m.item.textOr("name").empty())text(g,"Select an item to see prices and places to buy it.",pad,y,width-32,40,14,MUTED);
         else {
             text(g,m.item.textOr("name"),pad,y,width-200,30,21,INK,true);
             text(g,m.favorite?"FAVORITE  ·  "+m.item.textOr("kind"):m.item.textOr("kind"),width-180,y+5,164,22,11,GOLD,true);
-            text(g,"WHERE TO BUY",pad,y+35,200,20,10,MUTED,true);
-            text(g,"UEX CORP · IN-GAME SHOPS",width-228,y+35,212,20,10,MUTED);
-            y+=62;
+            y+=42;
+            const auto& stats=field(m.item,"weapon_stats");
+            if(!stats.textOr("status").empty()){
+                text(g,"STOCK SHIP WEAPON · GAME FILES",pad,y,width-32,20,10,MUTED,true);y+=24;
+                if(field(stats,"modes").items.empty()){text(g,"Statistics unavailable for this firing model.",pad,y,width-32,22,12,MUTED);y+=30;}
+                for(const auto& mode:field(stats,"modes").items){
+                    text(g,mode.textOr("name","Primary")+" · direct-hit values",pad,y,width-32,22,12,INK);y+=26;
+                    const char* labels[]={"HULL ALPHA / SHOT","BURST DPS · CALCULATED","FIRE RATE","PROJECTILE SPEED"};
+                    const char* keys[]={"alpha","burst_dps","rpm","projectile_speed"};const char* units[]={"physical + energy","damage / second","rounds / minute","meters / second"};
+                    int columns=width>=650?4:2;float tile=(width-32-(columns-1)*10)/columns;
+                    for(int i=0;i<4;++i){float x=pad+(i%columns)*(tile+10),top=y+(i/columns)*86;rounded(g,x,top,tile,76);text(g,labels[i],x+10,top+8,tile-20,16,9,MUTED,true);text(g,statValue(mode,keys[i]),x+10,top+25,tile-20,29,21,INK,true);text(g,units[i],x+10,top+55,tile-20,16,10,MUTED);}
+                    y+=columns==4?86:172;
+                    if(mode.numberOr("distortion_alpha")>0){text(g,"Distortion (separate): "+statValue(mode,"distortion_alpha")+" / shot · "+statValue(mode,"distortion_dps")+" DPS",pad,y,width-32,20,11,GOLD);y+=24;}
+                }
+                text(g,"Stock, full-rate burst · excludes spin-up, recharge, heat pauses, hit chance and crafted bonuses",pad,y,width-32,32,10,MUTED);y+=38;
+            }
+            text(g,"WHERE TO BUY",pad,y,200,20,10,MUTED,true);
+            text(g,"UEX CORP · IN-GAME SHOPS",width-228,y,212,20,10,MUTED);y+=26;
             const auto& rows=field(m.shops,"rows").items;
+            double lowest=0,highest=0;
+            for(const auto& row:rows){double value=row.numberOr("price");if(std::isfinite(value)&&value>0){if(!lowest||value<lowest)lowest=value;highest=std::max(highest,value);}}
             if(!m.item.textOr("item_id").empty()){
                 if(rows.empty()){
                     std::string message=flag(m.shops,"loading")?"Checking shop prices…":flag(m.shops,"error")?"Shop lookup unavailable. Retrying automatically.":"No retail listings reported for this item.";
@@ -47,9 +67,12 @@ void paint(HWND window){
                     Gdiplus::Pen pin(GOLD,1.7f);g.DrawEllipse(&pin,pad+16,y+19,12.f,12.f);g.DrawLine(&pin,pad+17,y+29,pad+22,y+38);g.DrawLine(&pin,pad+27,y+29,pad+22,y+38);
                     text(g,row.textOr("shop"),pad+42,y+10,width-306,25,16,INK,true);
                     text(g,row.textOr("place"),pad+42,y+37,width-306,22,12,MUTED);
-                    text(g,price(row.numberOr("price")),width-238,y+10,202,30,23,GOLD,true);
+                    auto deal=FinderLayout::compare(row.numberOr("price"),lowest,highest);
+                    auto color=deal==FinderLayout::Deal::Lowest?GREEN:deal==FinderLayout::Deal::Higher?RED:GOLD;
+                    text(g,price(row.numberOr("price")),width-238,y+10,202,30,23,color,true);
                     text(g,"aUEC / each",width-236,y+43,200,18,11,MUTED);
-                    text(g,row.textOr("reported_label")+"  ·  "+row.textOr("patch_label"),pad+42,y+64,width-100,18,10,flag(row,"different_patch")?GOLD:MUTED);
+                    if(deal!=FinderLayout::Deal::Neutral)text(g,deal==FinderLayout::Deal::Lowest?"LOWEST LISTED PRICE":"+"+price(row.numberOr("price")-lowest)+" vs lowest",width-236,y+64,200,18,10,color,true);
+                    text(g,row.textOr("reported_label")+"  ·  "+row.textOr("patch_label"),pad+42,y+64,width-306,18,10,flag(row,"different_patch")?GOLD:MUTED);
                     y+=98;
                 }
                 auto checked=m.shops.textOr("checked_label");
