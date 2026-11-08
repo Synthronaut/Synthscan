@@ -2192,6 +2192,13 @@ bool MinerGUI::processMessages() {
             return false;
         }
 
+        // RegisterHotKey targets the shell window. Deliver its event before
+        // dialog/navigation filters can consume it; the shell validates the
+        // binding, focus, recording state and repeat timing before acting.
+        if (msg.message == WM_HOTKEY) {
+            if (msg.hwnd) DispatchMessage(&msg);
+            continue;
+        }
         if(SynthScan::finderKey(msg.message,size_t(msg.wParam),msg.hwnd))continue;
         if(SynthHome::routeMessage(msg))continue;
         // Finder's owned window is not a dialog child of the mining HUD.
@@ -2200,7 +2207,6 @@ bool MinerGUI::processMessages() {
         if(SynthScan::finderOwnsInput(msg.hwnd)){TranslateMessage(&msg);DispatchMessage(&msg);continue;}
         // Buttons and menus own app actions. Escape and Alt+F4 must not
         // close an app window if it receives focus during play.
-        if (msg.message == WM_HOTKEY) continue;
         if ((msg.message == WM_KEYDOWN || msg.message == WM_SYSKEYDOWN) &&
             ((msg.wParam == VK_ESCAPE && !(loadoutOpen_ && craftedEditing_)) ||
              (msg.wParam == VK_F4 && msg.message == WM_SYSKEYDOWN))) continue;

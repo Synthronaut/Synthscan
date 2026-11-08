@@ -1,5 +1,8 @@
 ## Unreleased
 
+- Deliver registered HUD shortcuts through the native message loop instead of
+  discarding them before the shell handler receives the event.
+
 - Show generic shard identifiers only once in the server ribbon, regardless of
   capitalization. Keep saved names alongside numeric shard IDs in recent visits;
   do not invent a game-name mapping when the source supplies only a shard ID.
