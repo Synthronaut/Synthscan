@@ -33,10 +33,10 @@ def validate_fit(fit):
         if isinstance(slot,bool) or not isinstance(slot,int) or not 1<=slot<=ship['heads'] or slot in slots:
             raise ValueError('Choose a unique head position on this ship')
         slots.add(slot)
-        if laser['size']>ship['size'] or (ship.get('fixed_laser') and laser['id']!=ship['fixed_laser']):
+        if laser['size']!=ship['size'] or (ship.get('fixed_laser') and laser['id']!=ship['fixed_laser']):
             raise ValueError('That laser does not fit this ship')
-        if not ship.get('fixed_laser') and laser['id']=='drak_golem_s1':
-            raise ValueError('Pitman is built into the Golem')
+        if ship['id']!='golem' and laser['id']=='drak_golem_s1':
+            raise ValueError('Pitman is specific to the Golem')
         mods=head.get('modules',[])
         if not isinstance(mods,list) or len(mods)>laser['slots'] or any(m not in modules for m in mods):
             raise ValueError('Check the laser’s module slots')

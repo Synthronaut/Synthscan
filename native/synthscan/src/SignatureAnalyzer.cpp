@@ -152,8 +152,8 @@ std::vector<AnalysisResult> SignatureAnalyzer::analyzeSignature(int scannedSigna
 
     // In-game values are always exactly base x cluster size (each node/rock
     // carries a fixed signature; a cluster is a plain multiple). An exact hit
-    // therefore rules out fuzzy neighbors - those only serve as OCR-misread
-    // suggestions when no exact match is available in the selected system.
+    // therefore rules out fuzzy neighbors. A location reference is a hint and
+    // cannot turn an exact Ouratite 6740 into a nearby Riccite 6770.
     bool anyExact = false;
     bool anyExactInSystem = false;
     for (const auto& r : results) {
@@ -218,10 +218,6 @@ std::vector<AnalysisResult> SignatureAnalyzer::analyzeSignature(int scannedSigna
         std::vector<AnalysisResult> kept;
         for (const auto& r : results) {
             if (r.difference < 1.0) {
-                kept.push_back(r);
-            } else if (!anyExactInSystem && r.inSelectedSystem) {
-                // exact hit exists only outside the selected system - keep the
-                // in-system near-misses as "in case the OCR misread" options
                 kept.push_back(r);
             }
         }

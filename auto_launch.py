@@ -51,6 +51,12 @@ def install():
         "$link.WindowStyle = 7",
         "$link.Save()",
     ])
+    from installation import RELEASE,INSTALL_ROOT
+    if RELEASE:
+        # Stable bootstrap survives automatic version switches and rollback.
+        script=script.replace(f"$link.TargetPath = {literal(python_windowless())}",f"$link.TargetPath = {literal(str(INSTALL_ROOT/'SynthScan.exe'))}")
+        script=script.replace(f"$link.Arguments = {literal(subprocess.list2cmdline(['-B', str(ROOT / 'auto_launch.py'), '--watch']))}","$link.Arguments = '--watch'")
+        script=script.replace(f"$link.WorkingDirectory = {literal(ROOT)}",f"$link.WorkingDirectory = {literal(INSTALL_ROOT)}")
     subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
                    check=True, creationflags=subprocess.CREATE_NO_WINDOW, capture_output=True, text=True)
     if not instance_running("watcher"):

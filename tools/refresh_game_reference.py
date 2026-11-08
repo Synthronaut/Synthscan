@@ -19,6 +19,7 @@ from tools.export_local_blueprints import export as export_blueprints
 from tools.export_local_mining import export as export_mining
 from tools.export_game_library import export as export_library
 from installation import RELEASE, game_directory, output_root, reference_paths
+from reference_catalogs import publish_catalogues,catalogue_path
 
 
 def run(binary, args, log):
@@ -71,14 +72,29 @@ def main():
         global_ini = next(localizations.rglob('global.ini'))
         store = GameRecords(records, global_ini)
         base = json.loads((ROOT/'data/crafting_catalog.json').read_text(encoding='utf-8'))
+        # Preserve stable game identities learned on earlier refreshes. Never
+        # use an old recipe's ingredient amounts as the matching identity.
+        try:
+            previous=json.loads(catalogue_path(destination,'local_game_catalog.json').read_text(encoding='utf-8'))
+            identities={b['id']:b['native_id'] for b in previous['blueprints'] if b.get('native_id')}
+            for bp in base['blueprints']:
+                if bp['id'] in identities:bp['native_id']=identities[bp['id']]
+        except (OSError,ValueError,KeyError,TypeError):pass
         recipes = export_blueprints(store,base,manifest)
+        from material_qualities import export as export_qualities,lookup as quality_lookup
+        recipes['material_qualities']=export_qualities(store,manifest)
+        for material in recipes['materials']:
+            quality=quality_lookup(recipes['material_qualities'],material['name'])
+            if quality:material['quality_bands']=quality['values']
         mining = export_mining(store,manifest,ROOT/'data/mining_location_labels.csv')
         hashes = {str(p.relative_to(store.root)).replace('\\','/'):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(store.used)}
         recipes['native_provenance']['record_hashes'] = hashes
         mining['provenance']['record_hashes'] = hashes
         library = export_library(store,artwork,destination,manifest)
-        if (game/'build_manifest.id').read_bytes() != original or (archive.stat().st_size,archive.stat().st_mtime_ns) != stamp:
-            raise RuntimeError('Game files changed during extraction; existing catalogs preserved')
+        def stable_game():
+            if (game/'build_manifest.id').read_bytes() != original or (archive.stat().st_size,archive.stat().st_mtime_ns) != stamp:
+                raise RuntimeError('Game files changed during extraction; existing catalogs preserved')
+        stable_game()
         if not mining['locations'] or mining['provenance']['failures']:
             raise RuntimeError('Mining references are incomplete; existing catalogs preserved')
         if recipes['native_provenance']['enriched_entries'] < 1:
@@ -87,14 +103,9 @@ def main():
             raise RuntimeError('Library export incomplete; existing catalogs preserved')
         (work/'source_manifest.json').write_bytes(original)
         (artwork/'source_manifest.json').write_bytes(original)
-        # All outputs are fully prepared before active files are replaced.
-        for name, data in [('local_game_catalog.json',recipes),('local_mining_catalog.json',mining),('local_game_library.json',library)]:
-            prepared = work/name
-            prepared.write_text(json.dumps(data,ensure_ascii=False,separators=(',',':'))+'\n',encoding='utf-8')
-        for name in ('local_game_catalog.json','local_mining_catalog.json','local_game_library.json'):
-            temporary = destination/'data'/(name+'.tmp')
-            temporary.write_bytes((work/name).read_bytes())
-            os.replace(temporary, destination/'data'/name)
+        publish_catalogues(destination,dict(zip(
+            ('local_game_catalog.json','local_mining_catalog.json','local_game_library.json'),
+            (recipes,mining,library))),build,stable_game)
         print(f"Published build {manifest['Data']['RequestedP4ChangeNum']}: {recipes['native_provenance']['enriched_entries']} verified input sets, {len(mining['locations'])} mining presets, {len(library['entries'])} library records. Restart SynthScan to load.")
     finally:
         (work/'refresh_log.json').write_text(json.dumps(log,indent=2),encoding='utf-8')

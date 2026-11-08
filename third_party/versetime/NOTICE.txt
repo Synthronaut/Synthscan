@@ -1,0 +1,6 @@
+Daylight destination and body data derived from VerseTime by DYDRM.
+https://github.com/dydrmr/VerseTime
+Bundled revision: 6092b98125d1db6077ba999c2d9bc5ccc3b2ff99 (2026-07-10).
+GPL-3.0; see LICENSE. Upstream credits Murphy Exploration Group for data.
+SynthScan implements a separate real-seconds geometric forecast solver.
+Upstream catalogue refreshes do not constitute verified in-game calibration.

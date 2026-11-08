@@ -20,6 +20,14 @@ def fit(ship='prospector',laser='thcn_helix_s1',slot=1):
 
 
 class FitAndAdapterTests(unittest.TestCase):
+    def test_golem_accepts_crafted_helix_one_and_keeps_its_bonus(self):
+        raw=fit('golem','thcn_helix_s1');raw['heads'][0]['crafted_power']=25
+        result=validate_fit(raw)
+        self.assertEqual(result['heads'][0]['crafted_power'],25)
+        self.assertFalse(next(s for s in hardware()['ships'] if s['id']=='golem')['fixed_laser'])
+        self.assertEqual(validate_fit(fit('golem','drak_golem_s1'))['heads'][0]['laser'],'drak_golem_s1')
+        with self.assertRaises(ValueError):validate_fit(fit('golem','thcn_helix_s2'))
+
     def test_fit_preserves_mole_position_and_normalizes_numbers(self):
         raw=fit('mole','thcn_helix_s2',3)
         raw['distance']='30';raw['heads'][0]['crafted_power']='5.5'
@@ -30,7 +38,7 @@ class FitAndAdapterTests(unittest.TestCase):
         self.assertEqual(raw['distance'],'30')
 
     def test_incompatible_fits_are_rejected(self):
-        values=[fit(laser='thcn_helix_s2'),fit(laser='drak_golem_s1'),fit(slot=True),fit(slot=1.5)]
+        values=[fit('mole','thcn_helix_s1'),fit(laser='thcn_helix_s2'),fit(laser='drak_golem_s1'),fit(slot=True),fit(slot=1.5)]
         duplicate=fit('mole');duplicate['heads']*=2;values.append(duplicate)
         over=fit();over['heads'][0]['modules']=['active_surge']*3;values.append(over)
         invalid=fit();invalid['distance']=float('nan');values.append(invalid)

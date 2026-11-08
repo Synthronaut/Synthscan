@@ -54,6 +54,11 @@ std::string oreLocationOf(std::string_view placeName);
 // under one heading, and every point would say the same.
 const std::vector<GamePlace>& minablePlaces();
 
+// A body name from navigation/container logs establishes the vicinity, not
+// whether the player is on its surface or in orbit/rings. Explicit manual
+// selections keep their narrower table; automatic body names do not.
+GamePlace automaticMiningPlace(const GamePlace& place);
+
 // Whether what the log last named contradicts a place set by hand:
 // `namedPlace` a place the tables know, or "" when the log named only a
 // system, and `namedSystem` that system. Lyria in Stanton against a

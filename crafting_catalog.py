@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import re
 from installation import output_root, game_directory
+from reference_catalogs import catalogue_path
 
 
 def normalize_name(name):
@@ -33,7 +34,7 @@ class CraftingCatalog:
     def __init__(self, path=None):
         directory = Path(__file__).parent / 'data'
         self.data = json.loads(Path(path or directory / 'crafting_catalog.json').read_text(encoding='utf-8'))
-        local = output_root() / 'data/local_game_catalog.json'
+        local = catalogue_path(output_root(), 'local_game_catalog.json')
         if path is None and local.exists():
             candidate = json.loads(local.read_text(encoding='utf-8'))
             # Keep data for other builds available as a reference, without
@@ -42,6 +43,9 @@ class CraftingCatalog:
             manifest = json.loads(manifest_path.read_text(encoding='utf-8')) if manifest_path.exists() else None
             if manifest and candidate['native_provenance']['build']['BuildId'] == manifest['Data']['BuildId']:
                 self.data = candidate
+        if path is None:
+            from reference_sources import apply_annotations
+            apply_annotations(self.data)
         self.items = self.data['blueprints']
         self.materials = {m['name']: m for m in self.data['materials']}
         self.missions = self.data['missions']

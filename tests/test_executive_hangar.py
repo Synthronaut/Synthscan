@@ -1,6 +1,6 @@
 import copy,json,math,tempfile,time,unittest,xml.etree.ElementTree as ET
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import Mock,patch
 from executive_hangar import parse_source,validate,project,countdown,HangarScheduleService
 from executive_hangar_hud import hangar_position,hangar_svg,render_png
 
@@ -16,6 +16,9 @@ def script_fixture():
     return "const CYCLE_DRIFT_MS = 350; const DESIGN_ONLINE_MIN = 65; const DESIGN_OFFLINE_MIN = 120; const INITIAL_OPEN_TIME = new Date('2026-10-29T18:01:09.073-04:00'); /** @version 2.2.32 @lastModified 2026-Oct-29 */ const thresholds=["+rows+"];"
 
 class ExecutiveHangarTests(unittest.TestCase):
+    def setUp(self):
+        mock=patch('executive_hangar.fetch_resets',return_value=dict(ok=True,checked_at=1793491200,latest_reset_at=0))
+        mock.start();self.addCleanup(mock.stop)
     def test_literal_source_parser_reproduces_authors_published_model(self):
         parsed=parse_source(script_fixture(),'Star Citizen Patch 4.10.2-LIVE (Server Version 12974691)',now=1793491200)
         expected=seed()

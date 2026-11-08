@@ -3,6 +3,7 @@ import json
 import time
 from installation import ROOT,PROFILE,game_directory,reference_paths,output_root
 from telemetry_ipc import read_shared_json
+from reference_catalogs import catalogue_path
 
 def read(path,limit=16384):
     try:return read_shared_json(path,limit=limit) or {}
@@ -20,7 +21,8 @@ def ready():
                 and result.get('complete') is True and runtime.get('workspace')==str(ROOT)
                 and read(output_root()/'active_build.json').get('build_id')==p['root'].name
                 and (p['root']/'ready.json').exists() and (ROOT/'dist/native/workspace_library.json').exists()
-                and (output_root()/'data/local_game_library.json').exists())
+                and catalogue_path(output_root(),'local_game_library.json').exists()
+                and json.loads(catalogue_path(output_root(),'local_game_catalog.json').read_text(encoding='utf-8'))['native_provenance'].get('export_schema')==2)
     except (OSError,ValueError,KeyError,TypeError):return False
 
 def reputation_view(directory=PROFILE,now=None,session=None):

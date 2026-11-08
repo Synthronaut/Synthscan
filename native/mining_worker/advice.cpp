@@ -10,7 +10,9 @@ J hardware() {
         {"power",j(l.fracture)},{"full_range",j(l.fullRange)},{"zero_range",j(l.zeroRange)}}));
     for(const auto& m:MINING_MODULES)modules.items.push_back(object({{"id",j(m.id)},{"name",j(m.name)},{"active",j(m.active)}}));
     for(const auto& g:MINING_GADGETS)gadgets.items.push_back(object({{"id",j(g.id)},{"name",j(g.name)},{"description",j(g.blurb)}}));
-    for(const auto& s:MINING_SHIPS)ships.items.push_back(object({{"id",j(s.id)},{"name",j(s.name)},{"heads",j(int(s.heads))},{"size",j(int(s.size))},{"fixed_laser",j(s.fixedLaser)}}));
+    // The pinned engine's old Golem table predates interchangeable S1 heads.
+    // Keep this compatibility correction in the adapter, not the vendor tree.
+    for(const auto& s:MINING_SHIPS)ships.items.push_back(object({{"id",j(s.id)},{"name",j(s.name)},{"heads",j(int(s.heads))},{"size",j(int(s.size))},{"fixed_laser",j(std::strcmp(s.id,"golem")==0?static_cast<const char*>(nullptr):s.fixedLaser)}}));
     return object({{"lasers",lasers},{"modules",modules},{"gadgets",gadgets},{"ships",ships}});
 }
 J advice(const J& req) {
@@ -32,7 +34,7 @@ J advice(const J& req) {
         if(slot<1||slot>ship->heads||std::find(slots.begin(),slots.end(),slot)!=slots.end())throw std::runtime_error("Invalid crew head slot");
         slots.push_back(slot);
         MiningLoadout h;h.laser=laserById(input.textOr("laser").c_str());
-        if(!h.laser||!laserFits(*h.laser,*ship))throw std::runtime_error("Laser does not fit ship");
+        if(!h.laser||h.laser->size!=ship->size||!laserFits(*h.laser,*ship))throw std::runtime_error("Laser does not fit ship");
         h.craftedPower=float(input.numberOr("crafted_power"));
         if(h.craftedPower< -50||h.craftedPower>100)throw std::runtime_error("Crafted power outside supported range");
         if(auto mods=input.find("modules")) {

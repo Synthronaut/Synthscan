@@ -70,7 +70,7 @@ class MiningSetupPage(ctk.CTkScrollableFrame):
         self.heads=[]
         ship=self.ships[self.ship.get()]
         fit=self.app.native_fit if self.app.native_fit and self.app.native_fit['ship']==ship['id'] else None
-        choices=[l['name'] for l in self.data['lasers'] if (l['id']==ship['fixed_laser'] if ship.get('fixed_laser') else l['size']<=ship['size'] and l['id']!='drak_golem_s1')]
+        choices=[l['name'] for l in self.data['lasers'] if (l['id']==ship['fixed_laser'] if ship.get('fixed_laser') else l['size']==ship['size'] and l['id']!='drak_golem_s1')]
         for i in range(ship['heads']):
             h=next((h for n,h in enumerate(fit['heads']) if h.get('slot',n+1)==i+1),{}) if fit else {}
             enabled=ctk.BooleanVar(value=bool(h) or ship['heads']==1)

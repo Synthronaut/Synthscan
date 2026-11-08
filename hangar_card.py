@@ -56,6 +56,7 @@ class HangarPublisher:
     def __init__(self,directory,owner):
         self.directory=Path(directory);self.owner=owner;self.verification=HangarVerification(directory)
         self.last_key=None;self.next_check=0;self.inventory=None;self.build=None;self.enabled=False
+        self.last_command=''
         try:
             from installation import game_directory
             self.game=game_directory()
@@ -63,18 +64,30 @@ class HangarPublisher:
 
     def tick(self,service,enabled,now=None):
         now=time.time() if now is None else now
+        from telemetry_ipc import read_shared_json
+        try:command=read_shared_json(self.directory/'hangar_update_command.json') or {}
+        except (OSError,ValueError):command={}
+        requested=command.get('id')!=self.last_command and 0<=now-command.get('at',0)<60
+        if requested:self.last_command=command.get('id','')
         if now>=self.next_check:
             self.next_check=now+1
             try:self.build=installed_build(self.game) if self.game else None
             except (OSError,ValueError,TypeError,KeyError):self.build=None
             try:self.inventory=read_inventory(self.directory)
             except Exception:self.inventory={'unavailable':True}
-        reset_check=(service.schedule or {}).get('reset_check',{})
+        reset_check=service.reset_state()
         verification=self.verification.evaluate(self.build,service.schedule,now,service.fetched_at,bool(service.note),reset_check)
         if verification['build_changed']:service.attempted_at=-float('inf')
-        view=service.tick(enabled,now,refresh_interval=600,force_refresh=verification['needs_resync'],retry_interval=120)
-        reset_check=(service.schedule or {}).get('reset_check',{})
+        # Keep both sources fresh in every activity mode; switching tabs should
+        # not postpone discovery of maintenance or revised timing.
+        view=service.tick(True,now,refresh_interval=600,force_refresh=requested or verification['needs_resync'],retry_interval=120)
+        reset_check=service.reset_state()
         verification=self.verification.evaluate(self.build,service.schedule,now,service.fetched_at,bool(service.note),reset_check)
+        publish_json(self.directory/'hangar_update_status.json',dict(at=now,owner_pid=self.owner,**verification,
+            fetched_at=service.fetched_at,source_modified=(service.schedule or {}).get('source_modified',''),
+            reset_checked_at=reset_check.get('checked_at',0),latest_reset_at=reset_check.get('latest_reset_at',0),
+            schedule_error=service.note,reset_error=service.reset_error,
+            checking=bool(service.future or service.reset_future)))
         self.view=view
         if not enabled:return
         svg=card_svg(view,self.inventory,verification)

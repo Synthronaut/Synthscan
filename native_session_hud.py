@@ -13,6 +13,8 @@ def hud_state(snapshot,owner,now):
                   region_display=snapshot.get('region','--'),callsign=snapshot.get('shard_name','MAIN MENU'),
                   hop_status=snapshot.get('hop',''),location_display=snapshot.get('location') or '--',
                   connection_status='connected' if snapshot.get('session_token') else ('game_closed' if not snapshot.get('game_pids') else 'main_menu'))
+    observation=snapshot.get('shard_observation') or {}
+    source['shard_observation']=observation if snapshot.get('session_token') and observation.get('full_shard_id')==full else {}
     for key,ttl in [('client_fps',2),('ping_ms',3)]:
         metadata=(source.get('metric_meta') or {}).get(key) or {}
         age=now-metadata.get('observed_at',0)
@@ -34,7 +36,7 @@ def main():
     from hud_controller import TopTelemetryHUD
     from hud_controller import game_window_rect
     from hud_controller import get_monitor_by_id
-    from activity_hud import ActivityButton,ActivityCollapseButton
+    from activity_hud import ActivityButton,ActivityQuickControls
     from executive_hangar import HangarScheduleService
     from hangar_card import HangarPublisher
     from region_history_hud import RegionHistory
@@ -101,7 +103,7 @@ def main():
                 self.bar_canvas.create_text(12,self.BAR_HEIGHT//2,anchor='w',text='SERVER INFORMATION UNAVAILABLE · waiting for session service',fill='#f59e0b',font=('Consolas',9,'bold'))
                 self._last_rendered_key=None;return
             super().render_bar()
-    root=tk.Tk();root.withdraw();ribbon=Ribbon(root);gate=AlertGate(started_at);alert=SnareAlertWindow(root,game_window_rect);activity=ActivityButton(root,DATA,args.owner);collapse=ActivityCollapseButton(root,DATA,args.owner);ribbon.activity_button=activity
+    root=tk.Tk();root.withdraw();ribbon=Ribbon(root);gate=AlertGate(started_at);alert=SnareAlertWindow(root,game_window_rect);activity=ActivityButton(root,DATA,args.owner);collapse=ActivityQuickControls(root,DATA,args.owner);ribbon.activity_button=activity
     def callback_error(kind,value,traceback):
         logging.error('HUD input callback failed',exc_info=(kind,value,traceback))
     root.report_callback_exception=callback_error
@@ -110,20 +112,20 @@ def main():
     def protected_now():
         from overlay_input import foreground_process_id,protect_game_input
         return protect_game_input(foreground_process_id(),{os.getpid(),args.owner},bool(game_window_rect()))
-    for control in (ribbon,history,history.window,history.popup):control.input_guard=protected_now
+    ribbon.input_guard=protected_now
+    # The region arrow/popup are explicit controls, like HUD +/-. Keep their
+    # non-activating click handling available while the ribbon body is passive.
+    for control in (history,history.window,history.popup):control.input_guard=lambda:False
     def protect_input():
         from overlay_input import set_passthrough
         protected=protected_now()
-        history.input_protected=protected
-        if protected:
-            history.origin=None
-            if history.open:history.hide_popup('gameplay_input_protected')
+        history.input_protected=False
         api=ctypes.windll.user32
         from ctypes import wintypes as w
         api.GetParent.argtypes=[w.HWND];api.GetParent.restype=w.HWND
         bar_hwnd=api.GetParent(ribbon.bar_win.winfo_id()) or ribbon.bar_win.winfo_id()
-        for hwnd in (bar_hwnd,history.hwnd,history.popup_hwnd):set_passthrough(hwnd,protected)
-        for hwnd in (activity.hwnd,collapse.hwnd):set_passthrough(hwnd,False)
+        set_passthrough(bar_hwnd,protected)
+        for hwnd in (history.hwnd,history.popup_hwnd,activity.hwnd,collapse.hwnd):set_passthrough(hwnd,False)
         return protected
     def poll():
         if not owner_alive(args.owner):root.destroy();return
@@ -151,8 +153,8 @@ def main():
             enabled=piracy_alerts_enabled(settings,bool(game_window_rect()))
             notices=gate.consume(snapshot,args.owner,time.time(),enabled)
             alert.update(notices,ribbon.state.get('session_token'),enabled)
-            # The HUD body stays passive; only the two non-activating
-            # collapse controls accept a deliberate bounded click.
+            # The HUD body stays passive; the region dropdown and compact
+            # controls accept bounded clicks without activating the app.
             protected=protect_input()
             from telemetry_ipc import publish_json
             publish_json(DATA/'top_hud_status.json',dict(at=time.time(),pid=os.getpid(),owner_pid=args.owner,

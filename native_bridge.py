@@ -100,6 +100,8 @@ class SessionService:
         if token:self.sessions.confirm_seen(now)
         self.sessions.flush()
         sessions=self.sessions.get_sessions()
+        from shard_observations import observation_index
+        observations=observation_index(self.sessions.sessions,self.history.shards,now)
         session_view=timeline(self.sessions.sessions,now,self.session_filters,self.history,self.interdictions.entries)
         offset=max(0,min(self.session_offset,max(0,((session_view['count']-1)//100)*100)))
         session_rows=session_view.pop('rows')[offset:offset+100]
@@ -109,6 +111,7 @@ class SessionService:
                    metrics=metrics,cooldowns=self.history.active_cooldowns(r.full_shard_id) if token else [],
                    sessions=sessions[:100],session_count=len(sessions),session_rows=session_rows,session_log=session_view,plans=self.plans,note=self.note,
                    storage_warning=self.history.read_only or self.sessions.read_only)
+        state['shard_observation']=observations.get(r.full_shard_id,{}) if token else {}
         self.diary_inbox()
         state['diary']=self.diary.view(**self.diary_filters)
         state['diary_result']=self.diary_result
@@ -208,8 +211,16 @@ def run(data_dir,owner):
     from reputation_notice import NoticeGate
     from setup_status import reputation_view
     rep_notices=NoticeGate();rep_notice=''
+    from data_updates import DataUpdateService
+    updates=DataUpdateService(directory,exclusive=True)
+    from item_directory import ItemDirectoryService
+    item_directory=ItemDirectoryService(directory,owner)
+    from finder_market import FinderMarketService
+    finder_market=FinderMarketService(directory,owner)
     top_hud=subprocess.Popen([str(Path(sys.executable).with_name('pythonw.exe')),'-B',str(ROOT/'native_session_hud.py'),'--owner',str(owner)],
                              cwd=ROOT,creationflags=subprocess.CREATE_NO_WINDOW,stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+    contract_helper=subprocess.Popen([str(Path(sys.executable).with_name('pythonw.exe')),'-B',str(ROOT/'contract_share_helper.py'),'--owner',str(owner),'--watch'],
+                                    cwd=ROOT,creationflags=subprocess.CREATE_NO_WINDOW,stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
     try:
         while owner_alive(owner):
             try:
@@ -232,6 +243,12 @@ def run(data_dir,owner):
                     quest_command.unlink(missing_ok=True)
                 service.diary_commands()
                 state=service.tick(bool(games));state['game_pids']=sorted(games);state['owner_pid']=owner
+                try:state['data_updates']=updates.tick(game_running=bool(games))
+                except Exception:logging.exception('Data update check failed; HUD collection continues')
+                try:item_directory.tick(current_patch=updates.local.get('patch'))
+                except Exception:logging.exception('Item directory refresh failed; last known data retained')
+                try:finder_market.tick(current_patch=updates.local.get('patch',''))
+                except Exception:logging.exception('Finder market refresh failed; cached offers retained')
                 inbox=directory/'fabricator_scan_inbox.json'
                 state['review_revision']=inbox.stat().st_mtime if inbox.exists() else 0
                 quest_settings=read_shared_json(directory/'native_settings.json') or {}
@@ -258,7 +275,12 @@ def run(data_dir,owner):
                 logging.exception('Native bridge tick failed')
             time.sleep(1)
     finally:
+        from app_lifecycle import send_signal
+        send_signal('contract-share-stop')
         piracy.close()
+        item_directory.close()
+        finder_market.close()
+        updates.close()
         quests.close()
         service.close()
         if top_hud.poll() is None:top_hud.terminate();top_hud.wait(timeout=5)

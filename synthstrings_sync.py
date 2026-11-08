@@ -23,18 +23,19 @@ def format_blueprint_pool(pool_text: str, owned_names: set):
     - [  ] Item Name (Type)
     Returns: (new_pool_text, owned_count, total_count)
     """
-    owned_count = 0
-    total_count = 0
+    from blueprint_strings import item_key
+    owned = {item_key(n) for n in owned_names}
+    seen = set()
+    have = set()
 
     def repl(m):
-        nonlocal owned_count, total_count
         raw_name = m.group(1).strip()
         type_tag = m.group(2) or ""
-        total_count += 1
-        
-        is_owned = any(o in raw_name.lower() or raw_name.lower() in o for o in owned_names)
-        if is_owned:
-            owned_count += 1
+        full_name = (raw_name + type_tag).strip()
+        identity = item_key(full_name)
+        seen.add(identity)
+        if identity in owned:
+            have.add(identity)
             tag = "[OWNED]"
         else:
             tag = "[  ]"
@@ -44,7 +45,7 @@ def format_blueprint_pool(pool_text: str, owned_names: set):
     # Matches "- Item Name (Type)" or "- [OWNED] Item Name (Type)" or "- [  ] Item Name (Type)"
     pattern = re.compile(r'\\n\s*-\s*(?:\[(?:OWNED|X|\u2714)\]\s*|\[\s*\]\s*)?([^\(\n\r\\]+?)(\s*\([^\)\\\n\r]+\))?(?=\\n|$)')
     new_pool = pattern.sub(repl, pool_text)
-    return new_pool, owned_count, total_count
+    return new_pool, len(have), len(seen)
 
 def update_title_tag(title_line: str, owned_count: int, total_count: int) -> str:
     """
@@ -80,9 +81,17 @@ def sync_blueprints_to_global_ini(ini_path=DEFAULT_INI_PATH, owned_blueprints=No
     if owned_blueprints is None:
         from blueprint_db import BlueprintManager
         bpm = BlueprintManager()
-        owned_names = set(k.lower() for k in bpm.blueprints.keys())
+        owned_names = set(bp.get('name', k) for k, bp in bpm.blueprints.items() if isinstance(bp, dict))
+        try:
+            from installation import PROFILE
+            from blueprint_strings import native_owned_names
+            owned_txt = PROFILE / "owned_blueprints.txt"
+            if owned_txt.exists():
+                owned_names.update(native_owned_names(owned_txt))
+        except Exception:
+            pass
     else:
-        owned_names = set(k.lower() for k in owned_blueprints)
+        owned_names = set(owned_blueprints)
 
     # 1. Create a safe backup before first or subsequent modifications
     backup_path = ini_path + ".synthscan_bak"
@@ -100,14 +109,16 @@ def sync_blueprints_to_global_ini(ini_path=DEFAULT_INI_PATH, owned_blueprints=No
         return False, f"Failed to read {ini_path}: {e}", {}
 
     # 3. Process descriptions and map counts by key
-    mission_counts = {} # base_key -> (owned_c, total_c)
+    from blueprint_strings import resolve_title_key
+    all_keys = {l.split("=", 1)[0].split(",")[0].strip().casefold() for l in lines if "=" in l}
+    mission_counts_sets = {}  # base_key -> (have_set, seen_set)
     updated_lines = []
     desc_updates = 0
     title_updates = 0
-    complete_count = 0
-    partial_count = 0
 
     for line in lines:
+        from mining_labels import compact_mining_labels
+        line, _ = compact_mining_labels(line)
         # Enforce compressed commodity and HUD scanning tags
         if line.startswith("items_commodities_amiantpod="):
             line = "items_commodities_amiantpod=Pod\n"
@@ -126,16 +137,12 @@ def sync_blueprints_to_global_ini(ini_path=DEFAULT_INI_PATH, owned_blueprints=No
             new_pool, owned_c, total_c = format_blueprint_pool(pool, owned_names)
             
             # Extract key: e.g. Adagio_Desc_001
-            key = line.split("=", 1)[0].split(",")[0].strip()
-            # Canonical base key
-            base_key = key.replace("_Desc", "_Title").replace("_desc", "_title")
-            mission_counts[base_key] = (owned_c, total_c)
-            
-            if total_c > 0:
-                if owned_c == total_c:
-                    complete_count += 1
-                elif owned_c > 0:
-                    partial_count += 1
+            key = line.split("=", 1)[0].split(",")[0].strip().casefold()
+            base_key = resolve_title_key(key, all_keys)
+            if base_key not in mission_counts_sets:
+                mission_counts_sets[base_key] = [0, 0]
+            mission_counts_sets[base_key][0] += owned_c
+            mission_counts_sets[base_key][1] += total_c
 
             new_line = prefix + new_pool
             if new_line != line:
@@ -144,10 +151,14 @@ def sync_blueprints_to_global_ini(ini_path=DEFAULT_INI_PATH, owned_blueprints=No
         else:
             updated_lines.append(line)
 
+    mission_counts = {k: (c[0], c[1]) for k, c in mission_counts_sets.items()}
+    complete_count = sum(c[0] == c[1] and c[1] > 0 for c in mission_counts.values())
+    partial_count = sum(0 < c[0] < c[1] for c in mission_counts.values())
+
     # 4. Process titles
     final_lines = []
     for line in updated_lines:
-        line_key = line.split("=", 1)[0].split(",")[0].strip()
+        line_key = line.split("=", 1)[0].split(",")[0].strip().casefold()
         if line_key in mission_counts:
             owned_c, total_c = mission_counts[line_key]
             new_title = update_title_tag(line, owned_c, total_c)

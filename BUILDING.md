@@ -25,8 +25,17 @@ The `Windows community build` workflow performs these steps on demand and upload
 the resulting ZIP/checksum and guided installer as workflow artifacts. Build the
 installer locally with `python tools/build_installer.py --payload out/SynthScan-Windows-x64 --output out/installer`.
 The Inno Setup compiler is downloaded from its pinned official release and hash-checked.
-Publication to Releases is a
-separate deliberate step. Never upload the development folder directly.
+To sign the ZIP, run `python tools/sign_release.py --archive out/SynthScan-Windows-x64.zip
+--url https://github.com/Synthronaut/Synthscan/releases/download/v0.1.0-alpha.9/SynthScan-Windows-x64.zip
+--output out/synthscan-update.json`. Local signing uses the protected release key;
+CI uses the matching `SYNTHSCAN_SIGNING_PRIVATE_B64` secret. A different signing key
+will be rejected. Build artifacts remain usable without signing, but cannot be
+promoted to the automatic update channel.
+
+Publication is a separate deliberate step: the workflow's `publish` input defaults
+to false. Configure the protected `community-release` environment before enabling
+publication. It creates an immutable versioned release, then promotes the signed
+manifest at `update-channel`. Never upload the development folder directly.
 
 Corresponding modified GPL application source is `native/synthscan`; the earlier
 worker's source is `native/mining_worker`. Original copyright and component

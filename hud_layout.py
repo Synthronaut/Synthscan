@@ -53,6 +53,7 @@ def panel_rows(state, mining=None, *, session=True, mining_enabled=True, now=0, 
                 detail.append(node)
             row(' · '.join(str(v) for v in detail if v and v!='--'), 'muted')
             row(state.get('hop_status'), 'visit')
+            row((state.get('shard_observation') or {}).get('history_label'), 'muted')
         else:
             row('Main menu' if state.get('connection_status')!='game_closed' else 'Game closed', 'title')
             row('Waiting for a universe session', 'muted')

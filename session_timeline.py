@@ -34,6 +34,8 @@ def timeline(sessions,now,filters=None,history=None,interdictions=None):
     filters=filters or {};start,stop=date_bounds(filters.get('date_from',''),filters.get('date_to',''))
     query=filters.get('query','').strip().casefold();region=filters.get('region','').strip().casefold()
     ordered=sorted(sessions,key=lambda s:timestamp(s.get('joined_at')) or 0)
+    from shard_observations import observation_index
+    observations=observation_index(sessions,getattr(history,'shards',{}),now)
     counts={};previous={};rows=[];regions=set();next_joins={};following=None
     reports={}
     for e in interdictions or []:reports.setdefault((e['full_shard_id'],e['joined_utc']),[]).append(e)
@@ -69,6 +71,10 @@ def timeline(sessions,now,filters=None,history=None,interdictions=None):
         if confirmed is not None:details+='Last confirmed joined: '+local_time(session['last_confirmed_at'])+'\n'
         if left is None and not active and following is not None:details+='Exit occurred no later than next recorded join: '+local_time(utc_iso(following))+' (upper bound, not an exact logout)\n'
         details+='\n'+visit_label+'\n'
+        observation=observations.get(full,{})
+        if observation:
+            details+='\nShard observation history (this PC):\nFirst recorded: '+observation['first_recorded_local']+' (UTC+08:00)\n'
+            details+='Recorded visits: '+str(observation['visits'])+'\n'+observation['explanation']+'\nServer start / last reset: Unknown\n'
         if prior:details+='Previous visit: '+local_time(prior.get('joined_at'))+' to '+local_time(prior.get('left_at'))+'\n'
         reminders=history.active_cooldowns(full) if history and full else []
         for reminder in reminders:details+='Active shard reminder: '+str(reminder.get('label',''))+'\n'
@@ -89,6 +95,8 @@ def timeline(sessions,now,filters=None,history=None,interdictions=None):
                          join_source=time_source(session,'joined'),leave_source=time_source(session,'left') if left is not None else 'Unknown',
                          last_confirmed_utc=session.get('last_confirmed_at'),end_reason=session.get('end_reason','')))
         rows[-1]['interdiction_reports']=len(encounters);rows[-1]['interdicted_handles']='; '.join(e['target'] for e in encounters)
+        rows[-1]['shard_first_recorded_utc']=observation.get('first_recorded_at')
+        rows[-1]['shard_recorded_visits']=observation.get('visits',0)
     return dict(rows=list(reversed(rows)),count=len(rows),total=len(sessions),regions=sorted(x for x in regions if x),
                 timezone=ZONE_LABEL,filters=filters)
 
@@ -97,7 +105,7 @@ def export_timeline(destination,view,kind):
     if kind=='json':
         atomic_json(path,dict(format='SynthScan session timeline',version=1,timezone=ZONE_LABEL,filters=view['filters'],visits=view['rows']))
     elif kind=='csv':
-        fields=['joined_local','left_local','duration','status','region','full_shard_id','name','visit','joined_utc','left_utc','join_source','leave_source','last_confirmed_utc','end_reason','interdiction_reports','interdicted_handles','notes']
+        fields=['joined_local','left_local','duration','status','region','full_shard_id','name','visit','joined_utc','left_utc','join_source','leave_source','last_confirmed_utc','end_reason','shard_first_recorded_utc','shard_recorded_visits','interdiction_reports','interdicted_handles','notes']
         stream=io.StringIO(newline='');writer=csv.DictWriter(stream,fieldnames=['display_timezone']+fields,extrasaction='ignore');writer.writeheader()
         for row in view['rows']:
             # Spreadsheet applications must not interpret player notes as formulas.

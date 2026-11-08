@@ -1,6 +1,11 @@
 name: Windows community build
 on:
   workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the signed version and update channel
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
@@ -27,7 +32,22 @@ jobs:
       - name: Build guided Windows installer
         run: |
           python -B tools/verify_portable_runtime.py --payload out/SynthScan-Windows-x64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -B tools/verify_update_runtime.py --payload out/SynthScan-Windows-x64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python -B tools/build_installer.py --payload out/SynthScan-Windows-x64 --output out/installer
+      - name: Sign application update manifest
+        env:
+          SYNTHSCAN_SIGNING_PRIVATE_B64: ${{ secrets.SYNTHSCAN_SIGNING_PRIVATE_B64 }}
+        shell: pwsh
+        run: |
+          if ($env:SYNTHSCAN_SIGNING_PRIVATE_B64) {
+            $version = (Get-Content out/SynthScan-Windows-x64/release.json | ConvertFrom-Json).version
+            python -B tools/sign_release.py --archive out/SynthScan-Windows-x64.zip --url "https://github.com/Synthronaut/Synthscan/releases/download/v$version/SynthScan-Windows-x64.zip" --output out/synthscan-update.json
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } elseif ('${{ inputs.publish }}' -eq 'true') {
+            throw 'Publishing requires the protected release-signing secret.'
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: SynthScan-Windows-x64
@@ -36,3 +56,34 @@ jobs:
             out/SynthScan-Windows-x64.zip.sha256
             out/installer/SynthScan-Setup-Windows-x64.exe
             out/installer/SynthScan-Setup-Windows-x64.exe.sha256
+            out/synthscan-update.json
+  publish:
+    if: inputs.publish
+    needs: build
+    runs-on: windows-2022
+    environment: community-release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: SynthScan-Windows-x64
+          path: out
+      - name: Publish immutable release, then promote signed channel
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $envelope = Get-Content out/synthscan-update.json | ConvertFrom-Json
+          $manifest = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($envelope.payload)) | ConvertFrom-Json
+          $tag = 'v' + $manifest.version
+          gh release create $tag out/SynthScan-Windows-x64.zip out/SynthScan-Windows-x64.zip.sha256 out/installer/SynthScan-Setup-Windows-x64.exe out/installer/SynthScan-Setup-Windows-x64.exe.sha256 --repo Synthronaut/Synthscan --target '${{ github.sha }}' --title "SynthScan $($manifest.version)" --generate-notes
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          gh release view update-channel --repo Synthronaut/Synthscan *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create update-channel --repo Synthronaut/Synthscan --target '${{ github.sha }}' --title 'SynthScan automatic update channel' --notes 'Signed application update manifest. Install SynthScan using a versioned release.' --prerelease
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          gh release upload update-channel out/synthscan-update.json --repo Synthronaut/Synthscan --clobber
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

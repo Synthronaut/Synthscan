@@ -264,6 +264,9 @@ class TopTelemetryHUD:
                       "medical_imprint": self.medical_imprint, "hop_status": hop, "region_shards_seen": seen,
                       "is_loading_screen": reader.is_loading_screen, "connection_status": reader.connection_status,
                       "health": health, "cooldowns": self.shard_tracker.active_cooldowns(full_id) if token else []}
+        from shard_observations import observation_index
+        observations=observation_index(self.server_logger.sessions if self.server_logger else [],self.shard_tracker.shards,now)
+        self.state['shard_observation']=observations.get(full_id,{}) if token else {}
         self.state["storage_warning"] = self.shard_tracker.read_only or bool(self.server_logger and self.server_logger.read_only)
         if self.server_logger and token:
             self.server_logger.record_telemetry_sample(values["server_fps"], values["ping_ms"], values["restarts"], metadata=metadata)

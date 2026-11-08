@@ -5,6 +5,8 @@
 #include "PanelShapes.h"
 #include "PanelDigits.h"
 #include "MiningData.h"
+#include "HandMiningReference.h"
+#include "RockContents.h"
 #include "TextLineReader.h"
 
 #include <algorithm>
@@ -3251,6 +3253,14 @@ double glanceAtPanelSpot(const PanelSpot& spot, const cv::Mat& window) {
     return column.score;
 }
 
+bool locatePanelAtSpot(const cv::Mat& frame,const PanelSpot& spot,ScanPanel& panel){
+    const auto window=panelSpotWindow(spot,frame.size());if(window.empty())return false;
+    const auto column=findLabelColumnOf(channelGrey(asBgr(frame)(window),spot.ink),{spot.scale},spot.glyph,nullptr);
+    if(column.score<.40)return false; // identity/quality are independently verified afterwards
+    panel.labels=column.labels+window.tl();panel.labelScale=column.scale;panel.labelGlyph=column.glyph;panel.ink=spot.ink;
+    return true;
+}
+
 // ---------------------------------------------------------------------------
 
 void PanelSteadier::clear() {
@@ -3468,6 +3478,14 @@ int editDistance(const std::string& a, const std::string& b) {
 namespace {
 std::map<std::string,std::string> oreNameAliases;
 std::mutex oreAliasMutex;
+const std::vector<std::string>& scanMaterialNames() {
+    static const auto names=[] { std::vector<std::string> result;
+        for(const auto& m:MINERAL_SIGNATURES)result.push_back(m.name);
+        for(const auto& m:HAND_MINING_BANDS)result.push_back(m.ore);
+        return result;
+    }();
+    return names;
+}
 std::string oreLetters(const std::string& text) {
     std::string out;for(unsigned char c:text)if(std::isalpha(c)&&c<128)out+=(char)std::toupper(c);return out;
 }
@@ -3488,7 +3506,7 @@ int loadOreNameAliases(const std::filesystem::path& localization) {
         auto key=line.substr(18,eq-18);if(key.find("_desc")!=std::string::npos)continue;
         auto alias=oreLetters(line.substr(eq+1));if(alias.empty()||alias.size()>24)continue;
         const auto identity=oreIdentity(key);
-        for(const auto& mineral:MINERAL_SIGNATURES)if(oreIdentity(mineral.name)==identity)candidates[alias].insert(mineral.name);
+        for(const auto& mineral:scanMaterialNames())if(oreIdentity(mineral)==identity)candidates[alias].insert(mineral);
     }
     std::map<std::string,std::string> aliases;
     for(const auto& item:candidates)if(item.second.size()==1)aliases[item.first]=*item.second.begin();
@@ -3507,11 +3525,11 @@ std::string snapOreName(const std::string& read) {
     if (name.empty()) return "";
     {std::lock_guard<std::mutex> lock(oreAliasMutex);
      if(auto alias=oreNameAliases.find(name);alias!=oreNameAliases.end())return alias->second;}
-    const MineralSignature* best = nullptr;
+    const std::string* best = nullptr;
     int bestDistance = 1000, ties = 0;
-    for (const MineralSignature& m : MINERAL_SIGNATURES) {
+    for (const std::string& m : scanMaterialNames()) {
         std::string upper;
-        for (char c : m.name) upper += (char)std::toupper((unsigned char)c);
+        for (char c : m) upper += (char)std::toupper((unsigned char)c);
         const int d = editDistance(name, upper);
         if (d < bestDistance) {
             bestDistance = d;
@@ -3521,7 +3539,7 @@ std::string snapOreName(const std::string& read) {
             ties++;
         }
     }
-    if (best && ties == 0 && bestDistance <= (std::max)(1, (int)best->name.size() / 3)) return best->name;
+    if (best && ties == 0 && bestDistance <= (std::max)(1, (int)best->size() / 3)) return *best;
     // The second reader writes the panel's brackets its own way - "IRON ORE)"
     // with the opening one lost, "IRONCORE)" with it read as a C, and the
     // alphabet it was trained on has a full-width ) that is no bracket here
@@ -3551,18 +3569,18 @@ std::string snapOreName(const std::string& read) {
     // writes HEPH (RAW) for Hephaestanite. Four letters name one mineral and
     // no other, so a name that begins one and only one is that one.
     if (bare.size() >= 4) {
-        const MineralSignature* only = nullptr;
-        for (const MineralSignature& m : MINERAL_SIGNATURES) {
+        const std::string* only = nullptr;
+        for (const std::string& m : scanMaterialNames()) {
             std::string upper;
-            for (char c : m.name) {
+            for (char c : m) {
                 if (c >= 'a' && c <= 'z') upper += (char)(c - 'a' + 'A');
                 else if (c >= 'A' && c <= 'Z') upper += c;
             }
             if (upper.size() < bare.size() || upper.compare(0, bare.size(), bare) != 0) continue;
-            if (only && only->name != m.name) return "";   // begins two: no name
+            if (only && *only != m) return "";   // begins two: no name
             if (!only) only = &m;
         }
-        if (only) return only->name;
+        if (only) return *only;
     }
     return "";
 }
@@ -3672,35 +3690,51 @@ std::vector<FigureLines> figureLineCandidates(const cv::Mat& frame, const cv::Re
     return kept;
 }
 
-static std::vector<cv::Rect> whiteWordsIn(const cv::Mat& frame,const cv::Rect& area) {
+static std::vector<cv::Rect> whiteWordsIn(const cv::Mat& frame,const cv::Rect& area,int join=3,int colour=0,bool single=false) {
     const auto region=area&cv::Rect(0,0,frame.cols,frame.rows);
     if(region.empty())return {};
     const auto bgr=asBgr(frame)(region);std::vector<cv::Mat> channels;cv::split(bgr,channels);
     cv::Mat low=cv::min(channels[0],cv::min(channels[1],channels[2]));
     cv::Mat high=cv::max(channels[0],cv::max(channels[1],channels[2]));
     cv::Mat neutral=(high-low<70)&(low>140);
-    cv::Mat raised;cv::morphologyEx(low,raised,cv::MORPH_TOPHAT,cv::getStructuringElement(cv::MORPH_RECT,{3,19}));
+    if(colour==1) {
+        const cv::Mat green=(channels[1]>170)&(channels[1]-channels[2]>35)&(channels[1]-channels[0]>25);
+        neutral|=green;
+    } else if(colour==2) {
+        // Keep red separate: orange terrain must not join onto the white
+        // mass/instability glyphs. Candidate rows still need all three labels.
+        neutral=(channels[2]>200)&(channels[2]-channels[1]>70)&
+            (channels[2]-channels[0]>70)&(channels[2]>channels[1]*1.8)&
+            (cv::max(channels[1],channels[0])-cv::min(channels[1],channels[0])<30);
+    }
+    cv::Mat raised;cv::morphologyEx(colour==2?high:low,raised,cv::MORPH_TOPHAT,cv::getStructuringElement(cv::MORPH_RECT,{3,19}));
     cv::Mat mask=neutral&(raised>18);
-    cv::dilate(mask,mask,cv::getStructuringElement(cv::MORPH_RECT,{3,1}));
+    cv::dilate(mask,mask,cv::getStructuringElement(cv::MORPH_RECT,{join,1}));
     cv::Mat labels,stats,centres;int count=cv::connectedComponentsWithStats(mask,labels,stats,centres,8);
     std::vector<cv::Rect> words;
     for(int i=1;i<count;i++) {
         cv::Rect box(stats.at<int>(i,cv::CC_STAT_LEFT),stats.at<int>(i,cv::CC_STAT_TOP),stats.at<int>(i,cv::CC_STAT_WIDTH),stats.at<int>(i,cv::CC_STAT_HEIGHT));
-        if(box.height<5||box.height>32||box.width<box.height*1.1||box.width>box.height*9||stats.at<int>(i,cv::CC_STAT_AREA)<12)continue;
+        if(box.height<5||box.height>32||box.width<box.height*(single?.2:1.1)||box.width>box.height*9||stats.at<int>(i,cv::CC_STAT_AREA)<(single?4:12))continue;
         words.push_back(box+region.tl());
     }
     return words;
 }
 
-std::vector<FigureLines> whiteFigureLineCandidates(const cv::Mat& frame,const cv::Rect& area,int most) {
-    auto words=whiteWordsIn(frame,area);
+std::vector<FigureLines> whiteFigureLineCandidates(const cv::Mat& frame,const cv::Rect& area,int most,bool smallMineral) {
+    // Five-pixel joining reunites the tiny pilot numerals that a 3-pixel
+    // kernel splits into several words. The labelled-row gate below still
+    // requires MASS, RES and INST; SCU word isolation retains its own 3px join.
+    const auto massWords=whiteWordsIn(frame,area,5,0,smallMineral);
+    auto words=whiteWordsIn(frame,area,5,1);
+    const auto redWords=whiteWordsIn(frame,area,5,2);
+    words.insert(words.end(),redWords.begin(),redWords.end());
     std::sort(words.begin(),words.end(),[](const auto&a,const auto&b){return a.y<b.y;});
     std::vector<FigureLines> candidates;
-    for(const auto& a:words) {
-        if(a.width<a.height*2.8)continue;
+    for(const auto& a:massWords) {
+        if(smallMineral?a.width>a.height*2.8:a.width<a.height*2.8)continue;
         for(const auto& b:words) {
             const double pitch=b.y-a.y;
-            if(a.width<b.width*1.1||pitch<a.height||pitch>a.height*4||std::abs(a.x-b.x)>a.height*1.5||std::abs(a.height-b.height)>a.height*.5)continue;
+            if((!smallMineral&&a.width<b.width*1.1)||pitch<a.height||pitch>a.height*4||std::abs(a.x-b.x)>a.height*1.5||std::abs(a.height-b.height)>a.height*.5)continue;
             for(const auto& c:words) {
                 const double other=c.y-b.y;
                 if(std::abs(other-pitch)>pitch*.25||std::abs(c.x-a.x)>a.height*1.5||std::abs(c.height-a.height)>a.height*.5||c.width<c.height*2)continue;
@@ -3770,6 +3804,13 @@ bool labelledFigure(const std::string& text, const std::string& label, std::stri
     // This cockpit's tiny M is consistently read as H/N. The colon and
     // all three independently labelled numeric rows remain mandatory.
     if(label=="MASS"&&(tight.rfind("HASS",0)==0||tight.rfind("NASS",0)==0))tight[0]='M';
+    // The pilot's eight-pixel INST label can lose its initial I and read
+    // the final T as I. Only these observed spellings are accepted, still
+    // with punctuation and the independently verified MASS/RES rows.
+    const auto word=tight.substr(0,colon);
+    if(label=="INST"&&(word=="NST"||word=="NSI"||word=="INSI")) {
+        figure=tight.substr(colon+1);return !figure.empty();
+    }
     if (tight.compare(0, label.size(), label) != 0) return false;
     figure = tight.substr(colon + 1);
     return !figure.empty();
@@ -3926,7 +3967,7 @@ bool readPanelRows(const cv::Mat& frame, TextLineReader& lines, const std::array
         if (figureOf(2, "RES", figures[1])) resistance = facePercent(figures[1]);
         if (resistance >= 0 && figureOf(3, "INST", figures[2])) instability = faceTwoPlaces(figures[2], true);
     }
-    if (mass <= 0 || resistance < 0 || resistance > 100 || instability <= 0) {
+    if (mass <= 0 || resistance < 0 || resistance > 100 || instability < 0) {
         std::snprintf(note, sizeof(note), "; lines: %.0f/%.0f/%.2f in '%.40s', %.0f ms", mass, resistance, instability,
                       lastText.c_str(), ms);
         panel.note += note;
@@ -4006,6 +4047,10 @@ bool readPanelRows(const cv::Mat& frame, TextLineReader& lines, const std::array
         }
     }
     panel.stats.ore = ore;
+    if(instability==0 || mass<100){
+        RockContents gems;readRockContents(frame,panel,ore,lines,gems);
+        if(!contentsPieceQuotesReady(gems))return false;
+    }
     // The figures are the second reader's now, and what the shapes made of
     // the same place comes out of the panel. The app hands a panel whose mass
     // carries the shapes' likeness to the PanelSteadier - which would sum the
@@ -4026,6 +4071,9 @@ bool readPanelRows(const cv::Mat& frame, TextLineReader& lines, const std::array
 
 namespace {
 void completePanelVolume(const cv::Mat& frame,TextLineReader* lines,ScanPanel& panel) {
+    // Gem panels can show fractional SCU prefixes. Piece quotes need no
+    // volume, so do not pass an unverified unit through the ship-ore model.
+    for(const auto& gem:HAND_MINING_BANDS)if(panel.stats.ore==gem.ore){panel.stats.scu=0;return;}
     if(panel.stats.scu>0 || !lines || !lines->ready() || panel.labels.x<0 || panel.labelScale<=0)return;
     const double s=panel.labelScale;
     const cv::Rect screen(0,0,frame.cols,frame.rows);
@@ -4044,6 +4092,23 @@ void completePanelVolume(const cv::Mat& frame,TextLineReader* lines,ScanPanel& p
     const auto band=cv::Rect((int)std::lround(panel.labels.x+90*s),(int)std::lround(panel.labels.y+98*s),
         (int)std::lround(170*s),(int)std::lround(55*s))&screen;
     const auto words=whiteWordsIn(frame,band);
+    const auto contextRow=cv::Rect((int)std::lround(panel.labels.x-10*s),(int)std::lround(panel.labels.y+108*s),
+        (int)std::lround(246*s),(int)std::lround(32*s))&screen;
+    double contextAmount=-2;
+    auto confirmedContextAmount=[&]() {
+        if(contextAmount!=-2)return contextAmount;
+        contextAmount=-1;
+        if(contextRow.width<40||contextRow.height<8)return contextAmount;
+        auto context=lines->read(frame(contextRow));std::string text;
+        for(unsigned char c:context.text)if(!std::isspace(c))text+=(char)std::toupper(c);
+        static const std::regex rowFormat(R"((?:COMP|CMP)[.:]?([0-9]{1,3}[.,][0-9]{2})SCU)");
+        std::smatch match;
+        if(context.mean>=0.80&&std::regex_match(text,match,rowFormat)) {
+            auto number=match[1].str();std::replace(number.begin(),number.end(),',','.');
+            contextAmount=std::atof(number.c_str());
+        }
+        return contextAmount;
+    };
     for(const auto& number:words)for(const auto& unit:words) {
         int gap=unit.x-(number.x+number.width);
         if(gap<0||gap>number.height*2||std::abs(unit.y-number.y)>number.height*.5||
@@ -4052,15 +4117,40 @@ void completePanelVolume(const cv::Mat& frame,TextLineReader* lines,ScanPanel& p
         auto unitBox=cv::Rect(unit.x-1,unit.y-pad,unit.width+1+pad,unit.height+2*pad)&screen;
         const auto reading=lines->read(frame(unitBox));std::string text;
         for(unsigned char c:reading.text)if(!std::isspace(c))text+=(char)std::toupper(c);
-        if(reading.mean<0.80||text!="SCU")continue;
-        const int npad=std::max(4,(int)std::lround(6*s));
-        const auto digits=cv::Rect(number.x-npad,number.y-npad,number.width+npad,number.height+2*npad)&screen;
-        if(accept(lines->read(frame(digits)),"by aligned number/unit"))return;
+        if(reading.mean<0.65||text!="SCU")continue;
+        // Decimal gaps and narrow 1s split one printed number into several
+        // connected components. Grow the numeric group leftwards before
+        // cutting it; the SCU token remains a separate verified anchor.
+        cv::Rect group=number;
+        bool extended=true;
+        while(extended) {
+            extended=false;
+            for(const auto& piece:words) {
+                const int end=piece.x+piece.width;
+                if(piece.x>=group.x||end>group.x+2||group.x-end>number.height||
+                   std::abs(piece.y-number.y)>number.height*.5||
+                   std::abs(piece.height-number.height)>number.height*.5)continue;
+                group|=piece;extended=true;
+            }
+        }
+        const int npad=std::max({4,(int)std::lround(6*s),(int)std::lround(number.height*.85)});
+        const auto digits=cv::Rect(group.x-npad,group.y-npad,group.width+npad,group.height+2*npad)&screen;
+        const auto value=lines->read(frame(digits));
+        if(reading.mean<0.80) {
+            // A faint unit may read correctly but below the usual threshold.
+            // Require the complete labelled COMP row to independently confirm
+            // the same numeric amount; do not relax the 0.95 numeric gate.
+            std::string number;for(unsigned char c:value.text)if(!std::isspace(c))number+=(char)c;
+            if(!std::regex_match(number,format))continue;
+            std::replace(number.begin(),number.end(),',','.');
+            const double context=confirmedContextAmount();
+            if(context<=0||std::abs(std::atof(number.c_str())-context)>.005)continue;
+        }
+        if(accept(value,"by aligned number/unit"))return;
     }
     // Keep the earlier context-checked path for fonts whose white strokes
     // join the number and unit into one connected word.
-    const auto contextRow=cv::Rect((int)std::lround(panel.labels.x-10*s),(int)std::lround(panel.labels.y+108*s),
-        (int)std::lround(246*s),(int)std::lround(32*s))&screen;
+
     if(contextRow.width<40||contextRow.height<8)return;
     const auto context=lines->read(frame(contextRow));std::string label=context.text;
     for(char& c:label)c=(char)std::toupper((unsigned char)c);
@@ -4379,7 +4469,7 @@ ScanPanel readScanPanel(const cv::Mat& frame, OCREngine& ocr, GlyphReader* glyph
         // face grouping and the rule pairs. White values still form a clean
         // column. The neural reader must verify all three labels/formats.
         if(mode==4&&lines&&lines->ready()&&!noLines) {
-            for(const auto& f:whiteFigureLineCandidates(frame,hudBand(frame.size()),8)) {
+            for(bool smallMineral:{false,true})for(const auto& f:whiteFigureLineCandidates(frame,hudBand(frame.size()),8,smallMineral)) {
                 ScanPanel found;
                 const double s=((f.values[2].y-f.values[0].y)*.5)/SHAPE_ROW_PITCH;
                 found.labels={(int)std::lround(f.values[0].x-SHAPE_VALUE_DX*s),
@@ -4412,7 +4502,7 @@ ScanPanel readScanPanel(const cv::Mat& frame, OCREngine& ocr, GlyphReader* glyph
                     static const std::regex massFormat(R"([0-9]{1,6})"),resFormat(R"([0-9]{1,3}%)"),instFormat(R"([0-9]{1,4}[.,][0-9]{2})");
                     if(!verified||!std::regex_match(digits[0],massFormat)||!std::regex_match(digits[1],resFormat)||!std::regex_match(digits[2],instFormat))continue;
                     const float mass=lineWhole(digits[0]),res=facePercent(digits[1]),inst=faceTwoPlaces(digits[2],true);
-                    if(mass<=0||res<0||res>100||inst<=0)continue;
+                    if(mass<=0||res<0||res>100||inst<0)continue;
                     found.stats.mass=mass;found.stats.resistance=res;found.stats.instability=inst;
                     found.stats.resistanceAdjusted=printedInColour(frame,f.values[1])&&!printedInColour(frame,f.values[0]);
                     found.oreRow=f.rows[0];found.stats.ore=oreByLine(frame,found.oreRow,*lines);
@@ -4421,6 +4511,10 @@ ScanPanel readScanPanel(const cv::Mat& frame, OCREngine& ocr, GlyphReader* glyph
                             (int)std::lround(55*s),f.rows[0].height+5)&cv::Rect(0,0,frame.cols,frame.rows);
                         auto ore=lines->read(frame(oreBox));
                         if(ore.mean>=0.75)found.stats.ore=snapOreName(ore.text);
+                    }
+                    if(smallMineral||inst==0){
+                        RockContents gems;readRockContents(frame,found,found.stats.ore,*lines,gems);
+                        if(!contentsPieceQuotesReady(gems))continue;
                     }
                     found.found=true;found.confidence=1;found.figuresRead=3+(found.stats.ore.empty()?0:1);
                     found.box=f.rows[1]|f.rows[3];found.note="; verified split labels and values";

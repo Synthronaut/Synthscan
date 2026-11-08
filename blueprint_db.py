@@ -17,7 +17,13 @@ def synchronized(method):
     return locked
 
 DEFAULT_SC_DIR = r"C:\Program Files\Roberts Space Industries\StarCitizen\LIVE"
-BLUEPRINT_LIB_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "blueprints_library.json")
+DEFAULT_BLUEPRINT_LIB_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "blueprints_library.json")
+BLUEPRINT_LIB_FILE = DEFAULT_BLUEPRINT_LIB_FILE
+try:
+    from installation import PROFILE
+    BLUEPRINT_OWNED_FILE = str(PROFILE / "owned_blueprints.txt")
+except Exception:
+    BLUEPRINT_OWNED_FILE = ""
 
 def categorize_blueprint(name: str) -> str:
     n = name.lower()
@@ -143,6 +149,23 @@ class BlueprintManager:
         else:
             self.blueprints = {}
 
+        # Merge ownership records from native owned_blueprints.txt if present
+        try:
+            if BLUEPRINT_OWNED_FILE and os.path.exists(BLUEPRINT_OWNED_FILE) and BLUEPRINT_LIB_FILE == DEFAULT_BLUEPRINT_LIB_FILE:
+                from blueprint_strings import native_owned_names
+                for name in native_owned_names(BLUEPRINT_OWNED_FILE):
+                    if name not in self.blueprints:
+                        cat = categorize_blueprint(name)
+                        self.blueprints[name] = {
+                            'name': name,
+                            'category': cat,
+                            'unlocked_at': datetime.now().isoformat(),
+                            'source': 'Manual / Native',
+                            'cost': generate_default_cost(name, cat)
+                        }
+        except Exception:
+            pass
+
         if os.path.exists(BLUEPRINT_CATALOG_FILE):
             try:
                 with open(BLUEPRINT_CATALOG_FILE, "r", encoding="utf-8") as f:
@@ -176,12 +199,12 @@ class BlueprintManager:
         base_dir = custom_dir or self.sc_dir
         pattern = re.compile(r"Received Blueprint:\s*(.*?):")
         new_count = 0
-        
+
         all_logs = glob.glob(os.path.join(base_dir, "logbackups", "*.log"))
         game_log = os.path.join(base_dir, "Game.log")
         if os.path.exists(game_log):
             all_logs.append(game_log)
-            
+
         for log_path in all_logs:
             fname = os.path.basename(log_path)
             try:

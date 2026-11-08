@@ -98,7 +98,7 @@ def watch():
                         exit_code=code,exit_hex=f'0x{code & 0xffffffff:08X}',app_running=running))
                     logger.info('Launched process pid=%s exited code=%s (0x%08X), app_running=%s',process.pid,code,code & 0xffffffff,running)
                     process=None
-                if policy.update(games,running or setup_busy(),ready,read_quit(games)):
+                if policy.update(games,running or setup_busy() or instance_running('updating'),ready,read_quit(games)):
                     process=launch(True);logger.info('Started native SynthScan pid=%s for game pids=%s',process.pid,sorted(games))
                 if running and not ready and policy.started_at and time.time()-policy.started_at>60:
                     last_error='Native application has not reported ready. Open SynthScan manually to inspect startup.'

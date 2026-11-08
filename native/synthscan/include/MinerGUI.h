@@ -62,6 +62,7 @@ struct FrostCache {
 // Forward declaration
 class MinerGUI;
 bool blueprintOwnershipChecklistSelfTest();
+bool rockValuePresentationSelfTest();
 
 // Global instance for the window procedure
 inline MinerGUI* g_guiInstance = nullptr;
@@ -80,6 +81,13 @@ public:
     // Hides the window
     void hide();
 
+    // Quick profile controls use the normal per-head save/restore path.
+    std::vector<std::wstring> miningProfileNames() const;
+    int selectedMiningProfile() const { return fit_; }
+    void selectMiningProfile(int index);
+    void editMiningLoadout() { showLoadout(true); }
+    void manageMiningProfiles() { setShipPickerOpen(true); }
+
     // Updates the display with new analysis results.
     // confidence: OCR confidence in percent, or < 0 for manual input.
     // `outOfPlace` says the place the log names explains none of these -
@@ -92,6 +100,7 @@ public:
     // The game's scan panel is up, and this is what it says. The window swaps
     // to the rock view for as long as it stays up.
     void updateRock(const RockStats& rock);
+    void updatePieceScan(const RockContents& contents);
     // ...and it is gone. Back to the signature view, without anyone clicking.
     void clearRock();
     bool rockInView() const { return rockInView_; }
@@ -100,6 +109,18 @@ public:
     // (RockContents.h): each part's share and its quality. Shown with the
     // rock and gone with it; a list without parts takes the last one off.
     void setRockContents(const RockContents& contents);
+    const RockStats& displayedRock() const { return rock_; }
+    const RockContents& displayedContents() const { return rockContents_; }
+    bool rockOnView() const { return rockInView_; }
+    void setContentsReadNote(const std::string& note) { contentsReadNote_ = note; }
+    const std::string& contentsReadNote() const { return contentsReadNote_; }
+    std::vector<std::wstring> displayedRockValueLines() const { return rockValueLines(); }
+    double rockReadAgeSeconds() const {
+        return rockReadAt_==std::chrono::steady_clock::time_point{}?-1:
+            std::chrono::duration<double>(std::chrono::steady_clock::now()-rockReadAt_).count();
+    }
+
+
     // What the player bought and sold at the commodity terminals, the oldest
     // first (TradeBook): the Ore Finder lists an ore's own under its places
     void setTrades(std::vector<Trade> trades);
@@ -174,6 +195,9 @@ public:
         // put aside when the ship's HUD shows another laser fitted, back on
         // the head when it shows that one again (fitTakes)
         std::vector<std::pair<const MiningLaser*, float>> crafted;
+        // MOLE turrets can carry the same model with different item bonuses.
+        // A swapped-out laser's value belongs to its own turret, not every head.
+        std::vector<std::vector<std::pair<const MiningLaser*,float>>> craftedHeads;
     };
     static constexpr int MAX_FITS = 12;
     static constexpr int MAX_HULLS = 8;           // per fit: a claim makes a new id every so often
@@ -240,6 +264,7 @@ public:
     // into `kept`, and comes back with one that returns
     static void putLaser(std::vector<std::pair<const MiningLaser*, float>>& kept, MiningLoadout& head,
                          const MiningLaser* laser);
+    static void putProfileLaser(ShipFit& profile,int slot,MiningLoadout& head,const MiningLaser* laser);
     // --screenshot only: put the window into a state worth a picture
     void pickShipForShot(const char* id) {
         if (const MiningShip* kind = shipById(id)) {
@@ -267,7 +292,7 @@ public:
     // shortcuts and IsDialogMessage sit on. WM_CHAR delivered straight to
     // the procedure would skip that path.
     void typeCraftedForShot(const wchar_t* text) {
-        craftedEditing_ = true;
+        beginCraftedEditing();
         SetFocus(hwnd_);
         for (const wchar_t* c = text; *c; c++) {
             const UINT vk = (*c == L'.') ? VK_OEM_PERIOD : (UINT)*c;
@@ -506,9 +531,10 @@ public:
     bool isOverlayMode() const { return overlayMode_; }
     // The overlay out of screen captures while live mode is on, in them otherwise
     void keepOutOfCaptures();
-    // ...and every click through it to the game while Bedrock is not the
-    // window in front; Alt-Tab to Bedrock, and it takes clicks again
+    // Passive body during play; explicit buttons remain usable without activation.
     void updateClickThrough();
+    bool isOverlayButton(HWND button) const;
+    HWND overlayButtonAt(POINT screenPoint) const;
     // A rock's ores in the overlay: one to a row (true, the overlay two rows
     // taller) or all on one line; kept in window.txt
     void setOverlayOreRows(bool rows);
@@ -701,6 +727,8 @@ public:
 
 private:
     friend bool blueprintOwnershipChecklistSelfTest();
+    friend bool rockValuePresentationSelfTest();
+    friend bool craftedPowerEditorSelfTest();
     void toggleBlueprintOwned(int blueprint);
     HWND hwnd_ = nullptr;
     HINSTANCE hInstance_ = nullptr;
@@ -766,7 +794,8 @@ private:
     // by hand.
     bool rockInView_ = false;
     RockStats rock_;
-    RockContents rockContents_;   // what it holds; no parts until its list was read
+    RockContents rockContents_;
+    std::string contentsReadNote_;   // what it holds; no parts until its list was read
     std::vector<Trade> trades_;   // see setTrades
     // What the ship carries. It does not change between rocks, so it is set
     // once rather than read off the screen on every scan.
@@ -966,6 +995,13 @@ private:
     bool loadoutOpen_ = false;
     std::string craftedEntry_;          // what is being typed into the % field
     bool craftedEditing_ = false;
+    bool craftedSelected_ = false;
+    float craftedOriginal_ = 0;
+    void syncCraftedEntry();
+    void beginCraftedEditing();
+    bool typeCraftedCharacter(wchar_t c);
+    void previewCraftedEntry();
+    void finishCraftedEditing(bool keep);
     struct LoadoutHit { Gdiplus::RectF rect; int kind; int value; };
     // kind 0 laser, 1 module slot, 2 gadget, 3 the crafted field, 4 close
     std::vector<LoadoutHit> loadoutHits_;
@@ -1160,6 +1196,7 @@ private:
     std::shared_ptr<const RockPriceBook> rockPrices_;
     std::string rockPriceNote_;
     std::vector<std::wstring> rockValueLines() const;
+    std::wstring laserRangeLine() const;
     bool planPulse_ = false;          // the blink's beat
     // The Ore Finder's UEX tab: what players on the UEX marketplace buy and
     // sell the picked ore for, and at what quality; for the ground's two

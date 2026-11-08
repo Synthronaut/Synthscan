@@ -3,7 +3,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import Mock,patch
 from executive_hangar import HangarScheduleService,project
 from hangar_verification import HangarVerification,installed_build
 from hangar_card import card_svg,HangarPublisher
@@ -18,9 +18,12 @@ class HangarVerificationTests(unittest.TestCase):
         self.directory=Path(self.folder.name);self.watch=HangarVerification(self.directory)
         self.schedule=json.loads((ROOT/'data/executive_hangar_schedule.json').read_text())
         self.now=1793491200
+        mock=patch('executive_hangar.fetch_resets',return_value=dict(ok=True,checked_at=self.now,latest_reset_at=0))
+        mock.start();self.addCleanup(mock.stop)
         self.build=dict(patch='4.10.2',fingerprint='build-a',built_on='2026-10-12')
 
     def evaluate(self,build=None,schedule=None,**kw):
+        kw.setdefault('reset_check',dict(ok=True,checked_at=self.now,latest_reset_at=0))
         return self.watch.evaluate(build or self.build,schedule or self.schedule,self.now,self.now,**kw)
 
     def test_matching_community_patch_is_an_estimate_not_live_verification(self):
@@ -116,6 +119,7 @@ class HangarVerificationTests(unittest.TestCase):
         schedule=copy.deepcopy(self.schedule);schedule['reset_check']=dict(ok=True,checked_at=self.now,latest_reset_at=0)
         updated=copy.deepcopy(schedule);updated['anchor_ms']+=600000
         service=HangarScheduleService(self.directory,Mock(return_value=updated));service.schedule=schedule;service.fetched_at=self.now
+        service.reset_check=schedule['reset_check']
         publisher=HangarPublisher(self.directory,321);publisher.game=game
         try:
             publisher.tick(service,True,self.now)

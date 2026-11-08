@@ -13,8 +13,8 @@ import zipfile
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
-VERSION='0.1.0-alpha.8'
-PRIVATE={'loginData.json','inventory.json','config.json','region_config.txt','owned_blueprints.txt',
+VERSION='0.1.0-alpha.9'
+PRIVATE={'quantum_timer_status.json','quantum_timer_status.json.tmp','quantum_timer_command.json','quantum_timer_command.json.tmp','contract_share_preferences.json','contract_share_preferences.json.tmp','contract_share_status.json','contract_share_status.json.tmp','daylight_preferences.json.tmp','daylight_calibration.json.tmp','daylight_preferences.json','daylight_calibration.json','daylight_catalogue.json.tmp','loginData.json','inventory.json','config.json','region_config.txt','owned_blueprints.txt',
     'blueprints_library.json','blueprints_favorites.json','reputation_snapshot.json','reputation_localization_state.json',
     'server_log.json','shard_history.json','uex_token.dat','uex_key.dat','portable.txt',
     'native_runtime.json','workspace_library.json','launch_target.json','installation.json',
@@ -25,6 +25,11 @@ PRIVATE={'loginData.json','inventory.json','config.json','region_config.txt','ow
     'compboard_inventory.sqlite3-wal','compboard_inventory.sqlite3-shm',
     'native_status.json','top_hud_status.json','session_state.json','credentials.json','.env'}
 IGNORED={'.git','__pycache__','.venv','node_modules','synthscan-build','build'}
+PRIVATE.update({'directory_vehicles.json','item_directory_request.json','item_directory_detail.json','item_directory_catalog.json','data_update_status.json','data_update_command.json','hangar_update_status.json',
+    'hangar_update_command.json','hangar_reset_sync.json','catalogue_current.json'})
+PRIVATE.update({'update_preferences.json','app_update_status.json','reference_source_status.json','reference_source_current.json',
+    'mining_reference.json','mining_reference_status.json','signing-key.dpapi'})
+PRIVATE.update({'finder_market_index.json','finder_market_request.json','finder_market_detail.json','finder_market_cache'})
 
 
 def copy_tree(source,destination):
@@ -40,7 +45,7 @@ def stage_source(destination):
     for file in ROOT.glob('*.py'):
         if file.name.startswith('test_') or file.name=='make_shortcut.py':continue
         shutil.copy2(file,destination/file.name)
-    for name in ['LICENSES.md','README.md','CHANGELOG.md','PRIVACY.md','SECURITY.md','BUILDING.md','requirements-release.lock','.gitignore']:
+    for name in ['LICENSES.md','README.md','CHANGELOG.md','PRIVACY.md','SECURITY.md','BUILDING.md','requirements-release.lock','DISTRIBUTION.md','SERVER_HISTORY.md','update_trust.json','.gitignore']:
         shutil.copy2(ROOT/name,destination/name)
     shutil.copy2(ROOT/'native/synthscan/LICENSE',destination/'LICENSE')
     for name in ['synthscan','mining_worker']:copy_tree(ROOT/'native'/name,destination/'native'/name)
@@ -49,17 +54,19 @@ def stage_source(destination):
     copy_tree(ROOT/'installer',destination/'installer')
     (destination/'tests').mkdir()
     for file in (ROOT/'tests').glob('*.py'):shutil.copy2(file,destination/'tests'/file.name)
-    for name in ['bedrock','starbreaker','game_artwork','presentmon','executive_hangar']:copy_tree(ROOT/'third_party'/name,destination/'third_party'/name)
+    for name in ['bedrock','starbreaker','game_artwork','presentmon','executive_hangar','versetime']:copy_tree(ROOT/'third_party'/name,destination/'third_party'/name)
     for name in ['opencv_download.json','zstd_source.json','vc_runtime.json','vc_runtime_NOTICE.txt']:
         target=destination/'third_party/build_tools'/name;target.parent.mkdir(parents=True,exist_ok=True)
         shutil.copy2(ROOT/'third_party/build_tools'/name,target)
     (destination/'data').mkdir()
     for file in (ROOT/'data').iterdir():
-        if file.is_file() and not file.name.startswith('local_'):shutil.copy2(file,destination/'data'/file.name)
+        if file.is_file() and file.name not in PRIVATE and not file.name.startswith('local_'):shutil.copy2(file,destination/'data'/file.name)
     (destination/'assets').mkdir()
+    (destination/'docs').mkdir(exist_ok=True)
+    shutil.copy2(ROOT/'docs/material-quality-values.md',destination/'docs/material-quality-values.md')
     shutil.copy2(ROOT/'assets/snare_watch.wav',destination/'assets/snare_watch.wav')
     if (ROOT/'.github').exists():copy_tree(ROOT/'.github',destination/'.github')
-    (destination/'release.json').write_text(json.dumps(dict(version=VERSION,channel='community-alpha')),encoding='utf-8')
+    (destination/'release.json').write_text(json.dumps(dict(version=VERSION,channel='community-alpha',updater_schema=1,setup_schema=1)),encoding='utf-8')
     audit(destination)
     return destination
 
@@ -69,7 +76,7 @@ def audit(destination):
     files=list(destination.rglob('*'))
     for file in files:
         if not file.is_file():continue
-        if file.name in PRIVATE:raise ValueError('Private file included: '+str(file.relative_to(destination)))
+        if file.name in PRIVATE or file.suffix.lower()=='.dpapi':raise ValueError('Private file included: '+str(file.relative_to(destination)))
         relative=file.relative_to(destination)
         if relative.parts[0] in ('research','backups','release-validation','voice_cache'):
             raise ValueError('Development data included: '+str(relative))

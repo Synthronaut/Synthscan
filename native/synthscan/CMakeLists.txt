@@ -218,6 +218,7 @@ set(SOURCES
     src/DxgiCapture.cpp
     src/FrameRecorder.cpp
     src/Application.cpp
+    src/MiningReference.cpp
     src/MinerGUI.cpp
     src/Updater.cpp
     src/DevTools.cpp

@@ -105,10 +105,11 @@ private:
     struct LineLooked {
         cv::Rect where;
         std::chrono::steady_clock::time_point when;
+        cv::Mat patch;
     };
     std::vector<LineLooked> lineLooked_;
-    bool lineLookedAt(const cv::Rect& where);
-    void rememberLineLook(const cv::Rect& where);
+    bool lineLookedAt(const cv::Rect& where,const cv::Mat& image);
+    void rememberLineLook(const cv::Rect& where,const cv::Mat& image);
     // Rolling record of what the scan looked at, so a missed reading can be
     // replayed later instead of reconstructed from a screenshot taken too late
     FrameRecorder recorder_;
@@ -168,6 +169,12 @@ private:
     std::chrono::steady_clock::time_point lastRockLook_{};
     int rockMisses_ = 0;          // panels missed in a row; the view waits
     OCREngine rockOcr_;
+    GlyphReader rockGlyphReader_;
+    TextLineReader rockTextLines_; // keep panel OCR off the signature reader's model/mutex
+    struct RockPanelAnswer {cv::Mat frame;ScanPanel panel;RockContents pieces;
+        bool pieceReady=false;std::chrono::steady_clock::time_point captured{};};
+    std::future<RockPanelAnswer> rockPanelJob_;
+    bool fastGemSeat_=false,fastGemActive_=false;
     bool rockOcrTried_ = false;
     bool rockOcrReady_ = false;
     bool rockSeen_ = false;       // the last look had one, for the log line
@@ -236,7 +243,8 @@ private:
     void takeRockContents(const RockContents& read, const RockStats& rock);
     void clearRockView();                    // the rock off the view, and its list with it
     std::future<RockContents> contentsJob_;  // a reading under way
-    float contentsJobMass_ = 0;              // ...and the rock it was asked for
+    float contentsJobMass_ = 0;
+    RockStats contentsJobRock_, contentsConfirmedRock_, contentsWantedRock_;              // ...and the rock it was asked for
     bool contentsPartial_ = false;
     float contentsFor_ = 0;                  // the mass of the rock the view's list is of; 0: it has none
     std::string contentsOre_;                // ...and its ore
@@ -374,7 +382,7 @@ public:
     // itself goes no further)
     static std::string uexTokenForProbe();
     static std::shared_ptr<RockPriceBook> loadRockPrices(const std::filesystem::path& folder,
-                                                       const std::string& version, std::string& note);
+        const std::string& version,std::string& note,const std::vector<std::string>& materials={});
     // ...and the marketplace's listings of one ore, told as lines - no
     // player's name in them
     static std::string uexMarketForProbe(const std::filesystem::path& folder, const std::string& ore);
@@ -383,6 +391,7 @@ private:
     struct RockPriceAnswer { std::shared_ptr<RockPriceBook> prices; std::string note; };
     std::future<RockPriceAnswer> rockPriceJob_;
     std::chrono::steady_clock::time_point rockPriceAsked_{};
+    std::string rockPriceMaterials_;
     void serviceRockPrices();
     bool uexPushed_ = false;                       // the window has been told whether it is on
     std::future<UexOutcome> uexJob_;               // the asking in flight, off the UI thread

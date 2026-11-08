@@ -166,6 +166,10 @@ std::string oreLocationOf(std::string_view placeName) {
 GamePlace placeByLogName(std::string_view logName, std::string_view systemHint) {
     const std::string name = trimmed(logName);
     if (name.empty() || name == "<= UNINITIALIZED =>") return {};
+    if(sameName(name,"Terminus Rings")||sameName(name,"Pyro VI (Terminus) Rings"))
+        return {"Terminus Ring","Pyro","Terminus Ring",0};
+    if(sameName(name,"Yela Ring")||sameName(name,"Yela Rings"))
+        return {"Yela Asteroid Belt","Stanton","Yela Asteroid Belt",0};
     // The system itself, out in space: no place
     for (const char* sys : {"Stanton", "Pyro", "Nyx"}) {
         if (sameName(name, sys) || sameName(name, std::string(sys) + " System")) return {};
@@ -401,10 +405,23 @@ std::string jumpDestination(std::string_view internalName) {
     return jumpPoint(trimmed(internalName), nullptr, &to) ? to : "";
 }
 
+GamePlace automaticMiningPlace(const GamePlace& place){
+    for(const auto& row:ORE_LOCATIONS){
+        if(place.oreLocation==row.location&&(std::strcmp(row.kind,"planet")==0||std::strcmp(row.kind,"moon")==0)){
+            return {place.name+" vicinity (mining zone unknown)",place.system,"",-1};
+        }
+    }
+    return place;
+}
+
 bool contradictsHandPlace(std::string_view handPlace, std::string_view namedPlace, std::string_view namedSystem) {
     const GamePlace hand = placeByLogName(handPlace, "");
     if (!hand.known() || hand.system.empty()) return false;
     const std::string named = trimmed(namedPlace);
+    // Parent-body navigation messages cannot disprove a manually selected ring.
+    const GamePlace log=placeByLogName(named,namedSystem);
+    if((hand.name=="Terminus Ring"&&log.name=="Terminus")||
+       (hand.name=="Yela Asteroid Belt"&&log.name=="Yela"))return false;
     if (!named.empty()) return !sameName(named, hand.name);
     const std::string system = trimmed(namedSystem);
     if (system.empty()) return false;

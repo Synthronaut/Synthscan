@@ -37,7 +37,8 @@ def render_original_bar(self):
         game_running, is_connected, sfps, cfps, ping, packet_ping, rst, ent,
         shard_pop, srv_pop, shard_id, srv_id, srv_name, callsign,
         reg_raw, loc_display, self.bar_width,
-        s.get("hop_status"), s.get("region_shards_seen"), s.get("health", {}).get("label")
+        s.get("hop_status"), s.get("region_shards_seen"), s.get("health", {}).get("label"),
+        (s.get('shard_observation') or {}).get('history_label')
     )
     if getattr(self, "_last_rendered_key", None) == cache_key:
         return
@@ -231,6 +232,8 @@ def render_original_bar(self):
         h_bg = "#0d131a"
         h_bdr = "#1e293b"
         badge_txt = f"{hop_status} | {reg_seen} SEEN" if reg_seen > 0 else hop_status
+        history_label=(s.get('shard_observation') or {}).get('history_label')
+        if history_label:badge_txt+=' · '+history_label
         tmp_t = c.create_text(0, 0, text=badge_txt, font=("Consolas", 8, "bold"))
         tb = c.bbox(tmp_t)
         c.delete(tmp_t)

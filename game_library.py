@@ -3,15 +3,17 @@ from functools import lru_cache
 import json
 from pathlib import Path
 from installation import output_root, game_directory
+from reference_catalogs import catalogue_path
 
 ROOT = Path(__file__).resolve().parent
 
 
 class GameLibrary:
     def __init__(self, path=None):
-        self.path = Path(path or output_root() / 'data/local_game_library.json')
+        self.path = Path(path) if path else None
         self.error = ''
         try:
+            if self.path is None:self.path=catalogue_path(output_root(),'local_game_library.json')
             self.data = json.loads(self.path.read_text(encoding='utf-8'))
             if (not isinstance(self.data, dict) or not isinstance(self.data.get('entries'), list)
                     or not isinstance(self.data.get('assets'), dict) or not isinstance(self.data.get('provenance'), dict)):

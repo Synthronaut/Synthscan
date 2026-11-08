@@ -14,7 +14,11 @@ from localization_lock import localization_lock
 HEADING = re.compile(r'<EM4>(?:Potential Blueprints|Multiple Blueprint Pools)(?:\s*\([^<]*\))?</EM4>', re.I)
 ITEM = re.compile(r'^(\s*-\s*)(?:\[(?:OWNED|X|✔|\s*)\]\s*)?(.+?)(\s*)$')
 # Remove category annotations, never identity such as (S1) or magazine capacity.
-CATEGORY = re.compile(r'\s*\((?:Cooler|Shield|Shield Generator|Power Plant|Quantum Drive|Salvage Mod|Salvage Module|Mining Laser|Mining Head|Weapon|Armor|Clothing)\)\s*$', re.I)
+CATEGORY = re.compile(
+    r'\s*\((?:Cooler|Shield|Shield Generator|Power\s*Plant|Powerplant|Quantum Drive|Salvage Mod|Salvage Module|Mining Laser|Mining Head|Radar|Fuel\s*Nozzles?|Weapon|Armor|Clothing)\)\s*$',
+    re.I
+)
+BASE_SUFFIX = re.compile(r'\s+Base$', re.I)
 
 
 def normalise_name(name):
@@ -24,7 +28,55 @@ def normalise_name(name):
 
 
 def item_key(name):
-    return normalise_name(CATEGORY.sub('', name))
+    clean = CATEGORY.sub('', name)
+    clean = BASE_SUFFIX.sub('', clean)
+    return normalise_name(clean)
+
+
+SPECIAL_TITLE_MAP = {
+    'bhg_bounty_desc_rockcracker_power_001': 'bhg_bounty_title_rockcracker_001',
+    'bhg_bounty_desc_rockcracker_zone1_001': 'bhg_bounty_title_rockcracker_001',
+    'bhg_bounty_desc_rockcracker_zone2_001': 'bhg_bounty_title_rockcracker_001',
+    'northrock_bounty_fps_ugf_boss_desc_001': 'northrock_bounty_fps_title_001',
+    'northrock_bounty_fps_ugf_boss_nocivs_desc_001': 'northrock_bounty_fps_title_001',
+}
+
+
+def resolve_title_key(dk, all_keys):
+    """Find the corresponding mission title key for a blueprint description key."""
+    if dk in SPECIAL_TITLE_MAP and SPECIAL_TITLE_MAP[dk] in all_keys:
+        return SPECIAL_TITLE_MAP[dk]
+    c1 = re.sub(r'_(?:desc|description)(?=_|$)', '_title', dk)
+    if c1 in all_keys:
+        return c1
+    c2 = re.sub(r'_(?:desc|description)(?=_|$)', '_name', dk)
+    if c2 in all_keys:
+        return c2
+    c3 = re.sub(r'_(?:desc|description).*$', '_title', dk)
+    if c3 in all_keys:
+        return c3
+    c4 = re.sub(r'_(?:desc|description).*$', '_name', dk)
+    if c4 in all_keys:
+        return c4
+    num_m = re.search(r'(_\d+)$', dk)
+    if num_m:
+        c5 = re.sub(r'_(?:desc|description).*$', r'_title' + num_m.group(1), dk)
+        if c5 in all_keys:
+            return c5
+        c5_name = re.sub(r'_(?:desc|description).*$', r'_name' + num_m.group(1), dk)
+        if c5_name in all_keys:
+            return c5_name
+    parts = dk.split('_')
+    if 'desc' in parts:
+        idx = parts.index('desc')
+        if idx > 1:
+            alt = '_'.join(parts[:idx - 1] + ['title'] + parts[idx + 1:])
+            if alt in all_keys:
+                return alt
+            alt_name = '_'.join(parts[:idx - 1] + ['name'] + parts[idx + 1:])
+            if alt_name in all_keys:
+                return alt_name
+    return c1
 
 
 def annotate_blueprint_text(text, owned_names):
@@ -32,10 +84,11 @@ def annotate_blueprint_text(text, owned_names):
     from synthstrings_sync import update_title_tag
     owned = {item_key(n) for n in owned_names}
     lines = text.splitlines(keepends=True)
-    counts = {}
-    desc_updates = title_updates = 0
     def key(line):
-        return line.partition('=')[0].lstrip('\ufeff').split(',')[0].casefold()
+        return line.partition('=')[0].lstrip('\ufeff').split(',')[0].strip().casefold()
+    all_keys = {key(line) for line in lines if '=' in line}
+    counts_sets = {}
+    desc_updates = title_updates = 0
     for i, line in enumerate(lines):
         left, sep, value = line.partition('=')
         heading = HEADING.search(value) if sep else None
@@ -61,16 +114,24 @@ def annotate_blueprint_text(text, owned_names):
                 active = False
         if not seen:
             continue
-        counts[re.sub(r'_(?:desc|description)(?=_|$)', '_title', key(line))] = len(have), len(seen)
+        tk = resolve_title_key(key(line), all_keys)
+        if tk not in counts_sets:
+            counts_sets[tk] = (set(have), set(seen))
+        else:
+            counts_sets[tk][0].update(have)
+            counts_sets[tk][1].update(seen)
         updated = left + '=' + body[:heading.end()] + r'\n'.join(parts) + ending
         desc_updates += updated != line
         lines[i] = updated
+    counts = {k: (len(h), len(s)) for k, (h, s) in counts_sets.items()}
     for i, line in enumerate(lines):
         if key(line) in counts:
             updated = update_title_tag(line, *counts[key(line)])
             title_updates += updated != line
             lines[i] = updated
-    return ''.join(lines), dict(total_missions_with_bp=len(counts),
+    from mining_labels import compact_mining_labels
+    result,label_updates=compact_mining_labels(''.join(lines))
+    return result, dict(mining_label_updates=label_updates,total_missions_with_bp=len(counts),
         complete_missions=sum(h == n for h, n in counts.values()),
         partial_missions=sum(0 < h < n for h, n in counts.values()),
         desc_updates=desc_updates, title_updates=title_updates,

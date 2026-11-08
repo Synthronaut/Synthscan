@@ -24,7 +24,8 @@ def build(payload,output):
     payload=Path(payload).resolve();output=Path(output).resolve();output.mkdir(parents=True,exist_ok=True)
     from package_community import audit
     audit(payload)
-    subprocess.run([str(compiler()),'/Qp','/DPayload='+str(payload),'/DOutput='+str(output),str(ROOT/'installer/SynthScan.iss')],check=True)
+    version=json.loads((payload/'release.json').read_text(encoding='utf-8'))['version']
+    subprocess.run([str(compiler()),'/Qp','/DAppVersion='+version,'/DPayload='+str(payload),'/DOutput='+str(output),str(ROOT/'installer/SynthScan.iss')],check=True)
     file=output/'SynthScan-Setup-Windows-x64.exe'
     digest=hashlib.sha256(file.read_bytes()).hexdigest()
     file.with_suffix('.exe.sha256').write_text(digest+'  '+file.name+'\n',encoding='ascii')

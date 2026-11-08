@@ -205,7 +205,7 @@ struct FigureLines {
                                       // one region's candidates against another's
 };
 std::vector<FigureLines> figureLineCandidates(const cv::Mat& frame, const cv::Rect& region, int most);
-std::vector<FigureLines> whiteFigureLineCandidates(const cv::Mat& frame, const cv::Rect& region, int most);
+std::vector<FigureLines> whiteFigureLineCandidates(const cv::Mat& frame, const cv::Rect& region, int most, bool smallMineral=false);
 
 // ...and those four lines read. The rows are given, not worked out from a
 // label column, so this serves both the shape reader's places and the ones
@@ -344,6 +344,7 @@ cv::Rect panelSpotWindow(const PanelSpot& spot, const cv::Size& frame);
 // is the frame cut to panelSpotWindow - and the score from which a full look
 // is worth its cost: the column's bar less what the reading may make up.
 double glanceAtPanelSpot(const PanelSpot& spot, const cv::Mat& window);
+bool locatePanelAtSpot(const cv::Mat& frame,const PanelSpot& spot,ScanPanel& panel);
 double glanceBar(const PanelSpot& spot);
 
 // An ore's name as Tesseract read it, snapped to the nearest mineral the game

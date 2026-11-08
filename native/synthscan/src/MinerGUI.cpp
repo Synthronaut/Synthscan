@@ -1,5 +1,11 @@
 #include "MinerGUI.h"
 #include "SynthScanShell.h"
+#include "CraftedPower.h"
+#include "HandMiningReference.h"
+#include "OverlayInput.h"
+#ifdef _WIN32
+#include <commctrl.h>
+#endif
 #include "EmbeddedData.h"
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
@@ -35,6 +41,7 @@
 #include <cstring>
 #include <cstdint>
 #include <vector>
+#include <tuple>
 
 namespace SCMiner {
 
@@ -69,6 +76,7 @@ constexpr int HOTKEY_SNAPSHOT = 2;
 constexpr int ORE_ROWS_BUTTON_W = 40;   // the overlay's Rows/Line switch
 #define ID_EDIT_NOTE       1030
 #define ID_EDIT_NOTE_NAME  1031
+#define TIMER_OVERLAY_INPUT 13 // pointer policy only; never generates input
 #define TIMER_NOTE_SAVE    7
 #define TIMER_CARET        8
 #define TIMER_CONFIRM      9
@@ -1055,6 +1063,60 @@ void MinerGUI::createFonts() {
         CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
 }
 
+#ifdef _WIN32
+namespace {
+LRESULT CALLBACK passiveOverlayButton(HWND button, UINT message, WPARAM w, LPARAM l,
+                                     UINT_PTR, DWORD_PTR reference) {
+    auto* gui = reinterpret_cast<MinerGUI*>(reference);
+    // Only a press begun by this subclass can issue a passive click.
+    auto* press = reinterpret_cast<OverlayButtonPress*>(GetPropW(button, L"SynthScan.PassivePress"));
+    if (message == WM_NCDESTROY) {
+        delete press; RemovePropW(button, L"SynthScan.PassivePress");
+        RemoveWindowSubclass(button, passiveOverlayButton, 1);
+        return DefSubclassProc(button, message, w, l);
+    }
+    if (gui->isOverlayMode()) {
+        if (message == WM_MOUSEACTIVATE) return MA_NOACTIVATE;
+        if (message == WM_LBUTTONDOWN || message == WM_LBUTTONDBLCLK) {
+            CURSORINFO cursor{sizeof(cursor)};
+            if (!IsWindowEnabled(button) || !GetCursorInfo(&cursor) ||
+                !(cursor.flags & CURSOR_SHOWING)) return 0;
+            if (!press) {
+                press = new OverlayButtonPress;
+                if (!SetPropW(button, L"SynthScan.PassivePress", press)) { delete press; return 0; }
+            }
+            press->begin();
+            SetCapture(button); // explicit button press only; never captures HUD background
+            SendMessageW(button, BM_SETSTATE, TRUE, 0);
+            return 0; // standard BUTTON processing calls SetFocus; deliberately skip it
+        }
+        if (message == WM_MOUSEMOVE && press && press->down) {
+            RECT rect{}; GetClientRect(button, &rect);
+            POINT at{(short)LOWORD(l), (short)HIWORD(l)};
+            SendMessageW(button, BM_SETSTATE, PtInRect(&rect, at), 0);
+            return 0;
+        }
+        if (message == WM_LBUTTONUP) {
+            RECT rect{}; GetClientRect(button, &rect);
+            POINT at{(short)LOWORD(l), (short)HIWORD(l)};
+            const bool clicked = press && press->release(PtInRect(&rect, at) && IsWindowEnabled(button));
+            SendMessageW(button, BM_SETSTATE, FALSE, 0);
+            if (GetCapture() == button) ReleaseCapture();
+            if (clicked) SendMessageW(GetParent(button), WM_COMMAND,
+                MAKEWPARAM(GetDlgCtrlID(button), BN_CLICKED), reinterpret_cast<LPARAM>(button));
+            gui->updateClickThrough();
+            return 0;
+        }
+        if (message == WM_CONTEXTMENU || message == WM_RBUTTONDOWN || message == WM_RBUTTONUP) return 0;
+    }
+    if ((message == WM_CAPTURECHANGED || message == WM_CANCELMODE) && press) {
+        press->cancel(); SendMessageW(button, BM_SETSTATE, FALSE, 0);
+    }
+    return DefSubclassProc(button, message, w, l);
+}
+}
+#endif
+
 void MinerGUI::createControls() {
     const DWORD editStyle = WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_NUMBER | ES_CENTER;
     const DWORD btnStyle = WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW;
@@ -1073,6 +1135,7 @@ void MinerGUI::createControls() {
     CreateWindowW(L"BUTTON",L"Piracy",btnStyle,0,0,10,10,hwnd_,(HMENU)31811,hInstance_,nullptr);
     CreateWindowW(L"BUTTON",L"Missions",btnStyle,0,0,10,10,hwnd_,(HMENU)31813,hInstance_,nullptr);
     CreateWindowW(L"BUTTON",L"Hangars",btnStyle,0,0,10,10,hwnd_,(HMENU)31818,hInstance_,nullptr);
+    CreateWindowW(L"BUTTON",L"Finder",btnStyle,0,0,10,10,hwnd_,(HMENU)31819,hInstance_,nullptr);
     CreateWindowW(L"BUTTON",L"Start wait",btnStyle,0,0,10,10,hwnd_,(HMENU)31814,hInstance_,nullptr);
     CreateWindowW(L"BUTTON",L"Reset",btnStyle,0,0,10,10,hwnd_,(HMENU)31815,hInstance_,nullptr);
     CreateWindowW(L"BUTTON",L"Alerts on",btnStyle,0,0,10,10,hwnd_,(HMENU)31817,hInstance_,nullptr);
@@ -1098,8 +1161,10 @@ void MinerGUI::createControls() {
     // (placeOreRowsButton)
     btnOreRows_ = CreateWindowW(L"BUTTON", L"Rows", btnStyle & ~WS_VISIBLE,
         0, 0, 10, 10, hwnd_, (HMENU)ID_BTN_ORE_ROWS, hInstance_, nullptr);
-
-
+#ifdef _WIN32
+    for (int id : {1002,1011,1017,1021,31810,31811,31813,31814,31815,31817,31818,31819})
+        SetWindowSubclass(GetDlgItem(hwnd_, id), passiveOverlayButton, 1, reinterpret_cast<DWORD_PTR>(this));
+#endif
 }
 
 void MinerGUI::layoutControls() {
@@ -1125,14 +1190,14 @@ void MinerGUI::layoutControls() {
         MoveWindow(btnLiveMode_, cw - z(scale(8)) - z(scale(46)) - z(scale(4)) - z(scale(58)), btnY,
                    z(scale(58)), btnH, TRUE);
         MoveWindow(btnKeys_,cw-z(scale(8+46+4+58+4+52)),btnY,z(scale(52)),btnH,TRUE);
-        for(int i=0;i<4;i++){HWND tab=GetDlgItem(hwnd_,i==3?31818:i==2?31813:31810+i);ShowWindow(tab,SW_SHOWNOACTIVATE);if(SynthScan::piracyMode())MoveWindow(tab,z(scale(90+i*78)),z(scale(8)),z(scale(74)),z(scale(20)),TRUE);else {int gap=z(scale(4)),margin=z(scale(8)),width=(cw-margin*2-gap*3)/4;MoveWindow(tab,margin+i*(width+gap),rc.bottom-z(scale(27)),width,z(scale(22)),TRUE);}}
-        ShowWindow(btnLiveMode_,SynthScan::hangarsMode()?SW_HIDE:SW_SHOWNOACTIVATE);
-        if(SynthScan::hangarsMode())MoveWindow(btnKeys_,cw-z(scale(8+46+4+52)),btnY,z(scale(52)),btnH,TRUE);
+        for(int i=0;i<5;i++){HWND tab=GetDlgItem(hwnd_,i==4?31819:i==3?31818:i==2?31813:31810+i);ShowWindow(tab,SW_SHOWNOACTIVATE);int gap=z(scale(4)),margin=z(scale(8)),width=(cw-margin*2-gap*4)/5;MoveWindow(tab,margin+i*(width+gap),rc.bottom-z(scale(27)),width,z(scale(22)),TRUE);}
+        ShowWindow(btnLiveMode_,(SynthScan::hangarsMode()||SynthScan::finderMode())?SW_HIDE:SW_SHOWNOACTIVATE);
+        if(SynthScan::hangarsMode()||SynthScan::finderMode())MoveWindow(btnKeys_,cw-z(scale(8+46+4+52)),btnY,z(scale(52)),btnH,TRUE);
         placeOreRowsButton();
         return;
     }
 
-    ShowWindow(GetDlgItem(hwnd_,31810),SW_HIDE);ShowWindow(GetDlgItem(hwnd_,31811),SW_HIDE);ShowWindow(GetDlgItem(hwnd_,31813),SW_HIDE);ShowWindow(GetDlgItem(hwnd_,31818),SW_HIDE);ShowWindow(btnLiveMode_,SW_SHOW);
+    ShowWindow(GetDlgItem(hwnd_,31810),SW_HIDE);ShowWindow(GetDlgItem(hwnd_,31811),SW_HIDE);ShowWindow(GetDlgItem(hwnd_,31813),SW_HIDE);ShowWindow(GetDlgItem(hwnd_,31818),SW_HIDE);ShowWindow(GetDlgItem(hwnd_,31819),SW_HIDE);ShowWindow(btnLiveMode_,SW_SHOW);
     SetWindowTextW(btnKeys_,L"More");
     for (HWND h : fullOnly) ShowWindow(h, SW_SHOW);
     placeOreRowsButton();
@@ -1231,8 +1296,10 @@ void MinerGUI::toggleOverlayMode() {
         GetWindowThreadProcessId(GetForegroundWindow(), &front);
         appActive_ = front == GetCurrentProcessId();
 #endif
+        SetTimer(hwnd_, TIMER_OVERLAY_INPUT, 16, nullptr);
         updateClickThrough();
     } else {
+        KillTimer(hwnd_, TIMER_OVERLAY_INPUT);
         SetWindowLongPtr(hwnd_, GWL_STYLE, WS_OVERLAPPEDWINDOW | WS_VISIBLE | WS_CLIPCHILDREN);
         LONG_PTR ex = GetWindowLongPtr(hwnd_, GWL_EXSTYLE);
         SetWindowLongPtr(hwnd_, GWL_EXSTYLE, ex & ~WS_EX_LAYERED);
@@ -1268,7 +1335,7 @@ void MinerGUI::toggleOverlayMode() {
 // it holds, the verdict's three lines and the gadget - and under either
 // the ship on a line of its own. Without a ship to name, 178. (212: three
 // matches, "no exact match" over them and the ship under them.)
-int MinerGUI::overlayBaseWidth() const {return SynthScan::hangarsMode()?430:SynthScan::piracyMode()?600:OVERLAY_WIDTH;}
+int MinerGUI::overlayBaseWidth() const {return SynthScan::finderMode()?560:SynthScan::hangarsMode()?430:SynthScan::piracyMode()?600:OVERLAY_WIDTH;}
 
 void MinerGUI::refreshActivityLayout(){
     if(!overlayMode_||!hwnd_)return;
@@ -1278,9 +1345,10 @@ void MinerGUI::refreshActivityLayout(){
 }
 
 int MinerGUI::overlayHeight() const {
+    if(SynthScan::finderMode())return 420+30;
     if(SynthScan::hangarsMode())return 150+30;
     if(SynthScan::questingMode())return 350+30+SynthScan::sessionHeight();
-    if(SynthScan::piracyMode())return SynthScan::piracyHeight();
+    if(SynthScan::piracyMode())return SynthScan::piracyHeight()+30;
     // Two rows taller where a rock's ores stand one to a row: three of them,
     // and the verdict under them still in view
     const int extra = overlayOreRows_ ? 17 * (int)(rockContents_.parts.size()+1) : 0;
@@ -1639,6 +1707,7 @@ void MinerGUI::updateRock(const RockStats& read) {
         || std::abs(rock.resistance - rock_.resistance) > 0.1f
         || std::abs(rock.instability - rock_.instability) > 0.01f
         || std::abs(rock.distance - rock_.distance) > 0.2f
+        || std::abs(rock.scu - rock_.scu) > 0.005f
         || rock.resistanceAdjusted != rock_.resistanceAdjusted
         || rock.ore != rock_.ore;
 
@@ -1648,6 +1717,14 @@ void MinerGUI::updateRock(const RockStats& read) {
         placeOreRowsButton();
     }
     if (changed) InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+void MinerGUI::updatePieceScan(const RockContents& contents){
+    if(!contentsPieceQuotesReady(contents))return;
+    const bool first=!everRead_;everRead_=true;
+    RockStats rock;rock.mass=-1;rock.resistance=-1;rock.instability=-1;rock.ore=contents.parts.front().ore;
+    updateRock(rock);setRockContents(contents);
+    if(first)layoutControls();
 }
 
 void MinerGUI::setGadgetPlaced(const MiningGadget* gadget, const std::string& rockClass, long long ageSeconds) {
@@ -1869,21 +1946,71 @@ void MinerGUI::setRockPrices(std::shared_ptr<const RockPriceBook> prices,const s
     if(hwnd_)InvalidateRect(hwnd_,nullptr,FALSE);
 }
 
+std::wstring MinerGUI::laserRangeLine() const {
+    std::wstring values;
+    auto append = [&](const MiningLoadout& fit, const std::wstring& position) {
+        if (!fit.laser) return;
+        if (!values.empty()) values += L"  ·  ";
+        wchar_t distance[32];std::swprintf(distance,32,L"%.0f m",fit.laser->fullRange);
+        const std::wstring name=position.empty()?toW(fit.laser->name):position;
+        values += name + L" " + distance;
+    };
+    if(heads_.size()>1)for(size_t i=0;i<heads_.size();i++)append(heads_[i],headPlace((int)i));
+    else append(loadout_,L"");
+    return values.empty()?L"":L"Laser → rock, full power · "+values;
+}
+
 std::vector<std::wstring> MinerGUI::rockValueLines() const {
     if(!uexEnabled_ || !everRead_)return {};
-    if(!contentsEstimateReady(rockContents_) || rock_.scu<=0)return {L"VALUE: waiting for SCU and complete composition"};
+    auto money=[](double n){wchar_t s[48];if(std::abs(n)>=1000000)std::swprintf(s,48,L"%.2fm",n/1000000);
+        else if(std::abs(n)>=1000)std::swprintf(s,48,L"%.1fk",n/1000);else std::swprintf(s,48,L"%.0f",n);return std::wstring(s);};
+    auto range=[&](double low,double high){return L"~"+money(low)+(std::abs(high-low)>.01?L"–"+money(high):L"");};
+    // Piece prices need validated material/quality, never an inferred SCU-to-piece conversion.
+    if(contentsPieceQuotesReady(rockContents_)) {
+        bool pieces=false,ore=false;
+        for(const auto& part:rockContents_.parts)if(!part.inert){
+            bool gem=false;for(const auto& b:HAND_MINING_BANDS)if(part.ore==b.ore)gem=true;
+            pieces=pieces||gem;ore=ore||!gem;
+        }
+        if(pieces&&!ore){
+            if(!rockPrices_)return {L"VALUE: loading public UEX piece prices..."};
+            std::vector<std::wstring> lines;const auto now=(long long)std::time(nullptr);
+            for(const auto& part:rockContents_.parts)if(!part.inert){
+                const auto q=rockPrices_->marketRange(part.ore,part.quality,"unit",now);
+                std::wstring line=toW(part.ore)+L" Q"+std::to_wstring(part.quality);
+                if(q.known){
+                    line+=L" "+range(q.low,q.high)+L" aUEC/piece";
+                    lines.push_back(line);
+                    lines.push_back(std::wstring(q.historyOnly?L"Historical market estimate · Q":L"Market estimate · Q")+
+                        std::to_wstring(q.qualityMin)+(q.qualityMin!=q.qualityMax?L"-"+std::to_wstring(q.qualityMax):L"")+
+                        (q.limited?L" · limited data":L""));
+                }else lines.push_back(line+L": no recent matching market prices");
+            }
+            lines.push_back(L"Per piece · piece count not established by this scan");
+            return lines;
+        }
+    }
+    if(rock_.scu<=0 && !contentsEstimateReady(rockContents_))return {L"Reader: rock volume and composition not confirmed yet"};
+    if(rock_.scu<=0)return {L"Reader: composition captured; COMP. volume still unread"};
+    if(!contentsEstimateReady(rockContents_))return {L"Reader: volume captured; confirming material rows"};
     if(!rockPrices_)return {rockPriceNote_.empty()?L"VALUE: loading public UEX prices...":L"VALUE: UEX prices unavailable; retrying automatically"};
     const long long now=(long long)std::time(nullptr);
     const auto v=rockPrices_->estimate(rock_.scu,rockContents_,currentSystem_,refineryMethod_,now);
     if(!v.scanned)return {L"VALUE: waiting for a complete, valid rock scan"};
-    auto money=[](double n){wchar_t s[48];if(std::abs(n)>=1000000)std::swprintf(s,48,L"%.2fm",n/1000000);
-        else if(std::abs(n)>=1000)std::swprintf(s,48,L"%.1fk",n/1000);else std::swprintf(s,48,L"%.0f",n);return std::wstring(s);};
     auto age=[now](long long at){long long h=std::max(0ll,(now-at)/3600);return h>=24?std::to_wstring(h/24)+L"d":std::to_wstring(h)+L"h";};
     std::vector<std::wstring> out;
-    out.push_back(v.rawKnown?L"Raw ~"+money(v.raw)+L" aUEC · "+toW(v.rawTerminal)+L" · "+age(v.rawReported):L"Raw: no complete terminal quote");
-    out.push_back(v.refinedKnown?L"Refined ~"+money(v.refined-(v.feesKnown?v.fees:0))+L" aUEC "+(v.feesKnown?L"net":L"before fees")+L" · "+toW(v.refinedTerminal)+L" · "+age(v.refinedReported):L"Refined: no complete terminal quote");
-    if(v.playerCoverage>0)out.push_back(std::wstring(v.playerCoverage<0.999?L"Player portion ~":L"Player ~")+money(v.player)+L" aUEC · "+std::to_wstring((int)std::round(v.playerCoverage*100))+L"% priced · buy-ad average");
-    else out.push_back(L"Player: no matching active buy averages");
+    if(v.playerCoverage>0){
+        out.push_back(std::wstring(v.playerCoverage<0.999?L"Market portion ":L"Market ")+range(v.playerLow,v.playerHigh)+L" aUEC before fees · "+std::to_wstring((int)std::round(v.playerCoverage*100))+L"% priced");
+        if(!v.playerParts.empty()){
+            const auto& p=*std::max_element(v.playerParts.begin(),v.playerParts.end(),[](const auto& a,const auto& b){return a.value<b.value;});
+            wchar_t amount[40];std::swprintf(amount,40,L"%.2f",p.refinedScu);
+            out.push_back(toW(p.material)+L" Q"+std::to_wstring(p.quality)+L" · ~"+amount+L" refined SCU × "+range(p.lowPerScu,p.highPerScu)+L"/SCU");
+        }
+        out.push_back(std::wstring(v.playerHistoryOnly?L"Historical market estimate":L"General market estimate")+(v.playerLimited?L" · limited data":L"")+L" · "+age(v.playerReported));
+    }else{
+        out.push_back(v.refinedKnown?L"Refined ~"+money(v.refined-(v.feesKnown?v.fees:0))+L" aUEC "+(v.feesKnown?L"net":L"before fees")+L" · "+toW(v.refinedTerminal):L"Market: no recent matching prices");
+        out.push_back(v.rawKnown?L"Raw ~"+money(v.raw)+L" aUEC · "+toW(v.rawTerminal):L"Raw: no complete terminal quote");
+    }
     std::wstring basis=L"Whole-rock potential · 100% collection · UEX estimates";
     if(v.refinery>=0)basis=L"100% collection · "+toW(REFINING_METHODS[v.method].name)+L" @ "+toW(REFINERIES[v.refinery].name);
     if(rockContents_.partial) {
@@ -2037,11 +2164,17 @@ bool MinerGUI::processMessages() {
             return false;
         }
 
+        if(SynthScan::finderKey(msg.message,size_t(msg.wParam),msg.hwnd))continue;
+        // Finder's owned window is not a dialog child of the mining HUD.
+        // Dispatch its messages once, directly; IsDialogMessage on the HUD
+        // consumes ordinary letters before the search edit receives them.
+        if(SynthScan::finderOwnsInput(msg.hwnd)){TranslateMessage(&msg);DispatchMessage(&msg);continue;}
         // Buttons and menus own app actions. Escape and Alt+F4 must not
         // close an app window if it receives focus during play.
         if (msg.message == WM_HOTKEY) continue;
         if ((msg.message == WM_KEYDOWN || msg.message == WM_SYSKEYDOWN) &&
-            (msg.wParam == VK_ESCAPE || (msg.wParam == VK_F4 && msg.message == WM_SYSKEYDOWN))) continue;
+            ((msg.wParam == VK_ESCAPE && !(loadoutOpen_ && craftedEditing_)) ||
+             (msg.wParam == VK_F4 && msg.message == WM_SYSKEYDOWN))) continue;
 
         // Ctrl+V inside the notebook, when what is on the clipboard is a
         // PICTURE. Text paste is left alone - that is the rich edit control's
@@ -2213,19 +2346,46 @@ void MinerGUI::setOverlayZoomForShot(float zoom) {
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
-// Passive while another application has focus. An unlocked HUD may be
-// dragged only after the user explicitly activates SynthScan from the tray.
+// Body remains click-through during play. Visible buttons accept deliberate
+// pointer clicks without activating SynthScan or changing the game cursor.
+bool MinerGUI::isOverlayButton(HWND button) const {
+#ifdef _WIN32
+    return button && GetParent(button) == hwnd_ && overlayButtonId(GetDlgCtrlID(button)) &&
+        IsWindowVisible(button) && IsWindowEnabled(button);
+#else
+    return false;
+#endif
+}
+HWND MinerGUI::overlayButtonAt(POINT point) const {
+#ifdef _WIN32
+    if (!hwnd_ || !IsWindowVisible(hwnd_)) return nullptr;
+    for (int id : {1002,1011,1017,1021,31810,31811,31813,31814,31815,31817,31818,31819}) {
+        HWND button = GetDlgItem(hwnd_, id); RECT rect{};
+        if (isOverlayButton(button) && GetWindowRect(button, &rect) && PtInRect(&rect, point)) return button;
+    }
+#endif
+    return nullptr;
+}
 void MinerGUI::updateClickThrough() {
 #ifdef _WIN32
     if (!hwnd_) return;
-    if(!headless_) {
-        DWORD foreground=0;GetWindowThreadProcessId(GetForegroundWindow(),&foreground);
+    if (!headless_) {
+        DWORD foreground=0; GetWindowThreadProcessId(GetForegroundWindow(), &foreground);
         appActive_=foreground==GetCurrentProcessId();
     }
-    const bool through = overlayMode_ && !appActive_;
+    CURSORINFO cursor{sizeof(cursor)};
+    const bool visible = GetCursorInfo(&cursor) && (cursor.flags & CURSOR_SHOWING);
+    const bool pressed = (GetAsyncKeyState(VK_LBUTTON)&0x8000) ||
+                         (GetAsyncKeyState(VK_RBUTTON)&0x8000);
+    const bool capture = isOverlayButton(GetCapture());
+    const bool through = overlayMode_ && !SynthScan::finderMode() && !overlayPointerInteractive(appActive_,
+        visible && overlayButtonAt(cursor.ptScreenPos), visible, pressed, capture);
     const LONG_PTR ex = GetWindowLongPtr(hwnd_, GWL_EXSTYLE);
-    const LONG_PTR want = through ? (ex | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE)
-                                 : (ex & ~(WS_EX_TRANSPARENT | WS_EX_NOACTIVATE));
+    LONG_PTR want = through ? (ex | WS_EX_TRANSPARENT) : (ex & ~WS_EX_TRANSPARENT);
+    // Passive HUD tabs leave the game in the foreground. Finder contains a
+    // real text field, so a deliberate click must activate this same window.
+    if (overlayMode_&&!SynthScan::finderMode()) want |= WS_EX_NOACTIVATE;
+    else want &= ~WS_EX_NOACTIVATE;
     if (want != ex) SetWindowLongPtr(hwnd_, GWL_EXSTYLE, want);
 #endif
 }
@@ -2323,6 +2483,9 @@ LRESULT MinerGUI::handleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                 saveWindowPlace();
                 InvalidateRect(hwnd, nullptr, FALSE);
             }
+            break;
+        case WM_KILLFOCUS:
+            if(craftedEditing_){finishCraftedEditing(true);saveLoadout();InvalidateRect(hwnd,nullptr,TRUE);}
             break;
         case WM_SETCURSOR:
             if (overlayMode_ && LOWORD(lParam) == HTCLIENT) {
@@ -2431,20 +2594,13 @@ LRESULT MinerGUI::handleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
             // the bench can do.
             if (loadoutOpen_ && craftedEditing_) {
                 const wchar_t c = (wchar_t)wParam;
-                if (c == VK_BACK) {
-                    if (!craftedEntry_.empty()) craftedEntry_.pop_back();
-                } else if (c == VK_RETURN || c == VK_TAB) {
-                    craftedEditing_ = false;
-                } else if ((c >= L'0' && c <= L'9') ||
-                           (c == L'.' && craftedEntry_.find('.') == std::string::npos) ||
-                           (c == L'-' && craftedEntry_.empty())) {
-                    if (craftedEntry_.size() < 8) craftedEntry_ += (char)c;
-                } else {
-                    break;
+                if(c==22){SendMessageW(hwnd,WM_PASTE,0,0);return 0;} // Ctrl+V
+                if(c==VK_ESCAPE){finishCraftedEditing(false);saveLoadout();}
+                else if(c==VK_RETURN||c==VK_TAB){
+                    float value;
+                    if(parseCraftedPower(craftedEntry_,value)){finishCraftedEditing(true);saveLoadout();}
                 }
-                loadout_.craftedPower = craftedEntry_.empty() ? 0.0f
-                                                             : (float)std::atof(craftedEntry_.c_str());
-                saveLoadout();
+                else if(!typeCraftedCharacter(c))break;
                 InvalidateRect(hwnd, nullptr, TRUE);
                 return 0;
             }
@@ -2462,6 +2618,27 @@ LRESULT MinerGUI::handleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
             return 0;
         }
 
+        case WM_PASTE:
+            if(loadoutOpen_ && craftedEditing_ && OpenClipboard(hwnd)){
+                HANDLE data=GetClipboardData(CF_UNICODETEXT);
+                const wchar_t* source=data?static_cast<const wchar_t*>(GlobalLock(data)):nullptr;
+                if(source){
+                    const size_t limit=(std::min)(size_t(32),GlobalSize(data)/sizeof(wchar_t));
+                    std::string text;bool ascii=true,terminated=false;
+                    for(size_t i=0;i<limit;i++){
+                        if(!source[i]){terminated=true;break;}
+                        if(source[i]>127){ascii=false;break;}
+                        text+=char(source[i]);
+                    }
+                    float value;
+                    if(ascii&&terminated&&parseCraftedPower(text,value)){
+                        craftedEntry_=craftedPowerText(value);craftedSelected_=false;previewCraftedEntry();
+                    }
+                    GlobalUnlock(data);
+                }
+                CloseClipboard();InvalidateRect(hwnd,nullptr,TRUE);return 0;
+            }
+            break;
         case WM_KEYDOWN:
             if (lookingOpen_ && (wParam == VK_ESCAPE || wParam == VK_RETURN)) {
                 setLookingOpen(false);
@@ -2607,6 +2784,7 @@ LRESULT MinerGUI::handleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
             if (loadoutOpen_) {
                 for (const auto& hit : loadoutHits_) {
                     if (!hit.rect.Contains(px, py)) continue;
+                    if(hit.kind!=3 && craftedEditing_){finishCraftedEditing(true);saveLoadout();}
                     // A title being typed is kept by a click anywhere else,
                     // and Remove asks again after one
                     if (hit.kind != 6) endNameEditing(true);
@@ -2638,8 +2816,10 @@ LRESULT MinerGUI::handleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                         // sitting in a loadout that cannot exist - and the
                         // crafted figure stays with the laser it was typed for
                         std::vector<std::pair<const MiningLaser*, float>> none;
-                        auto& kept = fit_ >= 0 && fit_ < (int)fits_.size() ? fits_[(size_t)fit_].crafted : none;
-                        putLaser(kept, loadout_, &MINING_LASERS[hit.value]);
+                        if(fit_>=0 && fit_<(int)fits_.size())
+                            putProfileLaser(fits_[fit_],headShown_,loadout_,&MINING_LASERS[hit.value]);
+                        else putLaser(none,loadout_,&MINING_LASERS[hit.value]);
+                        syncCraftedEntry();
                         if ((int)loadout_.modules.size() > loadout_.laser->slots) {
                             loadout_.modules.resize(loadout_.laser->slots);
                         }
@@ -2656,8 +2836,11 @@ LRESULT MinerGUI::handleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                     } else if (hit.kind == 2) {
                         pickGadget(&MINING_GADGETS[hit.value]);
                     } else if (hit.kind == 3) {
-                        craftedEditing_ = true;
+                        beginCraftedEditing();
                         SetFocus(hwnd);   // the digits have to land here
+                        InvalidateRect(hwnd,nullptr,TRUE);return 0;
+                    } else if (hit.kind == 8) {
+                        loadout_.craftedPower=0;syncCraftedEntry();
                     } else if (hit.kind == 4) {
                         storeHead();
                         showLoadout(false);
@@ -2674,7 +2857,7 @@ LRESULT MinerGUI::handleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                     InvalidateRect(hwnd, nullptr, TRUE);
                     return 0;
                 }
-                craftedEditing_ = false;
+                finishCraftedEditing(true);saveLoadout();
                 endNameEditing(true);
                 removeArmed_ = false;
                 InvalidateRect(hwnd, nullptr, TRUE);
@@ -2801,12 +2984,20 @@ LRESULT MinerGUI::handleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
         case WM_MOUSEACTIVATE:
 #ifdef _WIN32
-            if(overlayMode_&&!appActive_)return MA_NOACTIVATEANDEAT;
+            if(overlayMode_)return SynthScan::finderMode()?MA_ACTIVATE:MA_NOACTIVATE;
 #endif
             break;
         case WM_NCHITTEST: {
 #ifdef _WIN32
-            if(overlayMode_&&!appActive_)return HTTRANSPARENT;
+            if (overlayMode_) {
+                POINT point{(short)LOWORD(lParam), (short)HIWORD(lParam)};
+                if (overlayButtonAt(point)) return HTCLIENT;
+                if(SynthScan::finderMode()){
+                    POINT local=point;ScreenToClient(hwnd,&local);RECT client{};GetClientRect(hwnd,&client);
+                    if(local.y>=overlayZoomed(scale(40))&&local.y<client.bottom-overlayZoomed(scale(30)))return HTCLIENT;
+                }
+                if (!appActive_ || SynthScan::hudLocked()) return HTTRANSPARENT;
+            }
 #endif
             // In overlay mode the whole client area drags the window - which
             // is also why nothing drawn in it can be pressed, the update chip
@@ -2851,6 +3042,7 @@ LRESULT MinerGUI::handleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
             return 0;
 
         case WM_TIMER: {
+            if (wParam == TIMER_OVERLAY_INPUT) { updateClickThrough(); return 0; }
             if (wParam == TIMER_FIT) {
                 KillTimer(hwnd, TIMER_FIT);
                 InvalidateRect(hwnd, nullptr, FALSE);   // the paint measures, and the fit follows
@@ -3183,7 +3375,7 @@ void MinerGUI::drawHeader(Gdiplus::Graphics& g, int cw) {
 
         const float top = (float)scale(LY_NOTICE) + extraTop();
         const float h = scaleF(26);
-        const float buttonW = scaleF(84);
+        const float buttonW = scaleF(100);
         const float gap = scaleF(8);
         // Three things in the row, in the order a player settles them: where
         // they are, what they fly, what is bolted to it.
@@ -3242,14 +3434,14 @@ void MinerGUI::drawHeader(Gdiplus::Graphics& g, int cw) {
         // outline in the quiet ink rather than one that can be pressed.
         loadoutButton_ = Gdiplus::RectF(shipX + fieldW + gap, top, buttonW, h);
         if (ship_) {
-            drawButton(g, loadoutButton_, L"Edit ship", buttonFont, ButtonKind::Secondary,
+            drawButton(g, loadoutButton_, L"Heads / craft", buttonFont, ButtonKind::Secondary,
                        isHot(hoverMain_, loadoutButton_), scaleF(R_CONTROL));
         } else {
             strokeRoundRect(g, loadoutButton_, scaleF(R_CONTROL), COL_BORDER);
             Gdiplus::StringFormat centred;
             centred.SetAlignment(Gdiplus::StringAlignmentCenter);
             centred.SetLineAlignment(Gdiplus::StringAlignmentCenter);
-            g.DrawString(L"Edit ship", -1, &buttonFont, loadoutButton_, &centred, &faintBrush);
+            g.DrawString(L"Heads / craft", -1, &buttonFont, loadoutButton_, &centred, &faintBrush);
         }
     }
 
@@ -3741,7 +3933,9 @@ std::vector<int> MinerGUI::fewestHeadsNeeded() const {
 // strongest one that fits, on every hardpoint
 static std::vector<MiningLoadout> startingHeads(const MiningShip& ship) {
     MiningLoadout start;
-    if (ship.fixedLaser) {
+    if (std::strcmp(ship.id,"golem")==0) {
+        start.laser = laserById("drak_golem_s1");
+    } else if (ship.fixedLaser) {
         start.laser = laserById(ship.fixedLaser);
     } else {
         for (int i = 0; i < MINING_LASER_COUNT; i++) {
@@ -3802,6 +3996,7 @@ std::string MinerGUI::uniqueFitName(const std::vector<ShipFit>& fits, const std:
 // The chosen fit's heads are live in heads_; the fit gets them back before
 // anything else is picked, saved or taken away
 void MinerGUI::storeFit() {
+    finishCraftedEditing(true);
     storeHead();
     if (fit_ >= 0 && fit_ < (int)fits_.size()) fits_[fit_].heads = heads_;
 }
@@ -3832,6 +4027,18 @@ void MinerGUI::pickFit(int index, bool byHand) {
     if (byHand) rememberHull();
     saveLoadout();
     keepOverlayHeight();
+}
+
+std::vector<std::wstring> MinerGUI::miningProfileNames() const {
+    std::vector<std::wstring> names;
+    for (const auto& fit : fits_) names.push_back(toW(fit.name));
+    return names;
+}
+
+void MinerGUI::selectMiningProfile(int index) {
+    if (index<0 || index>=(int)fits_.size()) return;
+    pickFit(index,true);
+    if(hwnd_)InvalidateRect(hwnd_,nullptr,TRUE);
 }
 
 void MinerGUI::pickShipKind(const MiningShip& kind, bool byHand) {
@@ -3924,7 +4131,7 @@ void MinerGUI::endNameEditing(bool keep) {
 void MinerGUI::fitHeads(const MiningShip& ship, std::vector<MiningLoadout>& heads) {
     heads.resize((size_t)(ship.heads > 0 ? ship.heads : 1));
     for (MiningLoadout& h : heads) {
-        if (h.laser && !laserFits(*h.laser, ship)) h.laser = nullptr;
+        if (h.laser && !laserFits(*h.laser, ship)) h = MiningLoadout();
         if (!h.laser && ship.fixedLaser) h.laser = laserById(ship.fixedLaser);
         if (h.laser && (int)h.modules.size() > h.laser->slots) {
             h.modules.resize(h.laser->slots);
@@ -3939,18 +4146,47 @@ void MinerGUI::storeHead() {
     if (headShown_ >= 0 && headShown_ < (int)heads_.size()) heads_[headShown_] = loadout_;
 }
 
+void MinerGUI::syncCraftedEntry(){
+    craftedEntry_=craftedPowerText(loadout_.craftedPower);craftedSelected_=false;
+}
+
+void MinerGUI::beginCraftedEditing(){
+    if(!craftedEditing_){syncCraftedEntry();craftedOriginal_=loadout_.craftedPower;}
+    craftedEditing_=true;craftedSelected_=true;
+}
+
+void MinerGUI::previewCraftedEntry(){
+    float value;
+    loadout_.craftedPower=parseCraftedPower(craftedEntry_,value)?value:craftedOriginal_;
+    storeHead();
+}
+
+bool MinerGUI::typeCraftedCharacter(wchar_t c){
+    if(c==1){craftedSelected_=true;return true;} // Ctrl+A
+    std::string next=craftedSelected_?std::string():craftedEntry_;
+    if(c==VK_BACK){if(!next.empty())next.pop_back();}
+    else if((c>=L'0'&&c<=L'9') || (c==L'.'&&next.find('.')==std::string::npos) ||
+            ((c==L'-'||c==L'+')&&next.empty())){
+        if(next.size()>=10)return true;
+        next+=char(c);
+    }else return false;
+    craftedEntry_=next;craftedSelected_=false;previewCraftedEntry();return true;
+}
+
+void MinerGUI::finishCraftedEditing(bool keep){
+    if(!craftedEditing_)return;
+    float value;
+    loadout_.craftedPower=keep&&parseCraftedPower(craftedEntry_,value)?value:craftedOriginal_;
+    craftedEditing_=false;storeHead();syncCraftedEntry();
+}
+
 void MinerGUI::useHead(int index) {
     if (index < 0 || index >= (int)heads_.size()) return;
+    finishCraftedEditing(true);
     storeHead();
     headShown_ = index;
     loadout_ = heads_[index];
-    craftedEntry_.clear();
-    if (loadout_.craftedPower != 0.0f) {
-        wchar_t buf[32];
-        std::swprintf(buf, 32, L"%.2f", loadout_.craftedPower);
-        const std::wstring wide(buf);
-        craftedEntry_.assign(wide.begin(), wide.end());
-    }
+    syncCraftedEntry();
     craftedEditing_ = false;
 }
 
@@ -3983,6 +4219,7 @@ void MinerGUI::closeOtherSheets(const bool& opening) {
 
 void MinerGUI::showLoadout(bool open) {
     if (loadoutOpen_ == open) return;
+    if(!open&&craftedEditing_){finishCraftedEditing(true);saveLoadout();}
     if (open) closeOtherSheets(loadoutOpen_);
     endNameEditing(true);    // a title half typed is kept, as a click elsewhere keeps it
     removeArmed_ = false;
@@ -3994,14 +4231,7 @@ void MinerGUI::showLoadout(bool open) {
     // with the focus (REFINERY, say) would take every digit typed into the
     // crafted-% field. The ore list takes the focus for the same reason.
     if (open) SetFocus(hwnd_);
-    if (open && loadout_.craftedPower != 0.0f) {
-        wchar_t buf[32];
-        std::swprintf(buf, 32, L"%.2f", loadout_.craftedPower);
-        const std::wstring wide(buf);
-        craftedEntry_.assign(wide.begin(), wide.end());
-    } else if (open) {
-        craftedEntry_.clear();
-    }
+    if(open)syncCraftedEntry();
     InvalidateRect(hwnd_, nullptr, TRUE);
 }
 
@@ -4161,7 +4391,13 @@ void MinerGUI::drawLoadoutCard(Gdiplus::Graphics& g, int cw, int ch) {
                          Gdiplus::PointF(tx + scaleF(12), y + scaleF(6)),
                          here ? &accentBrush : &dimBrush);
             if (l) {
-                g.DrawString(toW(l->name).c_str(), -1, &noteFont,
+                std::wstring headLabel=laserShortName(*l);
+                wchar_t bonus[40];
+                const float power=((int)i==headShown_?loadout_:heads_[i]).craftedPower;
+                if(power!=0)std::swprintf(bonus,40,L"%+.2f%% · ",power);
+                else std::swprintf(bonus,40,L"Stock · ");
+                headLabel=std::wstring(bonus)+headLabel;
+                g.DrawString(headLabel.c_str(), -1, &noteFont,
                              Gdiplus::RectF(tx + scaleF(12), y + scaleF(21), tabW - scaleF(22),
                                             scaleF(14)),
                              &oneLine, here ? &textBrush : &faintBrush);
@@ -4220,29 +4456,40 @@ void MinerGUI::drawLoadoutCard(Gdiplus::Graphics& g, int cw, int ch) {
     // Per head, not per ship: three heads on a MOLE are three separate
     // items, and a crafted one among stock ones is the normal case.
     if (heads_.size() > 1) {
-        const std::wstring craftLabel = L"CRAFTED BONUS  ·  " + headPlace(headShown_);
+        const std::wstring craftLabel = L"CRAFTED LASER POWER  ·  " + headPlace(headShown_);
         g.DrawString(craftLabel.c_str(), -1, &labelFont, Gdiplus::PointF(left, y), &faintBrush);
     } else {
-        g.DrawString(L"CRAFTED BONUS", -1, &labelFont, Gdiplus::PointF(left, y), &faintBrush);
+        g.DrawString(L"CRAFTED LASER POWER", -1, &labelFont, Gdiplus::PointF(left, y), &faintBrush);
     }
     y += scaleF(17);
     Gdiplus::RectF field(left, y, scaleF(110), scaleF(26));
     const bool fieldHot = isHot(hoverMain_, field);
-    fillRoundRect(g, field, scaleF(R_CONTROL), fieldHot && !craftedEditing_ ? COL_HOVER : COL_CARD_HI);
+    float inputPower;
+    const bool invalid=craftedEditing_&&!parseCraftedPower(craftedEntry_,inputPower);
+    fillRoundRect(g, field, scaleF(R_CONTROL), craftedSelected_?tint(COL_ACCENT,45):(fieldHot && !craftedEditing_ ? COL_HOVER : COL_CARD_HI));
     strokeRoundRect(g, field, scaleF(R_CONTROL),
-                    craftedEditing_ ? tint(COL_ACCENT, 220) : (fieldHot ? tint(COL_TEXT, 40) : COL_BORDER));
+                    invalid?COL_RED:(craftedEditing_ ? tint(COL_ACCENT, 220) : (fieldHot ? tint(COL_TEXT, 40) : COL_BORDER)));
     std::wstring shown = toW(craftedEntry_);
-    if (craftedEditing_) shown += L"|";
+    if (craftedEditing_&&!craftedSelected_) shown += L"|";
     else if (craftedEntry_.empty()) shown = L"0";
     shown += L" %";
     g.DrawString(shown.c_str(), -1, &rowFont,
                  Gdiplus::PointF(field.X + scaleF(12), y + scaleF(5)),
                  craftedEntry_.empty() && !craftedEditing_ ? &faintBrush : &textBrush);
     loadoutHits_.push_back({field, 3, 0});
-    g.DrawString(L"the second figure the item shows: \"Laser Power: +0.00 % → +28.84 %\"",
-                 -1, &noteFont, Gdiplus::PointF(left + scaleF(122), y + scaleF(1)), &dimBrush);
-    g.DrawString(L"leave it at 0 for a stock head", -1, &noteFont,
-                 Gdiplus::PointF(left + scaleF(122), y + scaleF(14)), &faintBrush);
+    Gdiplus::RectF reset(left+scaleF(116),y,scaleF(54),scaleF(26));
+    drawButton(g,reset,L"Stock",noteFont,ButtonKind::Secondary,isHot(hoverMain_,reset),scaleF(R_CONTROL));
+    loadoutHits_.push_back({reset,8,0});
+    g.DrawString(invalid?L"Not applied · enter -50 to +100%":L"Final item bonus · materials already combined",
+                 -1, &noteFont, Gdiplus::PointF(left + scaleF(182), y + scaleF(1)), invalid?&yellowBrush:&dimBrush);
+    std::wstring preview=L"0 = stock · Enter saves · Esc cancels";
+    if(loadout_.laser && !invalid){
+        const float power=loadout_.laser->fracture*(1+loadout_.craftedPower/100);
+        wchar_t text[120];std::swprintf(text,120,L"%.0f head power · %.4f× stock · before modules",power,1+loadout_.craftedPower/100);
+        preview=text;
+    }
+    g.DrawString(preview.c_str(), -1, &noteFont,
+                 Gdiplus::PointF(left + scaleF(182), y + scaleF(14)), invalid?&yellowBrush:&faintBrush);
     y += scaleF(38);
 
     // --- the modules it has room for
@@ -4548,15 +4795,19 @@ void MinerGUI::choosePlace(const std::string& placeName) {
 // "Helix I  ·  2× Rieger-C3": what a fit flies. A MOLE's three heads by their
 // lasers alone; their modules would not fit on the line.
 static std::wstring fitCarries(const std::vector<MiningLoadout>& heads) {
+    auto name=[](const MiningLoadout& head){
+        return laserShortName(*head.laser)+(head.craftedPower!=0?
+            L" "+toW((head.craftedPower>0?"+":"")+craftedPowerText(head.craftedPower))+L"%":L" (stock)");
+    };
     if (heads.size() == 1) {
         if (!heads[0].laser) return std::wstring();
-        return laserShortName(*heads[0].laser) + moduleWords(heads[0].modules);
+        return name(heads[0]) + moduleWords(heads[0].modules);
     }
     std::wstring lasers;
     for (const MiningLoadout& h : heads) {
         if (!h.laser) continue;
         if (!lasers.empty()) lasers += L", ";
-        lasers += laserShortName(*h.laser);
+        lasers += name(h);
     }
     return lasers;
 }
@@ -9711,17 +9962,30 @@ MinerGUI::LoadoutFile MinerGUI::readLoadoutFile(std::istream& in) {
             const size_t space = value.find(' ');
             if (space == std::string::npos) continue;
             const MiningLaser* kept = laserById(value.substr(0, space).c_str());
-            const float power = (float)std::atof(value.c_str() + space + 1);
+            float power=0;
+            if(!parseCraftedPower(value.substr(space+1),power))continue;
             if (kept && power != 0.0f && (int)into->crafted.size() < MAX_CRAFTED_KEPT) {
                 into->crafted.push_back({kept, power});
             }
+        } else if(key=="crafted_kept_head" && into){
+            std::istringstream row(value);int slot=0;std::string id,bonus,extra;float power=0;
+            if(!(row>>slot>>id>>bonus)||(row>>extra)||slot<1||slot>into->ship->heads||
+               !parseCraftedPower(bonus,power)||power==0)continue;
+            const auto* laser=laserById(id.c_str());
+            if(!laser||!laserFits(*laser,*into->ship))continue;
+            into->craftedHeads.resize(into->ship->heads);
+            auto& kept=into->craftedHeads[slot-1];
+            auto existing=std::find_if(kept.begin(),kept.end(),[&](const auto& entry){return entry.first==laser;});
+            if(existing!=kept.end())existing->second=power;
+            else if((int)kept.size()<MAX_CRAFTED_KEPT)kept.push_back({laser,power});
         } else if (!heads) continue;
         else if (key == "head" || key == "laser") {
             // "laser=" is what the one-head version of this file used
             heads->push_back(MiningLoadout());
             heads->back().laser = laserById(value.c_str());
         } else if (key == "crafted") {
-            if (!heads->empty()) heads->back().craftedPower = (float)std::atof(value.c_str());
+            float power=0;
+            if (!heads->empty() && parseCraftedPower(value,power)) heads->back().craftedPower=power;
         } else if (key == "module") {
             if (!heads->empty()) {
                 if (const MiningModule* m = moduleById(value.c_str())) heads->back().modules.push_back(m);
@@ -9792,6 +10056,10 @@ void MinerGUI::writeLoadoutFile(std::ostream& out, const LoadoutFile& file) {
         }
         for (const auto& kept : f.crafted) {
             if (kept.first) out << "crafted_kept=" << kept.first->id << " " << kept.second << "\n";
+        }
+        for(size_t slot=0;slot<f.craftedHeads.size()&&slot<size_t(f.ship->heads);slot++){
+            for(const auto& kept:f.craftedHeads[slot])if(kept.first)
+                out<<"crafted_kept_head="<<slot+1<<" "<<kept.first->id<<" "<<kept.second<<"\n";
         }
     }
 }
@@ -9988,6 +10256,98 @@ void MinerGUI::toggleBlueprintOwned(int blueprint) {
 
 // Exercise the production paint-generated click targets and ownership callback
 // without creating a window or sending mouse/keyboard messages.
+bool craftedPowerEditorSelfTest() {
+    // Production input/state transitions, without HWNDs, clipboard access,
+    // player-profile writes or simulated keyboard/mouse input.
+    MinerGUI gui;
+    const auto* laser=laserById("thcn_helix_s2");
+    const auto* module=moduleById("passive_rieger_mk3");
+    if(!laser||!module)return false;
+    MiningLoadout first;first.laser=laser;first.modules={module};first.craftedPower=25;
+    MiningLoadout second;second.laser=laser;second.craftedPower=17.6f;
+    MiningLoadout third;third.laser=laser;
+    gui.heads_={first,second,third};gui.headShown_=0;gui.loadout_=first;gui.syncCraftedEntry();
+    auto type=[&](const wchar_t* text){for(;*text;text++)if(!gui.typeCraftedCharacter(*text))return false;return true;};
+    auto approximately=[](float a,float b){return std::abs(a-b)<0.01f;};
+    gui.beginCraftedEditing();
+    if(!gui.craftedSelected_||!type(L"17.6"))return false;
+    if(!approximately(gui.heads_[0].craftedPower,17.6f) ||
+       !approximately(outputOf(gui.heads_[0]).fracture,laser->fracture*module->power*1.176f))return false;
+    gui.finishCraftedEditing(true);
+    if(gui.craftedEditing_||gui.craftedEntry_!="17.6")return false;
+    gui.beginCraftedEditing();if(!type(L"-"))return false;
+    if(!approximately(gui.loadout_.craftedPower,17.6f))return false;
+    gui.finishCraftedEditing(true); // Leaving an unfinished number restores the original.
+    if(gui.craftedEntry_!="17.6")return false;
+    gui.beginCraftedEditing();if(!type(L"125"))return false;
+    if(!approximately(gui.loadout_.craftedPower,17.6f))return false;
+    gui.finishCraftedEditing(true);
+    gui.beginCraftedEditing();if(!type(L"30"))return false;
+    gui.finishCraftedEditing(false); // Escape cancels valid previews too.
+    if(!approximately(gui.loadout_.craftedPower,17.6f))return false;
+    gui.beginCraftedEditing();gui.typeCraftedCharacter(1);gui.typeCraftedCharacter(VK_BACK);
+    gui.finishCraftedEditing(true);
+    if(gui.loadout_.craftedPower!=0 || !approximately(outputOf(gui.loadout_).fracture,laser->fracture*module->power))return false;
+    gui.useHead(1);gui.beginCraftedEditing();if(!type(L"+25.5"))return false;
+    gui.useHead(2); // Commits to head 2 before switching, without leaking into head 3.
+    if(gui.loadout_.craftedPower!=0 || !approximately(gui.heads_[1].craftedPower,25.5f))return false;
+    const auto summary=fitCarries(gui.heads_);
+    if(summary.find(L"+25.5%")==std::wstring::npos || summary.find(L"(stock)")==std::wstring::npos)return false;
+    MinerGUI::ShipFit profile;profile.name="Different crafted heads";profile.ship=shipById("mole");
+    profile.heads={first,second,third};
+    const auto* alternative=laserById("grin_lancet_s2");
+    if(!alternative)return false;
+    MinerGUI::putProfileLaser(profile,0,profile.heads[0],alternative);
+    MinerGUI::putProfileLaser(profile,1,profile.heads[1],alternative);
+    MinerGUI::LoadoutFile file;file.ship=profile.ship;file.fit=profile.name;file.fits={profile};
+    std::ostringstream saved;MinerGUI::writeLoadoutFile(saved,file);
+    std::istringstream input(saved.str());auto restored=MinerGUI::readLoadoutFile(input);
+    if(restored.fits.size()!=1||restored.fits[0].heads.size()!=3)return false;
+    auto& back=restored.fits[0];
+    MinerGUI::putProfileLaser(back,0,back.heads[0],laser);
+    MinerGUI::putProfileLaser(back,1,back.heads[1],laser);
+    return approximately(back.heads[0].craftedPower,25) && approximately(back.heads[1].craftedPower,17.6f) &&
+        back.heads[2].craftedPower==0;
+}
+
+bool rockValuePresentationSelfTest() {
+    // No HWND, capture, game input or player-profile writes. Exercise the
+    // actual presentation gate with the four rows from the Nov 2 scan.
+    MinerGUI gui;
+    Gdiplus::GdiplusStartupInput startup;
+    if(Gdiplus::GdiplusStartup(&gui.gdiplusToken_,&startup,nullptr)!=Gdiplus::Ok)return false;
+    gui.uexEnabled_=true;gui.everRead_=true;gui.rockInView_=true;
+    gui.rock_.mass=22717;gui.rock_.scu=40.35f;
+    RockContents contents;
+    for(const auto& tuple:std::vector<std::tuple<std::string,float,int>>{{"Tin",10.18f,880},{"Tin",37.05f,340},{"Copper",8.63f,593},{"",44.12f,0}}) {
+        RockPartRead part;part.ore=std::get<0>(tuple);part.percent=std::get<1>(tuple);part.quality=std::get<2>(tuple);part.inert=part.ore.empty();contents.parts.push_back(part);
+    }
+    if(!contentsHold(contents))return false;
+    gui.setRockContents(contents);
+    auto lines=gui.rockValueLines();
+    if(lines.empty()||lines.front().find(L"UEX")==std::wstring::npos)return false;
+    gui.rock_.scu=0;lines=gui.rockValueLines();
+    if(lines.empty()||lines.front().find(L"composition captured")==std::wstring::npos)return false;
+    gui.rock_.scu=40.35f;gui.setRockContents(RockContents());lines=gui.rockValueLines();
+    if(lines.empty()||lines.front().find(L"volume captured")==std::wstring::npos)return false;
+    gui.setRockContents(contents);
+    auto pieces=std::make_shared<RockPriceBook>();std::string why;
+    const auto now=(long long)std::time(nullptr);
+    const auto ads="{\"status\":\"ok\",\"data\":[{\"id_item\":91,\"item_name\":\"Glacosite\",\"quality_tier\":1,\"operation\":\"buy\",\"currency\":\"UEC\",\"unit\":\"unit\",\"listings_count\":1,\"price_avg\":2000000,\"game_version\":\"4.10.2\",\"date_modified\":"+std::to_string(now)+"}]}";
+    if(!pieces->read("{}","{}","{}","{}",ads,now,"4.10.2",why))return false;
+    gui.rockPrices_=pieces;gui.rock_.scu=0;
+    RockContents gems;RockPartRead gem;gem.ore="Glacosite";gem.quality=360;gem.nameText="GLAC";gem.qualityText="360";
+    gems.parts.push_back(gem);gui.updatePieceScan(gems);lines=gui.rockValueLines();
+    if(gui.rock_.mass>0||!gui.rockInView_||!gui.everRead_)return false;
+    if(lines.size()!=3||lines[0].find(L"Q360 ~2.00m aUEC/piece")==std::wstring::npos||
+        lines[1].find(L"limited data")==std::wstring::npos||lines[2].find(L"count not established")==std::wstring::npos)return false;
+    auto laser=[](const char* id)->const MiningLaser*{for(const auto& value:MINING_LASERS)if(std::strcmp(value.id,id)==0)return &value;return nullptr;};
+    gui.heads_.resize(3);gui.heads_[0].laser=laser("shin_hofstede_s1");gui.heads_[1].laser=laser("thcn_helix_s2");gui.heads_[2].laser=laser("thcn_impact_s2");
+    const auto ranges=gui.laserRangeLine();
+    if(ranges.find(L"LEFT 45 m")==std::wstring::npos||ranges.find(L"MIDDLE 30 m")==std::wstring::npos||ranges.find(L"RIGHT 60 m")==std::wstring::npos)return false;
+    return true;
+}
+
 bool blueprintOwnershipChecklistSelfTest() {
     MinerGUI gui;
     Gdiplus::GdiplusStartupInput startup;
@@ -13903,6 +14263,7 @@ void MinerGUI::drawCompactRock(Gdiplus::Graphics& g, int cw, int ch) {
         Gdiplus::Brush& unitBrush = dimBrush;
         const float numberAsc = fontAscent(numberFont), unitAsc = fontAscent(unitFont);
         const auto numberOf = [&](const RockPartRead* p) {
+            if(!contentsEstimateReady(rockContents_)&&contentsPieceQuotesReady(rockContents_))return std::wstring(L"per piece");
             const std::wstring amount = partScu(rock_.scu, p->percent);
             if (!amount.empty()) return amount;
             wchar_t share[32];
@@ -14020,6 +14381,10 @@ void MinerGUI::drawCompactRock(Gdiplus::Graphics& g, int cw, int ch) {
         }
     }
 
+    const auto rangeLine=laserRangeLine();
+    if(!rangeLine.empty()) {
+        line(rangeLine,infoFont,dimBrush);
+    }
     for(const auto& value : rockValueLines())line(value,infoFont,accentBrush);
 
     // the verdict, the way the full window puts it
@@ -14133,6 +14498,7 @@ void MinerGUI::drawCompactShip(Gdiplus::Graphics& g, int cw, int ch, float above
 }
 
 void MinerGUI::drawCompact(Gdiplus::Graphics& g, int cw, int ch) {
+    if(SynthScan::finderMode()){SynthScan::drawFinder(g,float(cw),float(ch),scaleF(1));wantHeight(scaleF(420));return;}
     if(SynthScan::hangarsMode()){SynthScan::drawHangars(g,float(cw),float(ch),scaleF(1));wantHeight(scaleF(150));return;}
     if(SynthScan::questingMode()){SynthScan::drawQuesting(g,float(cw),float(ch),scaleF(1));wantHeight(scaleF(350));return;}
     if(SynthScan::piracyMode()){SynthScan::drawPiracy(g,float(cw),float(ch),scaleF(1));wantHeight(scaleF(float(SynthScan::piracyHeight())));return;}
@@ -14366,7 +14732,7 @@ void MinerGUI::paintOwnerButton(Gdiplus::Graphics& g, const DRAWITEMSTRUCT* dis)
         g.DrawString(label, -1, &font, face, &centred, &ink);
         return;
     }
-    const bool on = (id == ID_BTN_AUTO_REGION && regionAuto_) || (id==31810&&!SynthScan::activityMode()) || (id==31811&&SynthScan::piracyMode()) || (id==31813&&SynthScan::questingMode()) || (id==31818&&SynthScan::hangarsMode());
+    const bool on = (id == ID_BTN_AUTO_REGION && regionAuto_) || (id==31810&&!SynthScan::activityMode()) || (id==31811&&SynthScan::piracyMode()) || (id==31813&&SynthScan::questingMode()) || (id==31818&&SynthScan::hangarsMode()) || (id==31819&&SynthScan::finderMode());
     drawButton(g, face, label, font, on ? ButtonKind::Selected : ButtonKind::Secondary, pressed, radius);
     // The work orders that are done, waiting at their refinery: a green
     // badge with their number at the button's right end
@@ -19092,7 +19458,7 @@ std::wstring MinerGUI::outOfScopeNote(const AnalysisResult& result) const {
         return n == "ROC Deposit" || n == "FPS Minable";
     });
     if (placeInSpace_ && ground) return L"not in open space";
-    return placeOre_.empty() ? L"not in " + toW(currentSystem_) : L"not at " + placeOre_;
+    return placeOre_.empty() ? L"not listed in " + toW(currentSystem_) : L"not listed at " + placeOre_;
 }
 
 void MinerGUI::setShip(const std::string& label, bool inSeat, const std::string& hull) {
@@ -19254,6 +19620,13 @@ void MinerGUI::putLaser(std::vector<std::pair<const MiningLaser*, float>>& kept,
         break;
     }
     head.laser = laser;
+}
+
+void MinerGUI::putProfileLaser(ShipFit& profile,int slot,MiningLoadout& head,const MiningLaser* laser){
+    if(profile.ship && profile.ship->heads>1 && slot>=0 && slot<profile.ship->heads){
+        profile.craftedHeads.resize(profile.ship->heads);
+        putLaser(profile.craftedHeads[slot],head,laser);
+    }else putLaser(profile.crafted,head,laser);
 }
 
 bool MinerGUI::fitTakes(ShipFit& fit, const MiningLaser& laser, const std::vector<const MiningModule*>& modules) {
@@ -19709,8 +20082,9 @@ void MinerGUI::paintNews(HDC hdc) {
                  L"signatures when it goes. The compact overlay shows the same answer.",
                  bodyFont, dimBrush, 16);
 
-            para(L"Set up your ship under EDIT SHIP first: its heads, the modules on them and the crafted "
-                 L"bonus the item shows. The answer is only as good as what SynthScan knows about your lasers.",
+            para(L"Open HEADS / CRAFT to set each head's modules and final Laser Power bonus. Enter the "
+                 L"combined percentage shown on the finished item; its crafting materials are already included. "
+                 L"The answer is only as good as what SynthScan knows about your lasers.",
                  bodyFont, dimBrush, 16);
 
             para(L"The maths behind it is measured against real rocks and lands close to the game. Not "

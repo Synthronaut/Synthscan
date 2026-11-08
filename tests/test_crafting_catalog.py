@@ -4,13 +4,15 @@ import unittest
 from unittest.mock import patch
 
 import blueprint_db
-from crafting_catalog import get_catalog, material_coverage, quality_factor
+from crafting_catalog import CraftingCatalog,get_catalog, material_coverage, quality_factor
 
 
 class CatalogTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.catalog = get_catalog()
+        # These assertions describe the bundled reference, independent of a
+        # developer's newer locally extracted game catalog or source imports.
+        cls.catalog = CraftingCatalog(Path(__file__).resolve().parents[1]/'data/crafting_catalog.json')
 
     def test_export_cardinality_and_references(self):
         c = self.catalog
@@ -108,6 +110,7 @@ class OwnershipTests(unittest.TestCase):
         self.root = Path(self.temp.name)
         self.patches = [patch.object(blueprint_db, attr, str(self.root / name)) for attr, name in (
             ('BLUEPRINT_LIB_FILE', 'owned.json'), ('BLUEPRINT_CATALOG_FILE', 'catalog.json'), ('BLUEPRINT_FAVORITES_FILE', 'favorites.json'))]
+        self.patches.append(patch.object(blueprint_db,'get_catalog',return_value=CraftingCatalog(Path(__file__).resolve().parents[1]/'data/crafting_catalog.json')))
         for p in self.patches:
             p.start()
         self.manager = blueprint_db.BlueprintManager()

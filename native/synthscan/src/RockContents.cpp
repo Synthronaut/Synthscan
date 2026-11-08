@@ -3,6 +3,7 @@
 #include "DevSwitch.h"
 #include "LoadoutReader.h"
 #include "MiningHardware.h"
+#include "HandMiningReference.h"
 #include "ScanPanel.h"
 #include "TextLineReader.h"
 
@@ -65,6 +66,7 @@ bool sameName(const char* a, const std::string& b) {
 }
 
 const OreBands* bandsOf(const std::string& ore) {
+    for (const auto& b : HAND_MINING_BANDS) if (sameName(b.ore, ore)) return &b;
     for (int b = 0; b < ORE_BANDS_COUNT; b++) {
         if (sameName(ORE_BANDS[b].ore, ore)) return &ORE_BANDS[b];
     }
@@ -237,6 +239,17 @@ bool contentsFitRock(const std::string& rockOre, const RockContents& contents) {
     return true;
 }
 
+bool contentsPieceQuotesReady(const RockContents& contents) {
+    bool any=false;
+    for(const auto& p:contents.parts)if(!p.inert){
+        bool gem=false;for(const auto& b:HAND_MINING_BANDS)if(p.ore==b.ore)gem=true;
+        if(!gem||bandOf(p.ore,p.quality)<0)return false;
+        if(!contents.whole && (snapOreName(p.nameText)!=p.ore || numerals(p.qualityText)!=std::to_string(p.quality)))return false;
+        any=true;
+    }
+    return any;
+}
+
 bool contentsHold(RockContents& contents) {
     double sum = 0;
     bool named = !contents.parts.empty();
@@ -284,7 +297,8 @@ namespace {
 // region as white on black, and read off the picture itself. `edge` is the
 // labels' left edge in the region.
 bool readList(const cv::Mat& frame, const cv::Rect& region, const cv::Mat& ink, double u, int edge,
-              const std::string& rockOre, TextLineReader& lines, RockContents& out, const std::string& dumpAs) {
+              const std::string& rockOre, TextLineReader& lines, RockContents& out, const std::string& dumpAs,
+              bool qualityRows=false,bool pieceOnly=false) {
     out = RockContents();
     auto done = [&](bool ok, const std::string& why) {
         if (!why.empty()) out.note = why;
@@ -527,6 +541,17 @@ bool readList(const cv::Mat& frame, const cv::Rect& region, const cv::Mat& ink, 
         if (x1 > x0) inked[(size_t)y] = cv::countNonZero(ink.row(y).colRange(x0, x1));
     }
     const int inkLeast = (std::max)(3, (int)std::lround(4 * u));
+    if(qualityRows) {
+        // Flight R-ALT/VSI text can merge several percentage rows while the
+        // right-hand quality numerals remain clear. Use their baselines as a
+        // second geometric proposal, then read every original share/name/
+        // quality and apply the same game-value and whole-rock sum checks.
+        for(int y=0;y<ink.rows;y++) {
+            const int right=std::clamp((int)std::lround(endsAt+lean*y+2*u),0,ink.cols);
+            const int left=std::clamp((int)std::lround(endsAt+lean*y-QUALITY_HOLDS*width),0,ink.cols);
+            inked[(size_t)y]=right>left&&cv::countNonZero(ink.row(y).colRange(left,right))>0?inkLeast:0;
+        }
+    }
     for (int y = 0; y < ink.rows; y++) {
         if (inked[(size_t)y] < inkLeast) continue;
         int end = y;
@@ -592,6 +617,21 @@ bool readList(const cv::Mat& frame, const cv::Rect& region, const cv::Mat& ink, 
     auto shareOf = [&](const Entry& e) { return cropOf(e, e.from - pad, e.from + SHARE_ENDS * width); };
     auto nameOf = [&](const Entry& e) { return cropOf(e, e.from + NAME_BEGINS * width, e.qualityFrom - u); };
     auto qualityOf = [&](const Entry& e) { return cropOf(e, e.qualityFrom, e.to + pad); };
+    if(pieceOnly){
+        for(const auto& e:entries){
+            if((e.top+e.bottom)*.5>(FIRST_BY-REGION_TOP)*u)break;
+            const auto qbox=qualityOf(e),nbox=nameOf(e);
+            if(qbox.width<8*u||nbox.width<20*u)continue;
+            const auto q=lines.read(frame(qbox));int quality=0;
+            if(q.mean<.92||!parseQuality(q.text,quality)||bandOf(rockOre,quality)<0)continue;
+            const auto name=lines.read(frame(nbox));
+            if(name.mean<.85||snapOreName(name.text)!=rockOre)continue;
+            RockPartRead part;part.ore=rockOre;part.quality=quality;
+            part.nameText=name.text;part.qualityText=q.text;out.parts.push_back(part);
+            return done(true,"fast gem name/quality; composition not measured");
+        }
+        return done(false,"gem row not confirmed");
+    }
     // The lines, from the first that begins with a share, one under the
     // other, until the rock is accounted for or something else follows -
     // the Golem has LOCK, TARG and AUTO a line's pitch under its list
@@ -732,6 +772,7 @@ bool readList(const cv::Mat& frame, const cv::Rect& region, const cv::Mat& ink, 
     for(auto& part:out.parts)if(!part.inert&&part.ore.empty()&&part.quality>0) {
         std::string unique;int matches=0;
         for(int b=0;b<ORE_BANDS_COUNT;b++)if(bandOf(ORE_BANDS[b].ore,part.quality)>=0){unique=ORE_BANDS[b].ore;matches++;}
+        for(const auto& b:HAND_MINING_BANDS)if(bandOf(b.ore,part.quality)>=0){unique=b.ore;matches++;}
         if(matches==1)part.ore=unique;
     }
     // Resolve a shared quality only when every matching game-defined rock
@@ -757,6 +798,26 @@ bool readList(const cv::Mat& frame, const cv::Rect& region, const cv::Mat& ink, 
 }
 
 }  // namespace
+
+bool readRockPieceQuote(const cv::Mat& frame,ScanPanel& panel,TextLineReader& lines,RockContents& out){
+    out=RockContents();if(frame.empty()||panel.labels.x<0||panel.labelScale<=0||!lines.ready())return false;
+    auto rows=panelFigureLines(panel,frame.size());if(rows.empty()||rows[0].empty())return false;
+    auto header=rows[0];const int margin=(int)std::lround(18*panel.labelScale);
+    header.x-=margin;header.y-=(int)std::lround(2*panel.labelScale);
+    header.width=(int)std::lround(135*panel.labelScale);header.height+=(int)std::lround(7*panel.labelScale);
+    header&=cv::Rect(0,0,frame.cols,frame.rows);if(header.empty())return false;
+    const auto title=lines.read(frame(header));if(title.mean<.85)return false;
+    const auto name=snapOreName(title.text);panel.stats.ore=name;
+    bool gem=false;for(const auto& b:HAND_MINING_BANDS)if(name==b.ore)gem=true;
+    if(!gem)return false;
+    const auto region=rockContentsRegion(panel,frame.size());if(region.empty())return false;
+    const auto started=std::chrono::steady_clock::now();
+    const auto ink=hudLetteringInk(frame(region),panel.labelScale);
+    bool ok=readList(frame,region,ink,panel.labelScale,panel.labels.x-region.x,name,lines,out,"",false,true);
+    if(!ok)ok=readList(frame,region,ink,panel.labelScale,panel.labels.x-region.x,name,lines,out,"",true,true);
+    out.ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-started).count();
+    return ok&&contentsPieceQuotesReady(out);
+}
 
 bool readRockContents(const cv::Mat& frame, const ScanPanel& panel, const std::string& rockOre,
                       TextLineReader& lines, RockContents& out) {
@@ -797,6 +858,16 @@ bool readRockContents(const cv::Mat& frame, const ScanPanel& panel, const std::s
         out = dark;
         out.note += "; dark on bright";
         return done(true);
+    }
+    for(bool inverted:{false,true}) {
+        RockContents byQuality;
+        const auto geometry=inverted?hudLetteringInk(negative,u):hudLetteringInk(frame(region),u);
+        const bool complete=readList(frame,region,geometry,u,edge,rockOre,lines,byQuality,
+            dump?std::string(dump)+(inverted?"_quality_dark":"_quality"):std::string(),true);
+        if(complete||contentsEstimateReady(byQuality)) {
+            out=std::move(byQuality);out.note+="; quality-column rows";
+            return done(complete);
+        }
     }
     if (out.parts.empty() && !dark.parts.empty()) {
         out = dark;

@@ -20,7 +20,8 @@ def installed_build(game):
     date=''
     try:date=datetime.strptime(str(data.get('BuildDateStamp','')),'%a %b %d %Y').date().isoformat()
     except ValueError:pass
-    return dict(patch=match[1],fingerprint=str(data['BuildId'])+':'+str(data.get('RequestedP4ChangeNum','')),built_on=date)
+    channel='PTU' if 'ptu' in str(data.get('Branch','')).lower() or Path(game).name.upper() in ('PTU','EPTU','TECH-PREVIEW') else 'LIVE'
+    return dict(patch=match[1],channel=channel,fingerprint=str(data['BuildId'])+':'+str(data.get('RequestedP4ChangeNum','')),built_on=date)
 
 
 class HangarVerification:
@@ -44,12 +45,12 @@ class HangarVerification:
                 state['baseline']=state.get('last_timing') or (timing_key(schedule) if schedule else '')
             state['build']=build['fingerprint']
         key=timing_key(schedule) if schedule else ''
-        patch_match=bool(build and schedule and re.match(r'^'+re.escape(build['patch'])+r'(?:-|$)',schedule.get('patch','')))
+        patch_match=bool(build and schedule and build.get('channel','LIVE')=='LIVE' and re.match(r'^'+re.escape(build['patch'])+r'-LIVE(?:\.|$)',schedule.get('patch',''),re.I))
         date_match=bool(schedule and build and build.get('built_on') and schedule.get('source_modified','')>=build['built_on'])
         # Server build numbers can differ from the installed client build. Compare
         # patch labels, and invalidate an observed client-build change separately.
         recent=0<=now-fetched_at<=86400
-        reset_ok=True
+        reset_ok=False
         if reset_check is not None:
             try:
                 reset_ok=bool(reset_check.get('ok') and 0<=now-float(reset_check.get('checked_at',0))<=86400)

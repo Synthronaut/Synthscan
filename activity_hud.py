@@ -13,6 +13,11 @@ def toggle_request(status,owner,now,request_id=None):
     return dict(id=request_id or uuid.uuid4().hex,action='set_activity_expanded',at=now,owner_pid=owner,
                 expanded=not bool(status.get('activity_expanded',True)))
 
+def afk_request(status,owner,now,request_id=None):
+    if not fresh_activity_status(status,owner,now):raise ValueError('Activity HUD is not ready')
+    return dict(id=request_id or uuid.uuid4().hex,action='set_afk_armed',at=now,owner_pid=owner,
+                armed=not bool((status.get('afk_jiggler') or {}).get('armed',False)))
+
 def button_position(bar,bounds,width=BUTTON_WIDTH):
     x,y,w,h=bar;right=bounds['left']+bounds['width'];bottom=bounds['top']+bounds['height']
     left=x+w+3
@@ -156,3 +161,50 @@ class ActivityCollapseButton(ActivityButton):
             visible=False
             if self.visible:self.window.withdraw()
         self.visible=visible
+
+
+class ActivityQuickControls(ActivityCollapseButton):
+    """One non-activating strip: collapse, then a direct AFK toggle beside it."""
+    WIDTH=78
+    AFK_LEFT=27
+    def press(self,event):
+        super().press(event)
+        self.pressed_action=('collapse' if event.x<24 else 'afk' if event.x>=self.AFK_LEFT else None) if self.pressed else None
+    def release(self,event):
+        pressed=getattr(self,'pressed',False);self.pressed=False
+        action=getattr(self,'pressed_action',None);self.pressed_action=None
+        if not pressed or not control_hit(event,self.WIDTH,self.height) or self.pending:return
+        released='collapse' if event.x<24 else 'afk' if event.x>=self.AFK_LEFT else None
+        if not action or action!=released:return
+        try:
+            now=time.time()
+            request=afk_request(self.status,self.owner,now) if action=='afk' else toggle_request(self.status,self.owner,now)
+            if action=='collapse':request['expanded']=False
+            if publish_json(self.directory/'activity_hud_command.json',request):
+                self.pending=request;notify_native(self.status,self.owner)
+        except (OSError,ValueError):return
+        self.paint()
+    def paint(self):
+        ready=fresh_activity_status(self.status,self.owner,time.time())
+        afk=self.status.get('afk_jiggler') or {};armed=bool(afk.get('armed',False))
+        error=str(afk.get('status','')).startswith('error')
+        pending=self.pending.get('action') if self.pending else None
+        last=float(afk.get('last_pulse_at') or 0)
+        sent_recently=bool(armed and 0<=time.time()-last<2)
+        seconds=int(afk.get('next_in_seconds',-1))
+        indicator='●' if armed else '○'
+        if armed and ready:
+            if afk.get('pulse_active'):indicator='↔'
+            elif sent_recently:indicator='✓'
+            elif 0<seconds<=10:indicator=str(seconds)
+        label='AFK '+('·' if pending=='set_afk_armed' else '!' if error else indicator)
+        key=(ready,armed,error,pending,label,self.height)
+        if getattr(self,'paint_key',None)==key:return
+        self.paint_key=key;self.canvas.delete('all')
+        self.canvas.configure(width=self.WIDTH)
+        self.canvas.create_rectangle(0,0,23,self.height-1,fill='#101722',outline='#334155')
+        self.canvas.create_text(12,self.height//2,text='·' if pending=='set_activity_expanded' else '−',fill='#cbd5e1' if ready else '#64748b',font=('Consolas',9,'bold'))
+        self.canvas.create_rectangle(self.AFK_LEFT,0,self.WIDTH-1,self.height-1,fill='#12251f' if armed else '#101722',outline='#397d66' if armed else '#334155')
+        self.canvas.create_text((self.AFK_LEFT+self.WIDTH)//2,self.height//2,text=label,fill='#f0b35b' if error else '#8ee2bd' if armed and ready else '#cbd5e1' if ready else '#64748b',font=('Consolas',9,'bold'))
+        detail=f"on — {afk.get('status','waiting')} — {int(afk.get('nudges',0))} pulses sent; click to turn off" if armed else 'off — click to turn on'
+        self.window.title('Collapse HUD / AFK mouse jiggler: '+detail)

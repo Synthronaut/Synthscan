@@ -644,8 +644,7 @@ inline std::vector<const MiningGadget*> rankFor(MiningGoal goal) {
 //
 //   Prospector  one S1 head, swappable
 //   MOLE        three S2 heads, swappable, each with its own modules
-//   Golem       one head that is part of the ship - the Pitman - but its two
-//               module slots are free
+//   Golem       one swappable S1 head; Pitman is its default, not a fixed mount
 //
 // A ship not listed here still works: pass the size and count directly.
 // ---------------------------------------------------------------------------
@@ -660,7 +659,7 @@ struct MiningShip {
 inline const MiningShip MINING_SHIPS[] = {
     {"prospector", "MISC Prospector", 1, 1, nullptr},
     {"mole",       "Argo MOLE",       3, 2, nullptr},
-    {"golem",      "Drake Golem",     1, 1, "drak_golem_s1"},
+    {"golem",      "Drake Golem",     1, 1, nullptr},
 };
 inline constexpr int MINING_SHIP_COUNT = 3;
 
@@ -669,6 +668,8 @@ inline constexpr int MINING_SHIP_COUNT = 3;
 // anywhere else. As an S1 head it would otherwise pass as a fit for a
 // MOLE's S2 mount.
 inline const MiningShip* shipBuiltInto(const MiningLaser& laser) {
+    // The default Pitman remains Golem-specific; that does not make its mount fixed.
+    if (std::strcmp(laser.id,"drak_golem_s1")==0) return &MINING_SHIPS[2];
     for (int i = 0; i < MINING_SHIP_COUNT; i++) {
         const MiningShip& ship = MINING_SHIPS[i];
         if (ship.fixedLaser && std::strcmp(ship.fixedLaser, laser.id) == 0) return &ship;
@@ -676,12 +677,9 @@ inline const MiningShip* shipBuiltInto(const MiningLaser& laser) {
     return nullptr;
 }
 
-// A hardpoint takes its own size and anything smaller - a MOLE can fly an S1
-// head on an S2 mount, which is not a corner case but a normal way to fit the
-// ship: the S1 Helix out-fractures three of the six S2 heads and gives up
-// reach for it. What it will not take is a head welded into another hull.
+// Mining heads must match the mount size: MOLE S2, Golem/Prospector S1.
 inline bool laserFits(const MiningLaser& laser, const MiningShip& ship) {
-    if (laser.size > ship.size) return false;
+    if (laser.size != ship.size) return false;
     const MiningShip* home = shipBuiltInto(laser);
     return home == nullptr || home == &ship;
 }
@@ -784,8 +782,7 @@ inline std::vector<LaserSuggestion> suggestLasers(const RockStats& rock,
 
     for (int i = 0; i < MINING_LASER_COUNT; i++) {
         const MiningLaser& l = MINING_LASERS[i];
-        // anything up to the mount's size, not only its exact size
-        if (l.size > hardpointSize) continue;
+        if (l.size != hardpointSize) continue;
         // ...but never a head that is part of another ship. A suggestion is
         // only ever asked for by a ship whose heads can be swapped, so one
         // that cannot be bought is never the answer.

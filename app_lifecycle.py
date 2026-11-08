@@ -9,7 +9,10 @@ ROOT = Path(__file__).resolve().parent
 
 
 def object_name(kind):
-    key = hashlib.sha256(os.path.normcase(str(ROOT)).encode()).hexdigest()[:20]
+    # Versioned runtimes share one installation's helper/update mutexes.
+    anchor=ROOT
+    if ROOT.parent.name=='versions' and len(ROOT.name)==64 and all(c in '0123456789abcdef' for c in ROOT.name) and (ROOT.parent.parent/'SynthScan.exe').is_file():anchor=ROOT.parent.parent
+    key = hashlib.sha256(os.path.normcase(str(anchor)).encode()).hexdigest()[:20]
     return rf"Local\SynthScan.{key}.{kind}"
 
 

@@ -1,0 +1,40 @@
+{
+  "build": {
+    "Branch": "sc-alpha-4.10.2",
+    "BuildDateStamp": "Mon Oct 12 2026",
+    "BuildId": "2cae0dfc-a941-4dcc-b82a-543b08b52d97",
+    "BuildTimeStamp": "02:20:01 PM CST",
+    "Config": "shipping",
+    "Platform": "pc",
+    "RequestedP4ChangeNum": "12913470",
+    "Shelved_Change": "",
+    "Tag": "public",
+    "Version": "4.10.197.2878"
+  },
+  "records": {
+    "libs/foundry/records/crafting/qualityquantization/quantization_aphorite.json": "6f7351f012b0ed98459fde7dd3b44e6e57cc4c1aa579f528aae519cb5e57e94a",
+    "libs/foundry/records/crafting/qualityquantization/quantization_beradom.json": "e340f93df29c4cbfc715600856aa0315ce5385f00d5a1d0ab282b2aacaabbb68",
+    "libs/foundry/records/crafting/qualityquantization/quantization_carinite.json": "87552495d781142c8ccc87b1a57358ee642e332d5c51df1d8e3905a8df4d1dd4",
+    "libs/foundry/records/crafting/qualityquantization/quantization_dolivine.json": "ecab339522815a414ddc27fbe0da1d2a28089feddddf715d9777ba370012e60a",
+    "libs/foundry/records/crafting/qualityquantization/quantization_feynmaline.json": "9b146084f6fb5c85c6c66ae9d6c43c07fd3838bc42117532979edc5e3d3f87fa",
+    "libs/foundry/records/crafting/qualityquantization/quantization_glacosite.json": "596f4562af574b4de869223ceb22f7f81096aa63d72e396134d971f55e9d8e27",
+    "libs/foundry/records/crafting/qualityquantization/quantization_hadanite.json": "86a31db6e2d3f91ab257aea8a4c2b0e49ecb5685af245dd5bd272c97962473bb",
+    "libs/foundry/records/crafting/qualityquantization/quantization_jaclium.json": "a08daa3d78a104a599c533f56d2efb2b2fb8c25f5784a4cffde63adc6f5efaf2",
+    "libs/foundry/records/crafting/qualityquantization/quantization_janalite.json": "4c967f3f9e8b4c74a94e343b55f9a7e32c28afa8c03da19832c10c890d2f26f8",
+    "libs/foundry/records/crafting/qualityquantization/quantization_sadaryx.json": "fc36f01c64dd7620153eaa1b66efb998ddb46e4e23ef36fd76bf220cd192a379",
+    "libs/foundry/records/crafting/qualityquantization/quantization_saldynium.json": "3bcb9e67b4aadb07ca5970afa4d93efb9ae19dde355a616c319439b30dbe9ce4"
+  },
+  "materials": [
+    "Aphorite",
+    "Beradom",
+    "Carinite",
+    "Dolivine",
+    "Feynmaline",
+    "Glacosite",
+    "Hadanite",
+    "Jaclium",
+    "Janalite",
+    "Sadaryx",
+    "Saldynium"
+  ]
+}

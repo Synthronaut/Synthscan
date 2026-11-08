@@ -5,6 +5,11 @@ from pathlib import Path
 import re
 
 ROOT=Path(__file__).resolve().parent
+def installation_root(path):
+    path=Path(path).resolve()
+    if path.parent.name=='versions' and re.fullmatch('[0-9a-f]{64}',path.name) and (path.parent.parent/'SynthScan.exe').is_file():return path.parent.parent
+    return path
+INSTALL_ROOT=installation_root(ROOT)
 PROFILE=Path(os.environ.get('SYNTHSCAN_DATA_DIR',str(Path(os.environ.get('LOCALAPPDATA',Path.home()))/'SynthScan/native')))
 RELEASE=(ROOT/'release.json').exists() or os.environ.get('SYNTHSCAN_RELEASE')=='1'
 

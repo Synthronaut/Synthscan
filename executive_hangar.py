@@ -8,6 +8,8 @@ from fractions import Fraction
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import hashlib,json,math,re,time,urllib.request
+from urllib.parse import urlsplit
+from hangar_reset_feed import fetch_resets
 
 SOURCE='https://exec.xyxyll.com/'
 SCHEMA=1
@@ -108,21 +110,22 @@ def countdown(milliseconds,round_up=True,with_hours=True):
 
 def fetch_schedule():
     def read(name):
-        request=urllib.request.Request(SOURCE+name,headers={'User-Agent':'SynthScan-hangar-schedule/1.0'})
-        with urllib.request.urlopen(request,timeout=8) as response:raw=response.read(262145)
+        request=urllib.request.Request(SOURCE+name,headers={'User-Agent':'SynthScan-hangar-schedule/1.0','Cache-Control':'no-cache'})
+        with urllib.request.urlopen(request,timeout=8) as response:
+            if urlsplit(response.geturl()).netloc!='exec.xyxyll.com':raise ValueError('Unexpected timer host')
+            raw=response.read(262145)
         if len(raw)>262144:raise ValueError('Timer response exceeds limit')
         return raw.decode('utf-8-sig')
     script=read('app.js');page=read('')
     result=parse_source(script,page)
-    from hangar_reset_feed import fetch_resets
-    try:result['reset_check']=fetch_resets()
-    except Exception:result['reset_check']=dict(ok=False)
     return result
 
 
 class HangarScheduleService:
-    def __init__(self,directory,fetcher=fetch_schedule):
+    def __init__(self,directory,fetcher=fetch_schedule,reset_fetcher=None):
         self.path=Path(directory)/'executive_hangar_sync.json';self.fetcher=fetcher;self.future=None;self.pool=None
+        self.reset_path=Path(directory)/'hangar_reset_sync.json';self.reset_fetcher=reset_fetcher or fetch_resets
+        self.reset_future=None;self.reset_attempted=-math.inf;self.reset_check={};self.reset_error=''
         self.schedule=None;self.note='';self.fetched_at=0;self.attempted_at=-math.inf;self.cached=True
         seed=Path(__file__).resolve().parent/'data/executive_hangar_schedule.json'
         for path in [self.path,seed]:
@@ -134,20 +137,47 @@ class HangarScheduleService:
                 if not math.isfinite(stamp) or stamp<0:raise ValueError('Invalid cached timestamp')
                 self.schedule=candidate;self.fetched_at=stamp;break
             except (OSError,ValueError,TypeError,KeyError):continue
+        try:
+            self.reset_check=self._validate_reset(read_shared_json(self.reset_path))
+        except (OSError,ValueError,TypeError,KeyError):pass
+    @staticmethod
+    def _validate_reset(data):
+        if not isinstance(data,dict) or data.get('ok') is not True:raise ValueError('Reset feed unavailable')
+        for key in ('checked_at','latest_reset_at'):
+            if not isinstance(data.get(key),(int,float)) or not math.isfinite(data[key]) or data[key]<0:raise ValueError('Invalid reset timestamp')
+        return data
+    def _pool(self):
+        if self.pool is None:self.pool=ThreadPoolExecutor(max_workers=2,thread_name_prefix='hangar-sync')
+        return self.pool
+    def reset_state(self):
+        # Keep the last announced reset even when the feed fails subsequently.
+        return dict(self.reset_check,ok=bool(self.reset_check.get('ok') and not self.reset_error))
     def tick(self,enabled,now=None,refresh_interval=21600,force_refresh=False,retry_interval=300):
         now=time.time() if now is None else now
+        if self.reset_future and self.reset_future.done():
+            try:
+                candidate=self._validate_reset(self.reset_future.result())
+                if not 0<=now-candidate['checked_at']<=86400:raise ValueError('Stale reset check')
+                candidate=dict(candidate,latest_reset_at=max(candidate['latest_reset_at'],self.reset_check.get('latest_reset_at',0)))
+                from telemetry_ipc import publish_json
+                if not publish_json(self.reset_path,candidate):raise OSError('Reset cache is locked')
+                self.reset_check=candidate;self.reset_error=''
+            except Exception as exc:self.reset_error=type(exc).__name__
+            self.reset_future=None
+        if enabled and self.reset_future is None and now-self.reset_attempted>=120 and (force_refresh or self.reset_error or not 0<=now-self.reset_check.get('checked_at',0)<300):
+            self.reset_attempted=now;self.reset_future=self._pool().submit(self.reset_fetcher)
         if self.future and self.future.done():
             try:
-                self.schedule=validate(self.future.result());self.fetched_at=now;self.cached=False;self.note=''
+                candidate=validate(self.future.result())
                 from telemetry_ipc import publish_json
-                publish_json(self.path,dict(schedule=self.schedule,fetched_at=now))
+                if not publish_json(self.path,dict(schedule=candidate,fetched_at=now)):raise OSError('Timer cache is locked')
+                self.schedule=candidate;self.fetched_at=now;self.cached=False;self.note=''
             except Exception as exc:
                 self.cached=True;self.note=type(exc).__name__
             self.future=None
         if enabled and self.future is None and (force_refresh or not -60<=now-self.fetched_at<refresh_interval) and now-self.attempted_at>=retry_interval:
             self.attempted_at=now
-            if self.pool is None:self.pool=ThreadPoolExecutor(max_workers=1,thread_name_prefix='hangar-schedule')
-            self.future=self.pool.submit(self.fetcher)
+            self.future=self._pool().submit(self.fetcher)
         if not enabled or self.schedule is None:return None
         result=project(self.schedule,now*1000);result.update(cached=self.cached,refresh_error=bool(self.note))
         return result

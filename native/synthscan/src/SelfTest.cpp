@@ -1,3 +1,5 @@
+#include "MiningReference.h"
+#include "SynthFinderHUD.h"
 // The self-test: what the program checks about itself, on both platforms.
 //
 // The Linux and Windows builds run the same checks: bedrock --selftest,
@@ -5,6 +7,9 @@
 // both sides (EmbeddedData); beside a build, the ones under tests/ are taken
 // instead.
 #include "SelfTest.h"
+#include "SignatureTiming.h"
+#include "OverlayInput.h"
+#include "AfkNudge.h"
 
 #include "DevSwitch.h"
 #include "Application.h"
@@ -19,6 +24,7 @@
 #include "GameTexts.h"
 #include "LoadoutReader.h"
 #include "MiningHardware.h"
+#include "CraftedPower.h"
 #include "P4kReader.h"
 #include "GameState.h"
 #include "MiningLocations.h"
@@ -29,6 +35,7 @@
 #include "RefiningData.h"
 #include "ScanPanel.h"
 #include "RockContents.h"
+#include "RockReadIdentity.h"
 #include "RefineryTerminal.h"
 #include "RefineryOrders.h"
 #include "TradeBook.h"
@@ -60,7 +67,7 @@
 #include <fstream>
 
 #ifdef _WIN32
-namespace SCMiner { bool blueprintOwnershipChecklistSelfTest(); }
+namespace SCMiner { bool blueprintOwnershipChecklistSelfTest(); bool rockValuePresentationSelfTest(); bool craftedPowerEditorSelfTest(); }
 #endif
 #include <functional>
 #include <iomanip>
@@ -169,6 +176,85 @@ static cv::Mat testFrame1080() {
 int runSelfTest() {
     std::cout << "\n=== SynthScan self-test ===\n" << std::endl;
     bool allPassed = true;
+    {
+        SCMiner::RockStats first; first.mass=22717; first.scu=40.35f; first.ore="Tin";
+        auto next=first;
+        allPassed &= check(SCMiner::sameContentsTarget(first,next),"composition target accepts the same mass, volume and ore");
+        next.scu=25.0f;
+        allPassed &= check(!SCMiner::sameContentsTarget(first,next),"equal-mass rocks with different SCU cannot reuse a composition");
+        next=first;next.mass=12717;
+        allPassed &= check(!SCMiner::sameContentsTarget(first,next),"a single changed mass numeral is not automatically the same rock");
+        next=first;next.mass=22718;
+        bool small=SCMiner::sameContentsTarget(first,next);next.scu=0;
+        allPassed &= check(small&&!SCMiner::sameContentsTarget(first,next),"small mass OCR wobble needs independent matching volume");
+        next=first;next.ore="Copper";
+        allPassed &= check(!SCMiner::sameContentsTarget(first,next),"another named ore invalidates a composition job");
+    }
+
+
+    {
+        using namespace SCMiner;
+        bool controls = true;
+        for (int id : {1002,1011,1017,1021,31810,31811,31813,31814,31815,31817,31818})
+            controls = controls && overlayButtonId(id);
+        allPassed &= check(controls && !overlayButtonId(0) && !overlayButtonId(1015),
+                           "overlay permits only explicit HUD button IDs during play");
+        allPassed &= check(overlayPointerInteractive(false,true,true,false,false) &&
+                           !overlayPointerInteractive(false,false,true,false,false),
+                           "visible cursor can click a HUD button while the background stays passive");
+        allPassed &= check(!overlayPointerInteractive(false,true,false,false,false) &&
+                           !overlayPointerInteractive(false,true,true,true,false),
+                           "hidden game cursor and an existing game press cannot activate HUD controls");
+        allPassed &= check(overlayPointerInteractive(false,false,false,true,true),
+                           "explicit HUD button capture survives leaving its bounds until release");
+        OverlayButtonPress press; press.begin();
+        bool first = press.release(true), repeated = press.release(true);
+        press.begin(); bool outside = press.release(false);
+        press.begin(); press.cancel(); bool cancelled = press.release(true);
+        allPassed &= check(first && !repeated && !outside && !cancelled && !press.down,
+                           "passive button fires once on release inside; cancel or release outside cannot fire");
+    }
+
+
+    {
+        using SynthScan::AfkNudge;
+        AfkNudge a;const auto wait=AfkNudge::interval,grace=AfkNudge::firstDelay;
+        allPassed &= check(!a.armed&&!a.due(wait,true,true,true,true,wait,false),"AFK input defaults off");
+        a.toggle(0);
+        allPassed &= check(!a.due(0,true,true,true,true,wait,false)&&a.nextInSeconds==10&&!a.due(grace-1,true,true,true,true,wait,false),"arming waits ten idle seconds and publishes countdown");
+        allPassed &= check(a.due(grace,true,true,true,true,grace,false),"first AFK pulse is due after ten idle seconds in foreground game");
+        a.sent(grace,true);
+        allPassed &= check(a.nudges==1&&!a.firstPulse()&&!a.due(grace+wait-1,true,true,true,true,wait,false)&&a.due(grace+wait,true,true,true,true,wait,false),"later AFK pulses wait four minutes");
+        allPassed &= check(!a.due(wait*2,true,true,true,true,1,false),"real user input prevents a due nudge");
+        allPassed &= check(!a.due(wait*2,true,true,true,true,wait,true)&&!a.due(wait*2+1,true,true,true,true,wait,false),"held keys and mouse buttons postpone nudges");
+        allPassed &= check(!a.due(wait*3,true,false,true,true,wait,false)&&!a.due(wait*4,true,true,true,true,wait,false),"background game pauses and refocusing waits a new interval");
+        allPassed &= check(!a.due(wait*5,true,true,false,true,wait,false)&&!a.due(wait*6,true,true,true,true,wait,false),"menus and stale session data cannot emit input");
+        allPassed &= check(!a.due(wait*7,true,true,true,false,wait,false),"unavailable idle detection fails closed");
+        a.sent(wait*8,false);
+        allPassed &= check(!a.armed&&!a.due(wait*9,true,true,true,true,wait,false),"failed send disarms without retrying");
+        a.toggle(wait*9);a.due(wait*10,false,false,false,true,wait,false);
+        allPassed &= check(!a.armed,"game exit disarms AFK mode");
+        AfkNudge restarted;
+        allPassed &= check(!restarted.armed,"restarting the app never restores AFK mode");
+        a.toggle(wait*10);a.interrupted(wait*10+1);
+        allPassed &= check(a.armed&&a.firstPulse()&&!a.due(wait*10+2,true,true,true,true,wait,false),"interruption preserves the toggle and postpones a pulse");
+        using SynthScan::AfkMousePulse;
+        AfkMousePulse p;p.start(0,700);
+        allPassed &= check(p.active&&p.ready(0)&&p.acceptsInput(700)&&!p.acceptsInput(701),"pulse accepts its baseline input and detects a returning player");
+        int position=0,maxPosition=0;bool spacing=true;
+        const std::uint64_t times[]={0,40,80,200,240,280};
+        for(unsigned i=0;i<6;i++){
+            spacing=spacing&&p.ready(times[i]);position+=p.delta();maxPosition=(std::max)(position,maxPosition);
+            p.sent(times[i],800+i);spacing=spacing&&p.acceptsInput(800+i);
+            if(i<5)spacing=spacing&&!p.ready(times[i+1]-1);
+        }
+        allPassed &= check(spacing&&position==0&&maxPosition==15&&!p.active&&!p.ready(281),"pulse moves fifteen counts then returns across six spaced events and 280 ms");
+        p.start(500,900);p.sent(2000,1000);
+        allPassed &= check(!p.ready(2039)&&p.ready(2040),"late timers cannot collapse spaced movement into one batch");
+        p.cancel();allPassed &= check(!p.active&&!p.ready(10000),"cancelled pulse never schedules a forced return movement");
+        p.start(10000,2000);
+        allPassed &= check(p.acceptsInput(2000)&&!p.acceptsInput(1000)&&!p.acceptsInput(800),"new pulse discards all old synthetic input timestamps");
+    }
 
     // Figures are read, written and parsed with a decimal point whatever the
     // system's language: on Linux, Qt takes the C library's locale from the
@@ -1286,6 +1372,34 @@ int runSelfTest() {
                                std::to_string(q.size()) + " for Quantainium" + (why.empty() ? "" : ", " + why) + ")");
     }
 
+    allPassed &= check(!SCMiner::restoreSignatureFragment(6800,26800,.3,true)&&
+        !SCMiner::restoreSignatureFragment(10000,100000,.3,true)&&
+        !SCMiner::restoreSignatureFragment(6800,26800,3,false)&&
+        SCMiner::restoreSignatureFragment(6800,26800,.3,false),
+        "clean target switches supersede old signatures; weak fragment repairs expire promptly");
+
+    allPassed &= check(SCMiner::signatureCandidateCost(10,200)<SCMiner::signatureCandidateCost(100,0),
+        "newly aimed signature outranks the old marker's continuity bonus");
+
+    {
+        const auto* mole=SCMiner::shipById("mole");const auto* golem=SCMiner::shipById("golem");
+        bool fits=true;for(const auto& laser:SCMiner::MINING_LASERS){
+            if(laser.size==1&&SCMiner::laserFits(laser,*mole))fits=false;
+            if(laser.size==2&&SCMiner::laserFits(laser,*golem))fits=false;
+        }
+        allPassed &= check(fits,"MOLE rejects all S1 mining heads; Golem rejects all S2 heads");
+        std::istringstream old("ship=mole\n[mole]\nhead=thcn_helix_s1\ncrafted=25\nmodule=passive_focus_mk3\nhead=thcn_helix_s2\ncrafted=15\n");
+        auto cleaned=SCMiner::MinerGUI::readLoadoutFile(old);
+        allPassed &= check(cleaned.fits.size()==1&&!cleaned.fits[0].heads[0].laser&&
+            cleaned.fits[0].heads[0].modules.empty()&&cleaned.fits[0].heads[0].craftedPower==0&&
+            cleaned.fits[0].heads[1].laser&&cleaned.fits[0].heads[1].craftedPower==15,
+            "old wrong-size head is cleared with its bonuses; valid neighboring head is preserved");
+    }
+
+#ifdef _WIN32
+    allPassed &= check(SynthFinder::selfTest(), "Finder autocomplete, ownership and recipe details");
+    allPassed &= check(SCMiner::miningReferenceSelfTest(), "mining reference update is atomic and preserves loadout pointers");
+#endif
     // Rock valuation: exact SCU fractions, inert exclusion, a single buyer
     // for the load, actual refining yield, and quality-band buy ads only.
     {
@@ -1319,14 +1433,58 @@ int runSelfTest() {
         RockPriceBook playerOnly;playerOnly.read(commodities,terminals,raw,"{}",market,now,"4.10.2",why);
         auto independent=playerOnly.estimate(100,c,"Nyx",2,now);
         allPassed &= check(!independent.refinedKnown&&independent.playerCoverage>0,"player valuation does not depend on an NPC refined quote");
-        for(const auto& pair : std::vector<std::pair<std::string,std::string>>{{"\"operation\":\"buy\"","\"operation\":\"sell\""},{"\"listings_count\":3","\"listings_count\":0"},{"\"unit\":\"cscu\"","\"unit\":\"crate\""},{"\"currency\":\"UEC\"","\"currency\":\"USD\""},{"\"listings_count\":3","\"listings_count\":2"}}) {
+        for(const auto& pair : std::vector<std::pair<std::string,std::string>>{{"\"operation\":\"buy\"","\"operation\":\"sell\""},{"\"listings_count\":3","\"listings_count\":0"},{"\"unit\":\"cscu\"","\"unit\":\"crate\""},{"\"currency\":\"UEC\"","\"currency\":\"USD\""}}) {
             auto unsupported=market;unsupported.replace(unsupported.find(pair.first),pair.first.size(),pair.second);
             RockPriceBook rejected;rejected.read(commodities,terminals,raw,refined,unsupported,now,"4.10.2",why);
-            allPassed &= check(rejected.estimate(100,c,"Nyx",2,now).playerCoverage==0,"unusable marketplace averages do not become player proceeds: "+pair.second);
+            allPassed &= check(!rejected.playerQuote("Aluminum",960,"scu",now).known,"unusable marketplace averages do not become player proceeds: "+pair.second);
         }
         allPassed &= check(RockPriceBook::qualityTier(0)==0&&RockPriceBook::qualityTier(499)==1&&
             RockPriceBook::qualityTier(500)==2&&RockPriceBook::qualityTier(949)==6&&RockPriceBook::qualityTier(950)==7&&
             RockPriceBook::qualityTier(1001)==0,"market quality tiers preserve the 499/500 and 949/950 boundaries");
+        const std::string pieceMarket="{\"status\":\"ok\",\"data\":[{\"id_item\":91,\"item_name\":\"Glacosite\",\"quality_tier\":1,\"operation\":\"buy\",\"currency\":\"UEC\",\"unit\":\"unit\",\"listings_count\":1,\"price_avg\":2000000,\"game_version\":\"4.10.2\",\"date_modified\":"+stamp+"}]}";
+        RockPriceBook pieces;
+        const bool pieceRead=pieces.read("{}","{}","{}","{}",pieceMarket,now,"4.10.2",why);
+        const auto q=pieces.playerQuote("Glacosite",360,"unit",now);
+        allPassed &= check(pieceRead&&q.known&&q.limited&&q.price==2000000&&q.qualityMin==1&&q.qualityMax==499,
+            "single active piece buy ad is useful with limited-data and quality-band labels, without terminal feeds");
+        allPassed &= check(!pieces.playerQuote("Glacosite",360,"scu",now).known&&
+            !pieces.playerQuote("Glacosite (Pure)",360,"unit",now).known&&
+            !pieces.playerQuote("Glacosite",0,"unit",now).known&&
+            !pieces.playerQuote("Glacosite",500,"unit",now).known&&
+            !pieces.playerQuote("Glacosite",360,"unit",now+49*3600).known,
+            "piece quotes never cross units, item forms, quality bands or expiry");
+        RockContents gems;gems.parts={{"Glacosite",false,69.74f,360},{"",true,30.25f,0}};
+        allPassed &= check(SCMiner::contentsHold(gems)&&SCMiner::snapOreName("GLAC")=="Glacosite"&&
+            SCMiner::snapOreName("JANALITE")=="Janalite","game gem qualities and ship-scanner abbreviations are recognized");
+        // General ranges use buy and sell references, then one latest
+        // historical snapshot per listing (never daily repetitions as trades).
+        auto historyRow=[&](int listing,double price,long long at,int q=937,const std::string& patch="4.10.2",int removed=0){
+            return "{\"id_item\":5703,\"id_listing\":"+std::to_string(listing)+",\"item_name\":\"Beradom\",\"quality\":"+std::to_string(q)+",\"quality_tier\":"+std::to_string(RockPriceBook::qualityTier(q))+",\"operation\":\"sell\",\"currency\":\"UEC\",\"unit\":\"unit\",\"price\":"+std::to_string(price)+",\"game_version\":\""+patch+"\",\"date_added\":"+std::to_string(at)+",\"date_removed\":"+std::to_string(removed)+"}";
+        };
+        auto history=[&](const std::vector<std::string>& rows){std::string j="{\"status\":\"ok\",\"data\":[";
+            for(const auto& row:rows){if(j.back()!='[')j+=",";j+=row;}return j+"]}";};
+        RockPriceBook rangeBook;rangeBook.read("{}","{}","{}","{}","{}",now,"4.10.2",why);
+        const auto snapshots=history({historyRow(1,80000,now),historyRow(2,100000,now),historyRow(3,120000,now),
+            historyRow(4,90000,now),historyRow(5,10000000,now),historyRow(1,9000000,now-86400),
+            historyRow(6,50000000,now,937,"4.9.0"),historyRow(7,50000000,now-31ll*86400)});
+        const bool added=rangeBook.addHistory(snapshots,now);const auto general=rangeBook.marketRange("Beradom",937,"unit",now);
+        allPassed &= check(added&&general.known&&general.low==80000&&general.high==120000&&general.price==100000&&
+            general.listings==5&&general.qualityMin==937&&general.qualityMax==937,
+            "market range deduplicates daily ad snapshots, rejects old patches/stale rows, and limits extreme asks");
+        allPassed &= check(!rangeBook.marketRange("Beradom",937,"scu",now).known&&
+            !rangeBook.marketRange("Beradom",969,"unit",now).known&&
+            !rangeBook.marketRange("Beradom",937,"unit",now+31ll*86400).known,
+            "general ranges preserve piece units, quality bands and expiry");
+        RockPriceBook historic;historic.read("{}","{}","{}","{}","{}",now,"4.10.2",why);
+        historic.addHistory(history({historyRow(10,75000,now-10*86400,937,"4.10.2",(int)(now-9*86400))}),now);
+        const auto lastKnown=historic.marketRange("Beradom",937,"unit",now);
+        allPassed &= check(lastKnown.known&&lastKnown.low==75000&&lastKnown.historyOnly&&lastKnown.limited,
+            "recent removed ads remain useful as labelled historical estimates without open buyers");
+        auto sellOnly=pieceMarket;sellOnly.replace(sellOnly.find("\"operation\":\"buy\""),17,"\"operation\":\"sell\"");
+        RockPriceBook sellers;sellers.read("{}","{}","{}","{}",sellOnly,now,"4.10.2",why);
+        const auto asking=sellers.marketRange("Glacosite",360,"unit",now);
+        allPassed &= check(asking.known&&asking.low==2000000&&asking.high==2000000,
+            "seller-only material still has a general per-piece estimate");
         // A second material has no common buyer: never add two best terminal
         // prices and present the result as one achievable sale.
         c.parts.push_back({"Gold",false,1,960});c.parts.back().percent=1;c.parts[2].percent=69;
@@ -2673,7 +2831,10 @@ int runSelfTest() {
             if (std::string(SCMiner::MINING_SHIPS[i].id) == "mole") threeHeads.ship = &SCMiner::MINING_SHIPS[i];
         }
         threeHeads.heads.assign(3, SCMiner::MiningLoadout{});
-        const bool refused = !MinerGUI::fitTakes(flown, *pitman, {}) && !MinerGUI::fitTakes(ownLaser, *helix, {}) &&
+        MinerGUI::ShipFit upgradedGolem=ownLaser;
+        const bool interchangeable=MinerGUI::fitTakes(upgradedGolem,*helix,{}) && upgradedGolem.heads[0].laser==helix;
+        const bool refused = interchangeable && !MinerGUI::fitTakes(flown, *pitman, {}) &&
+                             !MinerGUI::fitTakes(ownLaser, *SCMiner::laserById("thcn_helix_s2"), {}) &&
                              !MinerGUI::fitTakes(flown, *hofstede, {focus3, rieger3}) &&
                              !MinerGUI::fitTakes(threeHeads, *helix, {}) && flown.heads[0].laser == helix &&
                              ownLaser.heads[0].laser == pitman && threeHeads.heads[0].laser == nullptr &&
@@ -3115,6 +3276,25 @@ int runSelfTest() {
             allPassed &= check(trimmed.fits.size() == 2 && trimmed.fits[0].heads.size() == 1 &&
                                    !trimmed.fits[0].heads[0].laser && trimmed.fits[1].heads.size() == 3,
                                "an S2 head written under the Prospector is dropped, and the MOLE gets its three");
+        }
+
+        {
+            // Two Golems and two MOLEs retain independent crafted heads.
+            std::istringstream profiles("ship=golem\nfit=Golem Helix\n[golem]\nname=Golem Helix\nhead=thcn_helix_s1\ncrafted=25\n[golem]\nname=Golem Stock\nhead=drak_golem_s1\ncrafted=0\n[mole]\nname=MOLE Solo\nhead=thcn_helix_s2\ncrafted=10\nhead=thcn_helix_s2\ncrafted=20\nhead=thcn_helix_s2\ncrafted=30\n[mole]\nname=MOLE Crew\nhead=thcn_helix_s2\ncrafted=0\n");
+            auto fits=SCMiner::MinerGUI::readLoadoutFile(profiles);
+            std::ostringstream saved;SCMiner::MinerGUI::writeLoadoutFile(saved,fits);
+            std::istringstream reload(saved.str());auto back=SCMiner::MinerGUI::readLoadoutFile(reload);
+            const auto* golem=SCMiner::shipById("golem");
+            const auto* helix=SCMiner::laserById("thcn_helix_s1");
+            bool valid=back.fits.size()==4 && back.fit=="Golem Helix" && golem && !golem->fixedLaser && helix;
+            if(valid){
+                const auto& crafted=back.fits[0].heads[0];
+                valid=crafted.laser==helix && crafted.craftedPower==25 &&
+                    std::abs(SCMiner::outputOf(crafted).fracture-helix->fracture*1.25f)<0.01f &&
+                    back.fits[1].heads[0].craftedPower==0 && back.fits[2].heads[2].craftedPower==30 &&
+                    back.fits[3].heads[0].craftedPower==0;
+            }
+            allPassed &= check(valid,"four named mining profiles preserve Golem Helix I +25% and separate MOLE crafting bonuses");
         }
 
         // The Golem with the game's own labels written out - MASS:,
@@ -4081,6 +4261,25 @@ int runSelfTest() {
 
         // The analyzer narrowed to a place: an ore the tables list there
         // stays in scope, one they do not is out
+        {
+            SCMiner::SignatureAnalyzer rings;rings.setSystemFilter("PYRO");
+            rings.setPlaceFilter("Pyro VI (Terminus)");
+            const auto wrongSurface=rings.analyzeSignature(6740);
+            allPassed &= check(wrongSurface.size()==1&&wrongSurface.front().name=="Ouratite"&&wrongSurface.front().clusterSize==2&&wrongSurface.front().difference==0,
+                "6740 remains exact Ouratite x2 even with an incorrect surface filter");
+            rings.setPlaceFilter("Terminus Ring");rings.setGround(SCMiner::SignatureAnalyzer::Ground::Space);
+            const auto correctRing=rings.analyzeSignature(6740);
+            allPassed &= check(!correctRing.empty()&&correctRing.front().name=="Ouratite"&&correctRing.front().inSelectedSystem,
+                "Terminus Ring includes Ouratite and does not promote Riccite");
+            allPassed &= check(std::none_of(SCMiner::ORE_LOCATIONS.begin(),SCMiner::ORE_LOCATIONS.end(),[](const SCMiner::OreLocation& r){return std::string(r.location)=="Terminus Ring"&&std::string(r.mineral)=="Riccite";}),
+                "Terminus Ring reference does not list Riccite as a primary ore");
+            const auto vicinity=SCMiner::automaticMiningPlace(placeByLogName("Terminus","Pyro"));
+            const auto explicitRing=SCMiner::automaticMiningPlace(placeByLogName("Terminus Rings","Pyro"));
+            allPassed &= check(vicinity.oreLocation.empty()&&vicinity.surface==-1&&explicitRing.oreLocation=="Terminus Ring"&&explicitRing.surface==0,
+                "a parent-body log name leaves surface versus orbit unknown; explicit rings stay distinct");
+            allPassed &= check(!SCMiner::contradictsHandPlace("Terminus Ring","Terminus","Pyro")&&SCMiner::contradictsHandPlace("Terminus Ring","Bloom","Pyro"),
+                "a parent-body log message cannot clear a selected ring; another body can");
+        }
         SCMiner::SignatureAnalyzer narrowed;
         narrowed.setSystemFilter("PYRO");
         narrowed.setPlaceFilter("Pyro II (Monox)");
@@ -4286,8 +4485,8 @@ int runSelfTest() {
         if (r.name == "Stileron") stileronDimmed = !r.inSelectedSystem;
         if (r.inSelectedSystem) hasInSystemAlternative = true;
     }
-    allPassed &= check(stileronDimmed && hasInSystemAlternative,
-                       "System filter dims Stileron in Stanton but offers alternatives");
+    allPassed &= check(stileronDimmed && !hasInSystemAlternative,
+                       "An exact Stileron remains visible outside its system without fuzzy alternatives replacing it");
     analyzer.setSystemFilter("");
 
     // --- OCR ---
@@ -4824,6 +5023,18 @@ int runSelfTest() {
 #endif  // _WIN32: the HDR path is Desktop Duplication, which has no Linux side
 
 #ifdef _WIN32
+    allPassed &= check(SCMiner::rockValuePresentationSelfTest(), "complete Tin scan passes valuation gate; missing volume/composition distinguished; three configured turret ranges exposed without a window");
+    allPassed &= check(SCMiner::craftedPowerEditorSelfTest(),"crafted power editor replaces values, previews modules once, cancels invalid edits, resets stock and isolates heads without a window");
+    {
+        float power=0;bool valid=true;
+        for(const auto& sample:std::vector<std::pair<std::string,float>>{{"25",25},{"+17.6%",17.6f},{" -12.34 % ",-12.34f},{"0",0},{"",0},{"100",100},{"-50",-50}}){
+            valid=valid&&SCMiner::parseCraftedPower(sample.first,power)&&std::abs(power-sample.second)<0.001f;
+        }
+        for(const auto& sample:{"-",".","nan","inf","25oops","125","-50.01","1e2","25..5","%"}){
+            valid=valid&&!SCMiner::parseCraftedPower(sample,power);
+        }
+        allPassed &= check(valid,"final crafted item bonuses accept signed decimals/percent and reject unfinished, malformed and unsupported values");
+    }
     allPassed &= check(SCMiner::blueprintOwnershipChecklistSelfTest(),
                        "Blueprint list checkbox toggles ownership without opening details or resetting scroll; names still open recipes");
 #endif

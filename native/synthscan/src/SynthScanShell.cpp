@@ -2,6 +2,7 @@
 #define UNICODE
 #define _UNICODE
 #include "SynthScanShell.h"
+#include "SynthFinderHUD.h"
 #include "SynthJson.h"
 #include "SynthDiaryUI.h"
 #include "SynthNavUI.h"
@@ -9,6 +10,7 @@
 #include "MinerGUI.h"
 #include "AppPaths.h"
 #include "ScreenCapture.h"
+#include "AfkNudge.h"
 #include "resource.h"
 #include <commctrl.h>
 #include <commdlg.h>
@@ -22,6 +24,7 @@
 #include <cwctype>
 #include <algorithm>
 #include <fstream>
+#include <future>
 #pragma comment(lib,"comctl32.lib")
 #pragma comment(lib,"uxtheme.lib")
 namespace SynthScan {
@@ -33,9 +36,11 @@ HWND host=nullptr,panel=nullptr,listing=nullptr,detail=nullptr,search=nullptr,ki
 HWND autoCheck=nullptr,scanCheck=nullptr,hudCheck=nullptr,sessionCheck=nullptr,hotkey=nullptr,editName=nullptr,editReminder=nullptr,editMinutes=nullptr;
 HFONT font=nullptr,titleFont=nullptr;
 HBRUSH background=nullptr,card=nullptr;
-bool isAutomatic=false,testing=false,attached=false,hudVisible=true,scanOnLaunch=true,showSession=true,hotkeyOK=false,snareAlerts=true,hangars=false;
+bool isAutomatic=false,testing=false,attached=false,hudVisible=true,scanOnLaunch=true,showSession=true,hotkeyOK=false,snareAlerts=true,hangars=false,finder=false;
 bool pirateDetails=false,quest=false,pirate=false,miningResume=true,placementLocked=false,activityExpanded=true;
 std::string activityCommandId;
+std::string directoryRowId,directoryItemId,directoryRequestId,directoryText,libraryRevision,libraryLoadingRevision,relatedItemId;
+std::future<Json> libraryJob;
 int currentTab=0,hotkeyChoice=0,selected=-1;
 Json state,settings,library;std::vector<Json> visible;
 std::set<std::string> favorites;
@@ -43,12 +48,51 @@ std::unique_ptr<Gdiplus::Bitmap> icon,hangarImage;
 std::string lastState,summary="Session service starting",note;
 std::string controlCompleted="Startup registration updated.";
 std::string reputationNotice;
+NOTIFYICONDATAW tray{};
 bool userExitRequested=false;
+AfkNudge afk;
+AfkMousePulse afkPulse;
+HWND afkGame=nullptr;
+constexpr UINT_PTR AFK_PULSE_TIMER=3;
+double lastAfkPulseAt=0;
+void updateAfkIndicator(){
+    if(mining)SetWindowTextW(GetDlgItem(mining->windowHandle(),1017),L"More");
+    if(tray.hWnd){auto label=wide(std::string("SynthScan — AFK ")+(afk.armed?"ON: ":"")+afk.status);wcsncpy_s(tray.szTip,label.c_str(),_TRUNCATE);tray.uFlags=NIF_TIP;Shell_NotifyIconW(NIM_MODIFY,&tray);}
+}
+void toggleAfk(){if(host)KillTimer(host,AFK_PULSE_TIMER);afkPulse.cancel();afkGame=nullptr;afk.toggle(GetTickCount64());updateAfkIndicator();}
+void appendAfkMenu(HMENU menu,UINT id){
+    auto label=wide(std::string("AFK mouse jiggler: ")+(afk.armed?"ON — ":"OFF — ")+afk.status);
+    AppendMenuW(menu,MF_STRING|(afk.armed?MF_CHECKED:0),id,label.c_str());
+}
+void desktop();
+constexpr UINT PROFILE_FIRST=12000,PROFILE_MANAGE=12100,PROFILE_EDIT=12101;
+void appendProfileMenu(HMENU menu){
+    if(!mining)return;
+    HMENU profiles=CreatePopupMenu();
+    const auto names=mining->miningProfileNames();
+    for(size_t i=0;i<names.size()&&i<100;i++){
+        std::wstring label;for(auto c:names[i]){label+=c;if(c==L'&')label+=L'&';}
+        AppendMenuW(profiles,MF_STRING|(int(i)==mining->selectedMiningProfile()?MF_CHECKED:0),PROFILE_FIRST+UINT(i),label.c_str());
+    }
+    if(!names.empty())AppendMenuW(profiles,MF_SEPARATOR,0,nullptr);
+    AppendMenuW(profiles,MF_STRING,PROFILE_MANAGE,L"Add / manage ship profiles…");
+    AppendMenuW(profiles,MF_STRING|(names.empty()?MF_GRAYED:0),PROFILE_EDIT,L"Heads, modules & crafting…");
+    AppendMenuW(menu,MF_POPUP,reinterpret_cast<UINT_PTR>(profiles),L"Ship profiles");
+}
+bool handleProfileChoice(int choice){
+    if(!mining)return false;
+    if(choice>=PROFILE_FIRST&&choice<PROFILE_MANAGE){mining->selectMiningProfile(choice-PROFILE_FIRST);return true;}
+    if(choice==PROFILE_MANAGE||choice==PROFILE_EDIT){
+        desktop();
+        if(choice==PROFILE_MANAGE)mining->manageMiningProfiles();else mining->editMiningLoadout();
+        return true;
+    }
+    return false;
+}
 std::filesystem::path root,data;
 double lastStateAt=0;
 double uiScale=1;
 int px(int value){return int(std::lround(value*uiScale));}
-NOTIFYICONDATAW tray{};
 constexpr int HOTKEY=31001,TRAY=WM_APP+41;
 constexpr COLORREF BG=RGB(20,23,29),CARD=RGB(29,33,41),TEXT=RGB(233,237,241),MUTED=RGB(149,160,173),GOLD=RGB(218,160,79);
 double epoch(){return std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count();}
@@ -65,32 +109,37 @@ bool spawnPython(const wchar_t* script,const std::vector<std::wstring>& args,HAN
     CloseHandle(pi.hThread);if(job&&std::wstring(script)==L"native_bridge.py")AssignProcessToJobObject(job,pi.hProcess);
     if(result)*result=pi.hProcess;else CloseHandle(pi.hProcess);return true;
 }
-void saveSettings(){settings=obj({{"scan_on_launch",boolean(scanOnLaunch)},{"show_hud",boolean(hudVisible)},{"session_strip",boolean(showSession)},{"snare_alerts",boolean(snareAlerts)},{"piracy_details",boolean(pirateDetails)},{"hud_mode",str(hangars?"hangars":quest?"questing":pirate?"piracy":"mining")},{"mining_resume",boolean(miningResume)},{"hud_locked",boolean(placementLocked)},{"activity_expanded",boolean(activityExpanded)},{"hotkey",num(hotkeyChoice)}});if(!write(data/L"native_settings.json",settings))note="Could not save HUD settings.";}
+void saveSettings(){settings=obj({{"scan_on_launch",boolean(scanOnLaunch)},{"show_hud",boolean(hudVisible)},{"session_strip",boolean(showSession)},{"snare_alerts",boolean(snareAlerts)},{"piracy_details",boolean(pirateDetails)},{"hud_mode",str(finder?"finder":hangars?"hangars":quest?"questing":pirate?"piracy":"mining")},{"mining_resume",boolean(miningResume)},{"hud_locked",boolean(placementLocked)},{"activity_expanded",boolean(activityExpanded)},{"hotkey",num(hotkeyChoice)}});if(!write(data/L"native_settings.json",settings))note="Could not save HUD settings.";}
 void togglePlacement(){placementLocked=!placementLocked;if(mining)mining->updateClickThrough();saveSettings();}
-void modeControls(){if(!mining)return;if(pirate)SetWindowTextW(GetDlgItem(mining->windowHandle(),31814),flag(field(state,"piracy_watch"),"waiting_active")?L"Pause wait":L"Start wait");if(pirate){SetWindowTextW(GetDlgItem(mining->windowHandle(),1002),pirateDetails?L"Details -":L"Details +");SetWindowTextW(GetDlgItem(mining->windowHandle(),31817),snareAlerts?L"Alerts on":L"Muted");}if(quest)SetWindowTextW(GetDlgItem(mining->windowHandle(),1002),L"Next");mining->placeOreRowsButton();for(int id:{31810,31811,31813,31818})InvalidateRect(GetDlgItem(mining->windowHandle(),id),nullptr,FALSE);InvalidateRect(mining->windowHandle(),nullptr,FALSE);}
+void modeControls(){if(!mining)return;if(pirate)SetWindowTextW(GetDlgItem(mining->windowHandle(),31814),flag(field(state,"piracy_watch"),"waiting_active")?L"Pause wait":L"Start wait");if(pirate){SetWindowTextW(GetDlgItem(mining->windowHandle(),1002),pirateDetails?L"Details -":L"Details +");SetWindowTextW(GetDlgItem(mining->windowHandle(),31817),snareAlerts?L"Alerts on":L"Muted");}if(quest)SetWindowTextW(GetDlgItem(mining->windowHandle(),1002),L"Next");mining->placeOreRowsButton();for(int id:{31810,31811,31813,31818,31819})InvalidateRect(GetDlgItem(mining->windowHandle(),id),nullptr,FALSE);InvalidateRect(mining->windowHandle(),nullptr,FALSE);}
 void setMode(int value){
-    const int current=hangars?3:quest?2:pirate?1:0;
+    const int current=finder?4:hangars?3:quest?2:pirate?1:0;
     if(current==value||!mining)return;
     if(current==0){miningResume=text(GetDlgItem(mining->windowHandle(),1002))==L"Live on";if(miningResume)SendMessageW(mining->windowHandle(),WM_COMMAND,MAKEWPARAM(1002,BN_CLICKED),0);endMiningRock();}
-    pirate=value==1;quest=value==2;hangars=value==3;
+    SynthFinder::sync(false);pirate=value==1;quest=value==2;hangars=value==3;finder=value==4;
     if(value==0){mining->setLiveModeActive(false);if(miningResume)SendMessageW(mining->windowHandle(),WM_COMMAND,MAKEWPARAM(1002,BN_CLICKED),0);}
-    saveSettings();modeControls();mining->refreshActivityLayout();
+    mining->updateClickThrough();saveSettings();modeControls();mining->refreshActivityLayout();
 }
 void applyHotkey(){
     if(host)UnregisterHotKey(host,HOTKEY);
     hotkeyOK=false;
 }
 
-void showHud(bool value){hudVisible=value;if(mining){if(value&&activityExpanded){ShowWindow(mining->windowHandle(),SW_SHOWNOACTIVATE);mining->keepOverlayAboveGame(true);}else mining->hide();}saveSettings();}
+void showHud(bool value){if(!value)SynthFinder::sync(false);hudVisible=value;if(mining){if(value&&activityExpanded){ShowWindow(mining->windowHandle(),SW_SHOWNOACTIVATE);mining->keepOverlayAboveGame(true);}else mining->hide();}saveSettings();}
 void setActivityExpanded(bool value){
-    activityExpanded=value;
+    activityExpanded=value;if(!value)SynthFinder::sync(false);
     if(mining){if(value&&hudVisible){if(!mining->isOverlayMode()){auto window=mining->windowHandle();bool hadNoActivate=(GetWindowLongPtrW(window,GWL_EXSTYLE)&WS_EX_NOACTIVATE)!=0;SetWindowLongPtrW(window,GWL_EXSTYLE,GetWindowLongPtrW(window,GWL_EXSTYLE)|WS_EX_NOACTIVATE);mining->toggleOverlayMode();if(!hadNoActivate)SetWindowLongPtrW(window,GWL_EXSTYLE,GetWindowLongPtrW(window,GWL_EXSTYLE)&~WS_EX_NOACTIVATE);}ShowWindow(mining->windowHandle(),SW_SHOWNOACTIVATE);mining->keepOverlayAboveGame(true);}else mining->hide();}
     saveSettings();
 }
 void activityControl(){
     auto request=read(data/L"activity_hud_command.json");auto id=request.textOr("id");double age=epoch()-request.numberOr("at");
-    if(!id.empty()&&id!=activityCommandId&&request.numberOr("owner_pid")==GetCurrentProcessId()&&age>=-.25&&age<5&&request.textOr("action")=="set_activity_expanded"){
-        activityCommandId=id;setActivityExpanded(flag(request,"expanded",activityExpanded));
+    if(!id.empty()&&id!=activityCommandId&&request.numberOr("owner_pid")==GetCurrentProcessId()&&age>=-.25&&age<5){
+        auto action=request.textOr("action");
+        if(action=="set_activity_expanded"){
+            activityCommandId=id;setActivityExpanded(flag(request,"expanded",activityExpanded));
+        }else if(action=="set_afk_armed"&&field(request,"armed").kind==Json::Kind::Bool){
+            activityCommandId=id;if(flag(request,"armed")!=afk.armed)toggleAfk();
+        }
     }
 }
 void desktop(){if(!mining)return;if(mining->isOverlayMode())mining->toggleOverlayMode();hudVisible=true;activityExpanded=true;mining->show();ShowWindow(mining->windowHandle(),SW_RESTORE);SetForegroundWindow(mining->windowHandle());saveSettings();}
@@ -118,12 +167,14 @@ void listRows(){
     std::string prior=selected>=0&&selected<int(visible.size())?visible[selected].textOr("id"):"";
     SendMessageW(listing,WM_SETREDRAW,FALSE,0);ListView_DeleteAllItems(listing);visible.clear();selected=-1;icon.reset();
     std::wstring query=lower(text(search)),type=text(kind),cat=text(category);
+    size_t matched=0;
     auto append=[&](const Json& row){
-        if(!query.empty()){auto hay=lower(wide(row.textOr("name")+" "+row.textOr("detail")));if(currentTab==2){std::wistringstream terms(query);std::wstring term;while(terms>>term)if(hay.find(term)==std::wstring::npos)return;}else if(hay.find(query)==std::wstring::npos)return;}
+        if(currentTab==0&&!relatedItemId.empty()&&row.textOr("item_id")!=relatedItemId)return;
+        if(!query.empty()&&relatedItemId.empty()){auto hay=lower(wide(row.textOr("search",row.textOr("name")+" "+row.textOr("detail"))));std::wistringstream terms(query);std::wstring term;while(terms>>term)if(hay.find(term)==std::wstring::npos)return;}
         if(currentTab==0&&type==L"Favorites"&&!favorites.count(row.textOr("id")))return;
-        if(currentTab==0&&type!=L"All"&&type!=L"Favorites"&&wide(row.textOr("kind"))!=type)return;
+        if(currentTab==0&&type!=L"All"&&type!=L"Favorites"&&wide(row.textOr("kind"))!=type&&!(type==L"Item"&&row.textOr("kind")=="Component"))return;
         if(currentTab==0&&cat!=L"All categories"&&wide(row.textOr("category"))!=cat)return;
-        addRow(row);
+        ++matched;if(currentTab!=0||visible.size()<300)addRow(row);
     };
     if(currentTab==0)for(auto& row:field(library,"rows").items)append(row);
     if(currentTab==1)for(auto& row:field(state,"plans").items)append(row);
@@ -140,16 +191,31 @@ void listRows(){
     if(!visible.empty()){
         int index=0;for(int i=0;i<int(visible.size());i++)if(visible[i].textOr("id")==prior){index=i;break;}
         ListView_SetItemState(listing,index,LVIS_SELECTED|LVIS_FOCUSED,LVIS_SELECTED|LVIS_FOCUSED);ListView_EnsureVisible(listing,index,FALSE);
+    }else{
+        SetWindowTextW(detail,L"No matches. Change the search or filters.");directoryRowId.clear();directoryItemId.clear();directoryRequestId.clear();directoryText.clear();
     }
     if(currentTab==2){auto count=int(field(state,"session_log").numberOr("count"));auto offset=int(field(state,"session_log").numberOr("offset"));auto label=std::to_string(visible.empty()?0:offset+1)+"–"+std::to_string(offset+int(visible.size()))+" of "+std::to_string(count)+" visits · times UTC+08:00";SetDlgItemTextW(panel,227,wide(label).c_str());EnableWindow(GetDlgItem(panel,225),offset>0);EnableWindow(GetDlgItem(panel,226),offset+100<count);}
-    SetWindowTextW(status,wide(std::to_string(visible.size())+" entries · "+note).c_str());
+    SetWindowTextW(status,wide(std::to_string(visible.size())+" of "+std::to_string(matched)+" matches"+(matched>visible.size()?" · Narrow your search":"")+" · "+note).c_str());
+}
+void renderDirectoryDetail(const Json& row){
+    std::string body=row.textOr("detail");
+    if(currentTab==0&&!row.textOr("item_id").empty())body=row.textOr("name")+"\n\n"+directoryText+"\n\n"+body;
+    if(favorites.count(row.textOr("id")))body="★ Favorite\n\n"+body;
+    std::wstring rendered=wide(body);for(size_t p=0;(p=rendered.find(L'\n',p))!=std::wstring::npos;p+=2)rendered.replace(p,1,L"\r\n");
+    SetWindowTextW(detail,rendered.c_str());
 }
 void selection(){
     int i=ListView_GetNextItem(listing,-1,LVNI_SELECTED);if(i<0||i>=int(visible.size()))return;selected=i;
-    auto row=visible[i];std::string body=row.textOr("detail");
-    if(favorites.count(row.textOr("id")))body="★ Favorite\n\n"+body;
-    std::wstring rendered=wide(body);for(size_t p=0;(p=rendered.find(L'\n',p))!=std::wstring::npos;p+=2)rendered.replace(p,1,L"\r\n");
-    SetWindowTextW(detail,rendered.c_str());icon.reset();
+    const auto& row=visible[i];
+    if(currentTab==0&&!row.textOr("item_id").empty()){
+        if(directoryRowId!=row.textOr("id")||directoryItemId!=row.textOr("item_id")){
+            directoryRowId=row.textOr("id");directoryItemId=row.textOr("item_id");directoryRequestId=std::to_string(GetTickCount64())+":"+directoryRowId;
+            directoryText="IN-GAME PURCHASE LOCATIONS — UEX Corp\nChecking shops in the background…";
+            if(!testing)write(data/L"item_directory_request.json",obj({{"owner_pid",num(GetCurrentProcessId())},{"at",num(epoch())},{"request_id",str(directoryRequestId)},{"row_id",str(directoryRowId)},{"item_id",field(row,"item_id")}}));
+        }
+    }else{directoryRowId.clear();directoryItemId.clear();directoryRequestId.clear();directoryText.clear();}
+    renderDirectoryDetail(row);icon.reset();
+    if(currentTab==0)EnableWindow(GetDlgItem(panel,228),row.textOr("kind")!="Ship"&&row.textOr("kind")!="Vehicle"&&!row.textOr("item_id").empty());
     if(currentTab==2&&editReminder&&GetFocus()!=editReminder)SetWindowTextW(editReminder,wide(row.textOr("notes")).c_str());
     auto path=row.textOr("icon");if(!path.empty())icon=std::make_unique<Gdiplus::Bitmap>(wide(path).c_str());
     InvalidateRect(panel,nullptr,FALSE);
@@ -165,10 +231,10 @@ LRESULT CALLBACK headerPaint(HWND hwnd,UINT message,WPARAM w,LPARAM l,UINT_PTR,D
     return DefSubclassProc(hwnd,message,w,l);
 }
 void rebuild(int tab){
-    currentTab=tab;selected=-1;icon.reset();
+    currentTab=tab;selected=-1;icon.reset();relatedItemId.clear();
     HWND child=GetWindow(panel,GW_CHILD);while(child){HWND next=GetWindow(child,GW_HWNDNEXT);DestroyWindow(child);child=next;}
     listing=detail=search=kind=category=nullptr;
-    const wchar_t* names[]={L"Game library",L"Material picker",L"Server log",L"Review & imports",L"Startup & HUD"};
+    const wchar_t* names[]={L"Item directory",L"Material picker",L"Server log",L"Review & imports",L"Startup & HUD"};
     for(int i=0;i<5;i++)control(L"BUTTON",names[i],BS_PUSHBUTTON,18+i*168,62,160,30,100+i);
     status=control(L"STATIC",wide(note).c_str(),SS_LEFT,20,596,816,45,200);
     if(tab==4){
@@ -199,12 +265,12 @@ void rebuild(int tab){
         return;
     }
     search=control(L"EDIT",L"",ES_AUTOHSCROLL,20,112,tab==2?260:370,28,201);
-    SendMessageW(search,EM_SETCUEBANNER,TRUE,reinterpret_cast<LPARAM>(tab==2?L"Search time, shard, name or notes":L"Search items, materials or blueprints"));
+    SendMessageW(search,EM_SETCUEBANNER,TRUE,reinterpret_cast<LPARAM>(tab==2?L"Search time, shard, name or notes":L"Search items, blueprints or mission rewards"));
     kind=control(L"COMBOBOX",L"",CBS_DROPDOWNLIST|WS_VSCROLL,tab==2?295:405,112,tab==2?170:160,200,202);
     if(tab==2){control(L"STATIC",L"Search name, shard, time or notes",SS_LEFT,20,94,260,17,0);control(L"STATIC",L"Region",SS_LEFT,295,94,170,17,0);category=control(L"EDIT",L"",ES_AUTOHSCROLL,480,112,145,28,203);control(L"EDIT",L"",ES_AUTOHSCROLL,640,112,145,28,221);control(L"BUTTON",L"Filter",BS_PUSHBUTTON,795,112,45,28,222);control(L"STATIC",L"From date",SS_LEFT,480,94,145,17,0);control(L"STATIC",L"Through date",SS_LEFT,640,94,145,17,0);SendMessageW(category,EM_SETCUEBANNER,TRUE,(LPARAM)L"YYYY-MM-DD");SendDlgItemMessageW(panel,221,EM_SETCUEBANNER,TRUE,(LPARAM)L"YYYY-MM-DD");}
     else category=control(L"COMBOBOX",L"",CBS_DROPDOWNLIST|WS_VSCROLL,580,112,260,250,203);
     if(tab==0){
-        for(auto value:{L"All",L"Blueprint",L"Item",L"Material",L"Favorites"})SendMessageW(kind,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(value));
+        for(auto value:{L"All",L"Blueprint",L"Item",L"Material",L"Component",L"Ship",L"Vehicle",L"Favorites"})SendMessageW(kind,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(value));
         std::set<std::string> cats;for(auto& row:field(library,"rows").items)cats.insert(row.textOr("category"));
         SendMessageW(category,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(L"All categories"));
         for(auto& value:cats){auto w=wide(value);SendMessageW(category,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(w.c_str()));}
@@ -224,7 +290,7 @@ void rebuild(int tab){
     const wchar_t* sessionColumns[]={L"Joined",L"Left / observed",L"Region",L"Shard",L"Shard label",L"Duration",L"Visit"};int sessionWidths[]={160,160,85,65,130,85,100};
     for(int i=0;i<(tab==2?7:3);i++){LVCOLUMNW c{};c.mask=LVCF_TEXT|LVCF_WIDTH;c.pszText=const_cast<wchar_t*>(tab==2?sessionColumns[i]:columns[i]);c.cx=px(tab==2?sessionWidths[i]:(i==0?390:200));ListView_InsertColumn(listing,i,&c);}
     detail=control(L"EDIT",L"Select an entry",ES_MULTILINE|ES_READONLY|ES_AUTOVSCROLL|WS_VSCROLL,100,355,740,184,205);
-    if(tab==0){control(L"BUTTON",L"Favorite / unfavorite",BS_PUSHBUTTON,20,551,190,30,210);control(L"BUTTON",L"Mine this material",BS_PUSHBUTTON,224,551,190,30,211);}
+    if(tab==0){control(L"BUTTON",L"Favorite / unfavorite",BS_PUSHBUTTON,20,551,190,30,210);control(L"BUTTON",L"Mine this material",BS_PUSHBUTTON,224,551,190,30,211);control(L"BUTTON",L"Blueprints for this item",BS_PUSHBUTTON,428,551,240,30,228);}
     if(tab==1)control(L"BUTTON",L"Find mining destinations",BS_PUSHBUTTON,20,551,240,30,212);
     if(tab==2){
         control(L"BUTTON",L"Previous visits",BS_PUSHBUTTON,20,319,130,26,225);control(L"BUTTON",L"Next visits",BS_PUSHBUTTON,160,319,130,26,226);control(L"STATIC",L"",SS_LEFT,310,323,530,22,227);
@@ -258,6 +324,11 @@ void saveOptions(){
     InvalidateRect(mining->windowHandle(),nullptr,FALSE);SetWindowTextW(status,wide(note).c_str());
 }
 void handleAction(int id){
+    if(id==228&&currentTab==0&&selected>=0&&selected<int(visible.size())){
+        auto row=visible[selected];if(row.textOr("item_id").empty()){note="Choose an item to find its blueprints.";SetWindowTextW(status,wide(note).c_str());return;}
+        SetWindowTextW(search,wide(row.textOr("name")).c_str());SendMessageW(kind,CB_SETCURSEL,1,0);SendMessageW(category,CB_SETCURSEL,0,0);
+        relatedItemId=row.textOr("item_id");listRows();return;
+    }
     if(id==312){setMode(3);showHud(true);setActivityExpanded(true);return;}
     if(id==313){if(!testing)spawnPython(L"compboard_tracker.py",{});return;}
     if(id==222||id==223||id==224||id==225||id==226){Json c=obj({{"action",str(id==223||id==224?"session_export":"session_view")},{"query",str(utf8(text(search)))},{"region",str(SendMessageW(kind,CB_GETCURSEL,0,0)>0?utf8(text(kind)):"")},{"date_from",str(utf8(text(category)))},{"date_to",str(utf8(text(GetDlgItem(panel,221))))}});if(id==225||id==226)c.members.push_back({"offset",num(std::max(0.,field(state,"session_log").numberOr("offset")+(id==225?-100:100)))});if(id==223||id==224){if(testing)return;wchar_t path[32768]{};wcscpy_s(path,id==223?L"SynthScan server history.csv":L"SynthScan server history.json");OPENFILENAMEW f{sizeof(f)};f.hwndOwner=panel;f.lpstrFile=path;f.nMaxFile=32768;f.lpstrDefExt=id==223?L"csv":L"json";f.lpstrFilter=id==223?L"CSV file\0*.csv\0":L"JSON file\0*.json\0";f.Flags=OFN_OVERWRITEPROMPT|OFN_NOCHANGEDIR|OFN_PATHMUSTEXIST;if(!GetSaveFileNameW(&f))return;c.members.push_back({"path",str(utf8(path))});c.members.push_back({"format",str(id==223?"csv":"json")});}command(c);return;}
@@ -303,7 +374,7 @@ void handleAction(int id){
 }
 LRESULT CALLBACK panelProc(HWND hwnd,UINT message,WPARAM w,LPARAM l){
     switch(message){
-    case WM_COMMAND:{int id=LOWORD(w),code=HIWORD(w);if((id==201&&code==EN_CHANGE)||(id==202&&code==CBN_SELCHANGE)||(id==203&&code==CBN_SELCHANGE)){if(currentTab==0||currentTab==2||currentTab==3)SetTimer(hwnd,2,180,nullptr);return 0;}handleAction(id);return 0;}
+    case WM_COMMAND:{int id=LOWORD(w),code=HIWORD(w);if((id==201&&code==EN_CHANGE)||(id==202&&code==CBN_SELCHANGE)||(id==203&&code==CBN_SELCHANGE)){relatedItemId.clear();if(currentTab==0||currentTab==2||currentTab==3)SetTimer(hwnd,2,180,nullptr);return 0;}handleAction(id);return 0;}
     case WM_TIMER:if(w==2){KillTimer(hwnd,2);listRows();}return 0;
     case WM_NOTIFY:{
         auto header=reinterpret_cast<NMHDR*>(l);
@@ -328,9 +399,100 @@ LRESULT CALLBACK panelProc(HWND hwnd,UINT message,WPARAM w,LPARAM l){
 }
 void publishNativeStatus(){
     RECT overlayRect{};if(mining)GetWindowRect(mining->windowHandle(),&overlayRect);
-    if(!testing&&mining)write(data/L"native_status.json",obj({{"at",num(epoch())},{"pid",num(GetCurrentProcessId())},{"scanner_active",boolean(!pirate&&!quest&&!hangars&&text(GetDlgItem(mining->windowHandle(),1002))==L"Live on")},{"piracy_details",boolean(pirateDetails)},{"hud_mode",str(hangars?"hangars":quest?"questing":pirate?"piracy":"mining")},{"hud_locked",boolean(placementLocked)},{"activity_expanded",boolean(activityExpanded)},{"activity_command_id",str(activityCommandId)},{"hud_visible",boolean(IsWindowVisible(mining->windowHandle())!=FALSE)},{"overlay_mode",boolean(mining->isOverlayMode())},{"hud_topmost",boolean((GetWindowLongPtrW(mining->windowHandle(),GWL_EXSTYLE)&WS_EX_TOPMOST)!=0)},{"hud_position",obj({{"left",num(overlayRect.left)},{"top",num(overlayRect.top)},{"right",num(overlayRect.right)},{"bottom",num(overlayRect.bottom)}})},{"hotkey_registered",boolean(hotkeyOK)},{"bridge_age",num(lastStateAt?epoch()-lastStateAt:-1)}}));
+    Json scan=obj({});
+    if(mining){
+        const auto& rock=mining->displayedRock();const auto& contents=mining->displayedContents();
+        Json parts=arr();for(const auto& part:contents.parts)parts.items.push_back(obj({{"ore",str(part.ore)},{"percent",num(part.percent)},{"quality",num(part.quality)},{"inert",boolean(part.inert)}}));
+        Json values=arr();if(mining->rockOnView())for(const auto& line:mining->displayedRockValueLines())values.items.push_back(str(utf8(line)));
+        scan=obj({{"value_lines",values},{"read_age_seconds",num(mining->rockReadAgeSeconds())},{"on_view",boolean(mining->rockOnView())},{"mass",num(rock.mass)},{"scu",num(rock.scu)},{"ore",str(rock.ore)},
+            {"whole",boolean(contents.whole)},{"partial",boolean(contents.partial)},{"sum",num(contents.sum)},{"parts",parts},
+            {"reader_note",str(mining->contentsReadNote())}});
+    }
+
+    if(!testing&&mining)write(data/L"native_status.json",obj({{"at",num(epoch())},{"pid",num(GetCurrentProcessId())},{"afk_jiggler",obj({{"armed",boolean(afk.armed)},{"status",str(afk.status)},{"nudges",num(afk.nudges)},{"interval_seconds",num(AfkNudge::interval/1000)},{"next_in_seconds",num(afk.nextInSeconds)},{"first_pulse",boolean(afk.firstPulse())},{"pulse_active",boolean(afkPulse.active)},{"last_pulse_at",num(lastAfkPulseAt)},{"pulse_counts",num(15)}})},{"mining_scan",scan},{"scanner_active",boolean(!pirate&&!quest&&!hangars&&!finder&&text(GetDlgItem(mining->windowHandle(),1002))==L"Live on")},{"piracy_details",boolean(pirateDetails)},{"hud_mode",str(finder?"finder":hangars?"hangars":quest?"questing":pirate?"piracy":"mining")},{"hud_locked",boolean(placementLocked)},{"activity_expanded",boolean(activityExpanded)},{"activity_command_id",str(activityCommandId)},{"hud_visible",boolean(IsWindowVisible(mining->windowHandle())!=FALSE)},{"overlay_mode",boolean(mining->isOverlayMode())},{"hud_topmost",boolean((GetWindowLongPtrW(mining->windowHandle(),GWL_EXSTYLE)&WS_EX_TOPMOST)!=0)},{"hud_position",obj({{"left",num(overlayRect.left)},{"top",num(overlayRect.top)},{"right",num(overlayRect.right)},{"bottom",num(overlayRect.bottom)}})},{"hotkey_registered",boolean(hotkeyOK)},{"bridge_age",num(lastStateAt?epoch()-lastStateAt:-1)}}));
+}
+bool afkHeldInput(){
+    for(int key=1;key<255;key++)if(GetAsyncKeyState(key)&0x8000)return true;
+    return false;
+}
+bool afkConnected(HWND game){
+    if(!game||epoch()-lastStateAt<0||epoch()-lastStateAt>=4||state.textOr("session_token").empty())return false;
+    DWORD pid=0;GetWindowThreadProcessId(game,&pid);
+    for(const auto& candidate:field(state,"game_pids").items)if(pid&&candidate.number==pid)return true;
+    return false;
+}
+void pulseAfk(){
+    if(testing||!afk.armed||!afkPulse.active){KillTimer(host,AFK_PULSE_TIMER);afkPulse.cancel();return;}
+    LASTINPUTINFO input{sizeof(input)};
+    if(GetForegroundWindow()!=afkGame||!afkConnected(afkGame)||afkHeldInput()||
+       !GetLastInputInfo(&input)||!afkPulse.acceptsInput(input.dwTime)){
+        // Do not fight a returning player by completing the inverse movement.
+        KillTimer(host,AFK_PULSE_TIMER);afkPulse.cancel();afk.interrupted(GetTickCount64());updateAfkIndicator();return;
+    }
+    if(!afkPulse.ready(GetTickCount64()))return;
+    INPUT event{};event.type=INPUT_MOUSE;
+    event.mi.dwFlags=MOUSEEVENTF_MOVE|MOUSEEVENTF_MOVE_NOCOALESCE;
+    event.mi.dx=afkPulse.delta();event.mi.time=GetTickCount();
+    // Explicit timestamps let the short sequence distinguish its own input from
+    // a returning player's input without installing global mouse/keyboard hooks.
+    if(SendInput(1,&event,sizeof(INPUT))!=1){
+        KillTimer(host,AFK_PULSE_TIMER);afkPulse.cancel();afk.sent(GetTickCount64(),false);updateAfkIndicator();return;
+    }
+    afkPulse.sent(GetTickCount64(),event.mi.time);
+    if(!afkPulse.active){
+        KillTimer(host,AFK_PULSE_TIMER);afk.sent(GetTickCount64(),true);lastAfkPulseAt=epoch();updateAfkIndicator();publishNativeStatus();
+    }
+}
+void tickAfk(){
+    if(testing||!afk.armed||afkPulse.active)return;
+    HWND game=SCMiner::ScreenCapture::gameWindow();
+    HWND foreground=GetForegroundWindow();
+    LASTINPUTINFO info{sizeof(info)};
+    bool valid=GetLastInputInfo(&info)!=FALSE;
+    const bool fresh=epoch()-lastStateAt>=0&&epoch()-lastStateAt<4;
+    const std::string previous=afk.status;bool wasArmed=afk.armed;
+    const bool present=game||!fresh||!field(state,"game_pids").items.empty();
+    if(afk.due(GetTickCount64(),present,game&&foreground==game,afkConnected(game),valid,
+               valid?DWORD(GetTickCount()-info.dwTime):0,afkHeldInput())){
+        LASTINPUTINFO finalInput{sizeof(finalInput)};
+        if(!afkHeldInput()&&GetForegroundWindow()==game&&GetLastInputInfo(&finalInput)&&finalInput.dwTime==info.dwTime){
+            afkGame=game;afkPulse.start(GetTickCount64(),info.dwTime);
+            if(SetTimer(host,AFK_PULSE_TIMER,20,nullptr))pulseAfk();
+            else {afkPulse.cancel();afk.sent(GetTickCount64(),false);}
+        }
+    }
+    if(previous!=afk.status||wasArmed!=afk.armed)updateAfkIndicator();
+}
+void pollItemDirectory(){
+    if(testing)return;
+    auto meta=read(data/L"item_directory_catalog.json");
+    auto revision=meta.textOr("revision");
+    if(libraryJob.valid()&&libraryJob.wait_for(std::chrono::seconds(0))==std::future_status::ready){
+        try{auto next=libraryJob.get();if(!field(next,"rows").items.empty()){
+            library=std::move(next);libraryRevision=libraryLoadingRevision;
+            if(panel&&IsWindowVisible(panel)&&currentTab==0){
+                auto prior=text(category);std::set<std::string> cats;for(auto& row:field(library,"rows").items)cats.insert(row.textOr("category"));
+                SendMessageW(category,CB_RESETCONTENT,0,0);SendMessageW(category,CB_ADDSTRING,0,(LPARAM)L"All categories");
+                for(auto& c:cats){auto value=wide(c);SendMessageW(category,CB_ADDSTRING,0,(LPARAM)value.c_str());}
+                int found=int(SendMessageW(category,CB_FINDSTRINGEXACT,-1,(LPARAM)prior.c_str()));SendMessageW(category,CB_SETCURSEL,found>=0?found:0,0);
+                listRows();
+            }
+        }}catch(...){note="Item catalog refresh failed; keeping the previous catalog.";}
+    }
+    if(!revision.empty()&&revision!=libraryRevision&&!libraryJob.valid()){
+        libraryLoadingRevision=revision;auto path=data/L"workspace_library.json";
+        libraryJob=std::async(std::launch::async,[path](){auto next=read(path,64*1024*1024);SynthFinder::prepare(next);return next;});
+    }
+    if(panel&&IsWindowVisible(panel)&&currentTab==0&&selected>=0&&selected<int(visible.size())){
+        auto result=read(data/L"item_directory_detail.json",512*1024);
+        if(result.numberOr("owner_pid")==GetCurrentProcessId()&&result.textOr("request_id")==directoryRequestId&&result.textOr("row_id")==visible[selected].textOr("id")&&result.textOr("item_id")==visible[selected].textOr("item_id")){
+            auto next=result.textOr("text");if(!next.empty()&&next!=directoryText){directoryText=std::move(next);renderDirectoryDetail(visible[selected]);}
+        }
+    }
 }
 void timer(){
+    pollItemDirectory();
+    SynthFinder::sync(finder&&mining&&mining->isOverlayMode()&&hudVisible&&activityExpanded&&IsWindowVisible(mining->windowHandle()));
     activityControl();
     static HWND previousForeground=nullptr;HWND foreground=GetForegroundWindow();
     if(mining){mining->updateClickThrough();if(hudVisible&&activityExpanded)mining->keepOverlayAboveGame(foreground!=previousForeground);}
@@ -362,26 +524,29 @@ void timer(){
         if(readyHandle&&state.numberOr("owner_pid")==GetCurrentProcessId())SetEvent(readyHandle);
     }else if(summary!="Session service unavailable"){summary="Session service unavailable";SynthScanNav::update(obj({{"message",str("Session service unavailable; capture and navigation paused.")},{"guidance",obj({{"unavailable",str("No fresh service state")}})}}));if(mining)InvalidateRect(mining->windowHandle(),nullptr,FALSE);}
     if(controlProcess){DWORD code=STILL_ACTIVE;GetExitCodeProcess(controlProcess,&code);if(code!=STILL_ACTIVE){CloseHandle(controlProcess);controlProcess=nullptr;note=code==0?controlCompleted:read(data/L"control_status.json").textOr("error","Helper action failed. See native_control.log in your data folder.");if(status)SetWindowTextW(status,wide(note).c_str());}}
+    tickAfk();
     publishNativeStatus();
 }
 LRESULT CALLBACK hostProc(HWND hwnd,UINT message,WPARAM w,LPARAM l){
     if(message==TRAY&&l==NIN_BALLOONUSERCLICK){spawnPython(L"app_launcher.py",{L"--status"});return 0;}
     if(message==WM_APP+42){activityControl();publishNativeStatus();return 0;}
-    if(message==WM_TIMER){timer();return 0;}
+    if(message==WM_TIMER){if(w==AFK_PULSE_TIMER)pulseAfk();else timer();return 0;}
     if(message==WM_HOTKEY)return 0;
-    if(message==TRAY){if(l==WM_LBUTTONDBLCLK){desktop();return 0;}if(l==WM_RBUTTONUP){HMENU menu=CreatePopupMenu();AppendMenuW(menu,MF_STRING,1,L"Open SynthScan");AppendMenuW(menu,MF_STRING,2,L"Show / hide HUD");AppendMenuW(menu,MF_STRING,3,L"Startup & HUD settings");AppendMenuW(menu,MF_STRING,4,L"Exit SynthScan");AppendMenuW(menu,MF_STRING|(activityMode()?0:MF_CHECKED),5,L"HUD mode: Mining");AppendMenuW(menu,MF_STRING|(pirate?MF_CHECKED:0),6,L"HUD mode: Piracy");AppendMenuW(menu,MF_STRING|(quest?MF_CHECKED:0),8,L"HUD mode: Missions");AppendMenuW(menu,MF_STRING|(placementLocked?MF_CHECKED:0),7,L"Lock HUD position (click-through)");AppendMenuW(menu,MF_STRING|(hangars?MF_CHECKED:0),9,L"HUD mode: Hangars");AppendMenuW(menu,MF_STRING,10,L"Compboard inventory");POINT at;GetCursorPos(&at);SetForegroundWindow(hwnd);int choice=TrackPopupMenu(menu,TPM_RETURNCMD|TPM_RIGHTBUTTON,at.x,at.y,0,hwnd,nullptr);DestroyMenu(menu);if(choice==1)desktop();if(choice==2)showHud(!hudVisible);if(choice==3)workspace(4);if(choice==5||choice==6)setMode(choice==6);if(choice==8)setMode(2);if(choice==7)togglePlacement();if(choice==9){setMode(3);showHud(true);setActivityExpanded(true);}if(choice==10)spawnPython(L"compboard_tracker.py",{});if(choice==4&&mining){markUserExit();PostMessageW(mining->windowHandle(),WM_CLOSE,0,0);}return 0;}}
+    if(message==TRAY){if(l==WM_LBUTTONDBLCLK){desktop();return 0;}if(l==WM_RBUTTONUP){HMENU menu=CreatePopupMenu();AppendMenuW(menu,MF_STRING,1,L"Open SynthScan");AppendMenuW(menu,MF_STRING,2,L"Show / hide HUD");AppendMenuW(menu,MF_STRING,3,L"Startup & HUD settings");AppendMenuW(menu,MF_STRING,4,L"Exit SynthScan");AppendMenuW(menu,MF_STRING|(activityMode()?0:MF_CHECKED),5,L"HUD mode: Mining");AppendMenuW(menu,MF_STRING|(pirate?MF_CHECKED:0),6,L"HUD mode: Piracy");AppendMenuW(menu,MF_STRING|(quest?MF_CHECKED:0),8,L"HUD mode: Missions");AppendMenuW(menu,MF_STRING|(placementLocked?MF_CHECKED:0),7,L"Lock HUD position");AppendMenuW(menu,MF_STRING|(finder?MF_CHECKED:0),19,L"HUD mode: Finder");AppendMenuW(menu,MF_STRING|(hangars?MF_CHECKED:0),9,L"HUD mode: Hangars");AppendMenuW(menu,MF_STRING,10,L"Compboard inventory");AppendMenuW(menu,MF_STRING,11,L"Daylight planner");appendAfkMenu(menu,12);AppendMenuW(menu,MF_STRING,13,L"Automatic acceptance…");POINT at;GetCursorPos(&at);SetForegroundWindow(hwnd);appendProfileMenu(menu);int choice=TrackPopupMenu(menu,TPM_RETURNCMD|TPM_RIGHTBUTTON,at.x,at.y,0,hwnd,nullptr);DestroyMenu(menu);if(handleProfileChoice(choice))return 0;if(choice==19){setMode(4);showHud(true);setActivityExpanded(true);return 0;}if(choice==1)desktop();if(choice==2)showHud(!hudVisible);if(choice==3)workspace(4);if(choice==5||choice==6)setMode(choice==6);if(choice==8)setMode(2);if(choice==7)togglePlacement();if(choice==9){setMode(3);showHud(true);setActivityExpanded(true);}if(choice==10)spawnPython(L"compboard_tracker.py",{});if(choice==11)spawnPython(L"daylight_planner.py",{});if(choice==12)toggleAfk();if(choice==13)spawnPython(L"contract_share_helper.py",{L"--owner",std::to_wstring(GetCurrentProcessId())});if(choice==4&&mining){markUserExit();PostMessageW(mining->windowHandle(),WM_CLOSE,0,0);}return 0;}}
     return DefWindowProcW(hwnd,message,w,l);
 }
 LRESULT CALLBACK mainSubclass(HWND hwnd,UINT message,WPARAM w,LPARAM l,UINT_PTR,DWORD_PTR){
+    if(message==WM_ACTIVATEAPP)SynthFinder::activationChanged(w!=0);
     if(message==WM_SYSCOMMAND&&(w&0xfff0)==0xf020){setActivityExpanded(false);return 0;}
     if(message==WM_COMMAND&&l&&mining&&mining->isOverlayMode()) {
         DWORD foreground=0;GetWindowThreadProcessId(GetForegroundWindow(),&foreground);
-        if(foreground!=GetCurrentProcessId())return 0; // stale physical button notification after returning to game
+        if(foreground!=GetCurrentProcessId()&&!mining->isOverlayButton(reinterpret_cast<HWND>(l)))return 0;
     }
     if(message==WM_COMMAND&&LOWORD(w)==31812){togglePlacement();return 0;}
     if(message==WM_COMMAND&&(LOWORD(w)==31814||LOWORD(w)==31815)){
         if(pirate)write(data/L"piracy_command.json",obj({{"action",str(LOWORD(w)==31814?"toggle_wait":"reset_wait")},{"owner_pid",num(GetCurrentProcessId())},{"at",num(epoch())}}));return 0;
     }
+    if(message==WM_COMMAND&&LOWORD(w)==31819){setMode(4);return 0;}
     if(message==WM_COMMAND&&LOWORD(w)==31818){setMode(3);return 0;}
     if(message==WM_COMMAND&&LOWORD(w)==31813){setMode(2);return 0;}
     if(message==WM_COMMAND&&LOWORD(w)==1002&&quest){write(data/L"questing_command.json",obj({{"action",str("next")},{"owner_pid",num(GetCurrentProcessId())}}));return 0;}
@@ -390,12 +555,15 @@ LRESULT CALLBACK mainSubclass(HWND hwnd,UINT message,WPARAM w,LPARAM l,UINT_PTR,
     if(message==WM_COMMAND&&LOWORD(w)==31817&&pirate){snareAlerts=!snareAlerts;saveSettings();modeControls();return 0;}
     if(message==WM_COMMAND&&LOWORD(w)==1017){
         if(mining&&mining->isOverlayMode()){
-            HMENU mode=CreatePopupMenu();AppendMenuW(mode,MF_STRING|(activityMode()?0:MF_CHECKED),10,L"Mining HUD");AppendMenuW(mode,MF_STRING|(pirate?MF_CHECKED:0),11,L"Piracy HUD");AppendMenuW(mode,MF_STRING|(quest?MF_CHECKED:0),13,L"Missions HUD");AppendMenuW(mode,MF_STRING|(hangars?MF_CHECKED:0),15,L"Hangars HUD");AppendMenuW(mode,MF_STRING|(placementLocked?MF_CHECKED:0),12,L"Lock HUD position (click-through)");AppendMenuW(mode,MF_SEPARATOR,0,nullptr);AppendMenuW(mode,MF_STRING,4,L"Server log & interdiction history");AppendMenuW(mode,MF_STRING,6,L"Startup & HUD settings");AppendMenuW(mode,MF_STRING,14,L"Setup & reputation status");
-            POINT at;GetCursorPos(&at);int choice=TrackPopupMenu(mode,TPM_RETURNCMD,at.x,at.y,0,hwnd,nullptr);DestroyMenu(mode);if(choice==12)togglePlacement();if(choice==15)setMode(3);if(choice==13)setMode(2);if(choice==10||choice==11)setMode(choice==11);if(choice==4)workspace(2);if(choice==6)workspace(4);if(choice==14)spawnPython(L"app_launcher.py",{L"--status"});return 0;
+            HMENU mode=CreatePopupMenu();AppendMenuW(mode,MF_STRING|(activityMode()?0:MF_CHECKED),10,L"Mining HUD");AppendMenuW(mode,MF_STRING|(pirate?MF_CHECKED:0),11,L"Piracy HUD");AppendMenuW(mode,MF_STRING|(quest?MF_CHECKED:0),13,L"Missions HUD");AppendMenuW(mode,MF_STRING|(finder?MF_CHECKED:0),19,L"Finder HUD");AppendMenuW(mode,MF_STRING|(hangars?MF_CHECKED:0),15,L"Hangars HUD");AppendMenuW(mode,MF_STRING|(placementLocked?MF_CHECKED:0),12,L"Lock HUD position");AppendMenuW(mode,MF_STRING,16,L"Daylight planner");appendAfkMenu(mode,17);AppendMenuW(mode,MF_STRING,18,L"Automatic acceptance…");AppendMenuW(mode,MF_SEPARATOR,0,nullptr);AppendMenuW(mode,MF_STRING,4,L"Server log & interdiction history");AppendMenuW(mode,MF_STRING,6,L"Startup & HUD settings");AppendMenuW(mode,MF_STRING,14,L"Setup & reputation status");
+            POINT at;GetCursorPos(&at);appendProfileMenu(mode);int choice=TrackPopupMenu(mode,TPM_RETURNCMD,at.x,at.y,0,hwnd,nullptr);DestroyMenu(mode);if(handleProfileChoice(choice))return 0;if(choice==19){setMode(4);showHud(true);setActivityExpanded(true);return 0;}if(choice==18)spawnPython(L"contract_share_helper.py",{L"--owner",std::to_wstring(GetCurrentProcessId())});if(choice==17)toggleAfk();if(choice==16)spawnPython(L"daylight_planner.py",{});if(choice==12)togglePlacement();if(choice==15)setMode(3);if(choice==13)setMode(2);if(choice==10||choice==11)setMode(choice==11);if(choice==4)workspace(2);if(choice==6)workspace(4);if(choice==14)spawnPython(L"app_launcher.py",{L"--status"});return 0;
         }
-        HMENU menu=CreatePopupMenu();AppendMenuW(menu,MF_STRING,2,L"Game library & artwork");AppendMenuW(menu,MF_STRING,3,L"Material picker");AppendMenuW(menu,MF_STRING,4,L"Server log");AppendMenuW(menu,MF_STRING,5,L"Review imported records");AppendMenuW(menu,MF_STRING,6,L"Startup & HUD settings");AppendMenuW(menu,MF_STRING,7,L"Show / hide HUD");AppendMenuW(menu,MF_STRING,8,L"Mining diary & personal records");AppendMenuW(menu,MF_STRING,9,L"Rock bookmarks & return test");AppendMenuW(menu,MF_STRING,14,L"Setup & reputation status");
-        AppendMenuW(menu,MF_SEPARATOR,0,nullptr);AppendMenuW(menu,MF_STRING|(activityMode()?0:MF_CHECKED),10,L"HUD mode: Mining");AppendMenuW(menu,MF_STRING|(pirate?MF_CHECKED:0),11,L"HUD mode: Piracy");
-        AppendMenuW(menu,MF_STRING|(quest?MF_CHECKED:0),13,L"HUD mode: Missions");AppendMenuW(menu,MF_STRING|(hangars?MF_CHECKED:0),15,L"HUD mode: Hangars");AppendMenuW(menu,MF_STRING|(placementLocked?MF_CHECKED:0),12,L"Lock HUD position (click-through)");POINT at;GetCursorPos(&at);int choice=TrackPopupMenu(menu,TPM_RETURNCMD,at.x,at.y,0,hwnd,nullptr);DestroyMenu(menu);
+        HMENU menu=CreatePopupMenu();AppendMenuW(menu,MF_STRING,2,L"Item directory");AppendMenuW(menu,MF_STRING,3,L"Material picker");AppendMenuW(menu,MF_STRING,4,L"Server log");AppendMenuW(menu,MF_STRING,5,L"Review imported records");AppendMenuW(menu,MF_STRING,6,L"Startup & HUD settings");AppendMenuW(menu,MF_STRING,7,L"Show / hide HUD");AppendMenuW(menu,MF_STRING,8,L"Mining diary & personal records");AppendMenuW(menu,MF_STRING,9,L"Rock bookmarks & return test");AppendMenuW(menu,MF_STRING,16,L"Daylight planner");AppendMenuW(menu,MF_STRING,14,L"Setup & reputation status");
+        appendAfkMenu(menu,17);AppendMenuW(menu,MF_STRING,18,L"Automatic acceptance…");AppendMenuW(menu,MF_SEPARATOR,0,nullptr);AppendMenuW(menu,MF_STRING|(activityMode()?0:MF_CHECKED),10,L"HUD mode: Mining");AppendMenuW(menu,MF_STRING|(pirate?MF_CHECKED:0),11,L"HUD mode: Piracy");
+        AppendMenuW(menu,MF_STRING|(quest?MF_CHECKED:0),13,L"HUD mode: Missions");AppendMenuW(menu,MF_STRING|(finder?MF_CHECKED:0),19,L"HUD mode: Finder");AppendMenuW(menu,MF_STRING|(hangars?MF_CHECKED:0),15,L"HUD mode: Hangars");AppendMenuW(menu,MF_STRING|(placementLocked?MF_CHECKED:0),12,L"Lock HUD position");POINT at;GetCursorPos(&at);appendProfileMenu(menu);int choice=TrackPopupMenu(menu,TPM_RETURNCMD,at.x,at.y,0,hwnd,nullptr);DestroyMenu(menu);if(handleProfileChoice(choice))return 0;if(choice==19){setMode(4);showHud(true);setActivityExpanded(true);return 0;}
+        if(choice==18){spawnPython(L"contract_share_helper.py",{L"--owner",std::to_wstring(GetCurrentProcessId())});return 0;}
+        if(choice==17){toggleAfk();return 0;}
+        if(choice==16){spawnPython(L"daylight_planner.py",{});return 0;}
         if(choice==14){spawnPython(L"app_launcher.py",{L"--status"});return 0;}if(choice==12){togglePlacement();return 0;}
         if(choice==15){setMode(3);return 0;}if(choice==13){setMode(2);return 0;}if(choice==10||choice==11){setMode(choice==11);return 0;}
         if(choice==1)return DefSubclassProc(hwnd,message,w,l);if(choice>=2&&choice<=6)workspace(choice-2);if(choice==7)showHud(!hudVisible);if(choice==8)SynthScanDiary::open();if(choice==9)SynthScanNav::open();return 0;
@@ -407,9 +575,12 @@ bool automatic(){return isAutomatic;}
 bool piracyMode(){return pirate;}
 bool piracyDetails(){return pirateDetails;}
 int piracyHeight(){return pirateDetails?350:200;}
-int activityFooterHeight(){return pirate?0:30;}
+int activityFooterHeight(){return 30;}
 bool questingMode(){return quest;}
-bool activityMode(){return pirate||quest||hangars;}
+bool activityMode(){return pirate||quest||hangars||finder;}
+bool finderMode(){return finder;}
+bool finderKey(unsigned int message,size_t value,void* target){return SynthFinder::key(message,WPARAM(value),HWND(target));}
+bool finderOwnsInput(void* target){return SynthFinder::owns(HWND(target));}
 bool hangarsMode(){return hangars;}
 bool hudLocked(){return placementLocked;}
 bool gameAvailable(){
@@ -424,11 +595,12 @@ bool begin(bool value){
     if(GetLastError()==ERROR_ALREADY_EXISTS){if(!value){HANDLE event=OpenEventW(EVENT_MODIFY_STATE,FALSE,L"Local\\SynthScan.Native.Show");if(event){SetEvent(event);CloseHandle(event);}}CloseHandle(mutexHandle);mutexHandle=nullptr;return false;}
     readyHandle=CreateEventW(nullptr,TRUE,FALSE,L"Local\\SynthScan.Native.Ready");showHandle=CreateEventW(nullptr,FALSE,FALSE,L"Local\\SynthScan.Native.Show");return true;
 }
-void attach(SCMiner::MinerGUI* gui,std::function<bool(const std::string&)> confirm){
+void attach(SCMiner::MinerGUI* gui,std::function<bool(const std::string&)> confirm,std::function<int(int,const std::string&)> ownership){
     mining=gui;confirmOwned=std::move(confirm);attached=true;uiScale=GetDpiForWindow(gui->windowHandle())/96.0;if(uiScale<.75)uiScale=1;data=SCMiner::AppPaths::data();
     Json runtime=read(SCMiner::AppPaths::program()/L"native_runtime.json");root=std::filesystem::u8path(runtime.textOr("workspace"));
-    settings=read(data/L"native_settings.json");scanOnLaunch=flag(settings,"scan_on_launch",true);hudVisible=flag(settings,"show_hud",true);activityExpanded=flag(settings,"activity_expanded",true);showSession=flag(settings,"session_strip",true);hangars=settings.textOr("hud_mode")=="hangars";snareAlerts=flag(settings,"snare_alerts",true);pirate=settings.textOr("hud_mode")=="piracy";pirateDetails=flag(settings,"piracy_details",false);quest=settings.textOr("hud_mode")=="questing";miningResume=flag(settings,"mining_resume",scanOnLaunch);placementLocked=flag(settings,"hud_locked",false);gui->updateClickThrough();hotkeyChoice=int(settings.numberOr("hotkey"));if(hotkeyChoice<0||hotkeyChoice>2)hotkeyChoice=0;
-    library=read(SCMiner::AppPaths::program()/L"workspace_library.json");for(auto& value:read(data/L"workspace_favorites.json").items)favorites.insert(value.text);
+    settings=read(data/L"native_settings.json");scanOnLaunch=flag(settings,"scan_on_launch",true);hudVisible=flag(settings,"show_hud",true);activityExpanded=flag(settings,"activity_expanded",true);showSession=flag(settings,"session_strip",true);finder=settings.textOr("hud_mode")=="finder";hangars=settings.textOr("hud_mode")=="hangars";snareAlerts=flag(settings,"snare_alerts",true);pirate=settings.textOr("hud_mode")=="piracy";pirateDetails=flag(settings,"piracy_details",false);quest=settings.textOr("hud_mode")=="questing";miningResume=flag(settings,"mining_resume",scanOnLaunch);placementLocked=flag(settings,"hud_locked",false);gui->updateClickThrough();hotkeyChoice=int(settings.numberOr("hotkey"));if(hotkeyChoice<0||hotkeyChoice>2)hotkeyChoice=0;
+    library=read(data/L"workspace_library.json",64*1024*1024);if(field(library,"rows").items.empty())library=read(SCMiner::AppPaths::program()/L"workspace_library.json");for(auto& value:read(data/L"workspace_favorites.json").items)favorites.insert(value.text);
+    SynthFinder::initialize(gui->windowHandle(),data,std::move(ownership));SynthFinder::prepare(library);
     SynthScanDiary::initialize(gui->windowHandle(),data,testing,[](Json value){command(value);});
     SynthScanNav::initialize(gui->windowHandle(),testing,[](Json value){command(value);});
     background=CreateSolidBrush(BG);card=CreateSolidBrush(CARD);
@@ -437,18 +609,18 @@ void attach(SCMiner::MinerGUI* gui,std::function<bool(const std::string&)> confi
     WNDCLASSW wc{};wc.hInstance=GetModuleHandleW(nullptr);wc.lpfnWndProc=hostProc;wc.lpszClassName=L"SynthScanHost";RegisterClassW(&wc);host=CreateWindowW(wc.lpszClassName,L"SynthScan services",0,0,0,0,0,nullptr,nullptr,wc.hInstance,nullptr);
     SetWindowSubclass(gui->windowHandle(),mainSubclass,1,0);SetWindowTextW(GetDlgItem(gui->windowHandle(),1017),L"More");applyHotkey();SetTimer(host,1,500,nullptr);
     if(!testing){
-        job=CreateJobObjectW(nullptr,nullptr);if(job){JOBOBJECT_EXTENDED_LIMIT_INFORMATION info{};info.BasicLimitInformation.LimitFlags=JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;SetInformationJobObject(job,JobObjectExtendedLimitInformation,&info,sizeof(info));}
+        job=CreateJobObjectW(nullptr,nullptr);if(job){JOBOBJECT_EXTENDED_LIMIT_INFORMATION info{};info.BasicLimitInformation.LimitFlags=JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE|JOB_OBJECT_LIMIT_BREAKAWAY_OK;SetInformationJobObject(job,JobObjectExtendedLimitInformation,&info,sizeof(info));}
         std::error_code error;std::filesystem::remove(data/L"bridge_stop.json",error);
         if(!spawnPython(L"native_bridge.py",{L"--data-dir",data.wstring(),L"--owner",std::to_wstring(GetCurrentProcessId())},&bridgeProcess))note="Could not start session services. Check native_runtime.json.";
         tray.cbSize=sizeof(tray);tray.hWnd=host;tray.uID=1;tray.uFlags=NIF_MESSAGE|NIF_ICON|NIF_TIP;tray.uCallbackMessage=TRAY;tray.hIcon=LoadIconW(GetModuleHandleW(nullptr),MAKEINTRESOURCEW(IDI_APPICON));wcscpy_s(tray.szTip,L"SynthScan");Shell_NotifyIconW(NIM_ADD,&tray);
     }
-    if(activityMode()&&text(GetDlgItem(gui->windowHandle(),1002))==L"Live on"){bool p=pirate,q=quest,h=hangars;pirate=false;quest=false;hangars=false;SendMessageW(gui->windowHandle(),WM_COMMAND,MAKEWPARAM(1002,BN_CLICKED),0);pirate=p;quest=q;hangars=h;}
+    if(activityMode()&&text(GetDlgItem(gui->windowHandle(),1002))==L"Live on"){bool p=pirate,q=quest,h=hangars,f=finder;pirate=false;quest=false;hangars=false;finder=false;SendMessageW(gui->windowHandle(),WM_COMMAND,MAKEWPARAM(1002,BN_CLICKED),0);pirate=p;quest=q;hangars=h;finder=f;}
     modeControls();
     if(isAutomatic){
         gui->restoreOverlayPlacement();
         LONG_PTR style=GetWindowLongPtrW(gui->windowHandle(),GWL_EXSTYLE);SetWindowLongPtrW(gui->windowHandle(),GWL_EXSTYLE,style|WS_EX_NOACTIVATE);
         if(!gui->isOverlayMode())gui->toggleOverlayMode();
-        if((scanOnLaunch&&!pirate&&!quest&&!hangars)!=(text(GetDlgItem(gui->windowHandle(),1002))==L"Live on"))SendMessageW(gui->windowHandle(),WM_COMMAND,MAKEWPARAM(1002,BN_CLICKED),0);
+        if((scanOnLaunch&&!pirate&&!quest&&!hangars&&!finder)!=(text(GetDlgItem(gui->windowHandle(),1002))==L"Live on"))SendMessageW(gui->windowHandle(),WM_COMMAND,MAKEWPARAM(1002,BN_CLICKED),0);
         modeControls();ShowWindow(gui->windowHandle(),hudVisible&&activityExpanded?SW_SHOWNOACTIVATE:SW_HIDE);gui->updateClickThrough();gui->keepOverlayAboveGame(true);
     }
 }
@@ -457,7 +629,12 @@ void workspace(int tab){
     rebuild(tab);
     if(testing){SetWindowPos(panel,HWND_BOTTOM,-32000,-32000,0,0,SWP_NOSIZE|SWP_NOACTIVATE);ShowWindow(panel,SW_SHOWNOACTIVATE);}else{ShowWindow(panel,SW_SHOW);SetForegroundWindow(panel);}
 }
-int sessionHeight(){return attached&&showSession&&!pirate&&!hangars?44:0;}
+int sessionHeight(){return attached&&showSession&&!pirate&&!hangars&&!finder?44:0;}
+void drawFinder(Gdiplus::Graphics& g,float width,float height,float scale){
+    Gdiplus::SolidBrush ink(Gdiplus::Color(255,233,237,241));
+    Gdiplus::Font title(L"Segoe UI",15*scale,Gdiplus::FontStyleRegular,Gdiplus::UnitPixel);
+    g.DrawString(L"FINDER",-1,&title,Gdiplus::PointF(16*scale,10*scale),&ink);
+}
 void drawHangars(Gdiplus::Graphics& g,float width,float height,float scale){
     const auto model=read(data/L"hangar_hud.json",16384);
     const bool fresh=model.numberOr("owner_pid")==GetCurrentProcessId()&&epoch()-model.numberOr("at")>=0&&epoch()-model.numberOr("at")<4;
@@ -579,8 +756,9 @@ bool closeToTray(){
     return true;
 }
 void shutdown(){
+    if(host)KillTimer(host,AFK_PULSE_TIMER);afkPulse.cancel();afk=AfkNudge{};
     hangarImage.reset();icon.reset();
-    SynthScanDiary::close();SynthScanNav::close();
+    SynthFinder::close();SynthScanDiary::close();SynthScanNav::close();
     if(attached&&!testing){Json exit=obj({{"at",num(epoch())},{"pid",num(GetCurrentProcessId())},{"reason",str(userExitRequested?"user":"shutdown")},{"game_pids",field(state,"game_pids")}});write(data/L"native_exit.json",exit);}
     if(host){KillTimer(host,1);UnregisterHotKey(host,HOTKEY);Shell_NotifyIconW(NIM_DELETE,&tray);}
     if(bridgeProcess){write(data/L"bridge_stop.json",obj({{"owner_pid",num(GetCurrentProcessId())}}));WaitForSingleObject(bridgeProcess,2000);}

@@ -84,6 +84,9 @@ bool contentsFitRock(const std::string& rockOre, const RockContents& contents);
 bool contentsHold(RockContents& contents);
 // Named, game-valid rows suitable for an explicitly labelled partial estimate.
 bool contentsEstimateReady(const RockContents& contents);
+// Independently read gem identity/quality can support a unit price without
+// establishing whole-rock percentages, volume, yield or piece count.
+bool contentsPieceQuotesReady(const RockContents& contents);
 
 // The composition list of a panel whose label column was found (ScanPanel::
 // labels, labelScale). `rockOre` is the name the panel's own heading gave,
@@ -93,6 +96,9 @@ bool contentsEstimateReady(const RockContents& contents);
 // list, so not on a window's thread.
 bool readRockContents(const cv::Mat& frame, const ScanPanel& panel, const std::string& rockOre,
                       TextLineReader& lines, RockContents& out);
+// Fast price-only reading: independently matching heading and material name,
+// plus a game-valid quality. Does not invent mass, volume or composition.
+bool readRockPieceQuote(const cv::Mat& frame,ScanPanel& panel,TextLineReader& lines,RockContents& out);
 
 // The part of the picture the list is looked for in - all the reader looks
 // at, so a caller that reads on another thread need keep no more than this:

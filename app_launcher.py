@@ -24,7 +24,7 @@ def selected_game(folder):
 class SetupWindow:
     def __init__(self,window,status_only=False):
         self.window=window;self.busy=False;self.messages=queue.Queue();self.status_only=status_only;self.initial=not ready()
-        window.title('SynthScan — Setup & reputation');window.geometry('700x480');window.minsize(660,450)
+        window.title('SynthScan — Setup & reputation');window.geometry('760x500');window.minsize(720,480)
         style=ttk.Style(window);style.theme_use('clam')
         window.configure(bg='#101820')
         style.configure('.',background='#101820',foreground='#e5edf3',font=('Segoe UI',10))
@@ -45,6 +45,7 @@ class SetupWindow:
         bottom=ttk.Frame(outer);bottom.pack(fill='x',pady=(8,0))
         self.open=ttk.Button(bottom,text='Open SynthScan',command=self.open_app);self.open.pack(side='left',padx=(0,8))
         self.repair=ttk.Button(bottom,text='Repair setup',command=lambda:self.start(force=True));self.repair.pack(side='left')
+        ttk.Button(bottom,text='Data updates',command=self.open_updates).pack(side='left',padx=(8,0))
         ttk.Button(bottom,text='Close',command=self.close).pack(side='right')
         ttk.Label(outer,text='Your player records stay on this Windows account. Setup never asks for your password.',style='Sub.TLabel',wraplength=630).pack(anchor='w',pady=(18,0))
         self.allow.pack_forget();self.retry.pack_forget()
@@ -55,6 +56,14 @@ class SetupWindow:
         window.after(100,self.poll)
         if status_only and ready():self.finished()
         else:window.after(150,self.start)
+
+    def open_updates(self):
+        if self.busy:return
+        subprocess.Popen([str(Path(sys.executable).with_name('pythonw.exe')),'-B',str(ROOT/'data_update_ui.py')],
+            cwd=ROOT,creationflags=0x08000000)
+        # Release guided setup's mutex so the unattended reference refresh can
+        # run while the separate update-status window remains open.
+        self.window.destroy()
 
     def close(self):
         if self.busy:
@@ -140,6 +149,19 @@ class SetupWindow:
 
 def main():
     PROFILE.mkdir(parents=True,exist_ok=True)
+    from app_lifecycle import instance_running
+    if instance_running('updating') and not any(flag in sys.argv for flag in ('--recover-update','--update-health','--uninstall')):return
+    if '--recover-update' in sys.argv:
+        from installation import INSTALL_ROOT
+        from app_lifecycle import instance_running
+        if instance_running('updating'):return
+        from app_updates import recover,write
+        try:recover(INSTALL_ROOT,PROFILE)
+        except Exception as error:
+            write(PROFILE/'app_update_status.json',dict(status='recovery_failed',detail=str(error)))
+            return
+        subprocess.Popen([str(INSTALL_ROOT/'SynthScan.exe'),'--autostart'],cwd=INSTALL_ROOT,creationflags=0x08000000)
+        return
     if '--uninstall' in sys.argv:
         from community_uninstall import cleanup
         cleanup();return

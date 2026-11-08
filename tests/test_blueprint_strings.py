@@ -115,6 +115,42 @@ class BlueprintStringsTests(unittest.TestCase):
             BlueprintTextSync(profile,root/'PTU/Game.log').tick(100)
             self.assertIn('[  ] LH86 Pistol',ini.read_text())
 
+    def test_powerplant_radar_fuel_nozzle_and_base_armor_matching(self):
+        text = ('M_Desc_1=<EM4>Potential Blueprints</EM4>\\n'
+                '- Endurance (Powerplant)\\n'
+                '- Sunflare (Radar)\\n'
+                '- S3 Fuel Nozzle (Fuel Nozzle)\\n'
+                '- Venture Arms Base (Armor)\\n'
+                '- Argus Helmet Base (Armor)\n'
+                'M_Title=[BP] Test Mission\n')
+        # User owns Endurance, Sunflare, S3 Fuel Nozzle, Venture Arms, Argus Helmet Base
+        owned = {'Ind/1/C Endurance', 'Sunflare', 'Civ/1/A S3 Fuel Nozzle', 'Venture Arms', 'Argus Helmet Base'}
+        result, stats = annotate_blueprint_text(text, owned)
+        self.assertIn('- [OWNED] Endurance (Powerplant)', result)
+        self.assertIn('- [OWNED] Sunflare (Radar)', result)
+        self.assertIn('- [OWNED] S3 Fuel Nozzle (Fuel Nozzle)', result)
+        self.assertIn('- [OWNED] Venture Arms Base (Armor)', result)
+        self.assertIn('- [OWNED] Argus Helmet Base (Armor)', result)
+        self.assertIn('M_Title=[ALL BP OWNED] Test Mission', result)
+        self.assertEqual(stats['complete_missions'], 1)
+
+    def test_complex_mission_title_resolution(self):
+        # 1. Truncate suffix: covalex_haulcargo_atob_desc_deliverall -> covalex_haulcargo_atob_title
+        # 2. Name ending: rain_collectresources_multiple_gen_desc_01 -> rain_collectresources_multiple_gen_name_01
+        # 3. Middle qualifier: vaughn_eliminatespecific_fps_rockcracker_maintenance_desc_001 -> vaughn_eliminatespecific_fps_rockcracker_title_001
+        text = ('covalex_haulcargo_atob_title=[BP] Covalex Mission\n'
+                'covalex_haulcargo_atob_desc_deliverall=<EM4>Potential Blueprints</EM4>\\n- LH86 Pistol\n'
+                'rain_collectresources_multiple_gen_name_01=[BP] Rain Mission\n'
+                'rain_collectresources_multiple_gen_desc_01=<EM4>Potential Blueprints</EM4>\\n- LH86 Pistol\\n- F55 LMG\n'
+                'vaughn_eliminatespecific_fps_rockcracker_title_001=[BP] Vaughn Mission\n'
+                'vaughn_eliminatespecific_fps_rockcracker_maintenance_desc_001=<EM4>Potential Blueprints</EM4>\\n- LH86 Pistol\n')
+        result, stats = annotate_blueprint_text(text, {'LH86 Pistol'})
+        self.assertIn('covalex_haulcargo_atob_title=[ALL BP OWNED] Covalex Mission', result)
+        self.assertIn('rain_collectresources_multiple_gen_name_01=[BP: 1 LEFT] Rain Mission', result)
+        self.assertIn('vaughn_eliminatespecific_fps_rockcracker_title_001=[ALL BP OWNED] Vaughn Mission', result)
+        self.assertEqual(stats['complete_missions'], 2)
+        self.assertEqual(stats['partial_missions'], 1)
+
 
 if __name__ == '__main__':
     unittest.main()

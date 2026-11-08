@@ -1,4 +1,7 @@
 #include "Application.h"
+#include "MiningReference.h"
+#include "RockReadIdentity.h"
+#include "SignatureTiming.h"
 #include "DevSwitch.h"
 #include "ScanPanel.h"
 #include "LoadoutReader.h"
@@ -474,7 +477,15 @@ LRESULT CALLBACK Application::OverlayProc(HWND hwnd, UINT uMsg, WPARAM wParam, L
 // signature in it, lately. The HUD sways a pixel or two and the row is cut
 // a little differently every scan, so "the same row" is one about the same
 // place and about the same width.
-bool Application::lineLookedAt(const cv::Rect& where) {
+static cv::Mat signatureCachePatch(const cv::Mat& image){
+    if(image.empty())return {};
+    cv::Mat gray,patchImage;if(image.channels()==1)gray=image;else cv::cvtColor(image,gray,image.channels()==4?cv::COLOR_BGRA2GRAY:cv::COLOR_BGR2GRAY);
+    cv::resize(gray,patchImage,{32,16},0,0,cv::INTER_AREA);cv::normalize(patchImage,patchImage,0,255,cv::NORM_MINMAX);
+    return patchImage;
+}
+
+bool Application::lineLookedAt(const cv::Rect& where,const cv::Mat& image) {
+    const auto patch=signatureCachePatch(image);
     const auto now = std::chrono::steady_clock::now();
     for (size_t i = lineLooked_.size(); i-- > 0;) {
         if (std::chrono::duration<double>(now - lineLooked_[i].when).count() > LINE_LOOK_AGAIN_S) {
@@ -486,14 +497,14 @@ bool Application::lineLookedAt(const cv::Rect& where) {
         const int slackY = (std::max)(4, where.height / 2);
         if (std::abs(seen.where.x - where.x) <= slackX && std::abs(seen.where.y - where.y) <= slackY &&
             std::abs(seen.where.width - where.width) <= slackX) {
-            return true;
+            if(!patch.empty()&&!seen.patch.empty()&&cv::norm(patch,seen.patch,cv::NORM_L1)/patch.total()<2.0)return true;
         }
     }
     return false;
 }
 
-void Application::rememberLineLook(const cv::Rect& where) {
-    lineLooked_.push_back({where, std::chrono::steady_clock::now()});
+void Application::rememberLineLook(const cv::Rect& where,const cv::Mat& image) {
+    lineLooked_.push_back({where, std::chrono::steady_clock::now(),signatureCachePatch(image)});
     while (lineLooked_.size() > LINE_LOOKED_MOST) lineLooked_.erase(lineLooked_.begin());
 }
 
@@ -961,6 +972,10 @@ void Application::runWithGUI(HINSTANCE hInstance) {
         }
         if(found<0)return false;
         library_.setByHand(found,true);pushLibrary();return true;
+    },[this](int index,const std::string& name){
+        if(index<0||index>=CRAFT_BLUEPRINT_COUNT||name!=CRAFT_BLUEPRINTS[index].name)return -1;
+        if(!library_.owned(index))return 0;
+        auto stamps=library_.stamps();return index<int(stamps.size())&&stamps[index].find("(assumed)")!=std::string::npos?2:1;
     });
 
     lastScanTime_ = std::chrono::steady_clock::now();
@@ -972,15 +987,34 @@ void Application::runWithGUI(HINSTANCE hInstance) {
             break;
         }
 
+        // Apply validated reference generations between scans on this thread.
+#ifdef _WIN32
+        // The panel reader also classifies hardware. Update only after every
+        // background reader has finished, before launching its next job.
+        if((!rockPanelJob_.valid()||rockPanelJob_.wait_for(std::chrono::seconds(0))==std::future_status::ready)&&
+           (!refineryJob_.valid()||refineryJob_.wait_for(std::chrono::seconds(0))==std::future_status::ready))
+            refreshMiningReference(library_.gameLog().parent_path());
+#endif
         // The blueprint library follows the game's log
         pollLibrary();
+        // A scan can occupy this thread for hundreds of milliseconds. Give
+        // our desktop windows priority while the user works in them; leaving
+        // Live enabled resumes automatically on returning to the game. Passive
+        // overlays do not activate, so ordinary in-game scanning is unaffected.
+        DWORD foregroundPid=0;
+        GetWindowThreadProcessId(GetForegroundWindow(),&foregroundPid);
+        const bool usingInterface=foregroundPid==GetCurrentProcessId();
+        const bool scanAvailable=!usingInterface&&SynthScan::gameAvailable();
         // ...and a refinery's terminal, at a station that has one
-        if(SynthScan::gameAvailable())lookForRefinery();
+        if(scanAvailable)lookForRefinery();
         handRefineryOrdersToUex();
         serviceRefineryShare();
 
+        // Panel work runs independently of signature scan cadence; polling
+        // the result is cheap and does not run OCR on the window thread.
+        if(scanAvailable&&(liveModeActive_||rockPanelJob_.valid()))lookForRock();
         // Live mode
-        if (liveModeActive_ && SynthScan::gameAvailable()) {
+        if (liveModeActive_ && scanAvailable) {
             auto now = std::chrono::steady_clock::now();
             auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastScanTime_).count();
 
@@ -1348,6 +1382,8 @@ bool Application::shipCanMine() const {
 void Application::lookForRock() {
     if (!gui_ || !rockViewWanted()) return;
     const auto now = std::chrono::steady_clock::now();
+    const bool completed=rockPanelJob_.valid()&&rockPanelJob_.wait_for(std::chrono::seconds(0))==std::future_status::ready;
+    if(rockPanelJob_.valid()&&!completed)return;
     // While a panel is up its figures settle over several looks, so it is
     // looked at twice as often then; with none on screen, every second and a
     // half is enough to notice one come up. A panel whose labels are up and
@@ -1372,7 +1408,7 @@ void Application::lookForRock() {
     // that agrees, and at 700 ms between looks that second look comes 0.9 to
     // 1.0 s after the first.
     const bool settling = rockSettling_ && rockSettlingLooks_ < 4;
-    int waitMs = quick || settling ? 0 : (panelUp ? 700 : 1500);
+    int waitMs = quick || settling ? 0 : (fastGemSeat_ ? 150 : (panelUp ? 300 : 600));
     // The glance: between two full looks, with nothing on screen, the place
     // the last panel stood is captured on its own - a few hundred pixels
     // each way - and looked at for that one column at that one size. A few
@@ -1383,7 +1419,7 @@ void Application::lookForRock() {
     // the glance rests for three scans, so a cockpit that looks like a
     // column at that spot costs no more than the plain wait.
     double glance = -1;
-    if (!panelUp && !quick && now - lastRockLook_ < std::chrono::milliseconds(waitMs)) {
+    if (!completed && !panelUp && !quick && now - lastRockLook_ < std::chrono::milliseconds(waitMs)) {
         if (glanceQuiet_ > 0) {
             glanceQuiet_--;
         } else if (const PanelSpot spot = lastPanelSpot(); spot.known) {
@@ -1406,9 +1442,9 @@ void Application::lookForRock() {
             }
         }
     }
-    if (now - lastRockLook_ < std::chrono::milliseconds(waitMs)) return;
+    if (!completed && now - lastRockLook_ < std::chrono::milliseconds(waitMs)) return;
     const double sinceLastMs = std::chrono::duration<double, std::milli>(now - lastRockLook_).count();
-    lastRockLook_ = now;
+    if(!completed)lastRockLook_ = now;
 
     auto viewport = ScreenCapture::gameViewport();
     if (!viewport) return;          // the game is not up; leave the view alone
@@ -1419,11 +1455,13 @@ void Application::lookForRock() {
     whole.width = viewport->width;
     whole.height = viewport->height;
     whole.autoDetect = false;
-    const cv::Mat frame = screenCapture_.captureRegion(whole);
-    if (frame.empty()) return;
-
+    RockPanelAnswer answer;
+    if(!completed){
+        cv::Mat captured=screenCapture_.captureRegion(whole);
+        if(captured.empty())return;
     if (!rockOcrTried_) {
         rockOcrTried_ = true;
+        rockTextLines_.loadEmbedded();
         OCRConfig config;
         rockOcrReady_ = rockOcr_.initialize(config);
         throttlePanelSearch(true);
@@ -1431,15 +1469,36 @@ void Application::lookForRock() {
         std::cout << "[rock] text reader: " << (rockOcrReady_ ? "on" : "off - no tessdata beside the exe; "
                      "the figures are read by their shapes, the ore's name is not read") << std::endl;
     }
-    // NOT a condition for looking. The shapes read the panel's figures on
-    // their own; Tesseract only names the ore and backs the figures up where
-    // it is there, and an engine that did not start answers every question
-    // with nothing. Packages carry no tessdata: returning here without one
-    // blinds the rock view for every download while it still works beside a
-    // build tree that has one.
-    // ...and the second reader behind the shapes, for a HUD whose numerals
-    // they were not cut for - the MOLE's turret (see readPanelByLines)
-    const ScanPanel panel = readScanPanel(frame, rockOcr_, &glyphReader_, &textLines_);
+
+        const bool fastSeat=fastGemSeat_;
+        rockPanelJob_=std::async(std::launch::async,[this,picture=std::move(captured),fastSeat]()mutable{
+            RockPanelAnswer a;a.frame=std::move(picture);a.captured=std::chrono::steady_clock::now();
+            const bool located=locatePanelAtSpot(a.frame,lastPanelSpot(),a.panel);
+            if(located&&readRockPieceQuote(a.frame,a.panel,rockTextLines_,a.pieces)){
+                a.pieceReady=true;return a;
+            }
+            // A known gem HUD with no heading is between targets (or closed).
+            // Check it again promptly instead of launching a full cockpit search.
+            if(fastSeat&&located&&a.panel.stats.ore.empty())return a;
+            a.panel=readScanPanel(a.frame,rockOcr_,&rockGlyphReader_,&rockTextLines_);
+            if(a.panel.labels.x>=0)a.pieceReady=readRockPieceQuote(a.frame,a.panel,rockTextLines_,a.pieces);
+            return a;
+        });
+        return;
+    }
+    try{answer=rockPanelJob_.get();}catch(const std::exception&){return;}
+    const cv::Mat& frame=answer.frame;
+    const ScanPanel& panel=answer.panel;
+    if(answer.pieceReady){
+        // Discard a result delayed well beyond a quick glance.
+        if(now-answer.captured>std::chrono::milliseconds(1500))return;
+        fastGemSeat_=true;fastGemActive_=true;rockSeen_=true;rockMisses_=0;
+        rockReadings_.clear();rockSteadier_.clear();shownMass_=0;shownOre_=panel.stats.ore;
+        contentsFor_=0;contentsSeen_.clear();contentsShown_.clear();
+        gui_->updatePieceScan(answer.pieces);gui_->setContentsReadNote(answer.pieces.note);
+        lastRockPanel_=now;keepPanelSpot(cv::Size(viewport->width,viewport->height));return;
+    }
+    if(fastGemActive_){clearRockView();fastGemActive_=false;rockSeen_=false;}
     if (panel.found || panel.labels.x >= 0) lastRockPanel_ = std::chrono::steady_clock::now();
     if (panel.found) keepPanelSpot(cv::Size(viewport->width, viewport->height));
     readLoadoutOnHud(frame, panel);
@@ -1633,7 +1692,7 @@ void Application::lookForRock() {
 // on. The MOLE's pilot never sees its heads, so its fit stays the log's
 // and the player's.
 void Application::readLoadoutOnHud(const cv::Mat& frame, const ScanPanel& panel) {
-    if (!gui_ || !textLines_.ready()) return;
+    if (!gui_ || !rockTextLines_.ready()) return;
     // Whose HUD: the Prospector's or the Golem's, by the scan panel's label
     // column - and with no panel up, by the ship the log has the player
     // sitting in (hudShipOf). The HUD lists the loadout in mining mode with
@@ -1723,7 +1782,7 @@ void Application::readLoadoutOnHud(const cv::Mat& frame, const ScanPanel& panel)
     try {
         loadoutJob_ = std::async(std::launch::async, [this, picture = frame.clone()]() {
             SeenLoadout seen;
-            readSeenLoadout(picture, textLines_, seen);
+            readSeenLoadout(picture, rockTextLines_, seen);
             return seen;
         });
     } catch (const std::system_error&) {
@@ -1808,6 +1867,9 @@ void Application::clearRockView() {
     contentsFor_ = 0;
     contentsWanted_ = 0;
     contentsTries_ = 0;
+    contentsSeen_.clear();
+    contentsShown_.clear();
+    gui_->setContentsReadNote("");
 }
 
 // What the rock on view holds: the composition list under the panel's
@@ -1821,28 +1883,11 @@ void Application::clearRockView() {
 // are asked for all the same, because a 6 read for an 8 in a share's last
 // place passes both (54 readings to 3 on one Titanium rock).
 //
-// Which rock a list is of: the one whose mass the view had when the picture
-// was taken, and no other - a pilot pans from one rock to the next of its
-// kind without the panel going away, say two Hephaestanite rocks of 8,513
-// and 7,058 kg one after the other. Two readings that say the same are one
-// rock's whatever the mass did in between, for no two rocks have one list.
-// The same mass, or the same mass with one figure misread (21,460 and
-// 21,464 on one Copper rock, look by look), counts as one: otherwise a list
-// read at the one is thrown away at the other, and the second reading that
-// would agree with the first never comes. Two rocks a pilot looks at one
-// after the other do not differ in a single figure.
-static bool sameMassRead(float a, float b) {
-    if (a <= 0 || b <= 0) return false;
-    const std::string x = std::to_string(std::lround(a)), y = std::to_string(std::lround(b));
-    if (x == y) return true;
-    if (x.size() != y.size()) return false;
-    int differ = 0;
-    for (size_t i = 0; i < x.size(); i++) differ += x[i] != y[i] ? 1 : 0;
-    return differ == 1;
-}
-
+// Composition jobs are tied to mass, independently printed SCU and ore where
+// available. A confirmed list is rechecked periodically; mass alone must not
+// turn a cached composition into a permanent answer for an equal-mass target.
 void Application::readContentsOnHud(const cv::Mat& frame, const ScanPanel& panel, const RockStats& rock) {
-    if (!gui_ || !textLines_.ready() || rock.mass <= 0) return;
+    if (!gui_ || !rockTextLines_.ready() || rock.mass <= 0) return;
     // Under 900 lines the list's figures are a few pixels high: at 720 a
     // reading can pass every check with a figure wrong, twice running, where
     // from 1080 up none did across nine resolutions tested. No list rather
@@ -1862,31 +1907,32 @@ void Application::readContentsOnHud(const cv::Mat& frame, const ScanPanel& panel
                       << (read.whole ? "whole" : "not whole") << ", " << read.parts.size() << " lines, sum " << read.sum
                       << "; " << read.note << std::endl;
         }
-        const bool thisRock = sameMassRead(contentsJobMass_, rock.mass);
+        const bool thisRock = sameContentsTarget(contentsJobRock_, rock);
         logRockList("result", contentsJobMass_, rock.mass, &read, contentsTries_,
                     thisRock ? "for this rock" : "for another mass than on view: dropped");
         if (thisRock) takeRockContents(read, rock);
     }
-    if (sameMassRead(rock.mass, contentsFor_) && !contentsPartial_) return;   // read, and on view
-    // Another mass than the list on view was read at. It may be that rock
-    // still - with less of it left, or its mass read another way: the same
-    // ore, where both looks named one, and the mass no more than a quarter
-    // off - and then its list stays while it is read again. Of any other
-    // rock it says nothing.
-    const auto alike = [&](float mass, const std::string& ore) {
-        return mass > 0 && (ore.empty() || rock.ore.empty() || ore == rock.ore) &&
-               std::fabs(rock.mass - mass) <= mass * 0.25f;
-    };
-    bool shown = alike(contentsFor_, contentsOre_);
+    const auto refreshNow = std::chrono::steady_clock::now();
+    const bool confirmedTarget = contentsFor_ > 0 && sameContentsTarget(contentsConfirmedRock_, rock);
+    if (confirmedTarget && !contentsPartial_ && contentsEstimateReady(gui_->displayedContents()) &&
+        refreshNow - lastContentsRead_ < std::chrono::seconds(10)) return;
+    // A settled list gets checked periodically as well: equal-mass targets
+    // and a changed scan can otherwise leave a permanent cached answer.
+    // Keep a confirmed composition only while its independently read target
+    // fields agree. A different target starts a fresh two-read confirmation.
+    const bool wantedTarget = contentsWanted_ > 0 && sameContentsTarget(contentsWantedRock_, rock);
+    bool shown = confirmedTarget;
     if (!shown && contentsFor_ > 0) {
         logRockList("off", contentsFor_, rock.mass, nullptr, contentsTries_, "the rock on view is another");
         contentsFor_ = 0;
         gui_->setRockContents(RockContents());
     }
-    if (!alike(contentsWanted_, contentsWantedOre_)) {
+    if (!wantedTarget) {
         contentsTries_ = 0;
         lastContentsRead_ = {};
+        contentsSeen_.clear();
     }
+    contentsWantedRock_ = rock;
     contentsWanted_ = rock.mass;
     contentsWantedOre_ = rock.ore;
     const cv::Rect part = rockContentsRegion(panel, frame.size());
@@ -1912,13 +1958,14 @@ void Application::readContentsOnHud(const cv::Mat& frame, const ScanPanel& panel
     lastContentsRead_ = now;
     contentsTries_++;
     contentsJobMass_ = rock.mass;
+    contentsJobRock_ = rock;
     logRockList("start", rock.mass, rock.mass, nullptr, contentsTries_, shown ? "again, its list on view" : "");
     ScanPanel moved = panel;
     moved.labels -= part.tl();
     try {
         contentsJob_ = std::async(std::launch::async, [this, picture = frame(part).clone(), moved, ore = rock.ore]() {
             RockContents read;
-            readRockContents(picture, moved, ore, textLines_, read);
+            readRockContents(picture, moved, ore, rockTextLines_, read);
             return read;
         });
     } catch (const std::system_error&) {
@@ -1927,7 +1974,9 @@ void Application::readContentsOnHud(const cv::Mat& frame, const ScanPanel& panel
 }
 
 void Application::takeRockContents(const RockContents& read, const RockStats& rock) {
-    if (!contentsEstimateReady(read)) return;
+    gui_->setContentsReadNote(read.note + "; rows " + std::to_string(read.parts.size()) +
+        "; sum " + std::to_string(read.sum) + "; tries " + std::to_string(contentsTries_));
+    if (!contentsEstimateReady(read) && !contentsPieceQuotesReady(read)) return;
     std::string key, words;
     char text[96];
     for (const RockPartRead& part : read.parts) {
@@ -1952,6 +2001,7 @@ void Application::takeRockContents(const RockContents& read, const RockStats& ro
     const bool said = contentsFor_ > 0 && key == contentsShown_;
     if (!said) logRockList("shown", rock.mass, rock.mass, &read, contentsTries_, "");
     contentsFor_ = rock.mass;
+    contentsConfirmedRock_ = rock;
     contentsPartial_ = read.partial;
     contentsOre_ = rock.ore;
     contentsShown_ = key;
@@ -2019,7 +2069,7 @@ void Application::processScanWithGUI() {
     struct ScanGuard { bool& flag; ~ScanGuard() { flag = false; } } scanGuard{inScan_};
     inScan_ = true;
 
-    lookForRock();
+    if(!liveModeActive_)lookForRock();
 
     // Clocked from here to the log line: a scan slower than the interval is
     // what the player experiences as a slow reading. The stages start at
@@ -2078,7 +2128,7 @@ void Application::processScanWithGUI() {
     // apart. A real marker sits on a rock the player is looking at; it comes
     // back in the same breath, not in the next minute.
     static constexpr int RECENT_SLOTS = 6;
-    static constexpr double RECENT_SECONDS = 20.0;
+    static constexpr double RECENT_SECONDS = 2.0;
     // `alone` marks a value only the second reader saw. The fragment rule
     // below may not lean on such a value: where that reader takes the pin
     // for a leading figure, every correct reading afterwards looks like a
@@ -2346,7 +2396,7 @@ void Application::processScanWithGUI() {
             // resting or not - that is a marker just come into view.
             // With per-scan resting a new marker once went unread for
             // 55 scans (18 s), 22 of them spent resting.
-            if (linesIdle && lineLookedAt(candidate.screenRect)) {
+            if (linesIdle && lineLookedAt(candidate.screenRect,candidate.image)) {
                 if (g_line.empty()) g_line = "resting";
             } else {
                 linesLeft--;
@@ -2412,7 +2462,7 @@ void Application::processScanWithGUI() {
             g_lineMs += opinion.line.ms;
             if (g_line.empty() || g_line == "none") g_line = TextLineReader::name(opinion.verdict);
             if (opinion.verdict != TextLineReader::Verdict::Reads) {
-                rememberLineLook(candidate.screenRect);
+                rememberLineLook(candidate.screenRect,candidate.image);
                 continue;
             }
             recognizedValue = opinion.value;
@@ -2519,18 +2569,12 @@ void Application::processScanWithGUI() {
     // there and still says the whole number - and never as a value of its
     // own.
     {
-        auto fragmentOf = [](int part, int whole) {
-            if (part <= 0 || whole <= part) return false;
-            if (whole == part * 10) return true;                    // last digit gone
-            for (int p = 10; p <= 100000 && p <= whole; p *= 10) {
-                if (p > part && whole % p == part) return true;     // leading digit(s) gone
-            }
-            return false;
-        };
+        const bool strongCurrent=bothAgreed||(exactValue&&!repairedRead&&confidence>=90.0&&(fromGlyphs||agreement>=3));
         for (const RecentRead& recent : recentReads) {
             if (!stillCounts(recent) || recent.alone) continue;
             const int value = recent.value;
-            if (fragmentOf(scannedValue, value)) {
+            const double age=std::chrono::duration<double>(readAt-recent.when).count();
+            if (restoreSignatureFragment(scannedValue,value,age,strongCurrent)) {
                 std::cout << "f" << std::flush;
                 g_scanMs = msSince(scanStart);
                 logScan(debugSlot, "fragment-of-" + std::to_string(value), scannedValue, confidence, agreement);
@@ -3260,8 +3304,7 @@ std::vector<Application::LabelCandidate> Application::captureSignatureCandidates
 
     // Several rocks can be marked at once, and other warm HUD elements can
     // look like markers. Order by plausibility: prefer the label the previous
-    // scan used (stable readings while the view drifts), then the one closest
-    // to the aim point the user configured.
+    // scan used only as a close tie-breaker; favor the user's aim point.
     const cv::Point aim(signatureRegion_.x + signatureRegion_.width / 2 - search.x - lookIn.x,
                         signatureRegion_.y + signatureRegion_.height / 2 - search.y - lookIn.y);
     const cv::Point previous(hasLastLabel_
@@ -3277,8 +3320,8 @@ std::vector<Application::LabelCandidate> Application::captureSignatureCandidates
                       const cv::Point c(r.x + r.width / 2, r.y + r.height / 2);
                       const double toAim = cv::norm(c - aim);
                       const double toPrev = hasLastLabel_ ? cv::norm(c - previous) : toAim;
-                      // Weight continuity higher than the configured aim point
-                      return toPrev * 0.7 + toAim * 0.3;
+                      // A newly aimed marker wins over the previous target.
+                      return signatureCandidateCost(toAim,toPrev);
                   };
                   return cost(a) < cost(b);
               });
@@ -3955,7 +3998,7 @@ void Application::applyGameState() {
         const bool byHand = !placeOverride_.empty();
         const GamePlace place = byHand
             ? placeByLogName(placeOverride_, gameState_.system())
-            : placeByLogName(gameState_.place(), gameState_.system());
+            : automaticMiningPlace(placeByLogName(gameState_.place(), gameState_.system()));
         // A place that knows its own system settles the question, by hand or
         // not: "Nyx - Bloom" is not a place, and the half that is certain is
         // the one the tables can name.
@@ -4651,7 +4694,7 @@ static std::string uexListCached(const std::filesystem::path& file, const char* 
 }
 
 std::shared_ptr<RockPriceBook> Application::loadRockPrices(const std::filesystem::path& folder,
-                                                         const std::string& version, std::string& note) {
+    const std::string& version,std::string& note,const std::vector<std::string>& materials) {
     std::error_code ec;std::filesystem::create_directories(folder,ec);
     std::string why;
     const auto commodities=uexListCached(folder/"commodities.json","commodities",86400,why);
@@ -4660,7 +4703,23 @@ std::shared_ptr<RockPriceBook> Application::loadRockPrices(const std::filesystem
     const auto refined=uexListCached(folder/"prices.json","commodities_prices_all",1800,why);
     const auto market=uexListCached(folder/"market_averages.json","marketplace_prices_averages_all",3600,why);
     auto book=std::make_shared<RockPriceBook>();
-    if (!book->read(commodities,terminals,raw,refined,market,(long long)std::time(nullptr),version,note)) return nullptr;
+    const auto now=(long long)std::time(nullptr);
+    bool available=book->read(commodities,terminals,raw,refined,market,now,version,note);
+    JsonValue averages;std::string ignored;std::set<int> requested;
+    if(!version.empty()&&parseJson(market,averages,ignored))if(const auto* rows=averages.find("data");rows&&rows->kind==JsonValue::Kind::Array){
+        for(const auto& name:materials)for(const auto& row:rows->items){
+            if(RockPriceBook::material(row.textOr("item_name"))!=RockPriceBook::material(name))continue;
+            const auto* id=row.find("id_item");if(id&&id->kind==JsonValue::Kind::Number&&id->number>0)requested.insert((int)id->number);
+        }
+    }
+    int fetched=0;
+    for(int id:requested){
+        if(fetched++>=10)break;
+        const auto endpoint="marketplace_prices_history?id_item="+std::to_string(id)+"&game_version="+version+"&currency=UEC";
+        const auto history=uexListCached(folder/("market_history_"+version+"_"+std::to_string(id)+".json"),endpoint.c_str(),3600,why);
+        available=book->addHistory(history,now)||available;
+    }
+    if(!available)return nullptr;
     note=why;return book;
 }
 
@@ -4671,11 +4730,15 @@ void Application::serviceRockPrices() {
     }
     if (!uexWanted_ || rockPriceJob_.valid() || !gui_->rockInView()) return;
     const auto now=std::chrono::steady_clock::now();
-    if (rockPriceAsked_!=std::chrono::steady_clock::time_point{} && now-rockPriceAsked_<std::chrono::minutes(10)) return;
+    std::set<std::string> names;for(const auto& part:gui_->displayedContents().parts)if(!part.inert&&!part.ore.empty())names.insert(part.ore);
+    std::string key;std::vector<std::string> materials(names.begin(),names.end());for(const auto& name:materials)key+=name+";";
+    if (rockPriceAsked_!=std::chrono::steady_clock::time_point{} && now-rockPriceAsked_<std::chrono::seconds(5)) return;
+    if (key==rockPriceMaterials_&&rockPriceAsked_!=std::chrono::steady_clock::time_point{} && now-rockPriceAsked_<std::chrono::minutes(10)) return;
+    rockPriceMaterials_=key;
     rockPriceAsked_=now;const auto folder=AppPaths::data()/"uex";
     const int v=library_.liveGameVersion();
     const std::string version=v>0?std::to_string(v/10000)+"."+std::to_string(v/100%100)+"."+std::to_string(v%100):"";
-    rockPriceJob_=std::async(std::launch::async,[folder,version](){RockPriceAnswer a;a.prices=loadRockPrices(folder,version,a.note);return a;});
+    rockPriceJob_=std::async(std::launch::async,[folder,version,materials](){RockPriceAnswer a;a.prices=loadRockPrices(folder,version,a.note,materials);return a;});
 }
 
 std::string Application::uexTokenForProbe() { return uexToken(); }

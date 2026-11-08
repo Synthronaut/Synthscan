@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "manifest_url": "https://github.com/Synthronaut/Synthscan/releases/download/update-channel/synthscan-update.json",
+  "allowed_hosts": [
+    "github.com",
+    "release-assets.githubusercontent.com",
+    "objects.githubusercontent.com"
+  ],
+  "keys": {
+    "903e98c3360d2b06": "RUNTMSAAAADPn9jXkOsjLHPLaFzwpcqLd7bS1is4NUxS2OL00oNY2JgBukag3DysU6n1IfXBgQSeaoU2RFq5ReTQbTuoA8+I"
+  }
+}

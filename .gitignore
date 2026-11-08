@@ -42,3 +42,7 @@ reputation_snapshot.json
 reputation_localization_state.json
 
 /native/mining_worker/build/
+
+# Local daylight observations and saved destination
+/daylight_preferences.json
+/daylight_calibration.json

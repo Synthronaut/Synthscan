@@ -33,38 +33,66 @@ def migrate(data_dir,root=ROOT):
     atomic_json(report_path,report)
     return report
 
-def library_export(destination):
+def library_export(destination,game=None,catalog=None,extra_rows=()):
     from crafting_catalog import get_catalog
     from game_library import get_game_library
-    c,g=get_catalog(),get_game_library()
+    from item_directory import source_lines,is_component
+    c,g=catalog or get_catalog(),game or get_game_library()
+    build=g.data['provenance'].get('build') or {}
+    catalog_label='\n\nCatalog: '+str(build.get('Branch','unknown patch'))+' · build '+str(build.get('RequestedP4ChangeNum','unknown'))
+    by_item={}
+    material_uses={}
+    baseline=json.loads((ROOT/'data/crafting_catalog.json').read_text(encoding='utf-8'))['blueprints']
+    baseline_indices={bp['id']:(index,bp['name']) for index,bp in enumerate(baseline)}
+    def finder_blueprints(linked):
+        result=[]
+        for bp in linked:
+            index,reference_name=baseline_indices.get(bp['id'],(-1,''))
+            result.append(dict(name=bp['name'],reference_index=index,reference_name=reference_name,
+                known_from_start=bp.get('known_from_start',False),recipe_verified=bp.get('native_verified',False),
+                materials=[dict(material=s['material'],amount=s['amount'],unit=s['unit'],min_quality=s['min_quality']) for s in bp['slots']],
+                missions=[dict(title=m.get('title','Unknown'),faction=m.get('faction',''),system=m.get('system',''),standing=m.get('standing','')) for m in c.sources(bp)],
+                unlock_source=bp.get('unlock_source','Older bundled reference')))
+        return result
+    for blueprint in c.items:
+        if blueprint.get('item_id'):by_item.setdefault(blueprint['item_id'],[]).append(blueprint)
+        for slot in blueprint['slots']:material_uses.setdefault(slot['material'],set()).add(blueprint['name'])
     rows=[]
     for e in g.entries:
         if e.get('internal'):continue
         icon=g.image_path(e)
-        details=f"{e['name']}\n{e['category']} · {e['type']}\n\n{e.get('description') or 'No localized description in this record.'}\n\nGame record: {e['id']}\nClient data can contain unavailable items."
+        linked=by_item.get(e['id'],[])
+        details=f"{e['name']}\n{e['category']} · {e['type']}\n\nCRAFTING & BLUEPRINTS\n"
+        if not linked:details+='No linked creation blueprint in this catalog. This does not prove the item cannot be crafted.\n'
+        for blueprint in linked:
+            details+=f"\n{blueprint['name']} — blueprint\nRecipe: {blueprint.get('recipe_source','Reference table')}\n"
+            details+='\n'.join(source_lines(blueprint,c))+'\n'
+            details+='Search this name with Type = Blueprint to see ingredients and reward-pool details.\n'
+        details+=f"\nDESCRIPTION\n{e.get('description') or 'No localized description in this record.'}\n\nGame record: {e['id']}\nGame-file presence alone does not guarantee availability."
         if e['kind']=='Material':
-            uses=[b['name'] for b in c.items if any(s['material']==e['name'] for s in b['slots'])]
+            uses=sorted(material_uses.get(e['name'],[]))
             details+='\n\nUsed to craft:\n'+'\n'.join(uses)
-        rows.append(dict(id=e['id'],name=e['name'],kind=e['kind'],category=e['category'],detail=details,icon=str(icon) if icon else ''))
+        rows.append(dict(id=e['id'],item_id=e['id'] if e['kind']=='Item' else '',name=e['name'],kind='Component' if is_component(e) else e['kind'],category=e['category'],detail=details+catalog_label,icon=str(icon) if icon else '',
+                         finder_blueprints=finder_blueprints(linked),
+                         search=' '.join([e['name'],e['category'],e['type'],e.get('manufacturer',''),*[m.get(k,'') for b in linked for m in c.sources(b) for k in ('title','faction','system')]])))
     for b in c.items:
-        details=f"{b['name']}\n{b['category']} · {b['type']} · Size {b.get('size','?')} · Grade {b.get('grade','?')}\n\n{b.get('description','')}\n\nCraft time: {b['seconds']:g} seconds\nRecipe: {b.get('recipe_source','Reference table')}\n"
+        details=f"{b['name']}\n{b['category']} · {b['type']} · Size {b.get('size','?')} · Grade {b.get('grade','?')}\n\nBLUEPRINT UNLOCK SOURCES\n"
+        details+='\n'.join(source_lines(b,c,briefings=True))+'\n'
+        details+=f"\nCRAFTING RECIPE\nCraft time: {b['seconds']:g} seconds\nRecipe: {b.get('recipe_source','Reference table')}\n"
         for slot in b['slots']:
             details+=f"\n{slot['name']}: {slot['amount']:g} {slot['unit']} {slot['material']} · minimum Q{slot['min_quality']}\n"
             for effect in slot['effects']:
                 details+=f"  Affects {effect['stat']} · {effect.get('better','unknown')} is better"
                 if 'at_min' in effect:details+=f" · {effect['at_min']:g} at Q{effect['quality_min']} → {effect['at_max']:g} at Q{effect['quality_max']}"
                 details+='\n'
-        details+='\nUnlock sources (reference annotations):\n'
-        if b.get('known_from_start'):details+='Known from start\n'
-        if not b['sources'] and not b.get('known_from_start'):details+='No verified unlock source in the current reference.\n'
-        for index in b['sources']:
-            mission=c.data['missions'][index]
-            details+=f"\n{mission['title']}\n{mission.get('faction','')} · {mission.get('system','')}\nStanding: {mission.get('standing','Unknown')} · cooldown {mission.get('cooldown','?')} min\n"
-            details+=f"Reward chance: {mission.get('chance','?')}% · reward pool {mission.get('pool_size','?')} blueprints\n{mission.get('briefing','')}\n"
+        details+='\nDESCRIPTION\n'+b.get('description','')+'\n'
         image=g.image_path(g.resolve(b.get('item_id','')))
-        rows.append(dict(id=b['id'],name=b['name'],kind='Blueprint',category=b['category'],detail=details,icon=str(image) if image else ''))
+        rows.append(dict(id=b['id'],item_id=b.get('item_id',''),name=b['name'],kind='Blueprint',category=b['category'],detail=details+catalog_label,icon=str(image) if image else '',
+                         finder_blueprints=finder_blueprints([b]),
+                         search=c.search_text.get(b['id'],b['name'])))
+    rows.extend(extra_rows)
     rows.sort(key=lambda e:(e['name'].casefold(),e['id']))
-    atomic_json(destination,dict(schema=1,build=g.data['provenance'].get('build'),rows=rows))
+    atomic_json(destination,dict(schema=2,build=g.data['provenance'].get('build'),rows=rows))
     return len(rows)
 
 def plan_rows(targets,system='All',family='Ship'):

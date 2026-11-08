@@ -110,12 +110,15 @@ class RegionHistory:
         if self.open:self.hide_popup();return
         if not self.visible:return
         rows=recent_visits(self.snapshot)
-        width=510;height=(36+len(rows)*52 if rows else 72)+32
+        from shard_observations import popup_context
+        context=popup_context(self.snapshot);extra=len(context)*18
+        width=510;height=(36+len(rows)*52 if rows else 72)+32+extra
         c=self.content;c.configure(width=width,height=height);c.delete('all')
         c.create_text(12,15,anchor='w',text='RECENT REGIONS / SERVERS · TAIPEI (UTC+8)',fill='#94a3b8',font=('Consolas',9,'bold'))
-        if not rows:c.create_text(12,47,anchor='w',text='No recorded visits yet.',fill='#cbd5e1',font=('Consolas',9))
+        for index,line in enumerate(context):c.create_text(12,36+index*18,anchor='w',text=line,fill='#94a3b8',font=('Consolas',8))
+        if not rows:c.create_text(12,47+extra,anchor='w',text='No recorded visits yet.',fill='#cbd5e1',font=('Consolas',9))
         for i,row in enumerate(rows):
-            y=35+i*52
+            y=35+extra+i*52
             c.create_line(10,y-5,width-10,y-5,fill='#1e293b')
             c.create_text(12,y+4,anchor='w',text=('NOW · ' if row['current'] else '')+row['region']+' · '+row['server'],fill='#38bdf8' if row['current'] else '#cbd5e1',font=('Consolas',9,'bold'),width=width-24)
             c.create_text(12,y+25,anchor='w',text=row['times'],fill='#94a3b8',font=('Consolas',8))

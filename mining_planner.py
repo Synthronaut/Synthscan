@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import re
 from installation import output_root, game_directory
+from reference_catalogs import catalogue_path
 
 
 def material_key(name):
@@ -23,7 +24,7 @@ def primary_material(composition):
 
 class MiningPlanner:
     def __init__(self, path=None):
-        self.data = json.loads(Path(path or output_root() / 'data/local_mining_catalog.json').read_text(encoding='utf-8'))
+        self.data = json.loads(Path(path or catalogue_path(output_root(), 'local_mining_catalog.json')).read_text(encoding='utf-8'))
         self.compositions = self.data['compositions']
         self.locations = self.data['locations']
         manifest = game_directory()/'build_manifest.id'

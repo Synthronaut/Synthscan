@@ -86,13 +86,23 @@ def export(records, base, manifest):
         except (KeyError, ValueError, FileNotFoundError) as exc:
             failures.append(dict(record=raw['_RecordName_'], error=str(exc)))
     matched, unmatched, ambiguous = 0, [], []
+    used=set()
     for bp in data['blueprints']:
-        candidates = [n for n in native if n['name'] == bp['name'] and recipe_key(n['slots']) == recipe_key(bp['slots'])
-                      and n['item']['size'] == bp['size']]
+        # Recipe quantities are mutable data, not identity. Prefer the stable
+        # game GUID, then an unambiguous item name/size; only use the old recipe
+        # to distinguish otherwise ambiguous reference variants.
+        candidates = [n for n in native if bp.get('native_id') and n['guid']==bp['native_id']]
+        if not candidates:
+            candidates = [n for n in native if n['name']==bp['name'] and n['item']['size']==bp['size']]
+        if len(candidates)>1:
+            candidates=[n for n in candidates if recipe_key(n['slots'])==recipe_key(bp['slots'])]
         if len(candidates) != 1:
             (ambiguous if candidates else unmatched).append(bp['name'])
+            bp['native_verified']=False
+            bp['recipe_source']='Older community reference; not verified for this installed build'
             continue
         n = candidates[0]
+        used.add(n['guid'])
         for fresh, prior in zip(n['slots'], bp['slots']):
             for index, effect in enumerate(fresh['effects']):
                 if effect.get('unreadable'):
@@ -100,13 +110,31 @@ def export(records, base, manifest):
                     if reference:
                         fresh['effects'][index] = dict(copy.deepcopy(reference), local_decode_unknown=True,
                                                        curve_source='Bedrock reference; local decoder returned an unreadable range')
-        bp.update(native_id=n['guid'], native_tag=n['tag'], item_id=n['item']['guid'],
+        bp.update(name=n['name'],native_id=n['guid'], native_tag=n['tag'], item_id=n['item']['guid'],
                   description=n['item']['description'], slots=n['slots'], seconds=n['seconds'],
                   recipe_source='Installed Game2.dcb via StarBreaker', native_verified=True)
         matched += 1
+    added=[]
+    for n in native:
+        if n['guid'] in used:continue
+        item=n['item']
+        data['blueprints'].append(dict(id='game:'+n['guid'],native_id=n['guid'],native_tag=n['tag'],
+            name=n['name'],item_id=item['guid'],description=item['description'],
+            type=item.get('type') or 'Equipment',grade=item.get('grade'),size=item.get('size'),
+            item_class=None,manufacturer=item.get('manufacturer',''),seconds=n['seconds'],slots=n['slots'],
+            known_from_start=False,mission_count=0,sources=[],employers=0,
+            recipe_source='Installed Game2.dcb via StarBreaker; unlock source unknown',native_verified=True))
+        added.append(n['guid'])
+    material_names={m['name'] for m in data['materials']}
+    for bp in data['blueprints']:
+        for slot in bp['slots']:
+            if slot['material'] not in material_names:
+                data['materials'].append(dict(name=slot['material'],location_name=slot['material'],
+                    as_units=slot['unit']=='units',blueprints=0,rarity='',quality_bands=[],locations=[]))
+                material_names.add(slot['material'])
     data['native_provenance'] = dict(build=manifest['Data'], tool='StarBreaker v0.3.2',
         tool_source='https://github.com/diogotr7/StarBreaker/releases/tag/v0.3.2',
-        native_recipes=len(native), enriched_entries=matched,
+        export_schema=2,native_recipes=len(native), enriched_entries=matched,added_entries=added,
         unmatched_entries=unmatched, ambiguous_entries=ambiguous, failures=failures,
         note='Recipe inputs and descriptions verified locally. Readable curves retain their actual segments; undecoded curves are explicitly labelled reference data. Unlock annotations retain their original source.')
     return data

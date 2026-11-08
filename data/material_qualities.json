@@ -1,0 +1,3920 @@
+{
+  "schema": 1,
+  "build": {
+    "Branch": "sc-alpha-4.10.2",
+    "BuildDateStamp": "Mon Oct 12 2026",
+    "BuildId": "2cae0dfc-a941-4dcc-b82a-543b08b52d97",
+    "BuildTimeStamp": "02:20:01 PM CST",
+    "Config": "shipping",
+    "Platform": "pc",
+    "RequestedP4ChangeNum": "12913470",
+    "Shelved_Change": "",
+    "Tag": "public",
+    "Version": "4.10.197.2878"
+  },
+  "source": "Installed Game2.dcb quality quantization; localized through ResourceType links",
+  "materials": [
+    {
+      "name": "Agricium",
+      "aliases": [
+        "Agricium",
+        "Agricium (Ore)"
+      ],
+      "values": [
+        346,
+        588,
+        667,
+        796,
+        852,
+        943,
+        971,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 346
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 588
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 667
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 796
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 852
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 943
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 971
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [
+        "fc1ec740-3047-48d8-81f0-396f4c9a90ef"
+      ],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_agricium.json",
+      "sha256": "be38afd802197ca8326ed2bd0098dd492ef2802581d0e7ab0d0f80821b24d732"
+    },
+    {
+      "name": "Aluminum",
+      "aliases": [
+        "Aluminum",
+        "Aluminum (Ore)"
+      ],
+      "values": [
+        318,
+        511,
+        614,
+        783,
+        896,
+        919,
+        953,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 318
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 511
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 614
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 783
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 896
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 919
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 953
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [
+        "e30bdd32-8fd5-44b8-9994-5fd253a16c37"
+      ],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_aluminum.json",
+      "sha256": "4a5ac1d8d8e7765a5d4cd758e2205ca65569f8849a34329e8943fe8388cc2cba"
+    },
+    {
+      "name": "AmoishiPlague",
+      "aliases": [
+        "AmoishiPlague"
+      ],
+      "values": [
+        313,
+        566,
+        636,
+        732,
+        852,
+        906,
+        984,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 313
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 566
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 636
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 732
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 852
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 906
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 984
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_amoishiplague.json",
+      "sha256": "2385f1d44fc3655383e767db0c03dc031279939c022f449e103f6f26f5f31b08"
+    },
+    {
+      "name": "Aphorite",
+      "aliases": [
+        "Aphorite"
+      ],
+      "values": [
+        348,
+        523,
+        686,
+        717,
+        861,
+        916,
+        975,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 348
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 523
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 686
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 717
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 861
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 916
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 975
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [
+        "9b47bacf-8efa-42e2-8d84-dee64983a00a"
+      ],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_aphorite.json",
+      "sha256": "6f7351f012b0ed98459fde7dd3b44e6e57cc4c1aa579f528aae519cb5e57e94a"
+    },
+    {
+      "name": "Armillaria",
+      "aliases": [
+        "Armillaria"
+      ],
+      "values": [
+        328,
+        584,
+        686,
+        765,
+        810,
+        907,
+        967,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 328
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 584
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 686
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 765
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 810
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 907
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 967
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_armillaria.json",
+      "sha256": "38b8c49a912b5964c712b07fc6a4334f0ed4e6dbb225af99aef39c729675731e"
+    },
+    {
+      "name": "Aslarite",
+      "aliases": [
+        "Aslarite",
+        "Aslarite (Raw)"
+      ],
+      "values": [
+        287,
+        575,
+        602,
+        741,
+        854,
+        927,
+        963,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 287
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 575
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 602
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 741
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 854
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 927
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 963
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [
+        "f0c1f30b-001c-4a80-ac20-27df27183056"
+      ],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_aslarite.json",
+      "sha256": "c2a0788ce2707c951835ff5eb71dfcfd188d10567a144600ddecae642281b044"
+    },
+    {
+      "name": "Beradom",
+      "aliases": [
+        "Beradom"
+      ],
+      "values": [
+        287,
+        578,
+        656,
+        723,
+        881,
+        937,
+        969,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 287
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 578
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 656
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 723
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 881
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 937
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 969
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [
+        "c339897c-d682-48ad-a16f-daf145bc0f4d"
+      ],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_beradom.json",
+      "sha256": "e340f93df29c4cbfc715600856aa0315ce5385f00d5a1d0ab282b2aacaabbb68"
+    },
+    {
+      "name": "Beryl",
+      "aliases": [
+        "Beryl",
+        "Beryl (Raw)"
+      ],
+      "values": [
+        324,
+        547,
+        677,
+        717,
+        860,
+        937,
+        955,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 324
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 547
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 677
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 717
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 860
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 937
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 955
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [
+        "eb503701-389a-48a1-af28-eb7374009d5d"
+      ],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_beryl.json",
+      "sha256": "51eafa5f87541262561a4ea5d46a5a0bee84d4c29ea9926661cfaa234bd5bfc4"
+    },
+    {
+      "name": "Bexalite",
+      "aliases": [
+        "Bexalite",
+        "Bexalite (Raw)"
+      ],
+      "values": [
+        302,
+        597,
+        632,
+        756,
+        875,
+        941,
+        959,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 302
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 597
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 632
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 756
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 875
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 941
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 959
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [
+        "3848c27d-49cc-4fdb-9a18-e93770bc8bc2"
+      ],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_bexalite.json",
+      "sha256": "f4463571d2a72dc1f06cce4c2e4d16855fc7210392dfeac28387d865a1ccb264"
+    },
+    {
+      "name": "BlueBilva",
+      "aliases": [
+        "BlueBilva"
+      ],
+      "values": [
+        358,
+        584,
+        632,
+        795,
+        895,
+        929,
+        985,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 358
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 584
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 632
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 795
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 895
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 929
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 985
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_bluebilva.json",
+      "sha256": "0a4647f45df132b4fc562cb157c7297e910be08115a66e39874e1ce947b4f037"
+    },
+    {
+      "name": "Borase",
+      "aliases": [
+        "Borase",
+        "Borase (Ore)"
+      ],
+      "values": [
+        359,
+        584,
+        676,
+        743,
+        892,
+        903,
+        976,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 359
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 584
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 676
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 743
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 892
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 903
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 976
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [
+        "728a3d7e-9567-4e1c-87fd-2bd45b458aa6"
+      ],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_borase.json",
+      "sha256": "3bc80c32cf4a8f81b843e0ab111c7c0244296786f2b88e1c5eddf1717aa575de"
+    },
+    {
+      "name": "Carinite (Pure)",
+      "aliases": [
+        "Carinite",
+        "Carinite (Pure)"
+      ],
+      "values": [
+        273,
+        554,
+        647,
+        716,
+        880,
+        909,
+        959,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 273
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 554
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 647
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 716
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 880
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 909
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 959
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [
+        "d7d39082-ba27-470c-bc9a-d9e82ce838ae",
+        "80dd9dd7-1a4e-41b9-9b3b-4f385b87396c"
+      ],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_carinite.json",
+      "sha256": "87552495d781142c8ccc87b1a57358ee642e332d5c51df1d8e3905a8df4d1dd4"
+    },
+    {
+      "name": "Copper",
+      "aliases": [
+        "Copper",
+        "Copper (Ore)"
+      ],
+      "values": [
+        359,
+        593,
+        652,
+        742,
+        855,
+        917,
+        958,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 359
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 593
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 652
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 742
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 855
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 917
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 958
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [
+        "d4ba4af8-80f1-4a8a-b8cd-5ba7e37c005c"
+      ],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_copper.json",
+      "sha256": "d0cd1a831047c209abc8ac35169872c8627223d9453f528b2cd76ddbf87e951f"
+    },
+    {
+      "name": "Corundum",
+      "aliases": [
+        "Corundum",
+        "Corundum (Raw)"
+      ],
+      "values": [
+        309,
+        504,
+        665,
+        793,
+        886,
+        904,
+        971,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 309
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 504
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 665
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 793
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 886
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 904
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 971
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [
+        "4ceb21c5-48f8-418a-8188-0b0196c33505"
+      ],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_corundum.json",
+      "sha256": "0d4b5a7c3815883c13742a2b5e7cfb3fe3fb88f28d413c23b6cf7be9572eee11"
+    },
+    {
+      "name": "DecariPod",
+      "aliases": [
+        "DecariPod"
+      ],
+      "values": [
+        393,
+        505,
+        655,
+        790,
+        883,
+        940,
+        998,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 393
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 505
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 655
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 790
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 883
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 940
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 998
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_decaripod.json",
+      "sha256": "d507fbe472fcc57452891e16a305267ea5ac19783788674fbe8905d1a88bbd80"
+    },
+    {
+      "name": "DegnousRoot",
+      "aliases": [
+        "DegnousRoot"
+      ],
+      "values": [
+        252,
+        524,
+        634,
+        785,
+        829,
+        934,
+        980,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 252
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 524
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 634
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 785
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 829
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 934
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 980
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_degnousroot.json",
+      "sha256": "1d731dbe54ffccddd10d721be34d5aaf968627cf16a5a9241063e47648e9b8ab"
+    },
+    {
+      "name": "Desert Quasi Grazer Egg",
+      "aliases": [
+        "Desert Quasi Grazer Egg",
+        "QuasiEgg"
+      ],
+      "values": [
+        349,
+        545,
+        625,
+        790,
+        889,
+        918,
+        978,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 349
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 545
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 625
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 790
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 889
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 918
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 978
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [
+        "48bf58e1-8cba-469b-92ae-09dbc0acc645"
+      ],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_quasiegg.json",
+      "sha256": "a0cac2656d29a562accce4d077d22953d2c96f723c36859aa7e0647ebd383556"
+    },
+    {
+      "name": "Dolivine",
+      "aliases": [
+        "Dolivine"
+      ],
+      "values": [
+        304,
+        577,
+        621,
+        743,
+        886,
+        901,
+        957,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 304
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 577
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 621
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 743
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 886
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 901
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 957
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [
+        "7e86e2f4-6c31-41f8-9438-0fd8ad037426"
+      ],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_dolivine.json",
+      "sha256": "ecab339522815a414ddc27fbe0da1d2a28089feddddf715d9777ba370012e60a"
+    },
+    {
+      "name": "Feynmaline",
+      "aliases": [
+        "Feynmaline"
+      ],
+      "values": [
+        371,
+        561,
+        682,
+        769,
+        880,
+        906,
+        965,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 371
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 561
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 682
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 769
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 880
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 906
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 965
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [
+        "7310c15d-359c-42b4-b61e-7da3d0da3384"
+      ],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_feynmaline.json",
+      "sha256": "9b146084f6fb5c85c6c66ae9d6c43c07fd3838bc42117532979edc5e3d3f87fa"
+    },
+    {
+      "name": "Fotia",
+      "aliases": [
+        "Fotia"
+      ],
+      "values": [
+        386,
+        539,
+        687,
+        785,
+        830,
+        905,
+        989,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 386
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 539
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 687
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 785
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 830
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 905
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 989
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_fotia.json",
+      "sha256": "b14d24c25fdb3231c785b59966f9da2eabe507c780777ffb42aec268288efba3"
+    },
+    {
+      "name": "GaspingWeevilEggs",
+      "aliases": [
+        "GaspingWeevilEggs"
+      ],
+      "values": [
+        305,
+        354,
+        600,
+        748,
+        841,
+        927,
+        988,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 354
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 305
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 600
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 748
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 841
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 927
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 988
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_gaspingweevileggs.json",
+      "sha256": "0a0adf365634a9c5282a7689ae10fad0ab0e1b67d819b50049f3aa5dde39d4f5"
+    },
+    {
+      "name": "Glacosite",
+      "aliases": [
+        "Glacosite"
+      ],
+      "values": [
+        360,
+        567,
+        678,
+        724,
+        857,
+        916,
+        972,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 360
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 567
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 678
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 724
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 857
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 916
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 972
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [
+        "960eda23-d77c-425e-8cbd-89d94ca6e2aa"
+      ],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_glacosite.json",
+      "sha256": "596f4562af574b4de869223ceb22f7f81096aa63d72e396134d971f55e9d8e27"
+    },
+    {
+      "name": "Gold",
+      "aliases": [
+        "Gold",
+        "Gold (Ore)"
+      ],
+      "values": [
+        264,
+        553,
+        644,
+        786,
+        864,
+        916,
+        959,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 264
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 553
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 644
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 786
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 864
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 916
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 959
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [
+        "57aba429-cf97-4fdd-8042-94b1d643f5bd"
+      ],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_gold.json",
+      "sha256": "8c02c2c8d17450a0d0618614c5cdd95959649078688130c750ba7d920868172b"
+    },
+    {
+      "name": "GoldenMedmon",
+      "aliases": [
+        "GoldenMedmon"
+      ],
+      "values": [
+        361,
+        508,
+        687,
+        743,
+        882,
+        901,
+        984,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 361
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 508
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 687
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 743
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 882
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 901
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 984
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_goldenmedmon.json",
+      "sha256": "9476cd5325999c5a673b056746b0377e672537600c7a2e7bbd1794e70181085c"
+    },
+    {
+      "name": "Hadanite",
+      "aliases": [
+        "Hadanite"
+      ],
+      "values": [
+        274,
+        526,
+        665,
+        762,
+        867,
+        916,
+        959,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 274
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 526
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 665
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 762
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 867
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 916
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 959
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [
+        "3e5fdc37-cb59-4fd3-8168-e3c538ab9722"
+      ],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_hadanite.json",
+      "sha256": "86a31db6e2d3f91ab257aea8a4c2b0e49ecb5685af245dd5bd272c97962473bb"
+    },
+    {
+      "name": "HeartOfTheWoods",
+      "aliases": [
+        "HeartOfTheWoods"
+      ],
+      "values": [
+        398,
+        544,
+        604,
+        771,
+        896,
+        945,
+        993,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 398
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 544
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 604
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 771
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 896
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 945
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 993
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_heartofthewoods.json",
+      "sha256": "edae4c5536d774c71e5f5f37cc32690c92342619373fac6df0b0bff30e8bb567"
+    },
+    {
+      "name": "Hephaestanite",
+      "aliases": [
+        "Hephaestanite",
+        "Hephaestanite (R)"
+      ],
+      "values": [
+        330,
+        572,
+        692,
+        758,
+        896,
+        916,
+        975,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 330
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 572
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 692
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 758
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 896
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 916
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 975
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [
+        "cad319d9-e0e5-420d-bbfd-dd62a0362d05"
+      ],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_hephaestanite.json",
+      "sha256": "acd18b8e7fd65a6d93eab9b75ae109cfeac30c670b56d6b93dfb82e925d5985c"
+    },
+    {
+      "name": "Iron",
+      "aliases": [
+        "Iron",
+        "Iron (Ore)"
+      ],
+      "values": [
+        325,
+        521,
+        664,
+        710,
+        874,
+        907,
+        970,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 325
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 521
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 664
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 710
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 874
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 907
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 970
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [
+        "32c57a12-5de5-49b1-827a-9fd80278fbc4"
+      ],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_iron.json",
+      "sha256": "34e94f0e49f76d627cdac2ce99884edd0a14fa28c7b9673d4b34c9d849bcca83"
+    },
+    {
+      "name": "Jaclium (Ore)",
+      "aliases": [
+        "Jaclium",
+        "Jaclium (Ore)"
+      ],
+      "values": [
+        284,
+        576,
+        607,
+        781,
+        864,
+        941,
+        955,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 284
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 576
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 607
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 781
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 864
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 941
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 955
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [
+        "2c1e1693-4d19-446c-8224-ebad36feb618"
+      ],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_jaclium.json",
+      "sha256": "a08daa3d78a104a599c533f56d2efb2b2fb8c25f5784a4cffde63adc6f5efaf2"
+    },
+    {
+      "name": "Janalite",
+      "aliases": [
+        "Janalite"
+      ],
+      "values": [
+        269,
+        596,
+        632,
+        732,
+        898,
+        926,
+        964,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 269
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 596
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 632
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 732
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 898
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 926
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 964
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [
+        "f3379bda-0520-4c75-920a-c29a50eb6b50"
+      ],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_janalite.json",
+      "sha256": "4c967f3f9e8b4c74a94e343b55f9a7e32c28afa8c03da19832c10c890d2f26f8"
+    },
+    {
+      "name": "JumpingLimes",
+      "aliases": [
+        "JumpingLimes"
+      ],
+      "values": [
+        312,
+        525,
+        680,
+        722,
+        815,
+        926,
+        985,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 312
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 525
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 680
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 722
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 815
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 926
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 985
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_jumpinglimes.json",
+      "sha256": "d377dcedaaec202e521f947094e72f845e91476dfb03270edf3e17d448194903"
+    },
+    {
+      "name": "Kopion Horn",
+      "aliases": [
+        "Kopion Horn",
+        "KopionHorn"
+      ],
+      "values": [
+        259,
+        511,
+        661,
+        776,
+        838,
+        947,
+        992,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 259
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 511
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 661
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 776
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 838
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 947
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 992
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [
+        "1d4bce93-f0a3-47f2-8885-195f906a32d1"
+      ],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_kopionhorn.json",
+      "sha256": "09b0ec209bba462c9f6745f3247aa3042d85d80b9b842d0bb3278bbdec33672c"
+    },
+    {
+      "name": "Laranite",
+      "aliases": [
+        "Laranite",
+        "Laranite (Raw)"
+      ],
+      "values": [
+        298,
+        510,
+        698,
+        707,
+        858,
+        910,
+        975,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 298
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 510
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 698
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 707
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 858
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 910
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 975
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [
+        "7b7178c1-b0f0-4760-89de-9a3e3851e7a8"
+      ],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_laranite.json",
+      "sha256": "1efe0d3335c4225de6e065f622eb66c4031c55458051e2c7ab93f4df460440d7"
+    },
+    {
+      "name": "Lindinium",
+      "aliases": [
+        "Lindinium",
+        "Lindinium (Ore)"
+      ],
+      "values": [
+        305,
+        585,
+        618,
+        729,
+        853,
+        930,
+        954,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 305
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 585
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 618
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 729
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 853
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 930
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 954
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [
+        "87327e0c-86a7-4c6b-82c3-d0c8fe6bf15f"
+      ],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_lindinium.json",
+      "sha256": "9222eb56c7eb644db7b648e11b4db44f6bc96ef5fc734e1d4e6c4c274be97361"
+    },
+    {
+      "name": "Marok Gem",
+      "aliases": [
+        "Marok Gem",
+        "MarokPearl"
+      ],
+      "values": [
+        281,
+        505,
+        679,
+        734,
+        866,
+        903,
+        987,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 281
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 505
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 679
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 734
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 866
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 903
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 987
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [
+        "0f7378e2-2106-4c40-abd6-927cb91ba60d"
+      ],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_marokpearl.json",
+      "sha256": "8bc1008e32e171ddce5f7e93ee6b2d5e2449f98d5de04f10e7032b602c10f0c6"
+    },
+    {
+      "name": "Ouratite",
+      "aliases": [
+        "Ouratite",
+        "Raw Ouratite"
+      ],
+      "values": [
+        310,
+        523,
+        647,
+        779,
+        860,
+        912,
+        960,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 310
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 523
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 647
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 779
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 860
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 912
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 960
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [
+        "ca3ae4c1-3483-4985-ba61-50412994dc83"
+      ],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_ouratite.json",
+      "sha256": "2153129ffdddfaaae2f50118c19652578095cebec96b721831cc782efe8731ca"
+    },
+    {
+      "name": "Oza",
+      "aliases": [
+        "Oza"
+      ],
+      "values": [
+        270,
+        561,
+        654,
+        708,
+        871,
+        944,
+        966,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 270
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 561
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 654
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 708
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 871
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 944
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 966
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_oza.json",
+      "sha256": "51ae00eea9650256efebcdd08dcad49a2ee8d60bf5fa3cf6c11dc72ac67acd1e"
+    },
+    {
+      "name": "Pingala",
+      "aliases": [
+        "Pingala"
+      ],
+      "values": [
+        368,
+        513,
+        601,
+        730,
+        884,
+        947,
+        980,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 368
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 513
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 601
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 730
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 884
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 947
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 980
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_pingala.json",
+      "sha256": "fd7893d7b22360047d6c2cf46deed9dc35721cfdbed860d3bfd0fc25f2944e80"
+    },
+    {
+      "name": "Pitambu",
+      "aliases": [
+        "Pitambu"
+      ],
+      "values": [
+        329,
+        599,
+        697,
+        781,
+        820,
+        911,
+        979,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 329
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 599
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 697
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 781
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 820
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 911
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 979
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_pitambu.json",
+      "sha256": "153e08104a86510aba4b2d591c0af6ee87d008a07690dcff89a1c882340801da"
+    },
+    {
+      "name": "Pressurized Ice",
+      "aliases": [
+        "Pressurized Ice",
+        "Raw Ice",
+        "RawIce"
+      ],
+      "values": [
+        322,
+        561,
+        659,
+        714,
+        873,
+        922,
+        966,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 322
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 561
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 659
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 714
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 873
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 922
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 966
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [
+        "d9653427-af7f-4fea-bbd6-ae89393524b7"
+      ],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_rawice.json",
+      "sha256": "4dde1a8d8c45165aaddbd1b9f2f1b466c498bdd6ae52dc8337d1741e94182813"
+    },
+    {
+      "name": "Prota",
+      "aliases": [
+        "Prota"
+      ],
+      "values": [
+        368,
+        533,
+        678,
+        788,
+        809,
+        931,
+        987,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 368
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 533
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 678
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 788
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 809
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 931
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 987
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_prota.json",
+      "sha256": "5c8c4ec36b0b856257d7ab301f0b6567c84f1b31983f6345445d210e05d5e05a"
+    },
+    {
+      "name": "Quantainium",
+      "aliases": [
+        "Quantainium",
+        "Quantainium (Raw)"
+      ],
+      "values": [
+        344,
+        514,
+        669,
+        762,
+        852,
+        901,
+        974,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 344
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 514
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 669
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 762
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 852
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 901
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 974
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [
+        "501d9b2e-136c-483b-a4d9-282fe6a5d37a"
+      ],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_quantainium.json",
+      "sha256": "a2ae3ac5f765276fe48ce7da85877ff1aab0c727dad1d61897ddca7fb0f2150e"
+    },
+    {
+      "name": "Quartz",
+      "aliases": [
+        "Quartz",
+        "Quartz (Raw)"
+      ],
+      "values": [
+        330,
+        522,
+        641,
+        710,
+        899,
+        914,
+        969,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 330
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 522
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 641
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 710
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 899
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 914
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 969
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [
+        "8569b931-06bb-4d86-9f24-5e303e2ff3ee"
+      ],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_quartz.json",
+      "sha256": "a392b17f1c4b584b5ad71b44515ad6a7f6b1e4d389fee3409bc448e483e4c98e"
+    },
+    {
+      "name": "QuasiTongue",
+      "aliases": [
+        "QuasiTongue"
+      ],
+      "values": [
+        254,
+        548,
+        661,
+        776,
+        858,
+        907,
+        968,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 254
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 548
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 661
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 776
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 858
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 907
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 968
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_quasitongue.json",
+      "sha256": "8ad134232a63741c157902f08a085ceb64e37aaaca87cbea91e1d0030bd40937"
+    },
+    {
+      "name": "RantaDung",
+      "aliases": [
+        "RantaDung"
+      ],
+      "values": [
+        263,
+        558,
+        692,
+        739,
+        856,
+        920,
+        996,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 263
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 558
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 692
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 739
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 856
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 920
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 996
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_rantadung.json",
+      "sha256": "f1e82c2c93a6669a93b9f131ea668c28981f4d51204f30937d4ecb27307a98c4"
+    },
+    {
+      "name": "RevenantPod",
+      "aliases": [
+        "RevenantPod"
+      ],
+      "values": [
+        379,
+        541,
+        694,
+        793,
+        881,
+        919,
+        962,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 379
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 541
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 694
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 793
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 881
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 919
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 962
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_revenantpod.json",
+      "sha256": "42a7fac5226a7200c1bf7b7937a090a1d8426a2788c25898b97149f00f2bae48"
+    },
+    {
+      "name": "Riccite",
+      "aliases": [
+        "Riccite",
+        "Riccite (Ore)"
+      ],
+      "values": [
+        325,
+        525,
+        671,
+        743,
+        870,
+        942,
+        965,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 325
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 525
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 671
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 743
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 870
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 942
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 965
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [
+        "c3697191-8ad0-43a9-af7a-29c0ad58de34"
+      ],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_riccite.json",
+      "sha256": "2c8c39e269a61d9186f82ee1392bfa3201ecf7d7706dfb6a472e930156fd7b52"
+    },
+    {
+      "name": "Sadaryx",
+      "aliases": [
+        "Sadaryx"
+      ],
+      "values": [
+        258,
+        510,
+        688,
+        797,
+        865,
+        940,
+        971,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 258
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 510
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 688
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 797
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 865
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 940
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 971
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [
+        "93feeedc-6d17-4b86-b8ae-8e0f4ba56cbf"
+      ],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_sadaryx.json",
+      "sha256": "fc36f01c64dd7620153eaa1b66efb998ddb46e4e23ef36fd76bf220cd192a379"
+    },
+    {
+      "name": "Saldynium (Ore)",
+      "aliases": [
+        "Saldynium",
+        "Saldynium (Ore)"
+      ],
+      "values": [
+        301,
+        575,
+        674,
+        757,
+        861,
+        938,
+        955,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 301
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 575
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 674
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 757
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 861
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 938
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 955
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [
+        "5fdfdea8-3d75-4287-85c7-f29a722ee351"
+      ],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_saldynium.json",
+      "sha256": "3bcb9e67b4aadb07ca5970afa4d93efb9ae19dde355a616c319439b30dbe9ce4"
+    },
+    {
+      "name": "Savrilium",
+      "aliases": [
+        "Savrilium",
+        "Savrilium (Ore)"
+      ],
+      "values": [
+        322,
+        580,
+        636,
+        776,
+        878,
+        905,
+        967,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 322
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 580
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 636
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 776
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 878
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 905
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 967
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [
+        "d76ea7ef-5116-488c-93d3-71e02bada13d"
+      ],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_savrilium.json",
+      "sha256": "4d7a9a2349582c32c3ae10a89c06b296bfcff95bf5cf4584f85157a2ddfb35b6"
+    },
+    {
+      "name": "Silicon",
+      "aliases": [
+        "Raw Silicon",
+        "Silicon"
+      ],
+      "values": [
+        310,
+        510,
+        672,
+        782,
+        889,
+        926,
+        968,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 310
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 510
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 672
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 782
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 889
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 926
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 968
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [
+        "d137b905-b3bc-4721-a790-830499263c0c"
+      ],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_silicon.json",
+      "sha256": "66266966dbc2af13d616c5cfab5e208f8ccb331a8efd525086fe1951ec67d742"
+    },
+    {
+      "name": "SpiralFruit",
+      "aliases": [
+        "SpiralFruit"
+      ],
+      "values": [
+        302,
+        520,
+        672,
+        750,
+        872,
+        934,
+        978,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 302
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 520
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 672
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 750
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 872
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 934
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 978
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_spiralfruit.json",
+      "sha256": "02f45deeab1467930a09af289e52a86079df844b54a20d5881e8db5820415bb3"
+    },
+    {
+      "name": "Stileron",
+      "aliases": [
+        "Stileron",
+        "Stileron (Ore)"
+      ],
+      "values": [
+        330,
+        517,
+        681,
+        747,
+        874,
+        947,
+        972,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 330
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 517
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 681
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 747
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 874
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 947
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 972
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [
+        "32bafbd4-c52a-476d-b31c-97c4b3102471"
+      ],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_stileron.json",
+      "sha256": "6a08a5b99d6d1fbede99d591e71d232fbf84844e92ed5c5fa60c2b53e7c6de47"
+    },
+    {
+      "name": "SunsetBerry",
+      "aliases": [
+        "SunsetBerry"
+      ],
+      "values": [
+        266,
+        555,
+        679,
+        711,
+        830,
+        938,
+        973,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 266
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 555
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 679
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 711
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 830
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 938
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 973
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_sunsetberry.json",
+      "sha256": "148a01161febdc89d04922906e18dc871913cebb96e632043ab451b745983a94"
+    },
+    {
+      "name": "Taranite",
+      "aliases": [
+        "Taranite",
+        "Taranite (Raw)"
+      ],
+      "values": [
+        310,
+        525,
+        646,
+        718,
+        853,
+        925,
+        957,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 310
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 525
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 646
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 718
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 853
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 925
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 957
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [
+        "b6175879-fc61-4600-b4a9-1e15f2c2ddd5"
+      ],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_taranite.json",
+      "sha256": "e84435035ceb591ee380c70003eae2e2de8c6cee9842910ecf6a32532e0dcc4f"
+    },
+    {
+      "name": "Tin",
+      "aliases": [
+        "Tin",
+        "Tin (Ore)"
+      ],
+      "values": [
+        340,
+        537,
+        664,
+        704,
+        880,
+        940,
+        964,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 340
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 537
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 664
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 704
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 880
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 940
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 964
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [
+        "551cf88d-c09f-46e3-99b3-66c60bb65af1"
+      ],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_tin.json",
+      "sha256": "7276b948e2b456e4a6c4b101b34dc275f9119d4bc31e939fe95a742b773dd4c1"
+    },
+    {
+      "name": "Titanium",
+      "aliases": [
+        "Titanium",
+        "Titanium (Ore)"
+      ],
+      "values": [
+        295,
+        516,
+        622,
+        784,
+        866,
+        916,
+        959,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 295
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 516
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 622
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 784
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 866
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 916
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 959
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [
+        "64978449-1d87-4a16-ba55-4b5f94fee217"
+      ],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_titanium.json",
+      "sha256": "24e1cc357701cf2695376e9b18b903b48e3a52a02e28fd2d3a327c1ec9db3a5b"
+    },
+    {
+      "name": "Torite",
+      "aliases": [
+        "Torite",
+        "Torite (Ore)"
+      ],
+      "values": [
+        262,
+        528,
+        661,
+        785,
+        873,
+        944,
+        951,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 262
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 528
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 661
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 785
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 873
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 944
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 951
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [
+        "48b9b7ba-cd5e-458b-bb91-9b43eb46c568"
+      ],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_torite.json",
+      "sha256": "e7b7d8dbfdbd0448030b6e64695bdf6b9c8ba996dc872104878444f41ced6572"
+    },
+    {
+      "name": "Tungsten",
+      "aliases": [
+        "Tungsten",
+        "Tungsten (Ore)"
+      ],
+      "values": [
+        363,
+        530,
+        662,
+        787,
+        858,
+        902,
+        964,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 363
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 530
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 662
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 787
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 858
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 902
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 964
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [
+        "addc9aa4-5d2d-4c0d-b01b-ad2b2e50a5d6"
+      ],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_tungsten.json",
+      "sha256": "f9cf84cba92669fd45c518404c1df2b917fd14ab0adda6d1ec172b27fd3cdb6a"
+    },
+    {
+      "name": "Valakkar Fang",
+      "aliases": [
+        "VLKFang",
+        "Valakkar Fang"
+      ],
+      "values": [
+        294,
+        529,
+        640,
+        761,
+        868,
+        902,
+        951,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 294
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 529
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 640
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 761
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 868
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 902
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 951
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [
+        "8ba78e89-0832-48c2-b8ab-4eaa7d4bba42"
+      ],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_vlkfang.json",
+      "sha256": "aca3b1cbcf4ec8c06340816c1958346bbb6fe45ff6e013e0ff5d4dac8bdeda72"
+    },
+    {
+      "name": "VLKPearl",
+      "aliases": [
+        "VLKPearl"
+      ],
+      "values": [
+        396,
+        584,
+        660,
+        790,
+        834,
+        912,
+        964,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 396
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 584
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 660
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 790
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 834
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 912
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 964
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_vlkpearl.json",
+      "sha256": "aaa2e3e100a2533ce4cfa8f2c846610393c2b91a1394efb49f6cb3b2dfb65600"
+    },
+    {
+      "name": "Yormandi Eye",
+      "aliases": [
+        "Yormandi Eye",
+        "YormandiEye"
+      ],
+      "values": [
+        391,
+        515,
+        663,
+        794,
+        807,
+        938,
+        978,
+        1000
+      ],
+      "bands": [
+        {
+          "start": 0,
+          "end": 399,
+          "value": 391
+        },
+        {
+          "start": 400,
+          "end": 599,
+          "value": 515
+        },
+        {
+          "start": 600,
+          "end": 699,
+          "value": 663
+        },
+        {
+          "start": 700,
+          "end": 799,
+          "value": 794
+        },
+        {
+          "start": 800,
+          "end": 899,
+          "value": 807
+        },
+        {
+          "start": 900,
+          "end": 949,
+          "value": 938
+        },
+        {
+          "start": 950,
+          "end": 998,
+          "value": 978
+        },
+        {
+          "start": 999,
+          "end": 1000,
+          "value": 1000
+        }
+      ],
+      "resource_ids": [
+        "1e5e3c87-5e4c-4cac-8a17-6a46f97abb8a"
+      ],
+      "source": "libs/foundry/records/crafting/qualityquantization/quantization_yormandieye.json",
+      "sha256": "df2b9d2e3c89a208c0637354de727a2a51fe881c2286d4009d00fd228048f2c8"
+    }
+  ]
+}

@@ -58,3 +58,7 @@ change the licenses of reused components.
   2025 Xyxyll; website LICENSE copyright (c) 2026 Xyxyll. MIT License and source
   attribution are retained in third_party/executive_hangar/. The schedule is an
   estimate, independently rendered by SynthScan; remote scripts are never run.
+
+- Daylight destination/body data derives from VerseTime by DYDRM (GPL-3.0),
+  which credits Murphy Exploration Group for data. Pinned provenance and license
+  are in third_party/versetime/. SynthScan supplies a separate forecast solver.

@@ -10,6 +10,7 @@ import time
 import re
 from installation import ROOT, PROFILE, game_directory, reference_paths, output_root
 from setup_status import version
+from reference_catalogs import catalogue_path
 
 
 def prepare_reputation(paths):
@@ -37,9 +38,12 @@ def prepare(progress=print,force=False):
     paths=reference_paths();paths['root'].mkdir(parents=True,exist_ok=True)
     marker=paths['root']/'ready.json'
     try:
-        active_build=json.loads((output_root()/'data/local_game_library.json').read_text(encoding='utf-8'))['provenance']['build']['BuildId']
+        active_build=json.loads(catalogue_path(output_root(),'local_game_library.json').read_text(encoding='utf-8'))['provenance']['build']['BuildId']
     except (OSError,ValueError,KeyError):active_build=None
-    refreshed=force or not marker.exists() or active_build!=paths['root'].name
+    try:
+        schema=json.loads(catalogue_path(output_root(),'local_game_catalog.json').read_text(encoding='utf-8'))['native_provenance'].get('export_schema')
+    except (OSError,ValueError,KeyError):schema=None
+    refreshed=force or not marker.exists() or active_build!=paths['root'].name or schema!=2
     if refreshed:
         progress('Reading your installed game: blueprints, mining, artwork and reputation. This can take several minutes.')
         subprocess.run([sys.executable,'-B',str(ROOT/'tools/refresh_game_reference.py'),'--game-dir',str(game)],

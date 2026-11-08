@@ -3,6 +3,7 @@ from datetime import datetime,timezone
 from email.utils import parsedate_to_datetime
 from html import unescape
 import re,time,urllib.request,xml.etree.ElementTree as ET
+from urllib.parse import urlsplit
 
 URL='https://status.robertsspaceindustries.com/affected/persistent-universe/index.xml'
 RESET=re.compile(r'(?:servers?\b.{0,65}\b(?:offline|reset|restart|hotfix|updates?|maintenance)|(?:restart|reset).{0,30}\bservers?\b)',re.I)
@@ -36,6 +37,8 @@ def parse_resets(raw,now=None):
 
 
 def fetch_resets():
-    request=urllib.request.Request(URL,headers={'User-Agent':'SynthScan-hangar-schedule/1.0'})
-    with urllib.request.urlopen(request,timeout=8) as response:raw=response.read(1048577)
+    request=urllib.request.Request(URL,headers={'User-Agent':'SynthScan-hangar-schedule/1.0','Cache-Control':'no-cache'})
+    with urllib.request.urlopen(request,timeout=8) as response:
+        if urlsplit(response.geturl()).netloc!='status.robertsspaceindustries.com':raise ValueError('Unexpected reset feed host')
+        raw=response.read(1048577)
     return parse_resets(raw)
