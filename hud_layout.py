@@ -1,5 +1,22 @@
 """HUD presentation model and monitor-relative geometry; no telemetry acquisition."""
 import math
+import re
+
+
+def shard_display_name(name):
+    """Return a saved name, excluding generic numeric and disconnected labels."""
+    name = str(name or '').strip()
+    if not name or name.upper() in {'--', 'MAIN MENU', 'AWAITING TELEMETRY', 'UNKNOWN'}:
+        return ''
+    return '' if re.fullmatch(r'shard\s+\d+', name, re.IGNORECASE) else name
+
+
+def shard_label(name, number):
+    name = shard_display_name(name)
+    number = str(number or '--').strip()
+    if number.isdecimal():
+        number = str(int(number))
+    return f'{name} · Shard {number}' if name else f'Shard {number}'
 
 
 def bounded(value, default, low, high):
@@ -46,7 +63,7 @@ def panel_rows(state, mining=None, *, session=True, mining_enabled=True, now=0, 
             name = state.get('callsign') or f"Shard {state.get('shard_id', '—')}"
             row(name, 'title')
             detail = [state.get('region_display')]
-            if not name.upper().startswith('SHARD '):
+            if shard_display_name(name):
                 detail.append('Shard '+str(state.get('shard_id', '—')))
             node = state.get('server_name')
             if node and node!='--':

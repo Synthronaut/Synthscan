@@ -1,5 +1,14 @@
 ## Unreleased
 
+- Show generic shard identifiers only once in the server ribbon, regardless of
+  capitalization. Keep saved names alongside numeric shard IDs in recent visits;
+  do not invent a game-name mapping when the source supplies only a shard ID.
+
+- Add optional, customizable HUD toggle and next-tab shortcuts. Recommend F23
+  and F24 for programmable mouse buttons; new users opt in through Settings.
+  Preserve hidden state when cycling, release keys outside the configured focus
+  scope, suppress held-key repeats and reject duplicate/reserved bindings.
+
 - Keep piracy metrics independently through brief OCR misses, preserving their
   original capture times. Dim and age delayed values, expire them after ten
   seconds, and never use held population values for live deltas.

@@ -1,3 +1,4 @@
+#include "HudHotkeys.h"
 #include "MiningReference.h"
 #include "SynthFinderHUD.h"
 // The self-test: what the program checks about itself, on both platforms.
@@ -1420,6 +1421,20 @@ int runSelfTest() {
 
 #ifdef _WIN32
     allPassed &= check(SynthFinder::selfTest(), "Finder autocomplete, ownership and recipe details");
+    {
+        HudHotkeys::Config config;allPassed &= check(!config.enabled&&config.gameOnly&&config.toggle.key==VK_F23&&config.cycle.key==VK_F24,"HUD hotkeys default disabled with independent F23/F24 recommendations");
+        config.enabled=true;config.toggle={unsigned('R'),MOD_CONTROL|MOD_ALT};auto roundtrip=HudHotkeys::decodeConfig(HudHotkeys::encodeConfig(config));
+        allPassed &= check(roundtrip.enabled&&roundtrip.gameOnly&&HudHotkeys::same(config.toggle,roundtrip.toggle)&&HudHotkeys::same(config.cycle,roundtrip.cycle),"Custom HUD key/modifier settings round-trip without losing scope");
+        config.cycle=config.toggle;allPassed &= check(!HudHotkeys::error(config).empty(),"HUD toggle and cycle cannot share one shortcut");
+        allPassed &= check(!HudHotkeys::valid({VK_F12,0})&&!HudHotkeys::valid({unsigned('Q'),0})&&!HudHotkeys::valid({VK_CONTROL,0})&&!HudHotkeys::valid({VK_F23,MOD_WIN})&&HudHotkeys::valid({VK_F23,0})&&HudHotkeys::valid({unsigned('Q'),MOD_ALT}),"HUD bindings reject reserved F12, typing-only keys, modifier-only keys and Windows-key combinations");
+        HudHotkeys::Gate gate;HudHotkeys::Binding binding{VK_F23,0};
+        allPassed &= check(!gate.accept(0,100,true,false,true,false,binding,VK_F23,0)&&!gate.accept(0,100,true,true,false,false,binding,VK_F23,0)&&!gate.accept(0,100,true,true,true,true,binding,VK_F23,0)&&!gate.accept(0,100,true,true,true,false,binding,VK_F24,0),"HUD key gate rejects inactive registrations, other-app focus, shortcut recording and old binding messages");
+        allPassed &= check(gate.accept(0,100,true,true,true,false,binding,VK_F23,0)&&!gate.accept(0,110,true,true,true,false,binding,VK_F23,0)&&gate.accept(0,250,true,true,true,false,binding,VK_F23,0),"HUD key gate ignores duplicate button events without blocking a later press");
+        gate.suppressedUntil=1000;allPassed &= check(!gate.accept(0,900,true,true,true,false,binding,VK_F23,0)&&gate.accept(0,1001,true,true,true,false,binding,VK_F23,0),"Finishing shortcut recording cannot immediately activate the recorded command");
+        allPassed &= check(HudHotkeys::nextTab(0)==1&&HudHotkeys::nextTab(1)==2&&HudHotkeys::nextTab(2)==3&&HudHotkeys::nextTab(3)==4&&HudHotkeys::nextTab(4)==0,"HUD cycling covers five tabs and wraps to Mining");
+        allPassed &= check(HudHotkeys::label({VK_F23,0})==L"F23"&&HudHotkeys::label({VK_F24,MOD_CONTROL|MOD_SHIFT})==L"Ctrl + Shift + F24","HUD shortcut names preserve high function keys and modifiers");
+    }
+
     allPassed &= check(SCMiner::miningReferenceSelfTest(), "mining reference update is atomic and preserves loadout pointers");
 #endif
     // Rock valuation: exact SCU fractions, inert exclusion, a single buyer

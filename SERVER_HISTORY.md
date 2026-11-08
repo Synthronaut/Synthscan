@@ -29,3 +29,16 @@ low shard numbers and reports that a server feels fresh are not converted into
 automatic age estimates. No additional service calls or history uploads are
 required for this feature. Sharing observations across an organization could
 extend recorded history, but would still not establish a server's startup time.
+
+### Shard labels and names
+
+The ribbon shows a numeric shard identifier once. Recent visits show a saved
+name alongside that number; entries remain keyed by the full shard ID, including
+region and environment, rather than by number alone. Names entered in server
+history are local labels, not verified CIG names.
+
+The loading queue's word-based shard name is separate from both the numeric ID
+and a local DGS label such as GAME-7. The inspected client schema contains a
+PlayerShardHistory.shard_name field, but the current collector has no verified
+read source for it. Automatic loading-name capture is not implemented. Unknown
+names remain numeric identifiers; SynthScan does not manufacture a mapping.

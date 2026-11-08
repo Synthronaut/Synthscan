@@ -16,6 +16,7 @@ import tempfile
 import time
 from interdiction_watch import InterdictionNotifications
 from session_overview import play_events
+from jurisdiction_watch import JurisdictionWatch
 
 LOG = logging.getLogger(__name__)
 from installation import game_directory
@@ -139,6 +140,7 @@ class IncrementalGameLog:
 
     def reset(self, reason="disconnected", event_at=None, time_source=None):
         self.interdiction_notifications.reset()
+        self.jurisdiction = JurisdictionWatch()
         previous = getattr(self, "session_token", None)
         self.connected = False
         self.connection_status = reason
@@ -226,6 +228,7 @@ class IncrementalGameLog:
             self.player_name = match.group(1)
         if "OpenLoadingScreen" in line:
             self.is_loading_screen = True
+            self.jurisdiction.reset()
         if "StopLoadingScreen" in line and ("Finished" in line or "Starting CET" in line):
             self.is_loading_screen = False
 
@@ -247,6 +250,7 @@ class IncrementalGameLog:
 
         if not self.connected:
             return
+        self.jurisdiction.feed(line, at, time_source)
         # A PU join destroys the local frontend channel too. Only a disconnect
         # of the current remote replication channel ends the PU session.
         if "<Channel Created>" in line and f"remoteAddr={self.ip_address}:{self.port} " in line:

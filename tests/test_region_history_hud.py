@@ -3,6 +3,15 @@ from region_history_hud import recent_visits
 
 
 class RecentVisitsTests(unittest.TestCase):
+    def test_names_keep_numeric_identity_without_repeating_generic_labels(self):
+        sessions = [dict(joined_at=f'2026-10-22T07:0{i}:00Z', server_name=name,
+                         shard_id='00100', full_shard_id=f'pub_region_{i}_100')
+                    for i, name in enumerate(('Timothy', 'Shard 100', 'SHARD 00100', ''))]
+        rows = recent_visits(dict(sessions=sessions))
+        self.assertEqual([r['server'] for r in rows],
+                         ['Shard 100', 'Shard 100', 'Shard 100', 'Timothy · Shard 100'])
+        self.assertEqual(len({r['full'] for r in rows}), 4)
+
     def test_sorted_visits_current_session_and_taipei_times(self):
         old=dict(joined_at='2026-10-21T07:00:00Z',left_at='2026-10-21T09:00:00Z',region_display='EU',full_shard_id='old')
         new=dict(joined_at='2026-10-22T07:00:00Z',active=True,region_display='Asia',full_shard_id='new',server_name='Example')

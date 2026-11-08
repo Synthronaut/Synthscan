@@ -126,6 +126,7 @@ class SessionService:
         state['diary']=self.diary.view(**self.diary_filters)
         state['diary_result']=self.diary_result
         state['interdictions']=self.interdictions.view(token,now,r.full_shard_id,r.joined_at)
+        state['jurisdiction']=r.jurisdiction.view(now,active=bool(token) and not r.is_loading_screen and r.connection_status=='connected',session_token=token)
         state['hud_state']=dict(region_raw=r.region_raw,server_name='--',srv_id='--',metric_meta={})
         for key,value in [('ping_ms',ping),('client_fps',frames)]:
             if value:

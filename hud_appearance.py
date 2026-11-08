@@ -6,6 +6,7 @@ Data and health remain owned by the current controller; this
 module neither acquires metrics nor substitutes estimates for missing readings.
 """
 from displayinfo_reader import translate_region
+from hud_layout import shard_display_name
 
 
 def render_original_bar(self):
@@ -213,7 +214,7 @@ def render_original_bar(self):
     x = (bbox[2] + 4) if bbox else (x + 46)
 
     # Check if user set a custom nickname (e.g. "AEGIS", "PHANTOM BLADE")
-    has_custom_callsign = bool(is_connected and callsign and not callsign.startswith("SHARD ") and callsign not in ("AWAITING TELEMETRY", "MAIN MENU"))
+    has_custom_callsign = bool(is_connected and shard_display_name(callsign))
     if has_custom_callsign:
         cs_id = c.create_text(x, cy, text=callsign, anchor="w", fill="#cbd5e1", font=("Consolas", 8, "bold"))
         bbox = c.bbox(cs_id)

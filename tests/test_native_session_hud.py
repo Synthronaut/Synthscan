@@ -81,6 +81,17 @@ class NativeSessionHUDTests(unittest.TestCase):
         self.assertEqual(result['hud_state']['metric_meta']['ping_ms']['observed_at'],98)
         self.assertEqual(result['interdictions']['alerts'][0]['id'],'live-alert')
 
+    def test_generic_name_is_not_painted_as_a_second_shard_label(self):
+        from hud_appearance import render_original_bar
+        for name in ('Shard 200', 'SHARD 200', ' shard 00200 '):
+            snapshot = self.snapshot();snapshot['shard_name'] = name
+            view = RibbonSessionState();state = view.update(snapshot,42,101)
+            canvas = Mock();canvas.bbox.return_value = (0,0,100,16)
+            hud = SimpleNamespace(state=state,bar_canvas=canvas,bar_width=1600,BAR_HEIGHT=24,compact=True)
+            render_original_bar(hud)
+            labels = [str(call.kwargs.get('text','')) for call in canvas.create_text.call_args_list]
+            self.assertEqual(sum('SHARD' in label.upper() for label in labels), 1, labels)
+
     def test_actual_ribbon_painter_keeps_identity_and_shows_updating_without_stale_stats(self):
         from hud_appearance import render_original_bar
         view=RibbonSessionState();view.update(self.snapshot(),42,101)
