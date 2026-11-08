@@ -1433,6 +1433,10 @@ int runSelfTest() {
         gate.suppressedUntil=1000;allPassed &= check(!gate.accept(0,900,true,true,true,false,binding,VK_F23,0)&&gate.accept(0,1001,true,true,true,false,binding,VK_F23,0),"Finishing shortcut recording cannot immediately activate the recorded command");
         allPassed &= check(HudHotkeys::nextTab(0)==1&&HudHotkeys::nextTab(1)==2&&HudHotkeys::nextTab(2)==3&&HudHotkeys::nextTab(3)==4&&HudHotkeys::nextTab(4)==0,"HUD cycling covers five tabs and wraps to Mining");
         allPassed &= check(HudHotkeys::label({VK_F23,0})==L"F23"&&HudHotkeys::label({VK_F24,MOD_CONTROL|MOD_SHIFT})==L"Ctrl + Shift + F24","HUD shortcut names preserve high function keys and modifiers");
+        HudHotkeys::Edge edge;
+        allPassed &= check(!edge.sample(0)&&edge.sample(0x8001)&&!edge.sample(0x8000)&&!edge.sample(0)&&edge.sample(1),"HUD fallback detects held and brief presses once without held-key repeats");
+        edge.reset();allPassed &= check(!edge.sample(0x8001)&&!edge.sample(0x8000)&&!edge.sample(0)&&edge.sample(0x8001),"Returning to HUD shortcut scope ignores an already-held key until release");
+        HudHotkeys::Gate winGate;allPassed &= check(!winGate.accept(0,2000,true,true,true,false,binding,VK_F23,MOD_WIN),"HUD shortcut fallback rejects unexpected Windows modifiers");
     }
 
     allPassed &= check(SCMiner::miningReferenceSelfTest(), "mining reference update is atomic and preserves loadout pointers");

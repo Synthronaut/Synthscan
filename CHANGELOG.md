@@ -1,5 +1,9 @@
 ## Unreleased
 
+- Add a focused, configured-key-only HUD shortcut fallback when Windows hotkey
+  messages do not arrive during play. Ignore held keys on focus return and
+  suppress repeats; expose separate message and fallback counters for diagnosis.
+
 - Deliver registered HUD shortcuts through the native message loop instead of
   discarding them before the shell handler receives the event.
 

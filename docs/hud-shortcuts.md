@@ -30,15 +30,19 @@ HUD preserves its position and does not bring up the full Home window. No game
 commands or simulated game keystrokes are sent.
 
 Implementation uses Windows RegisterHotKey with MOD_NOREPEAT, a short duplicate-
-event guard, and foreground-change notifications. It uses no keyboard hook or
-continuous keyboard polling. With game/HUD scope enabled, registrations are
-released when another app is focused, rather than swallowing its shortcuts.
+event guard, and foreground-change notifications. A 20 ms fallback checks only
+the two configured keys and their modifiers while in scope, covering game input
+paths that do not deliver Windows hotkey messages. It uses no keyboard hook.
+Held keys trigger once; keys held when focus returns must be released first.
+With game/HUD scope enabled, registrations are released and fallback checks stop
+when another app is focused.
 Conflicting registrations are reported in Settings; failed bindings do not run.
 Close releases both registrations. Binding configuration is local to each player
 in hud_hotkeys.json and is excluded from community packages.
 
-The native status snapshot exposes registration status and accepted action counts
-for troubleshooting. It records only these two configured app actions, not typed
+The native status snapshot exposes registration status, Windows-message/fallback
+counts and accepted action counts for troubleshooting. It records only these two
+configured app actions, not typed
 text or other keys. An actual mouse-button test remains a physical user action;
 unit tests do not prove that a G HUB profile sends the expected hardware keys.
 

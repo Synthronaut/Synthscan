@@ -36,8 +36,17 @@ inline std::wstring label(Binding b){
 struct Gate {
     std::uint64_t last[2]{},suppressedUntil=0;bool seen[2]{};
     bool accept(int action,std::uint64_t now,bool enabled,bool registered,bool scope,bool editing,Binding binding,unsigned key,unsigned modifiers){
-        if(action<0||action>1||!enabled||!registered||!scope||editing||now<suppressedUntil||!binding.key||key!=binding.key||(modifiers&7)!=binding.modifiers)return false;
+        if(action<0||action>1||!enabled||!registered||!scope||editing||now<suppressedUntil||!binding.key||key!=binding.key||(modifiers&15)!=binding.modifiers)return false;
         if(seen[action]&&now-last[action]<140)return false;seen[action]=true;last[action]=now;return true;
+    }
+};
+struct Edge {
+    bool primed=false,held=false;
+    void reset(){primed=held=false;}
+    bool sample(unsigned state){
+        bool down=(state&0x8000)!=0,pressed=(state&1)!=0;
+        if(!primed){primed=true;held=down;return false;}
+        bool fire=!held&&(down||pressed);held=down;return fire;
     }
 };
 inline int nextTab(int current){return current>=0&&current<4?current+1:0;}

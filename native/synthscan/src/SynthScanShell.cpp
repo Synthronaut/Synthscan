@@ -53,8 +53,9 @@ std::string directoryRowId,directoryItemId,directoryRequestId,directoryText,libr
 std::future<Json> libraryJob;
 int currentTab=0,hotkeyChoice=0,selected=-1;
 HudHotkeys::Config hudKeys;HudHotkeys::Gate hudKeyGate;HudHotkeys::Binding editedKeys[2];
+HudHotkeys::Edge hudKeyEdges[2];HWND keyForeground=nullptr;
 HWINEVENTHOOK foregroundHook=nullptr;bool keyEditing=false,keyScopeActive=false,toggleKeyOK=false,cycleKeyOK=false;
-std::string keyError;unsigned togglePresses=0,cyclePresses=0;double lastHudKeyAt=0;
+std::string keyError;unsigned togglePresses=0,cyclePresses=0,windowsKeyMessages=0,polledKeyEdges=0;double lastHudKeyAt=0;
 Json state,settings,library;std::vector<Json> visible;
 Json directoryShops;
 HIMAGELIST directoryIcons=nullptr;
@@ -111,6 +112,7 @@ double uiScale=1;
 int px(int value){return int(std::lround(value*uiScale));}
 constexpr int HOTKEY=31001,HOTKEY_CYCLE=31002,TRAY=WM_APP+41;
 constexpr UINT HOTKEY_REFRESH=WM_APP+43;
+constexpr UINT_PTR HUD_KEY_TIMER=4;
 constexpr COLORREF BG=RGB(20,23,29),CARD=RGB(29,33,41),TEXT=RGB(233,237,241),MUTED=RGB(149,160,173),GOLD=RGB(98,204,255);
 double epoch(){return std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count();}
 std::wstring lower(std::wstring value){for(auto& c:value)c=std::towlower(c);return value;}
@@ -148,18 +150,21 @@ std::wstring hotkeyStatus(){
 }
 void applyHotkey(){
     bool wanted=!testing&&hudKeys.enabled&&!keyEditing&&hotkeyContext();
+    keyForeground=wanted?GetForegroundWindow():nullptr;
     if(wanted!=keyScopeActive){
+        KillTimer(host,HUD_KEY_TIMER);for(auto& edge:hudKeyEdges)edge.reset();
         UnregisterHotKey(host,HOTKEY);UnregisterHotKey(host,HOTKEY_CYCLE);toggleKeyOK=cycleKeyOK=hotkeyOK=false;keyScopeActive=wanted;
         if(wanted){
             keyError.clear();toggleKeyOK=hudKeys.toggle.key&&RegisterHotKey(host,HOTKEY,hudKeys.toggle.modifiers|MOD_NOREPEAT,hudKeys.toggle.key);
             cycleKeyOK=hudKeys.cycle.key&&RegisterHotKey(host,HOTKEY_CYCLE,hudKeys.cycle.modifiers|MOD_NOREPEAT,hudKeys.cycle.key);
             hotkeyOK=(!hudKeys.toggle.key||toggleKeyOK)&&(!hudKeys.cycle.key||cycleKeyOK);
             if(!hotkeyOK){keyError="Shortcut unavailable: "+utf8(HudHotkeys::label((!hudKeys.toggle.key||toggleKeyOK)?hudKeys.cycle:hudKeys.toggle))+" may already be used by another application. Choose another key or save to retry.";UnregisterHotKey(host,HOTKEY);UnregisterHotKey(host,HOTKEY_CYCLE);toggleKeyOK=cycleKeyOK=false;}
+            if(hotkeyOK)SetTimer(host,HUD_KEY_TIMER,20,nullptr);
         }
     }
     if(panel&&currentTab==7&&status&&IsWindow(status))SetWindowTextW(status,hotkeyStatus().c_str());
 }
-void resetHotkeyRegistration(){UnregisterHotKey(host,HOTKEY);UnregisterHotKey(host,HOTKEY_CYCLE);keyScopeActive=hotkeyOK=toggleKeyOK=cycleKeyOK=false;applyHotkey();}
+void resetHotkeyRegistration(){KillTimer(host,HUD_KEY_TIMER);for(auto& edge:hudKeyEdges)edge.reset();UnregisterHotKey(host,HOTKEY);UnregisterHotKey(host,HOTKEY_CYCLE);keyScopeActive=hotkeyOK=toggleKeyOK=cycleKeyOK=false;applyHotkey();}
 void CALLBACK foregroundChanged(HWINEVENTHOOK,DWORD,HWND,LONG,LONG,DWORD,DWORD){if(host)PostMessageW(host,HOTKEY_REFRESH,0,0);}
 LRESULT CALLBACK shortcutEdit(HWND hwnd,UINT message,WPARAM w,LPARAM l,UINT_PTR,DWORD_PTR which){
     if(message==WM_GETDLGCODE)return DLGC_WANTALLKEYS|DLGC_WANTARROWS|DLGC_WANTCHARS;
@@ -184,8 +189,9 @@ void setActivityExpanded(bool value){
     if(mining){if(value&&hudVisible){if(!mining->isOverlayMode()){auto window=mining->windowHandle();bool hadNoActivate=(GetWindowLongPtrW(window,GWL_EXSTYLE)&WS_EX_NOACTIVATE)!=0;SetWindowLongPtrW(window,GWL_EXSTYLE,GetWindowLongPtrW(window,GWL_EXSTYLE)|WS_EX_NOACTIVATE);mining->toggleOverlayMode();if(!hadNoActivate)SetWindowLongPtrW(window,GWL_EXSTYLE,GetWindowLongPtrW(window,GWL_EXSTYLE)&~WS_EX_NOACTIVATE);}ShowWindow(mining->windowHandle(),SW_SHOWNOACTIVATE);mining->keepOverlayAboveGame(true);}else mining->hide();}
     saveSettings();
 }
-void handleHudHotkey(int id,LPARAM packed){
+void handleHudHotkey(int id,LPARAM packed,bool polled=false){
     int action=id==HOTKEY?0:id==HOTKEY_CYCLE?1:-1;auto binding=action==0?hudKeys.toggle:hudKeys.cycle;
+    if(action>=0){if(polled)++polledKeyEdges;else ++windowsKeyMessages;}
     if(testing||!mining||!hudKeyGate.accept(action,GetTickCount64(),hudKeys.enabled,hotkeyOK,hotkeyContext(),keyEditing,binding,HIWORD(packed),LOWORD(packed)))return;
     if(action==0)++togglePresses;else ++cyclePresses;lastHudKeyAt=epoch();
     auto window=mining->windowHandle();bool shown=mining->isOverlayMode()&&!SynthPages::contains(window)&&IsWindowVisible(window)&&activityExpanded;
@@ -194,6 +200,14 @@ void handleHudHotkey(int id,LPARAM packed){
     if(SynthPages::contains(window)){SynthHome::selectPage("home");SynthPages::release(window);}
     if(!mining->isOverlayMode())mining->toggleOverlayMode(false);
     setActivityExpanded(true);showHud(true);if(finder)SynthFinder::sync(true);
+}
+void pollHudKeys(){
+    // Poll only the two configured keys, on the UI thread, while in scope.
+    // Focus changes disarm immediately even before the foreground hook runs.
+    if(testing||!hudKeys.enabled||!hotkeyOK||keyEditing||!keyForeground||GetForegroundWindow()!=keyForeground){for(auto& edge:hudKeyEdges)edge.reset();return;}
+    unsigned modifiers=((GetAsyncKeyState(VK_CONTROL)&0x8000)?MOD_CONTROL:0)|((GetAsyncKeyState(VK_MENU)&0x8000)?MOD_ALT:0)|((GetAsyncKeyState(VK_SHIFT)&0x8000)?MOD_SHIFT:0)|(((GetAsyncKeyState(VK_LWIN)|GetAsyncKeyState(VK_RWIN))&0x8000)?MOD_WIN:0);
+    HudHotkeys::Binding bindings[]{hudKeys.toggle,hudKeys.cycle};
+    for(int action=0;action<2;++action)if(bindings[action].key&&hudKeyEdges[action].sample(unsigned(GetAsyncKeyState(bindings[action].key))))handleHudHotkey(action?HOTKEY_CYCLE:HOTKEY,MAKELPARAM(modifiers,bindings[action].key),true);
 }
 void dockHud(){if(!mining)return;setActivityExpanded(true);showHud(true);mining->dockOverlayTopRight();}
 void activityControl(){
@@ -604,7 +618,7 @@ void publishNativeStatus(){
             {"reader_note",str(mining->contentsReadNote())}});
     }
 
-    if(!testing&&mining)write(data/L"native_status.json",obj({{"window_handle",num(double(reinterpret_cast<UINT_PTR>(mining->windowHandle())))},{"at",num(epoch())},{"pid",num(GetCurrentProcessId())},{"afk_jiggler",obj({{"armed",boolean(afk.armed)},{"status",str(afk.status)},{"nudges",num(afk.nudges)},{"interval_seconds",num(AfkNudge::interval/1000)},{"next_in_seconds",num(afk.nextInSeconds)},{"first_pulse",boolean(afk.firstPulse())},{"pulse_active",boolean(afkPulse.active)},{"last_pulse_at",num(lastAfkPulseAt)},{"pulse_counts",num(15)}})},{"mining_scan",scan},{"scanner_active",boolean(!pirate&&!quest&&!hangars&&!finder&&text(GetDlgItem(mining->windowHandle(),1002))==L"Live on")},{"piracy_details",boolean(pirateDetails)},{"hud_mode",str(finder?"finder":hangars?"hangars":quest?"questing":pirate?"piracy":"mining")},{"hud_locked",boolean(placementLocked)},{"activity_expanded",boolean(activityExpanded)},{"activity_command_id",str(activityCommandId)},{"hud_visible",boolean(IsWindowVisible(mining->windowHandle())!=FALSE)},{"overlay_mode",boolean(mining->isOverlayMode())},{"hud_topmost",boolean((GetWindowLongPtrW(mining->windowHandle(),GWL_EXSTYLE)&WS_EX_TOPMOST)!=0)},{"hud_position",obj({{"left",num(overlayRect.left)},{"top",num(overlayRect.top)},{"right",num(overlayRect.right)},{"bottom",num(overlayRect.bottom)}})},{"hotkey_registered",boolean(hotkeyOK)},{"hud_hotkeys",obj({{"enabled",boolean(hudKeys.enabled)},{"game_only",boolean(hudKeys.gameOnly)},{"active_scope",boolean(keyScopeActive)},{"toggle_registered",boolean(toggleKeyOK)},{"cycle_registered",boolean(cycleKeyOK)},{"error",str(keyError)},{"toggle_presses",num(togglePresses)},{"cycle_presses",num(cyclePresses)},{"last_action_at",num(lastHudKeyAt)}})},{"bridge_age",num(lastStateAt?epoch()-lastStateAt:-1)}}));
+    if(!testing&&mining)write(data/L"native_status.json",obj({{"window_handle",num(double(reinterpret_cast<UINT_PTR>(mining->windowHandle())))},{"at",num(epoch())},{"pid",num(GetCurrentProcessId())},{"afk_jiggler",obj({{"armed",boolean(afk.armed)},{"status",str(afk.status)},{"nudges",num(afk.nudges)},{"interval_seconds",num(AfkNudge::interval/1000)},{"next_in_seconds",num(afk.nextInSeconds)},{"first_pulse",boolean(afk.firstPulse())},{"pulse_active",boolean(afkPulse.active)},{"last_pulse_at",num(lastAfkPulseAt)},{"pulse_counts",num(15)}})},{"mining_scan",scan},{"scanner_active",boolean(!pirate&&!quest&&!hangars&&!finder&&text(GetDlgItem(mining->windowHandle(),1002))==L"Live on")},{"piracy_details",boolean(pirateDetails)},{"hud_mode",str(finder?"finder":hangars?"hangars":quest?"questing":pirate?"piracy":"mining")},{"hud_locked",boolean(placementLocked)},{"activity_expanded",boolean(activityExpanded)},{"activity_command_id",str(activityCommandId)},{"hud_visible",boolean(IsWindowVisible(mining->windowHandle())!=FALSE)},{"overlay_mode",boolean(mining->isOverlayMode())},{"hud_topmost",boolean((GetWindowLongPtrW(mining->windowHandle(),GWL_EXSTYLE)&WS_EX_TOPMOST)!=0)},{"hud_position",obj({{"left",num(overlayRect.left)},{"top",num(overlayRect.top)},{"right",num(overlayRect.right)},{"bottom",num(overlayRect.bottom)}})},{"hotkey_registered",boolean(hotkeyOK)},{"hud_hotkeys",obj({{"enabled",boolean(hudKeys.enabled)},{"game_only",boolean(hudKeys.gameOnly)},{"active_scope",boolean(keyScopeActive)},{"toggle_registered",boolean(toggleKeyOK)},{"cycle_registered",boolean(cycleKeyOK)},{"error",str(keyError)},{"windows_messages",num(windowsKeyMessages)},{"polled_edges",num(polledKeyEdges)},{"toggle_presses",num(togglePresses)},{"cycle_presses",num(cyclePresses)},{"last_action_at",num(lastHudKeyAt)}})},{"bridge_age",num(lastStateAt?epoch()-lastStateAt:-1)}}));
 }
 bool afkHeldInput(){
     for(int key=1;key<255;key++)if(GetAsyncKeyState(key)&0x8000)return true;
@@ -737,7 +751,7 @@ LRESULT CALLBACK hostProc(HWND hwnd,UINT message,WPARAM w,LPARAM l){
     LRESULT menuResult=0;if(SynthMenus::message(message,w,l,menuResult))return menuResult;
     if(message==TRAY&&l==NIN_BALLOONUSERCLICK){spawnPython(L"app_launcher.py",{L"--status"});return 0;}
     if(message==WM_APP+42){activityControl();publishNativeStatus();return 0;}
-    if(message==WM_TIMER){if(w==AFK_PULSE_TIMER)pulseAfk();else timer();return 0;}
+    if(message==WM_TIMER){if(w==AFK_PULSE_TIMER)pulseAfk();else if(w==HUD_KEY_TIMER)pollHudKeys();else timer();return 0;}
     if(message==HOTKEY_REFRESH){applyHotkey();return 0;}
     if(message==WM_HOTKEY){handleHudHotkey(int(w),l);return 0;}
     if(message==TRAY){if(l==WM_LBUTTONDBLCLK){desktop();return 0;}if(l==WM_RBUTTONUP){HMENU menu=CreatePopupMenu();AppendMenuW(menu,MF_STRING,1,L"Open SynthScan");AppendMenuW(menu,MF_STRING,2,L"Show / hide HUD");AppendMenuW(menu,MF_STRING,3,L"Startup & HUD settings");AppendMenuW(menu,MF_STRING,4,L"Exit SynthScan");AppendMenuW(menu,MF_STRING|(activityMode()?0:MF_CHECKED),5,L"HUD mode: Mining");AppendMenuW(menu,MF_STRING|(pirate?MF_CHECKED:0),6,L"HUD mode: Piracy");AppendMenuW(menu,MF_STRING|(quest?MF_CHECKED:0),8,L"HUD mode: Missions");AppendMenuW(menu,MF_STRING|(placementLocked?MF_CHECKED:0),7,L"Lock HUD position");AppendMenuW(menu,MF_STRING,20,L"Dock HUD top right");AppendMenuW(menu,MF_STRING|(finder?MF_CHECKED:0),19,L"HUD mode: Finder");AppendMenuW(menu,MF_STRING|(hangars?MF_CHECKED:0),9,L"HUD mode: Hangars");AppendMenuW(menu,MF_STRING,10,L"Compboard inventory");AppendMenuW(menu,MF_STRING,11,L"Daylight planner");appendAfkMenu(menu,12);AppendMenuW(menu,MF_STRING,13,L"Automatic acceptance…");POINT at;GetCursorPos(&at);SetForegroundWindow(hwnd);appendProfileMenu(menu);int choice=SynthMenus::track(menu,TPM_RETURNCMD|TPM_RIGHTBUTTON,at.x,at.y,0,hwnd,nullptr);DestroyMenu(menu);if(choice==20){dockHud();return 0;}if(handleProfileChoice(choice))return 0;if(choice==19){setMode(4);showHud(true);setActivityExpanded(true);return 0;}if(choice==1)desktop();if(choice==2)showHud(!hudVisible);if(choice==3)workspace(4);if(choice==5||choice==6)setMode(choice==6);if(choice==8)setMode(2);if(choice==7)togglePlacement();if(choice==9){setMode(3);showHud(true);setActivityExpanded(true);}if(choice==10)spawnPython(L"compboard_tracker.py",{});if(choice==11)spawnPython(L"daylight_planner.py",{});if(choice==12)toggleAfk();if(choice==13)spawnPython(L"contract_share_helper.py",{L"--owner",std::to_wstring(GetCurrentProcessId())});if(choice==4&&mining){markUserExit();PostMessageW(mining->windowHandle(),WM_CLOSE,0,0);}return 0;}}
@@ -990,7 +1004,7 @@ void shutdown(){
     hangarImage.reset();icon.reset();
     SynthHome::close();SynthFinder::close();SynthScanDiary::close();SynthScanNav::close();
     if(attached&&!testing){Json exit=obj({{"at",num(epoch())},{"pid",num(GetCurrentProcessId())},{"reason",str(userExitRequested?"user":"shutdown")},{"game_pids",field(state,"game_pids")}});write(data/L"native_exit.json",exit);}
-    if(host){KillTimer(host,1);UnregisterHotKey(host,HOTKEY);UnregisterHotKey(host,HOTKEY_CYCLE);Shell_NotifyIconW(NIM_DELETE,&tray);}
+    if(host){KillTimer(host,1);KillTimer(host,HUD_KEY_TIMER);UnregisterHotKey(host,HOTKEY);UnregisterHotKey(host,HOTKEY_CYCLE);Shell_NotifyIconW(NIM_DELETE,&tray);}
     if(bridgeProcess){write(data/L"bridge_stop.json",obj({{"owner_pid",num(GetCurrentProcessId())}}));WaitForSingleObject(bridgeProcess,2000);}
     if(job)CloseHandle(job);job=nullptr;
     if(bridgeProcess)CloseHandle(bridgeProcess);if(controlProcess)CloseHandle(controlProcess);
