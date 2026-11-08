@@ -1,6 +1,7 @@
 #include "SynthHome.h"
 #include "SynthJson.h"
 #include "resource.h"
+#include "SynthPages.h"
 #include <gdiplus.h>
 #include <dwmapi.h>
 #include <algorithm>
@@ -16,6 +17,7 @@ using namespace SynthScan;
 HWND window=nullptr,owner=nullptr;std::filesystem::path directory;
 std::function<void(const std::string&)> action;
 Json overview;std::string identity,lastAction;bool connected=false,previous=false,sessionChosen=false;
+std::string activePage="home";
 float scale=1;
 const Gdiplus::Color BG(255,15,16,19),SIDE(255,19,21,25),CARD(255,24,26,30),BORDER(255,44,47,54),INK(255,238,239,241),MUTED(255,160,166,176),ACCENT(255,238,178,70);
 struct Button {HWND hwnd;int id;std::wstring label;std::string action;bool navigation;};
@@ -37,6 +39,7 @@ void publish(){
     if(!window)return;RECT r{};GetWindowRect(window,&r);
     write(directory/L"home_status.json",obj({{"owner_pid",num(GetCurrentProcessId())},{"visible",SynthScan::boolean(IsWindowVisible(window)!=0)},
         {"last_action",str(lastAction)},{"previous_session",SynthScan::boolean(previous)},
+        {"active_page",str(activePage)},{"page_handle",num(double(reinterpret_cast<UINT_PTR>(SynthPages::current())))},
         {"left",num(r.left)},{"top",num(r.top)},{"right",num(r.right)},{"bottom",num(r.bottom)}}));
 }
 void layout(){
@@ -51,7 +54,10 @@ void layout(){
         else if(b.id==210||b.id==211){w=114;h=30;x=width-264+(b.id-210)*120;y=234;}
         else if(b.id==212){x=width-192;y=622;w=166;h=30;}
         MoveWindow(b.hwnd,int(x*scale),int(y*scale),int(w*scale),int(h*scale),TRUE);
+        ShowWindow(b.hwnd,b.navigation||activePage=="home"?SW_SHOW:SW_HIDE);
+        InvalidateRect(b.hwnd,nullptr,FALSE);
     }
+    SynthPages::place(int(218*scale),int(110*scale),int((width-234)*scale),std::max(1,int(r.bottom)-int(124*scale)),activePage!="home");
     InvalidateRect(window,nullptr,FALSE);
 }
 void add(int id,const wchar_t* label,const char* command,bool navigation){
@@ -61,7 +67,7 @@ void add(int id,const wchar_t* label,const char* command,bool navigation){
 void paintButton(const DRAWITEMSTRUCT& item){
     auto found=std::find_if(buttons.begin(),buttons.end(),[&](const auto& b){return b.id==int(item.CtlID);});if(found==buttons.end())return;
     const auto& b=*found;Gdiplus::Graphics g(item.hDC);g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);g.SetTextRenderingHint(Gdiplus::TextRenderingHintClearTypeGridFit);
-    bool selected=b.id==100||(b.id==210&&!previous)||(b.id==211&&previous);
+    bool selected=(b.navigation&&b.action==activePage)||(b.id==210&&!previous)||(b.id==211&&previous);
     g.Clear(b.navigation?SIDE:BG);Gdiplus::RectF r(0,0,float(item.rcItem.right),float(item.rcItem.bottom));
     rounded(g,r,(item.itemState&ODS_SELECTED)?Gdiplus::Color(255,58,50,34):selected?Gdiplus::Color(255,43,38,29):CARD,7);
     if(b.navigation&&selected)rounded(g,{0,7*scale,3*scale,r.Height-14*scale},ACCENT,1);
@@ -83,8 +89,11 @@ void paint(){
         words(g,L"YOUR VERSE, CONNECTED",24,73,164,20,9,MUTED,true);
         words(g,L"LOCAL PROFILE",24,height-66,164,20,9,ACCENT,true);
         words(g,L"Your records stay on this PC",24,height-45,166,30,10,MUTED);
-        words(g,L"Home",224,30,main,40,29,INK,true);
-        words(g,L"Find your next upgrade. See what you've accomplished.",224,76,main,28,13,MUTED);
+        std::wstring heading=L"Home";
+        for(const auto& button:buttons)if(button.navigation&&button.action==activePage)heading=button.label;
+        words(g,heading,224,30,main,40,29,INK,true);
+        words(g,activePage=="home"?L"Find your next upgrade. See what you've accomplished.":L"",224,76,main,28,13,MUTED);
+        if(activePage=="home"){
         words(g,L"SESSION RECAP",224,241,main-260,24,11,ACCENT,true);
         const Json& session=field(overview,previous?"previous":"current");
         const auto& blueprints=field(session,"blueprints").items;const auto& rep=field(session,"reputation").items;
@@ -118,6 +127,7 @@ void paint(){
         words(g,notice.empty()?L"Completed-order notifications appear here and in the Mining HUD.":L"Confirmed game notification · dismiss after reviewing your orders",240,645,main-200,19,10,MUTED);
         words(g,connected?wide(identity):L"No live shard observation",224,690,main,22,11,connected?INK:MUTED);
         words(g,flag(overview,"history_warning")?L"Saved recap could not be read. The original file has been preserved.":L"Recap includes logged grants and completions; reputation is measured between verified reads.",224,716,main,28,10,MUTED);
+        }
         Gdiplus::Graphics screen(dc);screen.DrawImage(&bitmap,0,0);
     }EndPaint(window,&ps);
 }
@@ -130,7 +140,12 @@ LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM w,LPARAM l){
         int id=LOWORD(w);
         if(id==210||id==211){previous=id==211;sessionChosen=true;InvalidateRect(hwnd,nullptr,FALSE);for(auto& b:buttons)InvalidateRect(b.hwnd,nullptr,FALSE);publish();return 0;}
         auto found=std::find_if(buttons.begin(),buttons.end(),[&](const auto& b){return b.id==id;});
-        if(found!=buttons.end()&&found->action!="home"){lastAction=found->action;publish();if(action)action(lastAction);}return 0;
+        if(found!=buttons.end()){
+            lastAction=found->action;
+            if(found->navigation){selectPage(lastAction);if(lastAction!="home"&&action)action(lastAction);publish();}
+            else if(action)action(lastAction);
+            publish();
+        }return 0;
     }
     if(message==WM_CLOSE){ShowWindow(hwnd,SW_HIDE);publish();return 0;}
     if(message==WM_DPICHANGED){auto r=reinterpret_cast<RECT*>(l);SetWindowPos(hwnd,nullptr,r->left,r->top,r->right-r->left,r->bottom-r->top,SWP_NOZORDER|SWP_NOACTIVATE);layout();return 0;}
@@ -140,11 +155,12 @@ LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM w,LPARAM l){
 void create(){
     if(window)return;WNDCLASSW cls{};cls.hInstance=GetModuleHandleW(nullptr);cls.lpszClassName=L"SynthScanHome";cls.lpfnWndProc=procedure;cls.hCursor=LoadCursor(nullptr,IDC_ARROW);cls.hIcon=LoadIconW(cls.hInstance,MAKEINTRESOURCEW(IDI_APPICON));RegisterClassW(&cls);
     MONITORINFO info{sizeof(info)};GetMonitorInfo(MonitorFromWindow(owner,MONITOR_DEFAULTTONEAREST),&info);
-    float dpi=GetDpiForWindow(owner)/96.f;int width=std::min(int(1060*dpi),int(info.rcWork.right-info.rcWork.left)-48),height=std::min(int(800*dpi),int(info.rcWork.bottom-info.rcWork.top)-48);
+    float dpi=GetDpiForWindow(owner)/96.f;int width=std::min(int(1240*dpi),int(info.rcWork.right-info.rcWork.left)-48),height=std::min(int(840*dpi),int(info.rcWork.bottom-info.rcWork.top)-48);
     window=CreateWindowExW(WS_EX_APPWINDOW|WS_EX_CONTROLPARENT,cls.lpszClassName,L"SynthScan — Home",WS_OVERLAPPEDWINDOW|WS_CLIPCHILDREN,
-        info.rcWork.left+(info.rcWork.right-info.rcWork.left-width)/2,info.rcWork.top+(info.rcWork.bottom-info.rcWork.top-height)/2,width,height,owner,nullptr,cls.hInstance,nullptr);
+        info.rcWork.left+(info.rcWork.right-info.rcWork.left-width)/2,info.rcWork.top+(info.rcWork.bottom-info.rcWork.top-height)/2,width,height,nullptr,nullptr,cls.hInstance,nullptr);
     BOOL dark=TRUE;DwmSetWindowAttribute(window,20,&dark,sizeof(dark));
-    const wchar_t* names[]={L"Home",L"Mining",L"Item & ship finder",L"Blueprint library",L"Refinery orders",L"Mining planner",L"Piracy HUD",L"Server history",L"Mining diary",L"Personal notes",L"Rock bookmarks",L"Daylight",L"Automatic acceptance",L"Settings"};
+    SynthPages::initialize(window);
+    const wchar_t* names[]={L"Home",L"Mining",L"Item & ship finder",L"Blueprint library",L"Refinery orders",L"Mining planner",L"Piracy",L"Server history",L"Mining diary",L"Personal notes",L"Rock bookmarks",L"Daylight",L"Automatic acceptance",L"Settings"};
     const char* actions[]={"home","mining","directory","blueprints","refinery","planner","hud_piracy","servers","diary","notes","bookmarks","daylight","acceptance","settings"};
     for(int i=0;i<int(sizeof(names)/sizeof(names[0]));i++)add(100+i,names[i],actions[i],true);
     add(200,L"Mining HUD\nAutomatic scan reading","hud_mining",false);add(201,L"Finder HUD\nShops & player market","hud_finder",false);
@@ -162,11 +178,16 @@ void update(const SCMiner::JsonValue& value,const std::string& label,bool live){
         previous=field(value,"previous").kind==Json::Kind::Object&&field(current,"blueprints").items.empty()&&field(current,"reputation").items.empty()&&current.numberOr("contracts_completed")==0;
         sessionChosen=true;
     }
+    if(window)publish();
     if(window&&changed){InvalidateRect(window,nullptr,FALSE);for(auto& b:buttons)if(b.id==210||b.id==211)InvalidateRect(b.hwnd,nullptr,FALSE);publish();}
 }
-void show(){create();ShowWindow(window,SW_SHOW);ShowWindow(window,SW_RESTORE);SetForegroundWindow(window);publish();}
+void show(){create();if(owner&&(GetWindowLongPtrW(owner,GWL_EXSTYLE)&WS_EX_TOPMOST))SetWindowPos(owner,HWND_NOTOPMOST,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE);ShowWindow(window,SW_SHOW);ShowWindow(window,SW_RESTORE);SetForegroundWindow(window);publish();}
 void hide(){if(window){ShowWindow(window,SW_HIDE);publish();}}
+HWND pageHost(){create();return SynthPages::host();}
+void selectPage(const std::string& name){activePage=name;SynthPages::hide();layout();publish();}
+std::string selectedPage(){return activePage;}
 bool visible(){return window&&IsWindowVisible(window);}
+bool active(){return visible()&&GetAncestor(GetForegroundWindow(),GA_ROOT)==window;}
 bool routeMessage(MSG& message){return window&&(message.hwnd==window||IsChild(window,message.hwnd))&&IsDialogMessage(window,&message);}
-void close(){if(window)DestroyWindow(window);window=nullptr;buttons.clear();}
+void close(){SynthPages::close();if(window)DestroyWindow(window);window=nullptr;buttons.clear();}
 }

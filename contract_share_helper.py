@@ -77,6 +77,11 @@ def main():
             if show.wait(0):root.deiconify();root.lift()
             if now-sampled>=.25:
                 snapshot=read_shared_json(DATA/'session_state.json',limit=8*1024*1024);sampled=now
+                external=acceptance_settings(read_shared_json(DATA/'contract_share_preferences.json'))
+                if external!=q.enabled:
+                    release_key();q.reset();reader=LogRecords(game/'Game.log');disabled_reason=''
+                    q.enabled=external
+                    for kind,value in external.items():switches[kind].set(value)
             valid,changed=context.update(snapshot,a.owner,now)
             if changed:
                 q.reset();reader=LogRecords(game/'Game.log');release_key()

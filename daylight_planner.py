@@ -262,19 +262,32 @@ class DaylightPlanner:
 def main():
     from app_lifecycle import SingleInstance,Signal,send_signal
     from native_control import DATA
-    lock = SingleInstance('daylight-planner')
-    if not lock.acquired:send_signal('daylight-planner-show');return
-    show = Signal('daylight-planner-show')
+    import argparse
+    parser=argparse.ArgumentParser();parser.add_argument('--embedded',action='store_true');parser.add_argument('--owner',type=int)
+    args=parser.parse_args()
+    if args.embedded and not args.owner:parser.error('Embedded pages require a native owner')
+    name='daylight-planner'+(f'-embedded-{args.owner}' if args.embedded else '')
+    lock = SingleInstance(name)
+    if not lock.acquired:send_signal(name+'-show');return
+    show = Signal(name+'-show')
     root = tk.Tk();root.withdraw()
     try:
         DaylightPlanner(root,DATA)
+        embedded=None
+        if args.embedded:
+            from embedded_window import EmbeddedWindow
+            embedded=EmbeddedWindow(root,DATA,args.owner)
         def poll_show():
-            if show.wait(0):root.deiconify();root.lift()
+            if show.wait(0):
+                if embedded:embedded.show()
+                else:root.deiconify();root.lift()
             root.after(250,poll_show)
-        poll_show();root.deiconify();root.mainloop()
+        poll_show()
+        if not embedded:root.deiconify()
+        root.mainloop()
     except Exception:
         logging.exception('Daylight planner failed')
-        messagebox.showerror('Daylight planner','Unable to open daylight data. No game files were changed.',parent=root)
+        if not args.embedded:messagebox.showerror('Daylight planner','Unable to open daylight data. No game files were changed.',parent=root)
         root.destroy()
     finally:show.close();lock.close()
 

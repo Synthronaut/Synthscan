@@ -525,7 +525,7 @@ public:
     void setRegionAuto(bool automatic);
 
     // Compact always-on-top overlay mode (for use while the game is running)
-    void toggleOverlayMode();
+    void toggleOverlayMode(bool showWindow=true);
     void restoreOverlayPlacement();
     void dockOverlayTopRight();
     void keepOverlayAboveGame(bool force=false);

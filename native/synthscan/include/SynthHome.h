@@ -12,4 +12,8 @@ void hide();
 void close();
 bool routeMessage(MSG& message);
 bool visible();
+bool active();
+HWND pageHost();
+void selectPage(const std::string& name);
+std::string selectedPage();
 }

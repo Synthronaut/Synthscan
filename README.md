@@ -7,9 +7,9 @@ reputation labels, a server HUD, and Mining / Piracy / Missions / Hangars / Find
 top-right edge. Turn off **Lock HUD position** to drag it elsewhere; the saved
 placement preserves the nearer screen edge across tab sizes and restarts.
 
-Opening SynthScan now starts at **Home**, with direct links to Mining, the item
+Opening SynthScan starts at **Home**, with a fixed sidebar for Mining, the item
 and ship finder, blueprints, refinery orders, planners, personal records and
-settings. **Full** on the pop-out opens Home; **Home** on the Mining window returns
+settings. Sidebar tabs switch the content inside the same desktop window; they do not open separate tool windows or resize the desktop. Larger pages scroll inside that area. The explicit HUD buttons still open the pop-out. **Full** on the pop-out opens Home; **Home** on the Mining window returns
 there. The session recap separates this game run from the previous run, records
 actual blueprint and contract notifications, and shows reputation changes since
 the first verified balance read in that run. Missed history is not reconstructed

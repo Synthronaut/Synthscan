@@ -3,6 +3,7 @@
 #include "ScreenCapture.h"
 #include "SynthScanShell.h"
 #include "SynthHome.h"
+#include "SynthPages.h"
 #include "CraftedPower.h"
 #include "HandMiningReference.h"
 #include "OverlayInput.h"
@@ -1263,11 +1264,16 @@ void MinerGUI::dockOverlayTopRight(){
 
 void MinerGUI::keepOverlayAboveGame(bool force) {
     if(!hwnd_||!overlayMode_||!IsWindowVisible(hwnd_))return;
+    if(SynthHome::active()){
+        if(GetWindowLongPtrW(hwnd_,GWL_EXSTYLE)&WS_EX_TOPMOST)SetWindowPos(hwnd_,HWND_NOTOPMOST,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE);
+        return;
+    }
     if(force||!(GetWindowLongPtrW(hwnd_,GWL_EXSTYLE)&WS_EX_TOPMOST))
         SetWindowPos(hwnd_,HWND_TOPMOST,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE|SWP_NOOWNERZORDER);
 }
 
-void MinerGUI::toggleOverlayMode() {
+void MinerGUI::toggleOverlayMode(bool showWindow) {
+    SynthPages::release(hwnd_);
     setLookingOpen(false);   // the panel belongs to the full window alone
     // ...and so does the first start's UEX offer: it comes back with it
     if (uexWelcome_.step) {
@@ -1286,7 +1292,7 @@ void MinerGUI::toggleOverlayMode() {
     if (overlayMode_) {
         GetWindowRect(hwnd_, &restoreRect_);
 
-        SetWindowLongPtr(hwnd_, GWL_STYLE, WS_POPUP | WS_VISIBLE | WS_CLIPCHILDREN);
+        SetWindowLongPtr(hwnd_, GWL_STYLE, WS_POPUP | (showWindow?WS_VISIBLE:0) | WS_CLIPCHILDREN);
         LONG_PTR ex = GetWindowLongPtr(hwnd_, GWL_EXSTYLE);
         SetWindowLongPtr(hwnd_, GWL_EXSTYLE, ex | WS_EX_LAYERED);
         SetLayeredWindowAttributes(hwnd_, 0, SynthScan::piracyMode()?255:235, LWA_ALPHA);  // slightly translucent
@@ -1312,7 +1318,7 @@ void MinerGUI::toggleOverlayMode() {
             }
         }
         at = overlayOnMonitor(at, width, height);
-        SetWindowPos(hwnd_, HWND_TOPMOST, at.x, at.y, width, height, SWP_FRAMECHANGED | SWP_SHOWWINDOW | SWP_NOACTIVATE);
+        SetWindowPos(hwnd_, HWND_TOPMOST, at.x, at.y, width, height, SWP_FRAMECHANGED | (showWindow?SWP_SHOWWINDOW:0) | SWP_NOACTIVATE);
         // through to the game at once where it went to the overlay without
         // Bedrock in front
 #ifdef _WIN32
@@ -1324,7 +1330,7 @@ void MinerGUI::toggleOverlayMode() {
         updateClickThrough();
     } else {
         KillTimer(hwnd_, TIMER_OVERLAY_INPUT);
-        SetWindowLongPtr(hwnd_, GWL_STYLE, WS_OVERLAPPEDWINDOW | WS_VISIBLE | WS_CLIPCHILDREN);
+        SetWindowLongPtr(hwnd_, GWL_STYLE, WS_OVERLAPPEDWINDOW | (showWindow?WS_VISIBLE:0) | WS_CLIPCHILDREN);
         LONG_PTR ex = GetWindowLongPtr(hwnd_, GWL_EXSTYLE);
         SetWindowLongPtr(hwnd_, GWL_EXSTYLE, ex & ~WS_EX_LAYERED);
         updateClickThrough();
@@ -1337,7 +1343,7 @@ void MinerGUI::toggleOverlayMode() {
                      restoreRect_.left, restoreRect_.top,
                      restoreRect_.right - restoreRect_.left,
                      restoreRect_.bottom - restoreRect_.top,
-                     SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+                     SWP_FRAMECHANGED | (showWindow?SWP_SHOWWINDOW:0));
     }
 
     if (headless_) {
@@ -1348,7 +1354,7 @@ void MinerGUI::toggleOverlayMode() {
     layoutControls();
     // Focus may sit on a control that was just hidden - reclaim it so the
     // window-level hotkeys (O/L/S/Q) keep working after the switch
-    if (!headless_ && !(GetWindowLongPtrW(hwnd_,GWL_EXSTYLE)&WS_EX_NOACTIVATE)) SetFocus(hwnd_);
+    if (showWindow && !headless_ && !(GetWindowLongPtrW(hwnd_,GWL_EXSTYLE)&WS_EX_NOACTIVATE)) SetFocus(hwnd_);
     InvalidateRect(hwnd_, nullptr, TRUE);
     // written now, not only at the close: the console's X ends the app
     // without one

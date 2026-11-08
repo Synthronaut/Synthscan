@@ -33,6 +33,7 @@ PRIVATE.update({'finder_market_index.json','finder_market_request.json','finder_
 PRIVATE.add('session_ribbon.json')
 PRIVATE.add('session_overview.json')
 PRIVATE.add('home_status.json')
+PRIVATE.add('daylight_embed_request.json')
 
 
 def copy_tree(source,destination):

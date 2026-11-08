@@ -267,7 +267,8 @@ def run(data_dir,owner):
                 inbox=directory/'fabricator_scan_inbox.json'
                 state['review_revision']=inbox.stat().st_mtime if inbox.exists() else 0
                 quest_settings=read_shared_json(directory/'native_settings.json') or {}
-                pirate_mode=quest_settings.get('hud_mode')=='piracy'
+                desktop=read_shared_json(directory/'home_status.json') or {}
+                pirate_mode=quest_settings.get('hud_mode')=='piracy' or (desktop.get('owner_pid')==owner and desktop.get('visible') and desktop.get('active_page')=='hud_piracy')
                 state['piracy_watch']=piracy.tick(pirate_mode,state.get('session_token'))
                 pirate_command=directory/'piracy_command.json'
                 if pirate_command.exists():
