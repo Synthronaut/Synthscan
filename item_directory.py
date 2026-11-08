@@ -329,7 +329,9 @@ class ItemDirectoryService:
             self.lookup_id = identifier
             self.lookup = self.pool.submit(self.fetch, identifier)
         result = dict(owner_pid=self.owner, request_id=self.active['request_id'], row_id=self.active['row_id'],
-                      item_id=identifier, text=shop_text(cached, self.current_patch, now, self.errors.get(identifier, '')))
+                      item_id=identifier, loading=bool((not cached or not 0 <= age < ttl) and not self.errors.get(identifier)),
+                      error=bool(self.errors.get(identifier)),
+                      text=shop_text(cached, self.current_patch, now, self.errors.get(identifier, '')))
         if result != self.last_result:
             publish_json(self.directory / 'item_directory_detail.json', result)
             self.last_result = result

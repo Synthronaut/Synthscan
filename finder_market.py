@@ -216,6 +216,8 @@ class FinderMarketService:
             self.job_id=identifier;self.job_identity=item['identity'];self.job=self.pool.submit(self.listing_fetch,identifier)
         exact=request.get('quality_exact') is True
         view=market_view(item,cached,request['quality_min'],current_patch,now,self.errors.get(identifier,''),exact)
-        result=dict(owner_pid=self.owner,request_id=request['request_id'],row_id=request['row_id'],item_id=request['item_id'],quality_min=request['quality_min'],quality_exact=exact,**view)
+        loading=bool((item and (not cached or not 0<=now-cached.get('checked_at',0)<LIST_TTL) and not self.errors.get(identifier))
+                     or (not item and self.index_job is not None))
+        result=dict(owner_pid=self.owner,request_id=request['request_id'],row_id=request['row_id'],item_id=request['item_id'],quality_min=request['quality_min'],quality_exact=exact,loading=loading,error=bool(self.errors.get(identifier)),**view)
         if result!=self.last:publish_json(self.directory/'finder_market_detail.json',result);self.last=result
     def close(self):self.pool.shutdown(wait=False,cancel_futures=True)

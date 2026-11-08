@@ -3,6 +3,8 @@
 #define _UNICODE
 #include "SynthScanShell.h"
 #include "SynthFinderHUD.h"
+#include "SynthHome.h"
+#include "SynthMenu.h"
 #include "SynthJson.h"
 #include "SynthDiaryUI.h"
 #include "SynthNavUI.h"
@@ -56,7 +58,7 @@ HWND afkGame=nullptr;
 constexpr UINT_PTR AFK_PULSE_TIMER=3;
 double lastAfkPulseAt=0;
 void updateAfkIndicator(){
-    if(mining)SetWindowTextW(GetDlgItem(mining->windowHandle(),1017),L"More");
+    if(mining)SetWindowTextW(GetDlgItem(mining->windowHandle(),1017),mining->isOverlayMode()?L"More":L"Home");
     if(tray.hWnd){auto label=wide(std::string("SynthScan — AFK ")+(afk.armed?"ON: ":"")+afk.status);wcsncpy_s(tray.szTip,label.c_str(),_TRUNCATE);tray.uFlags=NIF_TIP;Shell_NotifyIconW(NIM_MODIFY,&tray);}
 }
 void toggleAfk(){if(host)KillTimer(host,AFK_PULSE_TIMER);afkPulse.cancel();afkGame=nullptr;afk.toggle(GetTickCount64());updateAfkIndicator();}
@@ -110,8 +112,8 @@ bool spawnPython(const wchar_t* script,const std::vector<std::wstring>& args,HAN
     if(result)*result=pi.hProcess;else CloseHandle(pi.hProcess);return true;
 }
 void saveSettings(){settings=obj({{"scan_on_launch",boolean(scanOnLaunch)},{"show_hud",boolean(hudVisible)},{"session_strip",boolean(showSession)},{"snare_alerts",boolean(snareAlerts)},{"piracy_details",boolean(pirateDetails)},{"hud_mode",str(finder?"finder":hangars?"hangars":quest?"questing":pirate?"piracy":"mining")},{"mining_resume",boolean(miningResume)},{"hud_locked",boolean(placementLocked)},{"activity_expanded",boolean(activityExpanded)},{"hotkey",num(hotkeyChoice)}});if(!write(data/L"native_settings.json",settings))note="Could not save HUD settings.";}
-void togglePlacement(){placementLocked=!placementLocked;if(mining)mining->updateClickThrough();saveSettings();}
-void modeControls(){if(!mining)return;if(pirate)SetWindowTextW(GetDlgItem(mining->windowHandle(),31814),flag(field(state,"piracy_watch"),"waiting_active")?L"Pause wait":L"Start wait");if(pirate){SetWindowTextW(GetDlgItem(mining->windowHandle(),1002),pirateDetails?L"Details -":L"Details +");SetWindowTextW(GetDlgItem(mining->windowHandle(),31817),snareAlerts?L"Alerts on":L"Muted");}if(quest)SetWindowTextW(GetDlgItem(mining->windowHandle(),1002),L"Next");mining->placeOreRowsButton();for(int id:{31810,31811,31813,31818,31819})InvalidateRect(GetDlgItem(mining->windowHandle(),id),nullptr,FALSE);InvalidateRect(mining->windowHandle(),nullptr,FALSE);}
+void togglePlacement(){placementLocked=!placementLocked;if(mining){mining->updateClickThrough();if(!placementLocked&&!testing)SetForegroundWindow(mining->windowHandle());}saveSettings();}
+void modeControls(){if(!mining)return;SetWindowTextW(GetDlgItem(mining->windowHandle(),1017),mining->isOverlayMode()?L"More":L"Home");if(pirate)SetWindowTextW(GetDlgItem(mining->windowHandle(),31814),flag(field(state,"piracy_watch"),"waiting_active")?L"Pause wait":L"Start wait");if(pirate){SetWindowTextW(GetDlgItem(mining->windowHandle(),1002),pirateDetails?L"Details -":L"Details +");SetWindowTextW(GetDlgItem(mining->windowHandle(),31817),snareAlerts?L"Alerts on":L"Muted");}if(quest)SetWindowTextW(GetDlgItem(mining->windowHandle(),1002),L"Next");mining->placeOreRowsButton();for(int id:{31810,31811,31813,31818,31819})InvalidateRect(GetDlgItem(mining->windowHandle(),id),nullptr,FALSE);InvalidateRect(mining->windowHandle(),nullptr,FALSE);}
 void setMode(int value){
     const int current=finder?4:hangars?3:quest?2:pirate?1:0;
     if(current==value||!mining)return;
@@ -131,24 +133,48 @@ void setActivityExpanded(bool value){
     if(mining){if(value&&hudVisible){if(!mining->isOverlayMode()){auto window=mining->windowHandle();bool hadNoActivate=(GetWindowLongPtrW(window,GWL_EXSTYLE)&WS_EX_NOACTIVATE)!=0;SetWindowLongPtrW(window,GWL_EXSTYLE,GetWindowLongPtrW(window,GWL_EXSTYLE)|WS_EX_NOACTIVATE);mining->toggleOverlayMode();if(!hadNoActivate)SetWindowLongPtrW(window,GWL_EXSTYLE,GetWindowLongPtrW(window,GWL_EXSTYLE)&~WS_EX_NOACTIVATE);}ShowWindow(mining->windowHandle(),SW_SHOWNOACTIVATE);mining->keepOverlayAboveGame(true);}else mining->hide();}
     saveSettings();
 }
+void dockHud(){if(!mining)return;setActivityExpanded(true);showHud(true);mining->dockOverlayTopRight();}
 void activityControl(){
     auto request=read(data/L"activity_hud_command.json");auto id=request.textOr("id");double age=epoch()-request.numberOr("at");
     if(!id.empty()&&id!=activityCommandId&&request.numberOr("owner_pid")==GetCurrentProcessId()&&age>=-.25&&age<5){
         auto action=request.textOr("action");
-        if(action=="set_activity_expanded"){
+        if(action=="dock_hud_top_right"){activityCommandId=id;dockHud();}
+        else if(action=="set_activity_expanded"){
             activityCommandId=id;setActivityExpanded(flag(request,"expanded",activityExpanded));
         }else if(action=="set_afk_armed"&&field(request,"armed").kind==Json::Kind::Bool){
             activityCommandId=id;if(flag(request,"armed")!=afk.armed)toggleAfk();
         }
     }
 }
-void desktop(){if(!mining)return;if(mining->isOverlayMode())mining->toggleOverlayMode();hudVisible=true;activityExpanded=true;mining->show();ShowWindow(mining->windowHandle(),SW_RESTORE);SetForegroundWindow(mining->windowHandle());saveSettings();}
+void miningDesktop(){if(!mining)return;SynthHome::hide();if(mining->isOverlayMode())mining->toggleOverlayMode();hudVisible=true;activityExpanded=true;mining->show();ShowWindow(mining->windowHandle(),SW_RESTORE);SetForegroundWindow(mining->windowHandle());modeControls();saveSettings();}
+void desktop(){SynthHome::show();}
 void command(Json value){
     static unsigned sequence=0;char id[80];sprintf_s(id,"%020llu-%010u-%010u",GetTickCount64(),GetCurrentProcessId(),++sequence);
     value.members.push_back({"id",str(id)});value.members.push_back({"session_token",field(state,"session_token")});
     auto destination=data/L"workspace_command.json";
     if(!testing&&(value.textOr("action").find("diary_")==0||value.textOr("action").find("nav_")==0||value.textOr("action").find("session_")==0)){auto folder=data/L"diary_commands";std::error_code error;std::filesystem::create_directories(folder,error);destination=folder/std::filesystem::u8path(std::string(id)+".json");}
     if(!write(destination,value))note="Could not queue workspace action.";else note="Working…";
+}
+void homeAction(const std::string& value){
+    if(!mining)return;
+    if(value=="mining")miningDesktop();
+    else if(value=="directory")workspace(0);
+    else if(value=="servers")workspace(2);
+    else if(value=="settings")workspace(4);
+    else if(value=="blueprints")mining->openBlueprintLibrary();
+    else if(value=="refinery")mining->openRefineryOrders();
+    else if(value=="planner")mining->openMiningPlanner();
+    else if(value=="diary")SynthScanDiary::open();
+    else if(value=="notes")mining->openPersonalNotes();
+    else if(value=="bookmarks")SynthScanNav::open();
+    else if(value=="daylight")spawnPython(L"daylight_planner.py",{});
+    else if(value=="acceptance")spawnPython(L"contract_share_helper.py",{L"--owner",std::to_wstring(GetCurrentProcessId())});
+    else if(value=="dismiss_refinery")command(obj({{"action",str("dismiss_refinery_notices")}}));
+    else if(value.rfind("hud_",0)==0){
+        setMode(value=="hud_piracy"?1:value=="hud_finder"?4:value=="hud_missions"?2:value=="hud_hangars"?3:0);
+        if(!mining->isOverlayMode())mining->toggleOverlayMode();
+        setActivityExpanded(true);showHud(true);modeControls();SynthHome::hide();
+    }
 }
 HWND control(const wchar_t* cls,const wchar_t* label,DWORD style,int x,int y,int w,int h,int id){
     if(cls==std::wstring(L"BUTTON")&&(style&0xf)==BS_PUSHBUTTON)style|=BS_OWNERDRAW;
@@ -404,7 +430,7 @@ void publishNativeStatus(){
         const auto& rock=mining->displayedRock();const auto& contents=mining->displayedContents();
         Json parts=arr();for(const auto& part:contents.parts)parts.items.push_back(obj({{"ore",str(part.ore)},{"percent",num(part.percent)},{"quality",num(part.quality)},{"inert",boolean(part.inert)}}));
         Json values=arr();if(mining->rockOnView())for(const auto& line:mining->displayedRockValueLines())values.items.push_back(str(utf8(line)));
-        scan=obj({{"value_lines",values},{"read_age_seconds",num(mining->rockReadAgeSeconds())},{"on_view",boolean(mining->rockOnView())},{"mass",num(rock.mass)},{"scu",num(rock.scu)},{"ore",str(rock.ore)},
+        scan=obj({{"signature",num(mining->displayedSignature())},{"value_lines",values},{"read_age_seconds",num(mining->rockReadAgeSeconds())},{"on_view",boolean(mining->rockOnView())},{"mass",num(rock.mass)},{"scu",num(rock.scu)},{"ore",str(rock.ore)},
             {"whole",boolean(contents.whole)},{"partial",boolean(contents.partial)},{"sum",num(contents.sum)},{"parts",parts},
             {"reader_note",str(mining->contentsReadNote())}});
     }
@@ -503,6 +529,7 @@ void timer(){
     double stamp=next.numberOr("written_at");
     bool fresh=stamp>0&&epoch()-stamp>=0&&epoch()-stamp<4;
     if(fresh){
+        SynthHome::update(field(next,"home"),next.textOr("identity"),!next.textOr("session_token").empty());
         const auto rep=next.textOr("reputation_notice");
         if(!rep.empty()&&rep!=reputationNotice&&!testing){
             reputationNotice=rep;
@@ -513,7 +540,7 @@ void timer(){
             Shell_NotifyIconW(NIM_MODIFY,&message);
         }
         auto key=next.textOr("summary");if(key!=summary){summary=key;if(mining)InvalidateRect(mining->windowHandle(),nullptr,FALSE);}
-        if(stamp!=lastStateAt){state=std::move(next);lastStateAt=stamp;note=state.textOr("note");
+        if(stamp!=lastStateAt){bool refineryChanged=field(next,"home").textOr("refinery_notice")!=field(state,"home").textOr("refinery_notice");state=std::move(next);lastStateAt=stamp;note=state.textOr("note");if(refineryChanged&&mining)mining->refreshActivityLayout();
             SynthScanDiary::update(field(state,"diary"),field(state,"diary_result"),note);
             SynthScanNav::update(field(state,"navigation"));
             if(panel&&IsWindowVisible(panel)&&(currentTab==1||currentTab==2||currentTab==3)){
@@ -522,20 +549,22 @@ void timer(){
             }
         }
         if(readyHandle&&state.numberOr("owner_pid")==GetCurrentProcessId())SetEvent(readyHandle);
-    }else if(summary!="Session service unavailable"){summary="Session service unavailable";SynthScanNav::update(obj({{"message",str("Session service unavailable; capture and navigation paused.")},{"guidance",obj({{"unavailable",str("No fresh service state")}})}}));if(mining)InvalidateRect(mining->windowHandle(),nullptr,FALSE);}
+    }else if(summary!="Session service unavailable"){SynthHome::update(field(state,"home"),"",false);summary="Session service unavailable";SynthScanNav::update(obj({{"message",str("Session service unavailable; capture and navigation paused.")},{"guidance",obj({{"unavailable",str("No fresh service state")}})}}));if(mining)InvalidateRect(mining->windowHandle(),nullptr,FALSE);}
     if(controlProcess){DWORD code=STILL_ACTIVE;GetExitCodeProcess(controlProcess,&code);if(code!=STILL_ACTIVE){CloseHandle(controlProcess);controlProcess=nullptr;note=code==0?controlCompleted:read(data/L"control_status.json").textOr("error","Helper action failed. See native_control.log in your data folder.");if(status)SetWindowTextW(status,wide(note).c_str());}}
     tickAfk();
     publishNativeStatus();
 }
 LRESULT CALLBACK hostProc(HWND hwnd,UINT message,WPARAM w,LPARAM l){
+    LRESULT menuResult=0;if(SynthMenus::message(message,w,l,menuResult))return menuResult;
     if(message==TRAY&&l==NIN_BALLOONUSERCLICK){spawnPython(L"app_launcher.py",{L"--status"});return 0;}
     if(message==WM_APP+42){activityControl();publishNativeStatus();return 0;}
     if(message==WM_TIMER){if(w==AFK_PULSE_TIMER)pulseAfk();else timer();return 0;}
     if(message==WM_HOTKEY)return 0;
-    if(message==TRAY){if(l==WM_LBUTTONDBLCLK){desktop();return 0;}if(l==WM_RBUTTONUP){HMENU menu=CreatePopupMenu();AppendMenuW(menu,MF_STRING,1,L"Open SynthScan");AppendMenuW(menu,MF_STRING,2,L"Show / hide HUD");AppendMenuW(menu,MF_STRING,3,L"Startup & HUD settings");AppendMenuW(menu,MF_STRING,4,L"Exit SynthScan");AppendMenuW(menu,MF_STRING|(activityMode()?0:MF_CHECKED),5,L"HUD mode: Mining");AppendMenuW(menu,MF_STRING|(pirate?MF_CHECKED:0),6,L"HUD mode: Piracy");AppendMenuW(menu,MF_STRING|(quest?MF_CHECKED:0),8,L"HUD mode: Missions");AppendMenuW(menu,MF_STRING|(placementLocked?MF_CHECKED:0),7,L"Lock HUD position");AppendMenuW(menu,MF_STRING|(finder?MF_CHECKED:0),19,L"HUD mode: Finder");AppendMenuW(menu,MF_STRING|(hangars?MF_CHECKED:0),9,L"HUD mode: Hangars");AppendMenuW(menu,MF_STRING,10,L"Compboard inventory");AppendMenuW(menu,MF_STRING,11,L"Daylight planner");appendAfkMenu(menu,12);AppendMenuW(menu,MF_STRING,13,L"Automatic acceptance…");POINT at;GetCursorPos(&at);SetForegroundWindow(hwnd);appendProfileMenu(menu);int choice=TrackPopupMenu(menu,TPM_RETURNCMD|TPM_RIGHTBUTTON,at.x,at.y,0,hwnd,nullptr);DestroyMenu(menu);if(handleProfileChoice(choice))return 0;if(choice==19){setMode(4);showHud(true);setActivityExpanded(true);return 0;}if(choice==1)desktop();if(choice==2)showHud(!hudVisible);if(choice==3)workspace(4);if(choice==5||choice==6)setMode(choice==6);if(choice==8)setMode(2);if(choice==7)togglePlacement();if(choice==9){setMode(3);showHud(true);setActivityExpanded(true);}if(choice==10)spawnPython(L"compboard_tracker.py",{});if(choice==11)spawnPython(L"daylight_planner.py",{});if(choice==12)toggleAfk();if(choice==13)spawnPython(L"contract_share_helper.py",{L"--owner",std::to_wstring(GetCurrentProcessId())});if(choice==4&&mining){markUserExit();PostMessageW(mining->windowHandle(),WM_CLOSE,0,0);}return 0;}}
+    if(message==TRAY){if(l==WM_LBUTTONDBLCLK){desktop();return 0;}if(l==WM_RBUTTONUP){HMENU menu=CreatePopupMenu();AppendMenuW(menu,MF_STRING,1,L"Open SynthScan");AppendMenuW(menu,MF_STRING,2,L"Show / hide HUD");AppendMenuW(menu,MF_STRING,3,L"Startup & HUD settings");AppendMenuW(menu,MF_STRING,4,L"Exit SynthScan");AppendMenuW(menu,MF_STRING|(activityMode()?0:MF_CHECKED),5,L"HUD mode: Mining");AppendMenuW(menu,MF_STRING|(pirate?MF_CHECKED:0),6,L"HUD mode: Piracy");AppendMenuW(menu,MF_STRING|(quest?MF_CHECKED:0),8,L"HUD mode: Missions");AppendMenuW(menu,MF_STRING|(placementLocked?MF_CHECKED:0),7,L"Lock HUD position");AppendMenuW(menu,MF_STRING,20,L"Dock HUD top right");AppendMenuW(menu,MF_STRING|(finder?MF_CHECKED:0),19,L"HUD mode: Finder");AppendMenuW(menu,MF_STRING|(hangars?MF_CHECKED:0),9,L"HUD mode: Hangars");AppendMenuW(menu,MF_STRING,10,L"Compboard inventory");AppendMenuW(menu,MF_STRING,11,L"Daylight planner");appendAfkMenu(menu,12);AppendMenuW(menu,MF_STRING,13,L"Automatic acceptance…");POINT at;GetCursorPos(&at);SetForegroundWindow(hwnd);appendProfileMenu(menu);int choice=SynthMenus::track(menu,TPM_RETURNCMD|TPM_RIGHTBUTTON,at.x,at.y,0,hwnd,nullptr);DestroyMenu(menu);if(choice==20){dockHud();return 0;}if(handleProfileChoice(choice))return 0;if(choice==19){setMode(4);showHud(true);setActivityExpanded(true);return 0;}if(choice==1)desktop();if(choice==2)showHud(!hudVisible);if(choice==3)workspace(4);if(choice==5||choice==6)setMode(choice==6);if(choice==8)setMode(2);if(choice==7)togglePlacement();if(choice==9){setMode(3);showHud(true);setActivityExpanded(true);}if(choice==10)spawnPython(L"compboard_tracker.py",{});if(choice==11)spawnPython(L"daylight_planner.py",{});if(choice==12)toggleAfk();if(choice==13)spawnPython(L"contract_share_helper.py",{L"--owner",std::to_wstring(GetCurrentProcessId())});if(choice==4&&mining){markUserExit();PostMessageW(mining->windowHandle(),WM_CLOSE,0,0);}return 0;}}
     return DefWindowProcW(hwnd,message,w,l);
 }
 LRESULT CALLBACK mainSubclass(HWND hwnd,UINT message,WPARAM w,LPARAM l,UINT_PTR,DWORD_PTR){
+    LRESULT menuResult=0;if(SynthMenus::message(message,w,l,menuResult))return menuResult;
     if(message==WM_ACTIVATEAPP)SynthFinder::activationChanged(w!=0);
     if(message==WM_SYSCOMMAND&&(w&0xfff0)==0xf020){setActivityExpanded(false);return 0;}
     if(message==WM_COMMAND&&l&&mining&&mining->isOverlayMode()) {
@@ -553,14 +582,16 @@ LRESULT CALLBACK mainSubclass(HWND hwnd,UINT message,WPARAM w,LPARAM l,UINT_PTR,
     if(message==WM_COMMAND&&(LOWORD(w)==31810||LOWORD(w)==31811)){setMode(LOWORD(w)==31811);return 0;}
     if(message==WM_COMMAND&&LOWORD(w)==1002&&pirate){pirateDetails=!pirateDetails;saveSettings();modeControls();mining->refreshActivityLayout();return 0;}
     if(message==WM_COMMAND&&LOWORD(w)==31817&&pirate){snareAlerts=!snareAlerts;saveSettings();modeControls();return 0;}
+    if(message==WM_COMMAND&&LOWORD(w)==1011){if(mining->isOverlayMode())desktop();else{mining->toggleOverlayMode();modeControls();}return 0;}
     if(message==WM_COMMAND&&LOWORD(w)==1017){
+        if(mining&&!mining->isOverlayMode()){desktop();return 0;}
         if(mining&&mining->isOverlayMode()){
-            HMENU mode=CreatePopupMenu();AppendMenuW(mode,MF_STRING|(activityMode()?0:MF_CHECKED),10,L"Mining HUD");AppendMenuW(mode,MF_STRING|(pirate?MF_CHECKED:0),11,L"Piracy HUD");AppendMenuW(mode,MF_STRING|(quest?MF_CHECKED:0),13,L"Missions HUD");AppendMenuW(mode,MF_STRING|(finder?MF_CHECKED:0),19,L"Finder HUD");AppendMenuW(mode,MF_STRING|(hangars?MF_CHECKED:0),15,L"Hangars HUD");AppendMenuW(mode,MF_STRING|(placementLocked?MF_CHECKED:0),12,L"Lock HUD position");AppendMenuW(mode,MF_STRING,16,L"Daylight planner");appendAfkMenu(mode,17);AppendMenuW(mode,MF_STRING,18,L"Automatic acceptance…");AppendMenuW(mode,MF_SEPARATOR,0,nullptr);AppendMenuW(mode,MF_STRING,4,L"Server log & interdiction history");AppendMenuW(mode,MF_STRING,6,L"Startup & HUD settings");AppendMenuW(mode,MF_STRING,14,L"Setup & reputation status");
-            POINT at;GetCursorPos(&at);appendProfileMenu(mode);int choice=TrackPopupMenu(mode,TPM_RETURNCMD,at.x,at.y,0,hwnd,nullptr);DestroyMenu(mode);if(handleProfileChoice(choice))return 0;if(choice==19){setMode(4);showHud(true);setActivityExpanded(true);return 0;}if(choice==18)spawnPython(L"contract_share_helper.py",{L"--owner",std::to_wstring(GetCurrentProcessId())});if(choice==17)toggleAfk();if(choice==16)spawnPython(L"daylight_planner.py",{});if(choice==12)togglePlacement();if(choice==15)setMode(3);if(choice==13)setMode(2);if(choice==10||choice==11)setMode(choice==11);if(choice==4)workspace(2);if(choice==6)workspace(4);if(choice==14)spawnPython(L"app_launcher.py",{L"--status"});return 0;
+            HMENU mode=CreatePopupMenu();AppendMenuW(mode,MF_STRING|(activityMode()?0:MF_CHECKED),10,L"Mining HUD");AppendMenuW(mode,MF_STRING|(pirate?MF_CHECKED:0),11,L"Piracy HUD");AppendMenuW(mode,MF_STRING|(quest?MF_CHECKED:0),13,L"Missions HUD");AppendMenuW(mode,MF_STRING|(finder?MF_CHECKED:0),19,L"Finder HUD");AppendMenuW(mode,MF_STRING|(hangars?MF_CHECKED:0),15,L"Hangars HUD");AppendMenuW(mode,MF_STRING|(placementLocked?MF_CHECKED:0),12,L"Lock HUD position");AppendMenuW(mode,MF_STRING,20,L"Dock HUD top right");AppendMenuW(mode,MF_STRING,16,L"Daylight planner");appendAfkMenu(mode,17);AppendMenuW(mode,MF_STRING,18,L"Automatic acceptance…");AppendMenuW(mode,MF_SEPARATOR,0,nullptr);AppendMenuW(mode,MF_STRING,4,L"Server log & interdiction history");AppendMenuW(mode,MF_STRING,6,L"Startup & HUD settings");AppendMenuW(mode,MF_STRING,14,L"Setup & reputation status");
+            POINT at;GetCursorPos(&at);appendProfileMenu(mode);int choice=SynthMenus::track(mode,TPM_RETURNCMD,at.x,at.y,0,hwnd,nullptr);DestroyMenu(mode);if(choice==20){dockHud();return 0;}if(handleProfileChoice(choice))return 0;if(choice==19){setMode(4);showHud(true);setActivityExpanded(true);return 0;}if(choice==18)spawnPython(L"contract_share_helper.py",{L"--owner",std::to_wstring(GetCurrentProcessId())});if(choice==17)toggleAfk();if(choice==16)spawnPython(L"daylight_planner.py",{});if(choice==12)togglePlacement();if(choice==15)setMode(3);if(choice==13)setMode(2);if(choice==10||choice==11)setMode(choice==11);if(choice==4)workspace(2);if(choice==6)workspace(4);if(choice==14)spawnPython(L"app_launcher.py",{L"--status"});return 0;
         }
         HMENU menu=CreatePopupMenu();AppendMenuW(menu,MF_STRING,2,L"Item directory");AppendMenuW(menu,MF_STRING,3,L"Material picker");AppendMenuW(menu,MF_STRING,4,L"Server log");AppendMenuW(menu,MF_STRING,5,L"Review imported records");AppendMenuW(menu,MF_STRING,6,L"Startup & HUD settings");AppendMenuW(menu,MF_STRING,7,L"Show / hide HUD");AppendMenuW(menu,MF_STRING,8,L"Mining diary & personal records");AppendMenuW(menu,MF_STRING,9,L"Rock bookmarks & return test");AppendMenuW(menu,MF_STRING,16,L"Daylight planner");AppendMenuW(menu,MF_STRING,14,L"Setup & reputation status");
         appendAfkMenu(menu,17);AppendMenuW(menu,MF_STRING,18,L"Automatic acceptance…");AppendMenuW(menu,MF_SEPARATOR,0,nullptr);AppendMenuW(menu,MF_STRING|(activityMode()?0:MF_CHECKED),10,L"HUD mode: Mining");AppendMenuW(menu,MF_STRING|(pirate?MF_CHECKED:0),11,L"HUD mode: Piracy");
-        AppendMenuW(menu,MF_STRING|(quest?MF_CHECKED:0),13,L"HUD mode: Missions");AppendMenuW(menu,MF_STRING|(finder?MF_CHECKED:0),19,L"HUD mode: Finder");AppendMenuW(menu,MF_STRING|(hangars?MF_CHECKED:0),15,L"HUD mode: Hangars");AppendMenuW(menu,MF_STRING|(placementLocked?MF_CHECKED:0),12,L"Lock HUD position");POINT at;GetCursorPos(&at);appendProfileMenu(menu);int choice=TrackPopupMenu(menu,TPM_RETURNCMD,at.x,at.y,0,hwnd,nullptr);DestroyMenu(menu);if(handleProfileChoice(choice))return 0;if(choice==19){setMode(4);showHud(true);setActivityExpanded(true);return 0;}
+        AppendMenuW(menu,MF_STRING|(quest?MF_CHECKED:0),13,L"HUD mode: Missions");AppendMenuW(menu,MF_STRING|(finder?MF_CHECKED:0),19,L"HUD mode: Finder");AppendMenuW(menu,MF_STRING|(hangars?MF_CHECKED:0),15,L"HUD mode: Hangars");AppendMenuW(menu,MF_STRING|(placementLocked?MF_CHECKED:0),12,L"Lock HUD position");AppendMenuW(menu,MF_STRING,20,L"Dock HUD top right");POINT at;GetCursorPos(&at);appendProfileMenu(menu);int choice=SynthMenus::track(menu,TPM_RETURNCMD,at.x,at.y,0,hwnd,nullptr);DestroyMenu(menu);if(choice==20){dockHud();return 0;}if(handleProfileChoice(choice))return 0;if(choice==19){setMode(4);showHud(true);setActivityExpanded(true);return 0;}
         if(choice==18){spawnPython(L"contract_share_helper.py",{L"--owner",std::to_wstring(GetCurrentProcessId())});return 0;}
         if(choice==17){toggleAfk();return 0;}
         if(choice==16){spawnPython(L"daylight_planner.py",{});return 0;}
@@ -600,6 +631,7 @@ void attach(SCMiner::MinerGUI* gui,std::function<bool(const std::string&)> confi
     Json runtime=read(SCMiner::AppPaths::program()/L"native_runtime.json");root=std::filesystem::u8path(runtime.textOr("workspace"));
     settings=read(data/L"native_settings.json");scanOnLaunch=flag(settings,"scan_on_launch",true);hudVisible=flag(settings,"show_hud",true);activityExpanded=flag(settings,"activity_expanded",true);showSession=flag(settings,"session_strip",true);finder=settings.textOr("hud_mode")=="finder";hangars=settings.textOr("hud_mode")=="hangars";snareAlerts=flag(settings,"snare_alerts",true);pirate=settings.textOr("hud_mode")=="piracy";pirateDetails=flag(settings,"piracy_details",false);quest=settings.textOr("hud_mode")=="questing";miningResume=flag(settings,"mining_resume",scanOnLaunch);placementLocked=flag(settings,"hud_locked",false);gui->updateClickThrough();hotkeyChoice=int(settings.numberOr("hotkey"));if(hotkeyChoice<0||hotkeyChoice>2)hotkeyChoice=0;
     library=read(data/L"workspace_library.json",64*1024*1024);if(field(library,"rows").items.empty())library=read(SCMiner::AppPaths::program()/L"workspace_library.json");for(auto& value:read(data/L"workspace_favorites.json").items)favorites.insert(value.text);
+    SynthHome::initialize(gui->windowHandle(),data,homeAction);
     SynthFinder::initialize(gui->windowHandle(),data,std::move(ownership));SynthFinder::prepare(library);
     SynthScanDiary::initialize(gui->windowHandle(),data,testing,[](Json value){command(value);});
     SynthScanNav::initialize(gui->windowHandle(),testing,[](Json value){command(value);});
@@ -622,14 +654,15 @@ void attach(SCMiner::MinerGUI* gui,std::function<bool(const std::string&)> confi
         if(!gui->isOverlayMode())gui->toggleOverlayMode();
         if((scanOnLaunch&&!pirate&&!quest&&!hangars&&!finder)!=(text(GetDlgItem(gui->windowHandle(),1002))==L"Live on"))SendMessageW(gui->windowHandle(),WM_COMMAND,MAKEWPARAM(1002,BN_CLICKED),0);
         modeControls();ShowWindow(gui->windowHandle(),hudVisible&&activityExpanded?SW_SHOWNOACTIVATE:SW_HIDE);gui->updateClickThrough();gui->keepOverlayAboveGame(true);
-    }
+    }else if(!testing){desktop();}
 }
 void workspace(int tab){
     if(!panel){WNDCLASSW wc{};wc.hInstance=GetModuleHandleW(nullptr);wc.lpfnWndProc=panelProc;wc.hCursor=LoadCursor(nullptr,IDC_ARROW);wc.hbrBackground=background;wc.lpszClassName=L"SynthScanWorkspace";RegisterClassW(&wc);panel=CreateWindowExW(0,wc.lpszClassName,L"SynthScan workspace",WS_OVERLAPPED|WS_CAPTION|WS_SYSMENU|WS_MINIMIZEBOX,CW_USEDEFAULT,CW_USEDEFAULT,px(884),px(695),mining?mining->windowHandle():nullptr,nullptr,wc.hInstance,nullptr);SetWindowDisplayAffinity(panel,WDA_EXCLUDEFROMCAPTURE);BOOL dark=TRUE;DwmSetWindowAttribute(panel,20,&dark,sizeof(dark));}
     rebuild(tab);
     if(testing){SetWindowPos(panel,HWND_BOTTOM,-32000,-32000,0,0,SWP_NOSIZE|SWP_NOACTIVATE);ShowWindow(panel,SW_SHOWNOACTIVATE);}else{ShowWindow(panel,SW_SHOW);SetForegroundWindow(panel);}
 }
-int sessionHeight(){return attached&&showSession&&!pirate&&!hangars&&!finder?44:0;}
+std::string refineryNotice(){return !activityMode()?field(state,"home").textOr("refinery_notice"):"";}
+int sessionHeight(){return !attached?0:(showSession&&!pirate&&!hangars&&!finder?44:0)+(refineryNotice().empty()?0:18);}
 void drawFinder(Gdiplus::Graphics& g,float width,float height,float scale){
     Gdiplus::SolidBrush ink(Gdiplus::Color(255,233,237,241));
     Gdiplus::Font title(L"Segoe UI",15*scale,Gdiplus::FontStyleRegular,Gdiplus::UnitPixel);
@@ -731,12 +764,18 @@ void drawPiracy(Gdiplus::Graphics& g,float width,float height,float scale){
 }
 
 void drawSession(Gdiplus::Graphics& g,float width,float top,float height,float scale){
-    if(!attached||!showSession||height<=0)return;
+    if(!attached||height<=0)return;
     Gdiplus::SolidBrush bg(Gdiplus::Color(255,20,23,29)),fg(Gdiplus::Color(255,205,214,225)),muted(Gdiplus::Color(255,149,160,173));
     g.FillRectangle(&bg,1.f,top,width-2,height-2);
     Gdiplus::Pen line(Gdiplus::Color(255,54,62,73));g.DrawLine(&line,10*scale,top,width-10*scale,top);
     Gdiplus::Font f(L"Segoe UI",10*scale,Gdiplus::FontStyleRegular,Gdiplus::UnitPixel);
     Gdiplus::StringFormat format;format.SetFormatFlags(Gdiplus::StringFormatFlagsNoWrap);format.SetTrimming(Gdiplus::StringTrimmingEllipsisCharacter);
+    auto refinery=refineryNotice();
+    if(!refinery.empty()){
+        Gdiplus::SolidBrush accent(Gdiplus::Color(255,238,178,70));
+        g.DrawString(wide(refinery).c_str(),-1,&f,Gdiplus::RectF(10*scale,top+(showSession?44:3)*scale,width-20*scale,16*scale),&format,&accent);
+    }
+    if(!showSession)return;
     std::string value=epoch()-lastStateAt<4?state.textOr("identity",summary):"Session service unavailable";
     g.DrawString(wide(value).c_str(),-1,&f,Gdiplus::RectF(10*scale,top+5*scale,width-20*scale,16*scale),&format,&fg);
     bool fresh=epoch()-lastStateAt<4;
@@ -758,7 +797,7 @@ bool closeToTray(){
 void shutdown(){
     if(host)KillTimer(host,AFK_PULSE_TIMER);afkPulse.cancel();afk=AfkNudge{};
     hangarImage.reset();icon.reset();
-    SynthFinder::close();SynthScanDiary::close();SynthScanNav::close();
+    SynthHome::close();SynthFinder::close();SynthScanDiary::close();SynthScanNav::close();
     if(attached&&!testing){Json exit=obj({{"at",num(epoch())},{"pid",num(GetCurrentProcessId())},{"reason",str(userExitRequested?"user":"shutdown")},{"game_pids",field(state,"game_pids")}});write(data/L"native_exit.json",exit);}
     if(host){KillTimer(host,1);UnregisterHotKey(host,HOTKEY);Shell_NotifyIconW(NIM_DELETE,&tray);}
     if(bridgeProcess){write(data/L"bridge_stop.json",obj({{"owner_pid",num(GetCurrentProcessId())}}));WaitForSingleObject(bridgeProcess,2000);}

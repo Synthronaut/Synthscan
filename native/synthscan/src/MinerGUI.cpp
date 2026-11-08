@@ -1,5 +1,8 @@
 #include "MinerGUI.h"
+#include "OverlayPlacement.h"
+#include "ScreenCapture.h"
 #include "SynthScanShell.h"
+#include "SynthHome.h"
 #include "CraftedPower.h"
 #include "HandMiningReference.h"
 #include "OverlayInput.h"
@@ -1245,6 +1248,19 @@ void MinerGUI::restoreOverlayPlacement() {
     if(!placeRestored_&&!headless_){placeRestored_=true;restoreWindowPlace();}
 }
 
+void MinerGUI::dockOverlayTopRight(){
+    if(!hwnd_||headless_)return;
+    if(!overlayMode_)toggleOverlayMode();
+    RECT bounds{};bool found=false;
+    if(auto view=ScreenCapture::gameViewport()){
+        bounds={view->x,view->y,view->x+view->width,view->y+view->height};found=true;
+    }
+    if(!found){MONITORINFO info{sizeof(info)};if(!GetMonitorInfo(MonitorFromWindow(hwnd_,MONITOR_DEFAULTTONEAREST),&info))return;bounds=info.rcMonitor;}
+    RECT win{};GetWindowRect(hwnd_,&win);
+    SetWindowPos(hwnd_,nullptr,bounds.right-(win.right-win.left),bounds.top,0,0,SWP_NOSIZE|SWP_NOZORDER|SWP_NOACTIVATE);
+    keepOverlayPlace();saveWindowPlace();
+}
+
 void MinerGUI::keepOverlayAboveGame(bool force) {
     if(!hwnd_||!overlayMode_||!IsWindowVisible(hwnd_))return;
     if(force||!(GetWindowLongPtrW(hwnd_,GWL_EXSTYLE)&WS_EX_TOPMOST))
@@ -1286,7 +1302,15 @@ void MinerGUI::toggleOverlayMode() {
         // full window's corner.
         const int width = overlayZoomed(scale(overlayBaseWidth())), height = overlayZoomed(scale(overlayHeight()));
         POINT at = {restoreRect_.left, restoreRect_.top};
-        if (overlayPlaceKnown_ && overlayPlaceOnScreen(overlayPlace_, width)) at = overlayPlace_;
+        if (overlayPlaceKnown_ && overlayPlaceOnScreen(overlayPlace_, width)) {
+            at = overlayPlace_;
+            MONITORINFO info{sizeof(info)};
+            POINT grip{at.x+(overlaySavedWidth_>0?overlaySavedWidth_:width)/2,at.y+scale(12)};
+            if(GetMonitorInfo(MonitorFromPoint(grip,MONITOR_DEFAULTTONEAREST),&info)){
+                at.x=resizedOverlayOrigin(at.x,overlaySavedWidth_,width,info.rcMonitor.left,info.rcMonitor.right);
+                at.y=resizedOverlayOrigin(at.y,overlaySavedHeight_,height,info.rcMonitor.top,info.rcMonitor.bottom);
+            }
+        }
         at = overlayOnMonitor(at, width, height);
         SetWindowPos(hwnd_, HWND_TOPMOST, at.x, at.y, width, height, SWP_FRAMECHANGED | SWP_SHOWWINDOW | SWP_NOACTIVATE);
         // through to the game at once where it went to the overlay without
@@ -1407,20 +1431,7 @@ void MinerGUI::keepOverlayPlace() {
     RECT now = {};
     if (!GetWindowRect(hwnd_, &now)) return;
     overlayPlace_ = {now.left, now.top};
-    // Kept for the overlay at its own size: grown, it grows towards the middle
-    // of its screen (fitOverlay), and the place it opens at next time is the
-    // one its edge nearer the screen's had - not a step further in each time
-    MONITORINFO mi = {};
-    mi.cbSize = sizeof(mi);
-    if (GetMonitorInfo(MonitorFromWindow(hwnd_, MONITOR_DEFAULTTONEAREST), &mi)) {
-        const RECT& screen = mi.rcMonitor;
-        if (now.left + now.right > screen.left + screen.right) {
-            overlayPlace_.x = now.right - overlayZoomed(scale(overlayBaseWidth()));
-        }
-        if (now.top + now.bottom > screen.top + screen.bottom) {
-            overlayPlace_.y = now.bottom - overlayZoomed(scale(overlayHeight()));
-        }
-    }
+    overlaySavedWidth_=now.right-now.left;overlaySavedHeight_=now.bottom-now.top;
     overlayPlaceKnown_ = true;
 }
 
@@ -1581,10 +1592,12 @@ void MinerGUI::saveWindowPlace() const {
     // ...and the overlay's own place, screen coordinates, where it stands
     // if it is up
     POINT overlayAt = overlayPlace_;
+    int savedWidth=overlaySavedWidth_,savedHeight=overlaySavedHeight_;
     bool overlayKnown = overlayPlaceKnown_;
     RECT now = {};
     if (overlayMode_ && GetWindowRect(hwnd_, &now)) {
         overlayAt = {now.left, now.top};
+        savedWidth=now.right-now.left;savedHeight=now.bottom-now.top;
         overlayKnown = true;
     }
     std::ofstream out(AppPaths::file(WINDOW_FILE), std::ios::trunc);
@@ -1599,6 +1612,8 @@ void MinerGUI::saveWindowPlace() const {
     if (overlayKnown) {
         out << "overlay_left=" << overlayAt.x << std::endl;
         out << "overlay_top=" << overlayAt.y << std::endl;
+        out << "overlay_width=" << savedWidth << std::endl;
+        out << "overlay_height=" << savedHeight << std::endl;
     }
     out << "overlay_rows=" << (overlayOreRows_ ? 1 : 0) << std::endl;
     out << "overlay_zoom=" << (int)std::lround(overlayZoom_ * 100) << std::endl;
@@ -1624,6 +1639,8 @@ int MinerGUI::restoreWindowPlace() {
         else if (key == "maximised") maximised = value != 0;
         else if (key == "overlay_left") { overlayAt.x = value; overlaySeen++; }
         else if (key == "overlay_top") { overlayAt.y = value; overlaySeen++; }
+        else if (key == "overlay_width") overlaySavedWidth_=(std::max)(0L,value);
+        else if (key == "overlay_height") overlaySavedHeight_=(std::max)(0L,value);
         else if (key == "overlay_rows") overlayOreRows_ = value != 0;
         else if (key == "overlay_zoom") overlayZoom_ = std::clamp(value / 100.0f, OVERLAY_ZOOM_MIN, OVERLAY_ZOOM_MAX);
     }
@@ -2129,6 +2146,11 @@ void MinerGUI::updateResults(int signature, const std::vector<AnalysisResult>& r
     InvalidateRect(hwnd_, nullptr, TRUE);
 }
 
+void MinerGUI::setCaptureFailed(bool failed){
+    if(captureFailed_==failed)return;
+    captureFailed_=failed;layoutControls();InvalidateRect(hwnd_,nullptr,FALSE);
+}
+
 void MinerGUI::setCurrentSystem(const std::string& system) {
     currentSystem_ = system;
     InvalidateRect(hwnd_, nullptr, TRUE);
@@ -2165,6 +2187,7 @@ bool MinerGUI::processMessages() {
         }
 
         if(SynthScan::finderKey(msg.message,size_t(msg.wParam),msg.hwnd))continue;
+        if(SynthHome::routeMessage(msg))continue;
         // Finder's owned window is not a dialog child of the mining HUD.
         // Dispatch its messages once, directly; IsDialogMessage on the HUD
         // consumes ordinary letters before the search edit receives them.
@@ -3447,7 +3470,7 @@ void MinerGUI::drawHeader(Gdiplus::Graphics& g, int cw) {
 
     // The notice as a callout: a warm wash, an amber mark with the one thing
     // to do beside it, and where in the game's menus it is done.
-    if (!everRead_) {
+    if (captureFailed_) {
         Gdiplus::Font noteBold(&markFamily(), scaleF(12), Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
         Gdiplus::Font noteFont(&textFamily(), scaleF(10), Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
         Gdiplus::Font markGlyph(&textFamily(), scaleF(11), Gdiplus::FontStyleBold, Gdiplus::UnitPixel);
@@ -3465,9 +3488,9 @@ void MinerGUI::drawHeader(Gdiplus::Graphics& g, int cw) {
         Gdiplus::SolidBrush ink(COL_ACCENT_INK);
         g.DrawString(L"!", -1, &markGlyph, mark, &centred, &ink);
         const float words = mark.X + disc + scaleF(10);
-        g.DrawString(L"Star Citizen must run in Borderless Window mode", -1, &noteBold,
+        g.DrawString(L"The game image could not be captured", -1, &noteBold,
                      Gdiplus::PointF(words, top + scaleF(3)), &accentBrush);
-        g.DrawString(L"Options \u203A Graphics \u203A Window Mode. Fullscreen leaves the capture black.", -1,
+        g.DrawString(L"Return to the game and retry. If capture stays unavailable, try Borderless Window mode.", -1,
                      &noteFont, Gdiplus::PointF(words, top + scaleF(19)), &dimBrush);
     }
 }

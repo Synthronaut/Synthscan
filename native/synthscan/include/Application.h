@@ -494,6 +494,8 @@ private:
 
     // Live mode: last recognized signature (to avoid duplicate updates)
     int lastRecognizedSignature_ = 0;
+    bool signatureAutomatic_=false;
+    std::chrono::steady_clock::time_point signatureSeenAt_{};
     std::chrono::steady_clock::time_point lastScanTime_;
 
     CaptureRegion signatureRegion_;

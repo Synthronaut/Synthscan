@@ -3,6 +3,11 @@
 SynthScan has no SynthScan account server, shared player database, analytics,
 crash upload, or automatic sharing service in this release.
 
+Home keeps a local recap of current and previous game sessions: received
+blueprint and contract notifications, verified reputation balance comparisons,
+and refinery-completion reminders. These records are stored in the player
+profile, are not uploaded, and are excluded from community source and packages.
+
 - Each Windows user stores settings, inventory, blueprint ownership, reputation
   snapshots, mining diary, bookmarks and session history under
   `%LOCALAPPDATA%\SynthScan`. The download contains an empty player profile.

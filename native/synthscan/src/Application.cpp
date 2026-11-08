@@ -784,6 +784,7 @@ void Application::runWithGUI(HINSTANCE hInstance) {
     gui_->setManualAnalyzeCallback([this](int signature) {
         std::cout << "Manual signature: " << signature << std::endl;
         lastRecognizedSignature_ = signature;
+        signatureAutomatic_=false;
         auto results = analyzer_.analyzeSignature(signature);
         gui_->updateResults(signature, results, -1.0, analyzer_.outOfPlace());
         displayResultsCompact(results, signature);
@@ -947,7 +948,8 @@ void Application::runWithGUI(HINSTANCE hInstance) {
     });
     pushRefineryOrders();
 
-    if(!SynthScan::automatic())gui_->show();
+    // The application shell opens Home for a manual launch; Mining remains
+    // available from its navigation instead of being the landing screen.
 
     // ...and, once, what changed since the version they had
     maybeShowWhatsNew();
@@ -1005,6 +1007,12 @@ void Application::runWithGUI(HINSTANCE hInstance) {
         GetWindowThreadProcessId(GetForegroundWindow(),&foregroundPid);
         const bool usingInterface=foregroundPid==GetCurrentProcessId();
         const bool scanAvailable=!usingInterface&&SynthScan::gameAvailable();
+        if(signatureReadingExpired(signatureAutomatic_,lastRecognizedSignature_,
+                std::chrono::duration<double>(std::chrono::steady_clock::now()-signatureSeenAt_).count())){
+            lastRecognizedSignature_=0;signatureAutomatic_=false;agreedValue_=0;
+            hasLastLabel_=false;lockPatch_.release();
+            gui_->updateResults(0,{},-1.0,false);
+        }
         // ...and a refinery's terminal, at a station that has one
         if(scanAvailable)lookForRefinery();
         handRefineryOrdersToUex();
@@ -2518,6 +2526,13 @@ void Application::processScanWithGUI() {
                                 aim.y - takenFrom.y,
                                 takenFrom.y + takenFrom.height - (aim.y + aim.height)});
         g_havePos = true;
+        const bool outsideAim=g_outside>(std::max)(40,signatureRegion_.height/2);
+        const bool wrongFont=!g_ship.empty()&&g_font&&g_font[0]&&
+            ((GameState::maker(g_ship)=="Drake")!=(std::string_view(g_font)=="panel"));
+        if(!signatureMarkerContext(outsideAim,wrongFont,winningPin,winningSeparator,bothAgreed)){
+            recognizedValue.reset();hasLastLabel_=false;lockPatch_.release();agreedValue_=0;
+            g_line="rejected cockpit context";
+        }
     }
 
     // Report where the label currently sits so the GUI can show it
@@ -2659,8 +2674,6 @@ void Application::processScanWithGUI() {
                                    confidence >= SINGLE_FRAME_CONFIDENCE &&
                                    (fromGlyphs || agreement >= 3)) ||
                                   (exactValue && bothAgreed);
-    (void)winningPin;
-    (void)winningSeparator;
 
     // A repaired reading repeats itself: the same plate in the same light
     // is read the same wrong way again ("16,960" repaired to 18,000 twice in
@@ -2710,6 +2723,8 @@ void Application::processScanWithGUI() {
         lastRecognizedSignature_ = 0;
     }
 
+    // Repeated reads renew visibility even when the value did not change.
+    signatureSeenAt_=std::chrono::steady_clock::now();signatureAutomatic_=liveModeActive_;
     // Only update on change
     if (scannedValue == lastRecognizedSignature_) {
         return;
@@ -3181,6 +3196,7 @@ std::vector<Application::LabelCandidate> Application::captureSignatureCandidates
     auto fixedOnly = [&]() -> std::vector<LabelCandidate> {
         lastScanTracked_ = false;
         cv::Mat image = screenCapture_.captureRegion(signatureRegion_);
+        if(gui_)gui_->setCaptureFailed(image.empty());
         if (image.empty()) return {};
         return {{image, fixedRect, cv::Rect(), image, cv::Point()}};
     };
@@ -3208,6 +3224,7 @@ std::vector<Application::LabelCandidate> Application::captureSignatureCandidates
             std::chrono::steady_clock::now() - t).count();
     };
     cv::Mat searchImage = screenCapture_.captureRegion(search);
+    if(gui_)gui_->setCaptureFailed(searchImage.empty());
     g_captureMs = stageMs(stageClock);
     // Every frame is wider than the pipe to ffmpeg, so this waits for the
     // encoder on every scan. Worth seeing as its own number: recording is

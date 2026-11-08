@@ -17,6 +17,12 @@ from interdiction_watch import InterdictionJournal
 
 ROOT=Path(__file__).resolve().parent
 
+def ribbon_snapshot(state):
+    """Publish the small server ribbon before optional catalog/reputation work."""
+    keys=('schema','written_at','owner_pid','game_pids','session_token','full_shard_id',
+          'region','shard_name','hop','location','hud_state','shard_observation','sessions','interdictions')
+    return {key:state[key] for key in keys if key in state}
+
 def poll_latest(reader):
     """Publish only the end-of-file state, including after a process/log restart."""
     reader.poll()
@@ -43,6 +49,8 @@ class SessionService:
         self.diary=MiningDiary(self.directory);self.diary_filters={};self.diary_result={}
         self.navigation=RockNavigation(self.directory);self.navigation_context={};self.game_pids=[]
         self.session_filters={};self.session_offset=0;self.last_game_running=None
+        from session_overview import SessionOverview
+        self.overview=SessionOverview(self.directory,self.reader.log_path)
 
     def diary_inbox(self):
         folder=self.directory/'diary_inbox'
@@ -72,7 +80,9 @@ class SessionService:
         else:
             was=r.connection_status!='game_closed';r.reset('game_closed',now,'process_observation' if self.last_game_running else 'absence_on_startup')
             if was:r.rewind()
+        self.overview.rotate(game_running,now)
         for e in r.drain_events():
+            self.overview.consume(e)
             if e['type']=='left':self.sessions.end_session(e['at'],e.get('reason','disconnected'),e.get('time_source','observation'))
             elif e['type']=='joined':
                 match=SHARD_RE.fullmatch(e['full_shard_id'])
@@ -177,6 +187,8 @@ class SessionService:
             candidates=fabricator_candidates(read_image(str(path)))
             inbox=FabricatorInbox(self.directory/'fabricator_scan_inbox.json');inbox.add(candidates)
             self.note=f'{len(candidates)} blueprint candidates saved for review; ownership was not granted.'
+        elif action=='dismiss_refinery_notices':
+            self.overview.dismiss_refinery();self.overview.save();self.note='Refinery reminders dismissed.'
         else:raise ValueError('Unknown workspace command')
 
     def close(self):
@@ -197,7 +209,7 @@ def owner_alive(pid):
 
 def run(data_dir,owner):
     directory=Path(data_dir);directory.mkdir(parents=True,exist_ok=True)
-    logging.basicConfig(filename=directory/'bridge.log',level=logging.INFO)
+    logging.basicConfig(filename=directory/'bridge.log',level=logging.INFO,format='%(asctime)s %(levelname)s %(message)s')
     ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(),0x4000)
     migrate(directory)
     service=SessionService(directory)
@@ -217,6 +229,10 @@ def run(data_dir,owner):
     item_directory=ItemDirectoryService(directory,owner)
     from finder_market import FinderMarketService
     finder_market=FinderMarketService(directory,owner)
+    from finder_services import FinderServices
+    finder_services=FinderServices(item_directory,finder_market)
+    finder_services.current_patch=updates.local.get('patch','')
+    finder_services.start()
     top_hud=subprocess.Popen([str(Path(sys.executable).with_name('pythonw.exe')),'-B',str(ROOT/'native_session_hud.py'),'--owner',str(owner)],
                              cwd=ROOT,creationflags=subprocess.CREATE_NO_WINDOW,stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
     contract_helper=subprocess.Popen([str(Path(sys.executable).with_name('pythonw.exe')),'-B',str(ROOT/'contract_share_helper.py'),'--owner',str(owner),'--watch'],
@@ -243,12 +259,11 @@ def run(data_dir,owner):
                     quest_command.unlink(missing_ok=True)
                 service.diary_commands()
                 state=service.tick(bool(games));state['game_pids']=sorted(games);state['owner_pid']=owner
+                if not publish_json(directory/'session_ribbon.json',ribbon_snapshot(state)):
+                    logging.warning('Server ribbon publication delayed; previous snapshot retained')
                 try:state['data_updates']=updates.tick(game_running=bool(games))
                 except Exception:logging.exception('Data update check failed; HUD collection continues')
-                try:item_directory.tick(current_patch=updates.local.get('patch'))
-                except Exception:logging.exception('Item directory refresh failed; last known data retained')
-                try:finder_market.tick(current_patch=updates.local.get('patch',''))
-                except Exception:logging.exception('Finder market refresh failed; cached offers retained')
+                finder_services.current_patch=updates.local.get('patch','')
                 inbox=directory/'fabricator_scan_inbox.json'
                 state['review_revision']=inbox.stat().st_mtime if inbox.exists() else 0
                 quest_settings=read_shared_json(directory/'native_settings.json') or {}
@@ -265,6 +280,10 @@ def run(data_dir,owner):
                 # Reputation labels are a background feature in every HUD mode,
                 # including the development app used before packaging.
                 state['questing']=quests.tick(True,bool(games))
+                try:
+                    service.overview.reputation(read_shared_json(directory/'reputation_snapshot.json',limit=2*1024*1024))
+                except (OSError,ValueError,TypeError):pass
+                state['home']=service.overview.view(quests.balance_names,quests.scopes);service.overview.save()
                 blueprint_texts.tick()
                 rep_view=reputation_view(directory,time.time(),state)
                 if rep_notices.consume(rep_view,games):rep_notice='restart:'+','.join(map(str,sorted(games)))
@@ -278,8 +297,7 @@ def run(data_dir,owner):
         from app_lifecycle import send_signal
         send_signal('contract-share-stop')
         piracy.close()
-        item_directory.close()
-        finder_market.close()
+        finder_services.close()
         updates.close()
         quests.close()
         service.close()

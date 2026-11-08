@@ -15,6 +15,7 @@ import re
 import tempfile
 import time
 from interdiction_watch import InterdictionNotifications
+from session_overview import play_events
 
 LOG = logging.getLogger(__name__)
 from installation import game_directory
@@ -212,6 +213,7 @@ class IncrementalGameLog:
         return bool(re.search(rf"(?:\[|')({escaped})(?:\]|')|Player:\s*{escaped}(?:\s|$)", line, re.I))
 
     def _parse_line(self, line):
+        self.events.extend(play_events(line))
         tm = re.match(r"<([^>]+)>", line)
         at = timestamp(tm.group(1)) if tm else None
         time_source='game_log_timestamp' if at is not None else 'observation'

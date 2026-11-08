@@ -8,6 +8,7 @@
 // instead.
 #include "SelfTest.h"
 #include "SignatureTiming.h"
+#include "OverlayPlacement.h"
 #include "OverlayInput.h"
 #include "AfkNudge.h"
 
@@ -1380,6 +1381,20 @@ int runSelfTest() {
 
     allPassed &= check(SCMiner::signatureCandidateCost(10,200)<SCMiner::signatureCandidateCost(100,0),
         "newly aimed signature outranks the old marker's continuity bonus");
+    allPassed &= check(SCMiner::signatureReadingExpired(true,3570,1.6)&&
+        !SCMiner::signatureReadingExpired(true,3570,1.0)&&!SCMiner::signatureReadingExpired(false,3570,20),
+        "automatic signatures clear when no longer read; manual lookups remain available");
+    allPassed &= check(!SCMiner::signatureMarkerContext(true,true,.87,true,false)&&
+        !SCMiner::signatureMarkerContext(true,false,.87,false,false)&&
+        SCMiner::signatureMarkerContext(false,true,.87,true,false)&&
+        SCMiner::signatureMarkerContext(true,false,.95,true,false)&&
+        SCMiner::signatureMarkerContext(true,true,.9,true,true),
+        "off-aim cockpit lookalikes cannot become signatures from table matches alone");
+    allPassed &= check(SCMiner::resizedOverlayOrigin(1822,700,500,0,2560)==2022&&
+        SCMiner::resizedOverlayOrigin(2060,500,700,0,2560)==1860&&
+        SCMiner::resizedOverlayOrigin(0,500,700,0,2560)==0&&
+        SCMiner::resizedOverlayOrigin(-500,500,700,-2560,0)==-700,
+        "overlay tab size changes and restoration preserve the nearer screen edge");
 
     {
         const auto* mole=SCMiner::shipById("mole");const auto* golem=SCMiner::shipById("golem");

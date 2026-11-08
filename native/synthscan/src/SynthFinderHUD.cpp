@@ -26,11 +26,20 @@ bool updating=false,visible=false,dropdown=false,pendingSearch=false,dragScroll=
 size_t selected=size_t(-1);int highlighted=0,listOffset=0;
 std::string requestId,shopText,rendered;
 std::string marketText;Json marketLinks=arr();bool playerMarket=false;int qualityMinimum=0;
+bool loading=false,retrying=false;ULONGLONG loadingStarted=0;
+struct ReadyResult {std::string key,text;Json links;ULONGLONG at;};
+std::vector<ReadyResult> readyResults;
+const ReadyResult* recentResult(const std::vector<ReadyResult>& cache,const std::string& key,ULONGLONG now){
+    for(const auto& entry:cache)if(entry.key==key&&now-entry.at<60000)return &entry;
+    return nullptr;
+}
 bool qualityDropdown=false;int qualityHighlight=0;
 struct MarketLink {Gdiplus::RectF rect;std::string url;};std::vector<MarketLink> linkHits;
 float ui=1,scroll=0,contentHeight=0,viewHeight=0,dragStart=0,scrollStart=0;
 int lastWidth=0,lastHeight=0;
 constexpr int SEARCH_ID=43101;
+constexpr UINT_PTR LOADING_TIMER=2;
+void pollDetails();
 // Same palette as MinerGUI's other activity tabs.
 const Gdiplus::Color BG(255,15,16,19),CARD(255,24,26,30),BORDER(255,44,47,54),INK(255,238,239,241),MUTED(255,160,166,176),ACCENT(255,238,178,70);
 void repaint(){if(window)InvalidateRect(window,nullptr,FALSE);}
@@ -84,7 +93,8 @@ std::string blueprintText(const Json& row,const Ownership& owned){
 void render(){
     if(!shown||selected>=shown->size())return;
     const auto& row=(*shown)[selected].value;
-    auto next=(playerMarket?marketText:shopText)+"\n"+blueprintText(row,ownership);
+    // Keep the body empty until price and recipe details can appear together.
+    auto next=loading?std::string():(playerMarket?marketText:shopText)+"\n"+blueprintText(row,ownership);
     if(next!=rendered){rendered=std::move(next);repaint();}
 }
 std::vector<int> qualityChoices(){
@@ -101,14 +111,40 @@ void releaseInput(){
 }
 void requestPrices(const Json& row){
     requestId="finder:"+std::to_string(GetTickCount64())+":"+row.textOr("id");
+    loading=true;retrying=false;loadingStarted=GetTickCount64();marketLinks=arr();linkHits.clear();contentHeight=viewHeight=0;
+    auto cacheKey=row.textOr("id")+"|"+row.textOr("item_id")+"|"+row.textOr("market_identity")+"|"+(playerMarket?"market":"shops")+"|"+std::to_string(qualityMinimum);
+    if(const auto* cached=recentResult(readyResults,cacheKey,loadingStarted)){
+        loading=false;if(playerMarket){marketText=cached->text;marketLinks=cached->links;}else shopText=cached->text;
+    }
+    // A small timer polls only the selected lookup, without waiting for the HUD
+    // or session collectors. Animation runs solely while a lookup is pending.
+    if(loading)SetTimer(window,LOADING_TIMER,50,nullptr);else KillTimer(window,LOADING_TIMER);
     if(playerMarket){
-        marketText="PLAYER MARKET — UEX Corp\nChecking player offers…";marketLinks=arr();
         write(directory/L"finder_market_request.json",obj({{"owner_pid",num(GetCurrentProcessId())},{"at",num(std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count())},
               {"request_id",str(requestId)},{"row_id",field(row,"id")},{"item_id",field(row,"item_id")},{"market_item_id",field(row,"market_item_id")},{"market_identity",field(row,"market_identity")},{"quality_min",num(qualityMinimum)},{"quality_exact",SynthScan::boolean(true)}}));return;
     }
-    shopText="IN-GAME PURCHASE LOCATIONS — UEX Corp\nChecking prices and locations…";
     write(directory/L"item_directory_request.json",obj({{"owner_pid",num(GetCurrentProcessId())},{"at",num(std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count())},
           {"request_id",str(requestId)},{"row_id",field(row,"id")},{"item_id",field(row,"item_id")}}));
+}
+bool acceptsResult(const Json& result,DWORD pid,const std::string& request,const Json& row,bool market,int quality){
+    return result.numberOr("owner_pid")==pid&&result.textOr("request_id")==request&&result.textOr("row_id")==row.textOr("id")&&
+        result.textOr("item_id")==row.textOr("item_id")&&!flag(result,"loading")&&
+        (!market||(result.numberOr("quality_min")==quality&&flag(result,"quality_exact")));
+}
+void pollDetails(){
+    if((!loading&&!retrying)||!shown||selected>=shown->size())return;
+    const auto& row=(*shown)[selected].value;
+    auto result=SynthScan::read(directory/(playerMarket?L"finder_market_detail.json":L"item_directory_detail.json"),512*1024);
+    if(!acceptsResult(result,GetCurrentProcessId(),requestId,row,playerMarket,qualityMinimum))return;
+    if(playerMarket){marketText=result.textOr("text");marketLinks=field(result,"links");}else shopText=result.textOr("text");
+    loading=false;retrying=flag(result,"error");
+    if(retrying)SetTimer(window,LOADING_TIMER,250,nullptr);else KillTimer(window,LOADING_TIMER);
+    auto key=row.textOr("id")+"|"+row.textOr("item_id")+"|"+row.textOr("market_identity")+"|"+(playerMarket?"market":"shops")+"|"+std::to_string(qualityMinimum);
+    readyResults.erase(std::remove_if(readyResults.begin(),readyResults.end(),[&](const auto& entry){return entry.key==key;}),readyResults.end());
+    if(readyResults.size()>=16)readyResults.erase(readyResults.begin());
+    // Keep automatic retries live instead of giving failures a UI cache entry.
+    if(!flag(result,"error"))readyResults.push_back({key,result.textOr("text"),field(result,"links"),GetTickCount64()});
+    render();repaint();
 }
 void suggestions(){
     pendingSearch=false;KillTimer(window,1);auto latest=std::atomic_load(&index);if(!latest)return;
@@ -180,6 +216,15 @@ void paint(HWND hwnd){
             const auto& row=(*shown)[selected].value;
             y+=words(g,wide(row.textOr("name")),pad,y,w-pad*2,19,INK,true)+4*ui;
             y+=words(g,wide(row.textOr("kind"))+L"  ·  PURCHASE & CRAFTING",pad,y,w-pad*2,10,ACCENT,true)+15*ui;
+            if(loading){
+                // Delay the indicator briefly so fast cached lookups don't flash.
+                if(GetTickCount64()-loadingStarted>=150){
+                    Gdiplus::Pen spinner(ACCENT,2*ui);spinner.SetStartCap(Gdiplus::LineCapRound);spinner.SetEndCap(Gdiplus::LineCapRound);
+                    float angle=float(GetTickCount64()%1000)*.36f;
+                    g.DrawArc(&spinner,Gdiplus::RectF(pad+8*ui,y+3*ui,14*ui,14*ui),angle,250.f);
+                    words(g,L"Loading details…",pad+33*ui,y,w-pad*2-40*ui,12,MUTED);
+                }
+            }
             std::istringstream lines(rendered);std::string line;
             while(std::getline(lines,line)){
                 if(line.empty()){y+=10*ui;continue;}
@@ -228,6 +273,7 @@ LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM w,LPARAM l){
     if(message==WM_MOUSEACTIVATE){HWND previous=GetForegroundWindow();DWORD pid=0;GetWindowThreadProcessId(previous,&pid);if(pid!=GetCurrentProcessId())previousForeground=previous;return MA_ACTIVATE;}
     if(message==WM_COMMAND&&LOWORD(w)==SEARCH_ID&&HIWORD(w)==EN_CHANGE&&!updating){pendingSearch=true;SetTimer(hwnd,1,60,nullptr);return 0;}
     if(message==WM_TIMER&&w==1){suggestions();return 0;}
+    if(message==WM_TIMER&&w==LOADING_TIMER){pollDetails();if(loading)repaint();return 0;}
     if(message==WM_PAINT){paint(hwnd);return 0;}
     if(message==WM_SIZE){layout();return 0;}
     if(message==WM_ERASEBKGND)return 1;
@@ -278,31 +324,27 @@ void prepare(const SCMiner::JsonValue& library){
 
 void sync(bool show){
     if(!owner)return;
-    if(!show){if(window&&visible){releaseInput();ShowWindow(window,SW_HIDE);}visible=false;return;}
+    if(!show){if(window&&visible){releaseInput();ShowWindow(window,SW_HIDE);KillTimer(window,LOADING_TIMER);}visible=false;return;}
     create();RECT r{};GetClientRect(owner,&r);float scale=r.right/560.f;int margin=int(8*scale),top=int(42*scale),bottom=int(37*scale);
     int width=r.right-r.left-2*margin,height=r.bottom-r.top-top-bottom;if(width<100||height<80)return;
     RECT current{};GetWindowRect(window,&current);MapWindowPoints(HWND_DESKTOP,owner,reinterpret_cast<POINT*>(&current),2);
     if(!visible||current.left!=margin||current.top!=top||current.right-current.left!=width||current.bottom-current.top!=height)
         SetWindowPos(window,nullptr,margin,top,width,height,SWP_NOACTIVATE|SWP_NOZORDER|SWP_SHOWWINDOW);
     visible=true;
+    if(loading||retrying)SetTimer(window,LOADING_TIMER,loading?50:250,nullptr);
     auto latest=std::atomic_load(&index);
     if(latest&&shown&&latest!=shown){
         std::string id,item,marketIdentity;if(selected<shown->size()){id=(*shown)[selected].value.textOr("id");item=(*shown)[selected].value.textOr("item_id");marketIdentity=(*shown)[selected].value.textOr("market_identity");}
         shown=latest;selected=size_t(-1);
         for(size_t i=0;!id.empty()&&i<shown->size();i++)if((*shown)[i].value.textOr("id")==id){selected=i;break;}
-        if(selected>=shown->size()){requestId.clear();rendered.clear();}
+        if(selected>=shown->size()){requestId.clear();rendered.clear();loading=false;retrying=false;KillTimer(window,LOADING_TIMER);}
         else{
             auto choices=qualityChoices();bool invalid=std::find(choices.begin(),choices.end(),qualityMinimum)==choices.end();if(invalid)qualityMinimum=0;
             if(invalid||(*shown)[selected].value.textOr("item_id")!=item||(*shown)[selected].value.textOr("market_identity")!=marketIdentity)requestPrices((*shown)[selected].value);
         }
         if(dropdown)suggestions();repaint();
     }
-    if(shown&&selected<shown->size()){
-        const auto& row=(*shown)[selected].value;auto result=SynthScan::read(directory/(playerMarket?L"finder_market_detail.json":L"item_directory_detail.json"),512*1024);
-        if(result.numberOr("owner_pid")==GetCurrentProcessId()&&result.textOr("request_id")==requestId&&result.textOr("row_id")==row.textOr("id")&&result.textOr("item_id")==row.textOr("item_id")){
-            if(playerMarket&&result.numberOr("quality_min")==qualityMinimum&&flag(result,"quality_exact")){marketText=result.textOr("text");marketLinks=field(result,"links");}else if(!playerMarket)shopText=result.textOr("text");
-        }render();
-    }
+    pollDetails();if(shown&&selected<shown->size())render();
 }
 void activationChanged(bool active){
     if(!window||!visible)return;
@@ -335,9 +377,18 @@ bool selfTest(){
     Index crowded(80,shirt);crowded.push_back(ship);auto ships=find(crowded,L"Carrack");if(ships.empty()||ships[0]!=80)return false;
     crowded[0].name=crowded[0].hay=normalize(L"600i Shirt");crowded[80].name=crowded[80].hay=normalize(L"600i Explorer");auto six=find(crowded,L"600");if(six.empty()||six[0]!=80||find(crowded,L"")[0]!=80)return false;
     using namespace SynthScan;auto bp=obj({{"name",str("Test")},{"reference_index",num(1)},{"materials",arr()},{"missions",arr()}});
+    std::vector<ReadyResult> cache{{"market|975","Complete prices",arr(),100}};
+    const auto* cached=recentResult(cache,"market|975",101);
+    if(!cached||cached->text!="Complete prices"||recentResult(cache,"market|916",101)||recentResult(cache,"market|975",60100))return false;
     bp.members[2].second.items.push_back(obj({{"material",str("Copper")},{"amount",num(2)},{"unit",str("SCU")},{"min_quality",num(900)}}));
     bp.members[3].second.items.push_back(obj({{"title",str("Reward mission")}}));auto blueprints=arr();blueprints.items.push_back(bp);auto row=obj({{"finder_blueprints",blueprints}});
     auto unowned=blueprintText(row,[](int,const std::string&){return 0;}),owned=blueprintText(row,[](int,const std::string&){return 1;});
-    return unowned.find("Reward mission")!=std::string::npos&&unowned.find("min Q900")!=std::string::npos&&owned.find("Reward mission")==std::string::npos&&owned.find("Copper")!=std::string::npos;
+    if(unowned.find("Reward mission")==std::string::npos||unowned.find("min Q900")==std::string::npos||owned.find("Reward mission")!=std::string::npos||owned.find("Copper")==std::string::npos)return false;
+    auto selectedRow=obj({{"id",str("selected")},{"item_id",str("item")}});
+    auto result=obj({{"owner_pid",num(42)},{"request_id",str("new")},{"row_id",str("selected")},{"item_id",str("item")},{"quality_min",num(975)},{"quality_exact",SynthScan::boolean(true)},{"loading",SynthScan::boolean(true)}});
+    if(acceptsResult(result,42,"new",selectedRow,true,975))return false; // intermediate content stays hidden
+    for(auto& member:result.members)if(member.first=="loading")member.second=SynthScan::boolean(false);
+    return acceptsResult(result,42,"new",selectedRow,true,975)&&!acceptsResult(result,42,"old",selectedRow,true,975)&&
+        !acceptsResult(result,42,"new",selectedRow,true,916)&&!acceptsResult(result,43,"new",selectedRow,true,975);
 }
 }

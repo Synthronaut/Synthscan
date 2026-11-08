@@ -18,7 +18,7 @@ def render_original_bar(self):
             s[key] = int(s[key])
     game_running = s.get("connection_status") != "game_closed"
     shard_id = s.get("shard_id", "--") if game_running else "--"
-    is_connected = bool(s.get("session_token"))
+    is_connected = bool(s.get("session_token") or s.get('last_known_identity'))
     sfps = s.get("server_fps") if is_connected else None
     cfps = s.get("client_fps")
     ping = s.get("ping_ms") if is_connected else None
@@ -38,7 +38,7 @@ def render_original_bar(self):
         shard_pop, srv_pop, shard_id, srv_id, srv_name, callsign,
         reg_raw, loc_display, self.bar_width,
         s.get("hop_status"), s.get("region_shards_seen"), s.get("health", {}).get("label"),
-        (s.get('shard_observation') or {}).get('history_label')
+        (s.get('shard_observation') or {}).get('history_label'),s.get('feed_status')
     )
     if getattr(self, "_last_rendered_key", None) == cache_key:
         return
@@ -205,6 +205,9 @@ def render_original_bar(self):
         x = _sep(x + h_w + 8)
 
     # Segment B: Server Callsign / Shard Identifier
+    if s.get('feed_status'):
+        label=c.create_text(x,cy,text=s['feed_status'],anchor='w',fill='#f59e0b',font=('Consolas',8,'bold'))
+        bounds=c.bbox(label);x=_sep((bounds[2]+8) if bounds else x+180)
     lbl_id = c.create_text(x, cy, text="SERVER:", anchor="w", fill="#64748b", font=("Consolas", 8, "bold"))
     bbox = c.bbox(lbl_id)
     x = (bbox[2] + 4) if bbox else (x + 46)

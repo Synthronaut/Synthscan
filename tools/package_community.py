@@ -30,6 +30,9 @@ PRIVATE.update({'directory_vehicles.json','item_directory_request.json','item_di
 PRIVATE.update({'update_preferences.json','app_update_status.json','reference_source_status.json','reference_source_current.json',
     'mining_reference.json','mining_reference_status.json','signing-key.dpapi'})
 PRIVATE.update({'finder_market_index.json','finder_market_request.json','finder_market_detail.json','finder_market_cache'})
+PRIVATE.add('session_ribbon.json')
+PRIVATE.add('session_overview.json')
+PRIVATE.add('home_status.json')
 
 
 def copy_tree(source,destination):

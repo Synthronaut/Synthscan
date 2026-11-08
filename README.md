@@ -3,6 +3,25 @@
 A Windows companion for Star Citizen: mining assistance, blueprints, SynthStrings,
 reputation labels, a server HUD, and Mining / Piracy / Missions / Hangars / Finder activity tabs.
 
+**More → Dock HUD top right** puts the pop-out flush with the game viewport's
+top-right edge. Turn off **Lock HUD position** to drag it elsewhere; the saved
+placement preserves the nearer screen edge across tab sizes and restarts.
+
+Opening SynthScan now starts at **Home**, with direct links to Mining, the item
+and ship finder, blueprints, refinery orders, planners, personal records and
+settings. **Full** on the pop-out opens Home; **Home** on the Mining window returns
+there. The session recap separates this game run from the previous run, records
+actual blueprint and contract notifications, and shows reputation changes since
+the first verified balance read in that run. Missed history is not reconstructed
+from configured rewards. **Live on/off** controls automatic mining screen reading;
+the other background tools continue to work.
+
+Confirmed refinery-completion notifications are retained in a small Mining HUD
+line and on Home until dismissed. This records the game's notice; it does not
+claim that the ore is still uncollected. Reading a terminal remains necessary
+for full order details. Fullscreen is supported when Windows supplies a valid
+game image; the app suggests a window-mode change only after capture fails.
+
 The server HUD and server log show personal shard history: first recorded visit,
 recorded visits and a **HISTORY** span. Open the region dropdown for the exact
 first-recorded time. These observations do not establish server creation or

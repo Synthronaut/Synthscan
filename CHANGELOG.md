@@ -1,5 +1,26 @@
 ## Unreleased
 
+- Add a dark Home window with direct feature navigation and current/previous
+  game-session recaps. Record blueprint/contract notifications and verified
+  reputation balance changes without substituting configured mission rewards.
+- Show confirmed refinery-completion notices as a small Mining HUD reminder,
+  with persistent reminders dismissible from Home. Theme More menus to match.
+- Replace the unconditional borderless warning with a capture-failure notice
+  shown only after an actual image-capture failure.
+
+- Preserve the pop-out HUD's screen edge across tab sizes and restarts, and add
+  explicit top-right docking. Unlocking placement enables the drag interaction.
+- Clear unattended automatic signature results after 1.5 seconds without a new
+  reading. Require stronger marker evidence for off-aim cockpit lookalikes.
+
+- Publish the server ribbon before optional background work. Retain explicitly
+  labelled last-known shard identity for brief feed delays while hiding stale
+  metrics; clear it on disconnect, process change or a prolonged outage.
+
+- Keep Finder details in an explicit animated loading state until prices and
+  crafting information can appear together. Reuse recent completed selections
+  immediately and poll Finder independently of slower session collectors.
+
 - Replace raw player-market min/max with a median and middle-50% asking/bid
   range when enough comparable advertisements exist. Exclude extreme prices and
   multi-quality ads from estimates and displayed results. Do not use unfiltered

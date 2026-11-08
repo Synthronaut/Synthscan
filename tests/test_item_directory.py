@@ -109,6 +109,16 @@ class DirectoryServiceTests(unittest.TestCase):
     def test_wrong_owner_and_old_requests_do_not_trigger_network(self):
         self.request(owner=99);self.service.tick(100);self.assertIsNone(self.service.lookup)
         self.request(at=1);self.service.tick(101);self.assertIsNone(self.service.lookup)
+    def test_loading_is_explicit_until_complete_and_failure_is_terminal(self):
+        self.request();self.service.tick(100)
+        self.assertTrue(self.result()['loading'])
+        self.service.lookup.value=dict(item_id=A,checked_at=101,rows=[]);self.service.lookup.ready=True
+        self.service.tick(101)
+        self.assertFalse(self.result()['loading']);self.assertFalse(self.result()['error'])
+        self.request(B,at=102);self.service.tick(102)
+        self.assertTrue(self.result()['loading'])
+        self.service.lookup.error=OSError('offline');self.service.lookup.ready=True;self.service.tick(103)
+        self.assertFalse(self.result()['loading']);self.assertTrue(self.result()['error'])
     def test_late_lookup_is_cached_but_never_displayed_for_next_selection(self):
         self.request();self.service.tick(100);first=self.service.lookup
         self.request(B,at=101);self.service.tick(101)
@@ -123,7 +133,9 @@ class DirectoryServiceTests(unittest.TestCase):
         (folder/f'{A}.json').write_text(json.dumps(cache))
         self.request();self.service.tick(101);self.assertIsNone(self.service.lookup)
         self.assertIn('240 aUEC',self.result()['text'])
+        self.assertFalse(self.result()['loading'])
         self.service.tick(101+SHOP_TTL);future=self.service.lookup
+        self.assertTrue(self.result()['loading'])
         future.error=OSError('offline');future.ready=True;self.service.tick(102+SHOP_TTL)
         self.assertIn('last successful',self.result()['text']);self.assertIn('240 aUEC',self.result()['text'])
         self.assertIsNone(self.service.lookup)

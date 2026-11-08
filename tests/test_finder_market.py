@@ -84,6 +84,15 @@ class ServiceTests(unittest.TestCase):
         (self.root/'finder_market_request.json').write_text(json.dumps(value))
     def test_wrong_owner_cannot_start_lookup(self):
         self.request(owner=99);self.service.tick(NOW);self.assertIsNone(self.service.job)
+    def test_pending_offers_are_not_published_as_finished_details(self):
+        self.request();self.service.tick(NOW)
+        path=self.root/'finder_market_detail.json'
+        self.assertTrue(json.loads(path.read_text())['loading'])
+        self.service.job.ready=True;self.service.job.value=dict(item=7,checked_at=NOW+1,rows=[])
+        self.service.tick(NOW+1)
+        self.assertFalse(json.loads(path.read_text())['loading'])
+        self.service.tick(NOW+2)
+        self.assertFalse(json.loads(path.read_text())['loading'])
     def test_wrong_fingerprint_cannot_start_lookup(self):
         self.request(identity='wrong');self.service.tick(NOW);self.assertIsNone(self.service.job)
     def test_late_result_never_replaces_next_item(self):
@@ -94,5 +103,7 @@ class ServiceTests(unittest.TestCase):
     def test_failed_lookup_retries_and_retains_last_good_cache(self):
         self.request();self.service.tick(NOW);job=self.service.job;job.ready=True;job.error=OSError('offline')
         self.service.tick(NOW+1);self.assertGreater(self.service.retry[7],NOW+1);self.assertIsNone(self.service.job)
+        value=json.loads((self.root/'finder_market_detail.json').read_text())
+        self.assertFalse(value['loading']);self.assertTrue(value['error'])
 
 if __name__=='__main__':unittest.main()

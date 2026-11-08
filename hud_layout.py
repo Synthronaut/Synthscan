@@ -41,7 +41,7 @@ def panel_rows(state, mining=None, *, session=True, mining_enabled=True, now=0, 
     if editing:
         row('Drag to move · Right-click to lock', 'edit')
     if session:
-        connected = bool(state.get('session_token'))
+        connected = bool(state.get('session_token') or state.get('last_known_identity'))
         if connected:
             name = state.get('callsign') or f"Shard {state.get('shard_id', '—')}"
             row(name, 'title')
@@ -54,6 +54,7 @@ def panel_rows(state, mining=None, *, session=True, mining_enabled=True, now=0, 
             row(' · '.join(str(v) for v in detail if v and v!='--'), 'muted')
             row(state.get('hop_status'), 'visit')
             row((state.get('shard_observation') or {}).get('history_label'), 'muted')
+            row(state.get('feed_status'), 'warning')
         else:
             row('Main menu' if state.get('connection_status')!='game_closed' else 'Game closed', 'title')
             row('Waiting for a universe session', 'muted')

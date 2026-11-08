@@ -527,8 +527,15 @@ public:
     // Compact always-on-top overlay mode (for use while the game is running)
     void toggleOverlayMode();
     void restoreOverlayPlacement();
+    void dockOverlayTopRight();
     void keepOverlayAboveGame(bool force=false);
     bool isOverlayMode() const { return overlayMode_; }
+    int displayedSignature() const { return currentSignature_; }
+    void openBlueprintLibrary(){if(!craftingVisible_)toggleCrafting();if(crafting_)SetForegroundWindow(crafting_);}
+    void openRefineryOrders(){if(!refineryVisible_)toggleRefinery();if(refinery_)SetForegroundWindow(refinery_);}
+    void openMiningPlanner(){if(!plannerVisible_)togglePlanner();if(planner_)SetForegroundWindow(planner_);}
+    void openPersonalNotes(){if(!notesVisible_)toggleNotes();if(notes_)SetForegroundWindow(notes_);}
+    void setCaptureFailed(bool failed);
     // The overlay out of screen captures while live mode is on, in them otherwise
     void keepOutOfCaptures();
     // Passive body during play; explicit buttons remain usable without activation.
@@ -753,6 +760,7 @@ private:
     POINT overlayPlace_ = {};
     bool overlayPlaceKnown_ = false;
     void keepOverlayPlace();    // overlayPlace_ <- where the overlay is now
+    int overlaySavedWidth_=0,overlaySavedHeight_=0;
     bool overlayPlaceOnScreen(const POINT& at, int width) const;
     // ...the overlay whole on the screen its top edge is on, and its height
     // kept to whether there is a ship to name (see overlayHeight)
@@ -904,7 +912,8 @@ private:
     // on, and making it appear only after a successful read would mean
     // nobody can set one up before they need it. So both are shown, and the
     // rest of the window moves down until the notice retires.
-    int extraTop() const { return everRead_ ? 0 : scale(NOTICE_H + 22); }
+    bool captureFailed_=false;
+    int extraTop() const { return captureFailed_ ? scale(NOTICE_H + 22) : 0; }
     bool shipPickerOpen_ = false;
     Gdiplus::RectF shipField_{};        // the ship dropdown
     Gdiplus::RectF loadoutButton_{};    // ...and the button beside it

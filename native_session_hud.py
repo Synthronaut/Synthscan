@@ -1,10 +1,11 @@
 """Original top ribbon, fed read-only by the native app's session service."""
-import argparse,json,logging,os,time
+import argparse,json,logging,math,os,time
 from pathlib import Path
 from telemetry_core import SHARD_RE
 
 def hud_state(snapshot,owner,now):
-    if snapshot.get('owner_pid')!=owner or not 0<=now-snapshot.get('written_at',0)<4:
+    stamp=snapshot.get('written_at',0)
+    if snapshot.get('owner_pid')!=owner or not isinstance(stamp,(int,float)) or not math.isfinite(stamp) or not 0<=now-stamp<4:
         return dict(connection_status='unavailable',callsign='SESSION SERVICE UNAVAILABLE',session_token=None)
     source=dict(snapshot.get('hud_state') or {})
     full=snapshot.get('full_shard_id','');match=SHARD_RE.fullmatch(full)
@@ -21,16 +22,45 @@ def hud_state(snapshot,owner,now):
         if not -.25<=age<=ttl:source.pop(key,None)
     return source
 
+
+class RibbonSessionState:
+    """Retain labelled identity briefly, never stale live metrics or a join claim."""
+    def __init__(self):
+        self.last=None
+
+    def update(self,snapshot,owner,now,game_pids=None):
+        state=hud_state(snapshot,owner,now)
+        if state['connection_status']!='unavailable':
+            self.last=dict(snapshot) if state.get('session_token') and SHARD_RE.fullmatch(snapshot.get('full_shard_id','')) else None
+            return state
+        previous=self.last
+        if not previous:return state
+        # An owner change, process restart, clock reversal, newer contradictory
+        # lifecycle observation or a long outage must not retain a former shard.
+        age=now-previous['written_at']
+        changed=(isinstance(snapshot.get('written_at'),(int,float)) and snapshot['written_at']>previous['written_at'] and
+                 (snapshot.get('session_token')!=previous.get('session_token') or snapshot.get('full_shard_id')!=previous.get('full_shard_id')))
+        same_game=bool(game_pids) and set(game_pids)==set(previous.get('game_pids',[]))
+        if snapshot.get('owner_pid',owner)!=owner or changed or not same_game or not 0<=age<30:
+            self.last=None
+            return state
+        confirmed=hud_state(previous,owner,previous['written_at'])
+        retained={key:confirmed[key] for key in ('callsign','shard_id','full_shard_id','region_raw','region_display','hop_status','shard_observation') if key in confirmed}
+        retained.update(connection_status='refreshing',session_token=None,last_known_identity=True,
+                        feed_status='UPDATING · LAST KNOWN SHARD',feed_age_seconds=age)
+        return retained
+
 def main():
     started_at=time.time()
     p=argparse.ArgumentParser();p.add_argument('--owner',type=int,required=True);args=p.parse_args()
     from app_lifecycle import SingleInstance
+    from app_lifecycle import game_process_ids
     lock=SingleInstance('native-top-hud')
     if not lock.acquired:return
     from native_control import DATA
     from native_bridge import owner_alive
     from telemetry_ipc import read_shared_json
-    logging.basicConfig(filename=DATA/'top_hud.log',level=logging.INFO)
+    logging.basicConfig(filename=DATA/'top_hud.log',level=logging.INFO,format='%(asctime)s %(levelname)s %(message)s')
     import ctypes,tkinter as tk,tkinter.font as tkfont
     from config import load_config
     from hud_controller import TopTelemetryHUD
@@ -104,6 +134,7 @@ def main():
                 self._last_rendered_key=None;return
             super().render_bar()
     root=tk.Tk();root.withdraw();ribbon=Ribbon(root);gate=AlertGate(started_at);alert=SnareAlertWindow(root,game_window_rect);activity=ActivityButton(root,DATA,args.owner);collapse=ActivityQuickControls(root,DATA,args.owner);ribbon.activity_button=activity
+    session_view=RibbonSessionState();cached_settings={};last_feed_status=None
     def callback_error(kind,value,traceback):
         logging.error('HUD input callback failed',exc_info=(kind,value,traceback))
     root.report_callback_exception=callback_error
@@ -128,13 +159,29 @@ def main():
         for hwnd in (history.hwnd,history.popup_hwnd,activity.hwnd,collapse.hwnd):set_passthrough(hwnd,False)
         return protected
     def poll():
+        nonlocal last_feed_status
         if not owner_alive(args.owner):root.destroy();return
         protected=protect_input()  # independent of snapshot/JSON parsing failures
         try:
-            snapshot=read_shared_json(DATA/'session_state.json',limit=8*1024*1024)
-            settings=read_shared_json(DATA/'native_settings.json')
-            ribbon.state=hud_state(snapshot,args.owner,time.time())
-            ribbon.shard_tracker.snapshot=snapshot;history.snapshot=snapshot
+            try:
+                path=DATA/'session_ribbon.json'
+                snapshot=read_shared_json(path if path.exists() else DATA/'session_state.json',limit=8*1024*1024)
+                if not isinstance(snapshot,dict):raise ValueError('Invalid session snapshot')
+            except (OSError,ValueError):snapshot={}
+            try:cached_settings.update(read_shared_json(DATA/'native_settings.json'))
+            except (OSError,ValueError,TypeError):pass
+            settings=cached_settings;now=time.time()
+            games=None
+            if hud_state(snapshot,args.owner,now)['connection_status']=='unavailable':
+                try:games=game_process_ids()
+                except OSError:games=None
+            ribbon.state=session_view.update(snapshot,args.owner,now,games)
+            feed_status=ribbon.state.get('connection_status')
+            if feed_status!=last_feed_status:
+                logging.info('Session ribbon feed: %s',feed_status);last_feed_status=feed_status
+            history_snapshot=snapshot
+            if ribbon.state.get('last_known_identity'):history_snapshot=dict(session_view.last,session_token=None)
+            ribbon.shard_tracker.snapshot=history_snapshot;history.snapshot=history_snapshot
             ribbon.enabled=bool(settings.get('show_hud',True) and settings.get('session_strip',True))
             editable=not ribbon.server_bar_locked and not protected
             if ribbon.editing!=editable:ribbon.set_editing(editable)
@@ -160,9 +207,13 @@ def main():
             publish_json(DATA/'top_hud_status.json',dict(at=time.time(),pid=os.getpid(),owner_pid=args.owner,
                         visible=bool(ribbon._visible),geometry=ribbon._last_geometry,input_protected=protected,
                         session_token=ribbon.state.get('session_token'),callsign=ribbon.state.get('callsign'),layout='ribbon',
+                        connection_status=feed_status,last_known_identity=bool(ribbon.state.get('last_known_identity')),feed_age_seconds=ribbon.state.get('feed_age_seconds',0),
                         draggable=ribbon.editing,server_bar_locked=ribbon.server_bar_locked,position=ribbon.position,region_history_visible=history.visible,region_history_open=history.open,region_color=(getattr(ribbon,'region_hit',None) or {}).get('color'),region_text=(getattr(ribbon,'region_hit',None) or {}).get('text'),region_last_input=getattr(history,'last_input',None),region_transition=getattr(history,'last_transition',None),region_canvas_size=[history.canvas.winfo_width(),history.canvas.winfo_height()],region_geometry=history.geometry,region_popup_geometry=getattr(history,'popup_rect',None),activity_button_visible=activity.visible,activity_button_geometry=activity.geometry,collapse_button_visible=collapse.visible,collapse_button_geometry=collapse.geometry,hangar_timer_visible=hangar.visible,hangar_timer_geometry=hangar.geometry,hangar_timer_phase=(hangar.view or {}).get('phase'),hangar_timer_lights=(hangar.view or {}).get('lights'),activity_expanded=native.get('activity_expanded',True),snare_watch_enabled=enabled,snare_alerts_shown=alert.shown))
         except (OSError,ValueError,TypeError,KeyError):
-            ribbon.state=hud_state({},args.owner,time.time());ribbon.render_bar();alert.update([],None,False)
+            try:games=game_process_ids()
+            except OSError:games=None
+            ribbon.state=session_view.update({},args.owner,time.time(),games)
+            ribbon.render_bar();alert.update([],None,False)
             logging.exception('Top HUD refresh failed')
         root.after(250,poll)
     try:poll();root.mainloop()
