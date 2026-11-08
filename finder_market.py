@@ -133,8 +133,9 @@ def typical_range(prices):
 
 def market_view(item,cached,minimum,patch,now,error='',exact=False):
     from item_directory import date
-    output=['PLAYER MARKET — UEX Corp'];links=[]
-    if not item:return dict(text='PLAYER MARKET\nNo exact UEX marketplace identity is recorded for this item.',links=[])
+    output=['PLAYER MARKET — UEX Corp'];links=[];sections=[]
+    presentation=dict(presentation_schema=1,sections=sections,checked_label=date((cached or {}).get('checked_at')),stale=bool(error or cached and now-cached.get('checked_at',0)>=LIST_TTL),limited=bool((cached or {}).get('limited')))
+    if not item:return dict(text='PLAYER MARKET\nNo exact UEX marketplace identity is recorded for this item.',links=[],message='No exact UEX marketplace identity is recorded for this item.',**presentation)
     output+=['Any quality' if minimum==0 else f'Quality {minimum}'+(' exactly' if exact else '–1000')+'; unspecified quality excluded',
              'Active advertisements renewed within 30 days. Prices are offers, not completed-sale values.']
     if not cached:output.append('Checking player offers in the background…' if not error else 'Market unavailable; retrying automatically.')
@@ -142,6 +143,8 @@ def market_view(item,cached,minimum,patch,now,error='',exact=False):
         age=now-cached.get('checked_at',0);output.append('Last checked: '+date(cached.get('checked_at'))+(' · cached / refresh overdue' if age>=LIST_TTL or error else ''))
         eligible=[r for r in cached.get('rows',[]) if r['renewed']>=now-30*86400 and (not minimum or r['quality'] is not None and (r['quality']==minimum if exact else r['quality']>=minimum))]
         for operation,title in [('sell','SELLERS — ASKING PRICES'),('buy','BUYERS — BUY REQUESTS')]:
+            section=dict(operation=operation,label='Seller asks' if operation=='sell' else 'Buyer requests',summaries=[],offers=[])
+            sections.append(section)
             output+=['',title];offers=[r for r in eligible if r['operation']==operation]
             offers.sort(key=lambda r:(r['price'] if operation=='sell' else -r['price'],-r['renewed']))
             comparable,warnings=comparable_prices(offers,bool(minimum))
@@ -149,20 +152,25 @@ def market_view(item,cached,minimum,patch,now,error='',exact=False):
             for unit,quality in groups:
                 prices=[r['price'] for r in comparable if r['unit']==unit and (minimum or r['quality']==quality)]
                 grade='' if minimum else ' · '+('quality unspecified' if quality is None else 'Q'+str(int(quality)))
+                summary=dict(unit=unit,quality=quality,count=len(prices),reliable=len(prices)>=5)
+                section['summaries'].append(summary)
                 if len(prices)>=5:
                     low,high,median=typical_range(prices)
+                    summary.update(low=low,high=high,median=median)
                     output.append(f'Typical {"asks" if operation=="sell" else "bids"}: {low:,.0f}–{high:,.0f} aUEC / {unit}{grade}')
                     output.append(f'Median {median:,.0f} · {len(prices)} comparable ads · range is middle 50%')
                 else:output.append(f'No reliable estimate for {unit}{grade}: only {len(prices)} comparable ads; at least 5 required.')
             if not offers:output.append('No matching recent advertisements.')
             if not comparable and offers:output.append('No reliable estimate: all matching advertisements failed the price/quality checks.')
             if warnings:output.append(f'{len(warnings)} implausible-price or mixed-quality ads rejected; excluded from all estimates and results.')
+            section.update(rejected=len(warnings),total=len(comparable))
             displayed=comparable[:10]
             if len(comparable)>10:output.append(f'Showing 10 of {len(comparable)} comparable advertisements; browse UEX for the rest.')
             for offer in displayed:
                 quality='quality unspecified' if offer['quality'] is None else 'Q'+str(int(offer['quality']))
                 output.append(f"{offer['price']:,.0f} aUEC / {offer['unit']} · {quality}")
                 output.append(offer['title'][:180]+(' · '+offer['location'][:120] if offer['location'] else ''))
+                section['offers'].append(dict(price=offer['price'],unit=offer['unit'],quality=offer['quality'],title=offer['title'][:180],location=offer['location'][:120],url=offer['url'],updated_label=date(offer['renewed'])))
                 label=f"Open listing #{offer['id']} · updated {date(offer['renewed'])}"
                 output.append(label);links.append(dict(label=label,url=offer['url']))
         if cached.get('limited'):output.append('UEX reached its per-side listing limit; this is a partial view.')
@@ -170,7 +178,7 @@ def market_view(item,cached,minimum,patch,now,error='',exact=False):
     # UEX aggregate averages cannot be cleaned of individual bad advertisements.
     # Use that feed only for item discovery, never as a price fallback.
     if error:output.append('Refresh unavailable; retained cached data is shown above.')
-    return dict(text='\n'.join(output),links=links)
+    return dict(text='\n'.join(output),links=links,message=('Market unavailable; retrying automatically.' if error else 'Checking player offers…') if not cached else '',**presentation)
 
 class FinderMarketService:
     def __init__(self,directory,owner,index_fetch=fetch_catalog,listing_fetch=fetch_listings):

@@ -41,6 +41,22 @@ void paint(HWND window){
                 text(g,"STOCK SHIP OVERVIEW",pad,y,width-32,20,10,MUTED,true);y+=24;
                 auto role=ship.textOr("role",m.item.textOr("category"));
                 text(g,role+(flag(overview,"concept")?" · CONCEPT LISTING":""),pad,y,width-32,24,15,GOLD,true);y+=30;
+                const auto& ports=field(ship,"hardpoints");const auto& groups=field(ports,"groups").items;
+                text(g,"COMPONENT SLOTS & WEAPON MOUNTS",pad,y,width-32,18,10,MUTED,true);y+=24;
+                if(groups.empty()){text(g,"Mount limits unavailable for this exact ship.",pad,y,width-32,24,12,MUTED);y+=30;}
+                else{
+                    int cols=width>=650?3:2;float cell=(width-32-(cols-1)*10)/cols;
+                    for(size_t i=0;i<groups.size();++i){const auto& port=groups[i];float x=pad+(i%cols)*(cell+10),top=y+(i/cols)*74;rounded(g,x,top,cell,64);
+                        auto minimum=std::max(1,int(port.numberOr("minimum"))),maximum=int(port.numberOr("maximum"));
+                        auto limit=minimum==maximum?"S"+std::to_string(maximum):"S"+std::to_string(minimum)+"–S"+std::to_string(maximum);
+                        text(g,port.textOr("label"),x+12,top+8,cell-24,18,11,MUTED,true);
+                        text(g,std::to_string(int(port.numberOr("count")))+" × "+limit,x+12,top+27,cell-24,30,23,GOLD,true);
+                    }
+                    y+=((groups.size()+cols-1)/cols)*74;
+                    text(g,"With stock mounts / turrets · mount size and required tags can limit swaps",pad,y,width-32,30,10,MUTED);y+=34;
+                    if(ports.textOr("status")=="partial"){text(g,"Some mount limits are unavailable; only resolved slots are shown.",pad,y,width-32,28,10,MUTED);y+=32;}
+                }
+                text(g,"BASIC STOCK SPECS",pad,y,width-32,18,10,MUTED,true);y+=24;
                 const char* labels[]={"BODY HP","STOCK SHIELDS","CARGO","CREW"};
                 std::string values[]={statValue(ship,"body_hp"),statValue(ship,"shield_hp"),statValue(overview,"scu"),overview.textOr("crew","—")};
                 const char* units[]={"main body part","generator capacity","SCU · UEX","listed · UEX"};

@@ -1,6 +1,15 @@
 """Small browse taxonomy. Source categories remain available on every row."""
 import math
 
+# UEX omits UUIDs for these entries. Verified against each exact localized full
+# name and entity GUID in installed 4.10.2 build 12913470; never fuzzy-match a
+# different variant or override a UUID supplied by UEX.
+VERIFIED_VEHICLE_LINKS={
+    (117,'crusader m2 hercules starlifter'):'5cf39b3b-41d8-45c1-8ef2-d4678c7a7b85',
+    (251,'drake golem'):'b616b3ad-123c-40f2-80bd-b8f4109633aa',
+    (269,'drake golem ox'):'ea2c22bc-c2f0-42dc-967d-3300f9232f91',
+}
+
 
 def vehicle_metadata(vehicle):
     result=dict(source='UEX Corp',patch=str(vehicle.get('game_version') or 'not reported'),
@@ -59,6 +68,11 @@ def enrich(rows,ship_reference):
     ships=ship_reference.get('ships',{})
     for row in rows:
         identity=row.get('game_vehicle_id')
+        if not identity and row.get('kind') in ('Ship','Vehicle'):
+            identity=VERIFIED_VEHICLE_LINKS.get((row.get('uex_vehicle_id'),row.get('name','').strip().casefold()))
+            if identity:
+                row['game_vehicle_id']=identity
+                row['vehicle_identity_source']='Verified exact UEX ID and full-name cross-reference'
         if identity and identity in ships:
             row['ship_stats']=dict(ships[identity],patch=ship_reference.get('build',{}).get('Branch','Unknown build'))
         row['source_category']=row['category']

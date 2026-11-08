@@ -166,7 +166,7 @@ def export(store, source, destination, manifest, vehicle_xml=None):
     from ship_stats import export as export_ships
     ships=export_ships(store,vehicle_xml or store.root.parent/'vehicle_xml',manifest['Data'])
     return dict(schema=1, entries=entries, assets=assets, ship_reference=ships, provenance=dict(
-        build=manifest['Data'],weapon_stats_schema=1,ship_stats_schema=1, source='Installed Game2.dcb and Data.p4k via StarBreaker v0.3.2',
+        build=manifest['Data'],weapon_stats_schema=1,ship_stats_schema=2, source='Installed Game2.dcb and Data.p4k via StarBreaker v0.3.2',
         tool_url='https://github.com/diogotr7/StarBreaker/releases/tag/v0.3.2',
         copyright='Game records and artwork: Cloud Imperium Games. Local extraction; no redistribution grant implied.',
         entries=len(entries), with_static_artwork=sum(bool(e['artwork']) for e in entries),

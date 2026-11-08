@@ -145,7 +145,7 @@ def local_reference_status():
         same = provenance.get('build', {}).get('BuildId') == build['BuildId']
         complete = same and provenance.get('export_schema') == 2
         library=json.loads(catalogue_path(output_root(),'local_game_library.json').read_text(encoding='utf-8'))
-        complete=complete and library.get('provenance',{}).get('weapon_stats_schema')==1 and library.get('provenance',{}).get('ship_stats_schema')==1 and library.get('provenance',{}).get('build',{}).get('BuildId')==build['BuildId']
+        complete=complete and library.get('provenance',{}).get('weapon_stats_schema')==1 and library.get('provenance',{}).get('ship_stats_schema')==2 and library.get('provenance',{}).get('build',{}).get('BuildId')==build['BuildId']
         partial = bool(provenance.get('failures') or provenance.get('unmatched_entries') or provenance.get('ambiguous_entries'))
         return dict(status=('partial' if partial else 'current') if complete else 'refresh_required', build=build['BuildId'],
             patch=build.get('Branch', ''), enriched=provenance.get('enriched_entries', 0),

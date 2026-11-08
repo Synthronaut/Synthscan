@@ -1,5 +1,6 @@
 #include "SynthFinderHUD.h"
 #include "SynthJson.h"
+#include "FinderCards.h"
 #include <commctrl.h>
 #include <gdiplus.h>
 #include <windowsx.h>
@@ -25,9 +26,9 @@ std::filesystem::path directory;Ownership ownership;
 bool updating=false,visible=false,dropdown=false,pendingSearch=false,dragScroll=false;
 size_t selected=size_t(-1);int highlighted=0,listOffset=0;
 std::string requestId,shopText,rendered;
-std::string marketText;Json marketLinks=arr();bool playerMarket=false;int qualityMinimum=0;
+std::string marketText;Json shopView=obj({}),marketView=obj({});Json marketLinks=arr();bool playerMarket=false;int qualityMinimum=0;
 bool loading=false,retrying=false;ULONGLONG loadingStarted=0;
-struct ReadyResult {std::string key,text;Json links;ULONGLONG at;};
+struct ReadyResult {std::string key,text;Json links;ULONGLONG at;Json view;};
 std::vector<ReadyResult> readyResults;
 const ReadyResult* recentResult(const std::vector<ReadyResult>& cache,const std::string& key,ULONGLONG now){
     for(const auto& entry:cache)if(entry.key==key&&now-entry.at<60000)return &entry;
@@ -111,10 +112,10 @@ void releaseInput(){
 }
 void requestPrices(const Json& row){
     requestId="finder:"+std::to_string(GetTickCount64())+":"+row.textOr("id");
-    loading=true;retrying=false;loadingStarted=GetTickCount64();marketLinks=arr();linkHits.clear();contentHeight=viewHeight=0;
+    loading=true;retrying=false;loadingStarted=GetTickCount64();shopView=obj({});marketView=obj({});marketLinks=arr();linkHits.clear();contentHeight=viewHeight=0;
     auto cacheKey=row.textOr("id")+"|"+row.textOr("item_id")+"|"+row.textOr("market_identity")+"|"+(playerMarket?"market":"shops")+"|"+std::to_string(qualityMinimum);
     if(const auto* cached=recentResult(readyResults,cacheKey,loadingStarted)){
-        loading=false;if(playerMarket){marketText=cached->text;marketLinks=cached->links;}else shopText=cached->text;
+        loading=false;if(playerMarket){marketText=cached->text;marketLinks=cached->links;marketView=cached->view;}else{shopText=cached->text;shopView=cached->view;}
     }
     // A small timer polls only the selected lookup, without waiting for the HUD
     // or session collectors. Animation runs solely while a lookup is pending.
@@ -136,14 +137,14 @@ void pollDetails(){
     const auto& row=(*shown)[selected].value;
     auto result=SynthScan::read(directory/(playerMarket?L"finder_market_detail.json":L"item_directory_detail.json"),512*1024);
     if(!acceptsResult(result,GetCurrentProcessId(),requestId,row,playerMarket,qualityMinimum))return;
-    if(playerMarket){marketText=result.textOr("text");marketLinks=field(result,"links");}else shopText=result.textOr("text");
+    if(playerMarket){marketText=result.textOr("text");marketLinks=field(result,"links");marketView=result;}else{shopText=result.textOr("text");shopView=result;}
     loading=false;retrying=flag(result,"error");
     if(retrying)SetTimer(window,LOADING_TIMER,250,nullptr);else KillTimer(window,LOADING_TIMER);
     auto key=row.textOr("id")+"|"+row.textOr("item_id")+"|"+row.textOr("market_identity")+"|"+(playerMarket?"market":"shops")+"|"+std::to_string(qualityMinimum);
     readyResults.erase(std::remove_if(readyResults.begin(),readyResults.end(),[&](const auto& entry){return entry.key==key;}),readyResults.end());
     if(readyResults.size()>=16)readyResults.erase(readyResults.begin());
     // Keep automatic retries live instead of giving failures a UI cache entry.
-    if(!flag(result,"error"))readyResults.push_back({key,result.textOr("text"),field(result,"links"),GetTickCount64()});
+    if(!flag(result,"error"))readyResults.push_back({key,result.textOr("text"),field(result,"links"),GetTickCount64(),result});
     render();repaint();
 }
 void suggestions(){
@@ -215,7 +216,7 @@ void paint(HWND hwnd){
             float y=contentTop+5*ui-scroll;
             const auto& row=(*shown)[selected].value;
             y+=words(g,wide(row.textOr("name")),pad,y,w-pad*2,19,INK,true)+4*ui;
-            y+=words(g,wide(row.textOr("kind"))+L"  ·  PURCHASE & CRAFTING",pad,y,w-pad*2,10,ACCENT,true)+15*ui;
+            y+=words(g,wide(row.textOr("kind"))+L"  ·  "+wide(row.textOr("category")),pad,y,w-pad*2,10,ACCENT,true)+15*ui;
             if(loading){
                 // Delay the indicator briefly so fast cached lookups don't flash.
                 if(GetTickCount64()-loadingStarted>=150){
@@ -225,16 +226,14 @@ void paint(HWND hwnd){
                     words(g,L"Loading details…",pad+33*ui,y,w-pad*2-40*ui,12,MUTED);
                 }
             }
-            std::istringstream lines(rendered);std::string line;
-            while(std::getline(lines,line)){
-                if(line.empty()){y+=10*ui;continue;}
-                bool heading=line.rfind("BLUEPRINT",0)==0||line=="MATERIALS TO CRAFT"||line=="UNLOCK MISSIONS"||line.rfind("IN-GAME PURCHASE",0)==0||line.rfind("PLAYER MARKET",0)==0||line.rfind("SELLERS",0)==0||line.rfind("BUYERS",0)==0||line=="UEX QUALITY-TIER REFERENCE";
-                if(heading){y+=9*ui;rounded(g,{pad,y-3*ui,w-pad*2,25*ui},5*ui,CARD);}
-                bool link=playerMarket&&line.rfind("Open listing #",0)==0;
-                auto color=heading||link?ACCENT:line.find("aUEC")!=std::string::npos?INK:line.rfind("Last checked",0)==0||line.rfind("Source:",0)==0?MUTED:INK;
-                float height=words(g,wide(line),pad+8*ui,y,w-pad*2-23*ui,heading?10:12,color,heading);
-                if(link&&y>=contentTop&&y+height<=h-6*ui)for(const auto& entry:marketLinks.items)if(entry.textOr("label")==line)linkHits.push_back({{pad,y,w-pad*2,height},entry.textOr("url")});
-                y+=height+5*ui;
+            if(!loading){
+                FinderCards::Canvas cards{g,w,ui};cards.clipTop=contentTop;cards.clipBottom=h-6*ui;
+                if(playerMarket){
+                    if(marketView.numberOr("presentation_schema")==1)y=cards.market(marketView,y,qualityMinimum);
+                    else y=cards.note("Player-market presentation unavailable; refreshing automatically.",y);
+                }else{y=cards.shops(shopView,y);y=cards.mounts(row,y);}
+                y=cards.blueprints(row,y,ownership);
+                for(const auto& link:cards.links)linkHits.push_back({link.rect,link.url});
             }
             contentHeight=y+scroll-contentTop;viewHeight=h-contentTop-6*ui;g.Restore(state);
             float limit=std::max(0.f,contentHeight-viewHeight);if(scroll>limit){scroll=limit;repaint();}
@@ -316,7 +315,7 @@ void prepare(const SCMiner::JsonValue& library){
     for(const auto& row:SynthScan::field(library,"rows").items){
         auto kind=row.textOr("kind");if((kind!="Item"&&kind!="Component"&&kind!="Ship"&&kind!="Vehicle"&&kind!="Market item")||row.textOr("item_id").empty())continue;
         auto name=SynthScan::wide(row.textOr("name"));Row item;item.value=SynthScan::obj({{"id",SynthScan::field(row,"id")},{"item_id",SynthScan::field(row,"item_id")},{"name",SynthScan::field(row,"name")},
-            {"kind",SynthScan::field(row,"kind")},{"finder_blueprints",SynthScan::field(row,"finder_blueprints")},{"market_item_id",SynthScan::field(row,"market_item_id")},{"market_identity",SynthScan::field(row,"market_identity")},{"market_board",SynthScan::field(row,"market_board")},{"quality_values",SynthScan::field(row,"quality_values")}});
+            {"kind",SynthScan::field(row,"kind")},{"category",SynthScan::field(row,"category")},{"ship_stats",SynthScan::field(row,"ship_stats")},{"finder_blueprints",SynthScan::field(row,"finder_blueprints")},{"market_item_id",SynthScan::field(row,"market_item_id")},{"market_identity",SynthScan::field(row,"market_identity")},{"market_board",SynthScan::field(row,"market_board")},{"quality_values",SynthScan::field(row,"quality_values")}});
         item.name=normalize(name);item.hay=normalize(SynthScan::wide(row.textOr("search",row.textOr("name")+" "+row.textOr("category"))));item.display=name+L" · "+SynthScan::wide(kind);next->push_back(std::move(item));
     }
     std::atomic_store(&index,std::shared_ptr<const Index>(std::move(next)));
@@ -370,6 +369,8 @@ bool key(UINT message,WPARAM value,HWND target){
 }
 void close(){if(window)DestroyWindow(window);window=nullptr;search=nullptr;visible=false;if(font)DeleteObject(font);font=nullptr;if(fieldBrush)DeleteObject(fieldBrush);fieldBrush=nullptr;}
 bool selfTest(){
+    wchar_t previewPath[32768]{};DWORD length=GetEnvironmentVariableW(L"SYNTHSCAN_FINDER_PREVIEW_DIR",previewPath,32768);
+    if(!FinderCards::selfTest(length>0&&length<32768?std::filesystem::path(previewPath):std::filesystem::path()))return false;
     Row one;one.name=normalize(L"Helix I Mining Laser");one.hay=one.name;Row two;two.name=normalize(L"Helix II Mining Laser");two.hay=two.name;
     auto matches=find(Index{one,two},L"helix one");if(matches.empty()||matches[0]!=0)return false;
     Row shirt;shirt.name=normalize(L"Carrack T-Shirt");shirt.hay=shirt.name;shirt.value=SynthScan::obj({{"kind",SynthScan::str("Item")}});

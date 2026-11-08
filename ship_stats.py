@@ -28,6 +28,8 @@ def extract(store,record,classes,xml_paths):
         parts=[e for parent in xml.findall('Parts') for e in parent.iter('Part')]
         bodies=[float(e.get('damageMax','0')) for e in parts if e.get('name','').lower()=='body' and 'damageMax' in e.attrib]
         if len(bodies)==1 and positive(bodies[0]):result['body_hp']=bodies[0]
+    from ship_hardpoints import extract as extract_ports
+    result['hardpoints']=extract_ports(store,raw,classes,xml_path,vehicle.get('modification',''))
     loadout=next((c.get('loadout',{}) for c in components if c.get('_Type_')=='SEntityComponentDefaultLoadoutParams'),{})
     shields=[];unresolved=False;armors=[]
     for node in walk_nodes(loadout):
@@ -59,7 +61,7 @@ def extract(store,record,classes,xml_paths):
 
 def export(store,xml_root,build):
     classes={}
-    for folder in ('shieldgenerator','armor'):
+    for folder in ('shieldgenerator','armor','weapon_mounts','turret','weapons','utility'):
         for p in (store.root/'libs/foundry/records/entities/scitem/ships'/folder).rglob('*.json'):
             record=store.read(p);classes[record['_RecordName_'].split('.',1)[-1]]=p
     xml_paths={}
@@ -70,4 +72,4 @@ def export(store,xml_root,build):
     for p in (store.root/'libs/foundry/records/entities/spaceships').rglob('*.json'):
         record=store.read(p)
         result[record['_RecordId_']]=extract(store,record,classes,xml_paths)
-    return dict(schema=1,build=build,ships=result,xml_hashes={p.relative_to(xml_root).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in Path(xml_root).rglob('*.xml')})
+    return dict(schema=2,build=build,ships=result,xml_hashes={p.relative_to(xml_root).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in Path(xml_root).rglob('*.xml')})

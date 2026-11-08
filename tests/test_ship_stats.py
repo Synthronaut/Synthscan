@@ -51,6 +51,20 @@ class ShipStatsTests(unittest.TestCase):
         self.assertEqual(rows[2]['category'],'Ship equipment')
         self.assertEqual(rows[2]['source_category'],'Weapons & ammunition')
 
+    def test_missing_uex_uuid_uses_only_verified_id_and_full_name(self):
+        identity='5cf39b3b-41d8-45c1-8ef2-d4678c7a7b85'
+        rows=[dict(name='Crusader M2 Hercules Starlifter',kind='Ship',category='Ships',uex_vehicle_id=117),
+              dict(name='Crusader A2 Hercules Starlifter',kind='Ship',category='Ships',uex_vehicle_id=117),
+              dict(name='Crusader M2 Hercules Starlifter',kind='Ship',category='Ships',uex_vehicle_id=118),
+              dict(name='Crusader M2 Hercules Starlifter',kind='Ship',category='Ships',uex_vehicle_id=117,game_vehicle_id='provided-id')]
+        enrich(rows,dict(ships={identity:dict(role='Heavy Freight')}))
+        self.assertIn('ship_stats',rows[0])
+        self.assertEqual(rows[0]['game_vehicle_id'],identity)
+        self.assertNotIn('ship_stats',rows[1])
+        self.assertNotIn('ship_stats',rows[2])
+        self.assertNotIn('ship_stats',rows[3])
+        self.assertEqual(rows[3]['game_vehicle_id'],'provided-id')
+
     def test_blueprint_reference_labels_do_not_create_duplicate_browse_groups(self):
         self.assertEqual(category(dict(kind='Blueprint',category='Armor & suits',item_type='Arms (Armor)')),'Armor')
         self.assertEqual(category(dict(kind='Blueprint',category='Personal weapons',item_type='FPS Weapon')),'Personal weapons & ammo')

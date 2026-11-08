@@ -1,5 +1,22 @@
 ## Unreleased
 
+- Apply readable purchase cards to the in-game Finder HUD: prominent prices,
+  compact locations and green/red retail price comparisons. Preserve the existing
+  layered-window transparency and input behavior.
+- Present player-market ranges and filtered listings as structured HUD cards;
+  retain exact quality/unit separation and existing outlier exclusions. Format
+  blueprint ingredients and unlock missions as short rows rather than a text wall.
+- Add raster-only HUD presentation checks that create no windows or game input.
+
+- Remove redundant Finder material-planning and blueprint navigation buttons;
+  retain one explicit add/remove-favorite action.
+- Add compact ship component-slot and weapon-mount cards with counts and size
+  limits. Apply exact vehicle variant patches and active-port rules; follow
+  stock gimbals/turrets without mistaking turret socket sizes for gun sizes.
+  Mark unresolved mount information instead of guessing compatibility.
+- Document the researched shopping-list and destination-consolidation proposal
+  in docs/shopping-list-plan.md; the cart itself is not implemented yet.
+
 - Prevent redundant hide/show cycles when sidebar pages receive a second ready
   notification. Keep page transitions on a dark surface until mounting finishes.
 - Add stock ship overview cards: body-part HP, stock shield-generator capacity,

@@ -37,6 +37,24 @@ class MarketTests(unittest.TestCase):
         text=market_view(index()['items']['7'],dict(checked_at=NOW,rows=offers),975,'4.10.2',NOW,exact=True)['text']
         self.assertIn('Typical asks: 362,500–487,500',text);self.assertNotIn('470 aUEC / scu',text);self.assertIn('excluded from all estimates and results',text)
         self.assertNotIn('470,000',text)
+    def test_structured_hud_cards_share_the_filtered_prices_and_units(self):
+        raw=[ad(id=i+1,quality=975,price=p) for i,p in enumerate([470,300000,350000,400000,450000,500000,1500000])]
+        raw.append(ad(id=99,quality=975,unit='unit',price=8000000))
+        offers,_=listings(payload(*raw),7,'sell',NOW)
+        view=market_view(index()['items']['7'],dict(checked_at=NOW,rows=offers),975,'4.10.2',NOW,exact=True)
+        self.assertEqual(view['presentation_schema'],1)
+        sellers=view['sections'][0]
+        self.assertEqual(sellers['operation'],'sell')
+        self.assertNotIn(470,[r['price'] for r in sellers['offers']])
+        groups={g['unit']:g for g in sellers['summaries']}
+        self.assertEqual(groups['scu']['low'],362500)
+        self.assertEqual(groups['scu']['high'],487500)
+        self.assertEqual(groups['scu']['median'],425000)
+        self.assertFalse(groups['unit']['reliable'])
+        self.assertNotIn('low',groups['unit'])
+        self.assertEqual(sellers['rejected'],1)
+        self.assertTrue(all(r['url'].startswith('https://uexcorp.space/marketplace/') for r in sellers['offers']))
+
     def test_outlier_checks_do_not_mix_units_or_quality_values(self):
         raw=[ad(id=i+1,price=p) for i,p in enumerate([300000,350000,400000,450000,500000])]
         raw+=[ad(id=20,quality=348,price=470),ad(id=21,unit='cscu',price=4000)]

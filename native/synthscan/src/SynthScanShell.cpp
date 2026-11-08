@@ -226,7 +226,7 @@ void updateDirectoryCategories(){
 void listRows(){
     if(!listing)return;
     std::string prior=selected>=0&&selected<int(visible.size())?visible[selected].textOr("id"):"";
-    SendMessageW(listing,WM_SETREDRAW,FALSE,0);ListView_DeleteAllItems(listing);visible.clear();selected=-1;icon.reset();
+    SendMessageW(listing,WM_SETREDRAW,FALSE,0);ListView_DeleteAllItems(listing);visible.clear();selected=-1;icon.reset();if(currentTab==0)EnableWindow(GetDlgItem(panel,210),FALSE);
     std::wstring query=lower(text(search)),type=text(kind),cat=text(category);
     size_t matched=0;
     std::vector<const Json*> candidates;
@@ -290,8 +290,7 @@ void selection(){
         }
     }else{directoryRowId.clear();directoryItemId.clear();directoryRequestId.clear();directoryText.clear();directoryShops=obj({});}
     renderDirectoryDetail(row);icon.reset();
-    if(currentTab==0)EnableWindow(GetDlgItem(panel,228),row.textOr("kind")!="Ship"&&row.textOr("kind")!="Vehicle"&&!row.textOr("item_id").empty());
-    if(currentTab==0)EnableWindow(GetDlgItem(panel,211),row.textOr("kind")=="Material");
+    if(currentTab==0){EnableWindow(GetDlgItem(panel,210),TRUE);SetDlgItemTextW(panel,210,favorites.count(row.textOr("id"))?L"★ Remove favorite":L"☆ Add favorite");}
     if(currentTab==2&&editReminder&&GetFocus()!=editReminder)SetWindowTextW(editReminder,wide(row.textOr("notes")).c_str());
     auto path=row.textOr("icon");if(!path.empty())icon=std::make_unique<Gdiplus::Bitmap>(wide(path).c_str());
     InvalidateRect(panel,nullptr,FALSE);
@@ -321,7 +320,7 @@ void layoutDirectory(){
     move(search,layout.query);move(kind,layout.type);move(category,layout.category);move(listing,layout.results);move(detail,layout.details);
     int available=int(layout.results.width*scale)-GetSystemMetrics(SM_CXVSCROLL);
     ListView_SetColumnWidth(listing,0,available*54/100);ListView_SetColumnWidth(listing,1,available*18/100);ListView_SetColumnWidth(listing,2,available*28/100);
-    const int actions[]={210,211,228};for(int i=0;i<3;++i)move(GetDlgItem(panel,actions[i]),{20+i*208,layout.actions,i==2?240:196,32});
+    move(GetDlgItem(panel,210),{20,layout.actions,196,32});
     move(status,{20,layout.footer,int(rect.right/scale)-40,22});
 }
 void rebuild(int tab){
@@ -402,7 +401,7 @@ void rebuild(int tab){
     const wchar_t* sessionColumns[]={L"Joined",L"Left / observed",L"Region",L"Shard",L"Shard label",L"Duration",L"Visit"};int sessionWidths[]={160,160,85,65,130,85,100};
     for(int i=0;i<(tab==2?7:3);i++){LVCOLUMNW c{};c.mask=LVCF_TEXT|LVCF_WIDTH;c.pszText=const_cast<wchar_t*>(tab==2?sessionColumns[i]:columns[i]);c.cx=px(tab==2?sessionWidths[i]:(i==0?390:200));ListView_InsertColumn(listing,i,&c);}
     detail=tab==0?SynthDirectoryCard::create(panel,205,px(20),px(355),px(820),px(184)):control(L"EDIT",L"Select an entry",ES_MULTILINE|ES_READONLY|ES_AUTOVSCROLL|WS_VSCROLL,100,355,740,184,205);
-    if(tab==0){control(L"BUTTON",L"Favorite / unfavorite",BS_PUSHBUTTON,20,551,190,30,210);control(L"BUTTON",L"Mine this material",BS_PUSHBUTTON,224,551,190,30,211);control(L"BUTTON",L"Blueprints for this item",BS_PUSHBUTTON,428,551,240,30,228);}
+    if(tab==0){control(L"BUTTON",L"☆ Add favorite",BS_PUSHBUTTON,20,551,190,30,210);EnableWindow(GetDlgItem(panel,210),FALSE);}
     if(tab==1)control(L"BUTTON",L"Find mining destinations",BS_PUSHBUTTON,20,551,240,30,212);
     if(tab==2){
         control(L"BUTTON",L"Previous visits",BS_PUSHBUTTON,20,319,130,26,225);control(L"BUTTON",L"Next visits",BS_PUSHBUTTON,160,319,130,26,226);control(L"STATIC",L"",SS_LEFT,310,323,530,22,227);
@@ -449,11 +448,6 @@ void handleAction(int id){
         write(data/L"piracy_command.json",obj({{"owner_pid",num(GetCurrentProcessId())},{"at",num(epoch())},{"action",str(id==335?"reset_wait":"toggle_wait")}}));return;
     }
 
-    if(id==228&&currentTab==0&&selected>=0&&selected<int(visible.size())){
-        auto row=visible[selected];if(row.textOr("item_id").empty()){note="Choose an item to find its blueprints.";SetWindowTextW(status,wide(note).c_str());return;}
-        SetWindowTextW(search,wide(row.textOr("name")).c_str());SendMessageW(kind,CB_SETCURSEL,1,0);updateDirectoryCategories();SendMessageW(category,CB_SETCURSEL,0,0);
-        relatedItemId=row.textOr("item_id");listRows();return;
-    }
     if(id==312){setMode(3);showHud(true);setActivityExpanded(true);return;}
     if(id==313){if(!testing)spawnPython(L"compboard_tracker.py",{});return;}
     if(id==222||id==223||id==224||id==225||id==226){Json c=obj({{"action",str(id==223||id==224?"session_export":"session_view")},{"query",str(utf8(text(search)))},{"region",str(SendMessageW(kind,CB_GETCURSEL,0,0)>0?utf8(text(kind)):"")},{"date_from",str(utf8(text(category)))},{"date_to",str(utf8(text(GetDlgItem(panel,221))))}});if(id==225||id==226)c.members.push_back({"offset",num(std::max(0.,field(state,"session_log").numberOr("offset")+(id==225?-100:100)))});if(id==223||id==224){if(testing)return;wchar_t path[32768]{};wcscpy_s(path,id==223?L"SynthScan server history.csv":L"SynthScan server history.json");OPENFILENAMEW f{sizeof(f)};f.hwndOwner=panel;f.lpstrFile=path;f.nMaxFile=32768;f.lpstrDefExt=id==223?L"csv":L"json";f.lpstrFilter=id==223?L"CSV file\0*.csv\0":L"JSON file\0*.json\0";f.Flags=OFN_OVERWRITEPROMPT|OFN_NOCHANGEDIR|OFN_PATHMUSTEXIST;if(!GetSaveFileNameW(&f))return;c.members.push_back({"path",str(utf8(path))});c.members.push_back({"format",str(id==223?"csv":"json")});}command(c);return;}
@@ -478,7 +472,7 @@ void handleAction(int id){
         SetWindowTextW(status,wide(note).c_str());return;
     }
     if(id==210&&selected>=0){auto key=visible[selected].textOr("id");if(favorites.count(key))favorites.erase(key);else favorites.insert(key);Json list=arr();for(auto& key:favorites)list.items.push_back(str(key));write(data/L"workspace_favorites.json",list);selection();return;}
-    if(id==211&&selected>=0){auto row=visible[selected];if(row.textOr("kind")!="Material"){note="Select a material first.";SetWindowTextW(status,wide(note).c_str());return;}auto target=wide(row.textOr("name"));rebuild(1);SetWindowTextW(search,target.c_str());handleAction(212);return;}
+
     if(id==212){command(obj({{"action",str("plan")},{"targets",str(utf8(text(search)))},{"family",str(utf8(text(kind)))},{"system",str(utf8(text(category)))}}));return;}
     if(id==213&&selected>=0){auto row=visible[selected];if(row.textOr("kind")=="Legacy cargo"){note="Cargo is a saved snapshot; this button confirms blueprints only.";}
         else if(confirmOwned&&confirmOwned(row.textOr("name")))note="Blueprint confirmed in the native library.";else note="No unambiguous native blueprint match; original record kept for review.";
@@ -1078,7 +1072,8 @@ int uiTest(const std::string& directory){
             bool scoped=true;int categories=int(SendMessageW(category,CB_GETCOUNT,0,0));
             for(int i=1;i<categories;i++){wchar_t label[512]{};SendMessageW(category,CB_GETLBTEXT,i,(LPARAM)label);bool found=false;for(const auto& row:field(library,"rows").items)if(row.textOr("kind")=="Ship"&&wide(row.textOr("category"))==label)found=true;scoped=scoped&&found;}
             result.members.push_back({"finder_categories_scoped_to_type",boolean(scoped&&shipType>=0)});
-            SetWindowTextW(search,L"Arrow");listRows();if(!visible.empty()){ListView_SetItemState(listing,0,LVIS_SELECTED|LVIS_FOCUSED,LVIS_SELECTED|LVIS_FOCUSED);selection();}
+            result.members.push_back({"finder_redundant_actions_removed",boolean(!GetDlgItem(panel,211)&&!GetDlgItem(panel,228))});
+            SetWindowTextW(search,wide(read(std::filesystem::u8path(directory)/"finder_test_model.json").textOr("query","Arrow")).c_str());listRows();if(!visible.empty()){ListView_SetItemState(listing,0,LVIS_SELECTED|LVIS_FOCUSED,LVIS_SELECTED|LVIS_FOCUSED);selection();}
         }if(tab==2){timelineColumns=Header_GetItemCount(ListView_GetHeader(listing));timelineRows=ListView_GetItemCount(listing);SendMessageW(panel,WM_COMMAND,222,0);sessionRoute=read(data/L"workspace_command.json").textOr("action")=="session_view";}}
         gui.processMessages();UpdateWindow(target);
         RECT rc;GetClientRect(target,&rc);HDC dc=GetDC(target),mem=CreateCompatibleDC(dc);HBITMAP bm=CreateCompatibleBitmap(dc,rc.right,rc.bottom);auto old=SelectObject(mem,bm);
