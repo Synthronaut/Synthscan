@@ -66,14 +66,16 @@ def vehicle_rows(payload,checked_at):
         detail=f"{name}\n{kind} · {maker}\n\nIn-game purchase locations and aUEC prices are checked separately from the vehicle catalog.\n"
         if vehicle.get('is_concept'):detail+='Listed as a concept by UEX; inclusion here does not imply in-game availability.\n'
         detail+='\nVehicle directory: UEX Corp · checked '+date(checked_at)
+        from finder_categories import vehicle_metadata
+        overview=vehicle_metadata(vehicle)
         rows.append(dict(id=key,item_id=key,name=name,kind=kind,category='Ground vehicles' if kind=='Vehicle' else 'Ships',
-                         detail=detail,icon='',search=' '.join([name,str(vehicle.get('name') or ''),maker,kind]),uex_vehicle_id=identifier))
+                         detail=detail,icon='',search=' '.join([name,str(vehicle.get('name') or ''),maker,kind]),uex_vehicle_id=identifier,game_vehicle_id=str(vehicle.get('uuid') or ''),ship_overview=overview))
     return rows
 
 
 def fetch_vehicle_catalog():
     now=time.time()
-    return dict(schema=1,checked_at=now,rows=vehicle_rows(uex_json('vehicles'),now),source='UEX Corp')
+    return dict(schema=2,checked_at=now,rows=vehicle_rows(uex_json('vehicles'),now),source='UEX Corp')
 
 
 def saved_vehicles(directory):
@@ -241,7 +243,8 @@ class ItemDirectoryService:
         self.token = token or self.catalogue_token
         self.pool = ThreadPoolExecutor(max_workers=3, thread_name_prefix='item-directory')
         self.vehicle_fetch=vehicle_fetch;self.vehicle_future=None
-        self.next_vehicle_check=stamp(saved_vehicles(self.directory).get('checked_at'))+VEHICLE_TTL
+        vehicles=saved_vehicles(self.directory)
+        self.next_vehicle_check=stamp(vehicles.get('checked_at'))+VEHICLE_TTL if vehicles.get('schema')==2 else 0
         self.export = None
         self.export_token = None
         self.next_export = 0

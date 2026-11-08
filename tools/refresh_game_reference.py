@@ -60,7 +60,7 @@ def main():
     records, localizations = work/'records', work/'localization'
     log = []
     try:
-        filters = ['**/{crafting,mining,resourcetypedatabase,entities/scitem,scitemmanufacturer,ammoparams}/**',
+        filters = ['**/{crafting,mining,resourcetypedatabase,entities/scitem,entities/spaceships,scitemmanufacturer,ammoparams}/**',
                    '**/{harvestable,entities/mineable,entities/ui}/**',
                    '**/{reputation,factions,missionbroker,missiondata,characternamedata,contracts,reputationvaluesettings,sreputationglobalcontextbbparams,journalentry,lawsystem}/**']
         for pattern in filters:
@@ -69,6 +69,8 @@ def main():
         artwork = work/'artwork'
         art_filter = r'(?i)^Data[\\/]UI[\\/](Textures[\\/](Vector[\\/]General[\\/](Items|CommonIcons)|EA[\\/]LoadoutIcons)|mobiGlas[\\/]assets[\\/]TIF[\\/]AssetManager|SharedAssets[\\/]CommodityLogos)[\\/].*\.(svg|dds)$'
         run(binary, ['p4k','extract','--p4k',str(archive),'--regex',art_filter,'--max-threads','1','--convert','dds-png','-o',str(artwork)],log)
+        vehicle_xml=work/'vehicle_xml'
+        run(binary,['p4k','extract','--p4k',str(archive),'--regex',r'(?i).*scripts[\\/]entities[\\/]vehicles[\\/]implementations[\\/]xml[\\/].*\.xml$','--convert','cryxml','--max-threads','1','-o',str(vehicle_xml)],log)
         global_ini = next(localizations.rglob('global.ini'))
         store = GameRecords(records, global_ini)
         base = json.loads((ROOT/'data/crafting_catalog.json').read_text(encoding='utf-8'))
@@ -90,7 +92,7 @@ def main():
         hashes = {str(p.relative_to(store.root)).replace('\\','/'):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(store.used)}
         recipes['native_provenance']['record_hashes'] = hashes
         mining['provenance']['record_hashes'] = hashes
-        library = export_library(store,artwork,destination,manifest)
+        library = export_library(store,artwork,destination,manifest,vehicle_xml)
         def stable_game():
             if (game/'build_manifest.id').read_bytes() != original or (archive.stat().st_size,archive.stat().st_mtime_ns) != stamp:
                 raise RuntimeError('Game files changed during extraction; existing catalogs preserved')
@@ -99,6 +101,8 @@ def main():
             raise RuntimeError('Mining references are incomplete; existing catalogs preserved')
         if recipes['native_provenance']['enriched_entries'] < 1:
             raise RuntimeError('No reference recipes could be verified; existing catalogs preserved')
+        if not library.get('ship_reference',{}).get('ships'):
+            raise RuntimeError('Ship references are incomplete; existing catalogs preserved')
         if library['provenance']['failures'] or library['provenance']['asset_failures'] or not library['entries']:
             raise RuntimeError('Library export incomplete; existing catalogs preserved')
         (work/'source_manifest.json').write_bytes(original)

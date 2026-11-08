@@ -57,7 +57,7 @@ class WeaponStatsTests(unittest.TestCase):
             library=root/'data/local_game_library.json';library.write_text(json.dumps(dict(provenance=dict(build=dict(BuildId='build')))))
             with patch('installation.game_directory',return_value=root),patch('installation.output_root',return_value=root):
                 self.assertEqual(local_reference_status()['status'],'refresh_required')
-                library.write_text(json.dumps(dict(provenance=dict(build=dict(BuildId='build'),weapon_stats_schema=1))))
+                library.write_text(json.dumps(dict(provenance=dict(build=dict(BuildId='build'),weapon_stats_schema=1,ship_stats_schema=1))))
                 self.assertEqual(local_reference_status()['status'],'current')
 
     def test_directory_audit_preserves_distinct_item_and_blueprint_identities(self):

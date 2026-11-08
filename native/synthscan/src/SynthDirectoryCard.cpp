@@ -36,6 +36,22 @@ void paint(HWND window){
             text(g,m.item.textOr("name"),pad,y,width-200,30,21,INK,true);
             text(g,m.favorite?"FAVORITE  ·  "+m.item.textOr("kind"):m.item.textOr("kind"),width-180,y+5,164,22,11,GOLD,true);
             y+=42;
+            const auto& ship=field(m.item,"ship_stats");const auto& overview=field(m.item,"ship_overview");
+            if(m.item.textOr("kind")=="Ship"||m.item.textOr("kind")=="Vehicle"){
+                text(g,"STOCK SHIP OVERVIEW",pad,y,width-32,20,10,MUTED,true);y+=24;
+                auto role=ship.textOr("role",m.item.textOr("category"));
+                text(g,role+(flag(overview,"concept")?" · CONCEPT LISTING":""),pad,y,width-32,24,15,GOLD,true);y+=30;
+                const char* labels[]={"BODY HP","STOCK SHIELDS","CARGO","CREW"};
+                std::string values[]={statValue(ship,"body_hp"),statValue(ship,"shield_hp"),statValue(overview,"scu"),overview.textOr("crew","—")};
+                const char* units[]={"main body part","generator capacity","SCU · UEX","listed · UEX"};
+                int columns=width>=650?4:2;float tile=(width-32-(columns-1)*10)/columns;
+                for(int i=0;i<4;++i){float x=pad+(i%columns)*(tile+10),top=y+(i/columns)*86;rounded(g,x,top,tile,76);text(g,labels[i],x+10,top+8,tile-20,16,9,MUTED,true);text(g,values[i],x+10,top+25,tile-20,29,21,INK,true);text(g,units[i],x+10,top+55,tile-20,16,10,MUTED);}
+                y+=columns==4?86:172;
+                text(g,"Armor damage taken: physical ×"+statValue(ship,"armor_physical")+" · energy ×"+statValue(ship,"armor_energy"),pad,y,width-32,22,12,INK);y+=26;
+                text(g,"Size "+statValue(ship,"size")+" · L × W × H: "+statValue(overview,"length")+" × "+statValue(overview,"width")+" × "+statValue(overview,"height")+" m",pad,y,width-32,22,12,MUTED);y+=26;
+                text(g,"Defense: "+ship.textOr("patch","not available for this exact ship")+" · body HP is not total survival HP",pad,y,width-32,32,10,MUTED);y+=36;
+                text(g,"Basic specs: UEX · patch "+overview.textOr("patch","not reported")+" · — = unavailable",pad,y,width-32,30,10,MUTED);y+=34;
+            }
             const auto& stats=field(m.item,"weapon_stats");
             if(!stats.textOr("status").empty()){
                 text(g,"STOCK SHIP WEAPON · GAME FILES",pad,y,width-32,20,10,MUTED,true);y+=24;

@@ -93,11 +93,13 @@ def library_export(destination,game=None,catalog=None,extra_rows=()):
         details+='\nDESCRIPTION\n'+b.get('description','')+'\n'
         image=g.image_path(g.resolve(b.get('item_id','')))
         rows.append(dict(id=b['id'],item_id=b.get('item_id',''),name=b['name'],kind='Blueprint',category=b['category'],detail=details+catalog_label,icon=str(image) if image else '',
-                         finder_blueprints=finder_blueprints([b]),weapon_stats=game_by_id.get(b.get('item_id'),{}).get('weapon_stats',{}),
+                         finder_blueprints=finder_blueprints([b]),item_type=b.get('type',''),item_record=game_by_id.get(b.get('item_id'),{}).get('record',''),weapon_stats=game_by_id.get(b.get('item_id'),{}).get('weapon_stats',{}),
                          search=c.search_text.get(b['id'],b['name'])))
     for row in extra_rows:
         if display_name(row.get('name')):rows.append(row)
         else:excluded.append(dict(id=row.get('id'),reason='Unresolved external display name'))
+    from finder_categories import enrich
+    enrich(rows,g.data.get('ship_reference',{}))
     rows.sort(key=lambda e:(e['name'].casefold(),e['id']))
     atomic_json(destination,dict(schema=2,build=g.data['provenance'].get('build'),rows=rows,audit=validate(rows),excluded_records=excluded))
     return len(rows)

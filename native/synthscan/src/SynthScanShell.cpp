@@ -211,6 +211,18 @@ void addRow(const Json& row){
     auto k=wide(row.textOr("kind")),c=wide(row.textOr("category"));ListView_SetItemText(listing,index,1,k.data());ListView_SetItemText(listing,index,2,c.data());
     if(currentTab==2){const char* keys[]={"joined_local","left_local","kind","shard_id","name","duration","visit"};for(int col=0;col<7;col++){auto value=wide(row.textOr(keys[col]));ListView_SetItemText(listing,index,col,value.data());}}
 }
+void updateDirectoryCategories(){
+    if(currentTab!=0||!category||!kind)return;
+    auto prior=text(category),type=text(kind);std::set<std::string> cats;
+    for(const auto& row:field(library,"rows").items){
+        if(type!=L"All"&&type!=L"Favorites"&&wide(row.textOr("kind"))!=type)continue;
+        if(type==L"Favorites"&&!favorites.count(row.textOr("id")))continue;
+        cats.insert(row.textOr("category"));
+    }
+    SendMessageW(category,CB_RESETCONTENT,0,0);SendMessageW(category,CB_ADDSTRING,0,(LPARAM)L"All categories");
+    for(auto& c:cats){auto value=wide(c);SendMessageW(category,CB_ADDSTRING,0,(LPARAM)value.c_str());}
+    int found=int(SendMessageW(category,CB_FINDSTRINGEXACT,-1,(LPARAM)prior.c_str()));SendMessageW(category,CB_SETCURSEL,found>=0?found:0,0);
+}
 void listRows(){
     if(!listing)return;
     std::string prior=selected>=0&&selected<int(visible.size())?visible[selected].textOr("id"):"";
@@ -439,7 +451,7 @@ void handleAction(int id){
 
     if(id==228&&currentTab==0&&selected>=0&&selected<int(visible.size())){
         auto row=visible[selected];if(row.textOr("item_id").empty()){note="Choose an item to find its blueprints.";SetWindowTextW(status,wide(note).c_str());return;}
-        SetWindowTextW(search,wide(row.textOr("name")).c_str());SendMessageW(kind,CB_SETCURSEL,1,0);SendMessageW(category,CB_SETCURSEL,0,0);
+        SetWindowTextW(search,wide(row.textOr("name")).c_str());SendMessageW(kind,CB_SETCURSEL,1,0);updateDirectoryCategories();SendMessageW(category,CB_SETCURSEL,0,0);
         relatedItemId=row.textOr("item_id");listRows();return;
     }
     if(id==312){setMode(3);showHud(true);setActivityExpanded(true);return;}
@@ -488,7 +500,7 @@ void handleAction(int id){
 LRESULT CALLBACK panelProc(HWND hwnd,UINT message,WPARAM w,LPARAM l){
     switch(message){
     case WM_SIZE:layoutDirectory();return 0;
-    case WM_COMMAND:{int id=LOWORD(w),code=HIWORD(w);if((id==201&&code==EN_CHANGE)||(id==202&&code==CBN_SELCHANGE)||(id==203&&code==CBN_SELCHANGE)){relatedItemId.clear();if(currentTab==0||currentTab==2||currentTab==3)SetTimer(hwnd,2,180,nullptr);return 0;}handleAction(id);return 0;}
+    case WM_COMMAND:{int id=LOWORD(w),code=HIWORD(w);if((id==201&&code==EN_CHANGE)||(id==202&&code==CBN_SELCHANGE)||(id==203&&code==CBN_SELCHANGE)){relatedItemId.clear();if(currentTab==0&&id==202)updateDirectoryCategories();if(currentTab==0||currentTab==2||currentTab==3)SetTimer(hwnd,2,180,nullptr);return 0;}handleAction(id);return 0;}
     case WM_TIMER:if(w==2){KillTimer(hwnd,2);listRows();}return 0;
     case WM_NOTIFY:{
         auto header=reinterpret_cast<NMHDR*>(l);
@@ -586,10 +598,7 @@ void pollItemDirectory(){
         try{auto next=libraryJob.get();if(!field(next,"rows").items.empty()){
             library=std::move(next);libraryRevision=libraryLoadingRevision;
             if(panel&&IsWindowVisible(panel)&&currentTab==0){
-                auto prior=text(category);std::set<std::string> cats;for(auto& row:field(library,"rows").items)cats.insert(row.textOr("category"));
-                SendMessageW(category,CB_RESETCONTENT,0,0);SendMessageW(category,CB_ADDSTRING,0,(LPARAM)L"All categories");
-                for(auto& c:cats){auto value=wide(c);SendMessageW(category,CB_ADDSTRING,0,(LPARAM)value.c_str());}
-                int found=int(SendMessageW(category,CB_FINDSTRINGEXACT,-1,(LPARAM)prior.c_str()));SendMessageW(category,CB_SETCURSEL,found>=0?found:0,0);
+                updateDirectoryCategories();
                 listRows();
             }
         }}catch(...){note="Item catalog refresh failed; keeping the previous catalog.";}
@@ -1064,7 +1073,13 @@ int uiTest(const std::string& directory){
             for(int frame=0;frame<8;frame++){gui.processMessages();InvalidateRect(gui.windowHandle(),nullptr,FALSE);UpdateWindow(gui.windowHandle());Sleep(20);}
             target=gui.windowHandle();
         }
-        else{workspace(tab);target=panel;if(tab==2){timelineColumns=Header_GetItemCount(ListView_GetHeader(listing));timelineRows=ListView_GetItemCount(listing);SendMessageW(panel,WM_COMMAND,222,0);sessionRoute=read(data/L"workspace_command.json").textOr("action")=="session_view";}}
+        else{workspace(tab);target=panel;if(tab==0){
+            int shipType=int(SendMessageW(kind,CB_FINDSTRINGEXACT,-1,(LPARAM)L"Ship"));SendMessageW(kind,CB_SETCURSEL,shipType,0);updateDirectoryCategories();
+            bool scoped=true;int categories=int(SendMessageW(category,CB_GETCOUNT,0,0));
+            for(int i=1;i<categories;i++){wchar_t label[512]{};SendMessageW(category,CB_GETLBTEXT,i,(LPARAM)label);bool found=false;for(const auto& row:field(library,"rows").items)if(row.textOr("kind")=="Ship"&&wide(row.textOr("category"))==label)found=true;scoped=scoped&&found;}
+            result.members.push_back({"finder_categories_scoped_to_type",boolean(scoped&&shipType>=0)});
+            SetWindowTextW(search,L"Arrow");listRows();if(!visible.empty()){ListView_SetItemState(listing,0,LVIS_SELECTED|LVIS_FOCUSED,LVIS_SELECTED|LVIS_FOCUSED);selection();}
+        }if(tab==2){timelineColumns=Header_GetItemCount(ListView_GetHeader(listing));timelineRows=ListView_GetItemCount(listing);SendMessageW(panel,WM_COMMAND,222,0);sessionRoute=read(data/L"workspace_command.json").textOr("action")=="session_view";}}
         gui.processMessages();UpdateWindow(target);
         RECT rc;GetClientRect(target,&rc);HDC dc=GetDC(target),mem=CreateCompatibleDC(dc);HBITMAP bm=CreateCompatibleBitmap(dc,rc.right,rc.bottom);auto old=SelectObject(mem,bm);
         DWORD affinity=0;GetWindowDisplayAffinity(target,&affinity);SetWindowDisplayAffinity(target,WDA_NONE);PrintWindow(target,mem,PW_CLIENTONLY);SetWindowDisplayAffinity(target,affinity);
@@ -1083,6 +1098,25 @@ int uiTest(const std::string& directory){
     bool hotkeyIgnored=!IsWindowVisible(gui.windowHandle())&&!hotkeyOK;
     result.members.push_back({"mouse_visibility_route",boolean(shown&&hidden)});
     result.members.push_back({"hotkey_messages_ignored",boolean(hotkeyIgnored)});
+    // Hidden-window integration fixture: repeated ready notifications must not
+    // hide/show the mounted page; navigation must retain redraw suppression.
+    WNDCLASSW transitionClass{};transitionClass.hInstance=GetModuleHandleW(nullptr);transitionClass.lpszClassName=L"SynthPageTransitionFixture";
+    transitionClass.lpfnWndProc=[](HWND h,UINT m,WPARAM w,LPARAM l)->LRESULT{if(m==WM_SHOWWINDOW)SetWindowLongPtrW(h,GWLP_USERDATA,GetWindowLongPtrW(h,GWLP_USERDATA)+1);return DefWindowProcW(h,m,w,l);};RegisterClassW(&transitionClass);
+    HWND fixtureRoot=CreateWindowW(transitionClass.lpszClassName,L"",WS_POPUP,-32000,-32000,640,480,nullptr,nullptr,transitionClass.hInstance,nullptr);
+    SynthPages::initialize(fixtureRoot);SynthPages::place(0,0,640,480,true);
+    HWND first=CreateWindowW(transitionClass.lpszClassName,L"",WS_POPUP,0,0,640,480,nullptr,nullptr,transitionClass.hInstance,nullptr);
+    HWND second=CreateWindowW(transitionClass.lpszClassName,L"",WS_POPUP,0,0,640,480,nullptr,nullptr,transitionClass.hInstance,nullptr);
+    SynthPages::mount(first);auto shows=GetWindowLongPtrW(first,GWLP_USERDATA);SynthPages::mount(first);
+    bool stable=GetWindowLongPtrW(first,GWLP_USERDATA)==shows;
+    auto oldGeneration=SynthPages::generation();SynthPages::hide();SynthPages::mount(first);
+    SendMessageW(SynthPages::host(),WM_APP+417,(WPARAM)first,oldGeneration);
+    bool lateReady=(GetWindowLongPtrW(first,GWL_STYLE)&WS_VISIBLE)!=0&&SynthPages::current()==first;
+    result.members.push_back({"stale_page_ready_cannot_hide_reused_page",boolean(lateReady)});
+    SynthPages::beginTransition();SynthPages::mount(second);SynthPages::place(0,0,600,440,true);
+    bool held=(GetWindowLongPtrW(SynthPages::host(),GWL_STYLE)&WS_VISIBLE)==0;
+    SynthPages::endTransition();bool committed=(GetWindowLongPtrW(SynthPages::host(),GWL_STYLE)&WS_VISIBLE)!=0&&SynthPages::current()==second&&GetParent(second)==SynthPages::host();
+    result.members.push_back({"page_ready_mount_is_idempotent",boolean(stable)});result.members.push_back({"page_transition_holds_redraw_until_ready",boolean(held&&committed)});
+    SynthPages::close();DestroyWindow(first);DestroyWindow(second);DestroyWindow(fixtureRoot);
     write(std::filesystem::u8path(directory)/"ui_test.json",result);shutdown();return field(library,"rows").items.empty()||!persisted||!shown||!hidden||!hotkeyIgnored?3:0;
 }
 }

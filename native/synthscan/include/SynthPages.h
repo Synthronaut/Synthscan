@@ -11,4 +11,6 @@ bool contains(HWND page);
 HWND host();
 HWND current();
 unsigned generation();
+void beginTransition();
+void endTransition();
 }

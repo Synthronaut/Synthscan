@@ -11,6 +11,8 @@ namespace {
 struct Page {LONG_PTR style=0,ex=0;HWND parent=nullptr;int width=0,height=0,crop=0,x=0,y=0;bool captured=false;};
 HWND mainWindow=nullptr,container=nullptr,active=nullptr;HHOOK hook=nullptr;
 std::map<HWND,Page> pages;bool arranging=false;unsigned revision=1;
+bool transitioning=false,wantVisible=false;
+HBRUSH surface=CreateSolidBrush(RGB(15,16,19));
 constexpr UINT READY=WM_APP+417;
 void arrange(){
     if(!container||!active||!IsWindow(active)||arranging)return;
@@ -30,8 +32,9 @@ LRESULT CALLBACK childProc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp,UINT_PTR,DWORD
     return DefSubclassProc(hwnd,msg,wp,lp);
 }
 LRESULT CALLBACK hostProc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp){
+    if(msg==WM_PAINT){PAINTSTRUCT ps{};HDC dc=BeginPaint(hwnd,&ps);FillRect(dc,&ps.rcPaint,surface);EndPaint(hwnd,&ps);return 0;}
     if(msg==WM_SIZE){arrange();return 0;}
-    if(msg==READY){auto page=reinterpret_cast<HWND>(wp);if(IsWindow(page)){if(unsigned(lp)==revision)mount(page);else ShowWindow(page,SW_HIDE);}return 0;}
+    if(msg==READY){auto page=reinterpret_cast<HWND>(wp);if(IsWindow(page)){if(unsigned(lp)==revision)mount(page);else if(page!=active)ShowWindow(page,SW_HIDE);}return 0;}
     if((msg==WM_VSCROLL||msg==WM_HSCROLL||msg==WM_MOUSEWHEEL)&&active){
         auto& p=pages[active];bool vertical=msg!=WM_HSCROLL;int bar=vertical?SB_VERT:SB_HORZ;
         SCROLLINFO si{sizeof(si),SIF_ALL};GetScrollInfo(hwnd,bar,&si);int at=si.nPos;
@@ -53,7 +56,7 @@ LRESULT CALLBACK createHook(int code,WPARAM wp,LPARAM lp){
             if(tool){
                 Page p;p.style=create->style;p.ex=create->dwExStyle;p.parent=create->hwndParent;p.width=std::max(100,create->cx);p.height=std::max(100,create->cy);p.captured=true;
                 pages[reinterpret_cast<HWND>(wp)]=p;
-                create->style=(create->style&~(WS_POPUP|WS_CAPTION|WS_THICKFRAME|WS_SYSMENU|WS_MINIMIZEBOX|WS_MAXIMIZEBOX))|WS_CHILD|WS_CLIPCHILDREN;
+                create->style=(create->style&~(WS_VISIBLE|WS_POPUP|WS_CAPTION|WS_THICKFRAME|WS_SYSMENU|WS_MINIMIZEBOX|WS_MAXIMIZEBOX))|WS_CHILD|WS_CLIPCHILDREN|WS_CLIPSIBLINGS;
                 create->dwExStyle&=~(WS_EX_APPWINDOW|WS_EX_TOOLWINDOW|WS_EX_TOPMOST|WS_EX_NOACTIVATE);
                 create->hwndParent=container;create->x=create->y=0;
                 PostMessageW(container,READY,wp,revision);
@@ -65,14 +68,15 @@ LRESULT CALLBACK createHook(int code,WPARAM wp,LPARAM lp){
 }
 void initialize(HWND main){
     mainWindow=main;if(container)return;
-    WNDCLASSW cls{};cls.lpfnWndProc=hostProc;cls.hInstance=GetModuleHandleW(nullptr);cls.lpszClassName=L"SynthScanPageHost";cls.hCursor=LoadCursor(nullptr,IDC_ARROW);RegisterClassW(&cls);
+    WNDCLASSW cls{};cls.lpfnWndProc=hostProc;cls.hbrBackground=surface;cls.hInstance=GetModuleHandleW(nullptr);cls.lpszClassName=L"SynthScanPageHost";cls.hCursor=LoadCursor(nullptr,IDC_ARROW);RegisterClassW(&cls);
     container=CreateWindowExW(WS_EX_CONTROLPARENT,cls.lpszClassName,L"",WS_CHILD|WS_CLIPCHILDREN|WS_VSCROLL|WS_HSCROLL,0,0,10,10,main,nullptr,cls.hInstance,nullptr);
     SetWindowTheme(container,L"DarkMode_Explorer",nullptr);
     hook=SetWindowsHookExW(WH_CBT,createHook,nullptr,GetCurrentThreadId());
 }
-void place(int x,int y,int width,int height,bool visible){if(container){MoveWindow(container,x,y,width,height,TRUE);ShowWindow(container,visible?SW_SHOW:SW_HIDE);arrange();}}
+void place(int x,int y,int width,int height,bool visible){wantVisible=visible;if(container){MoveWindow(container,x,y,width,height,!transitioning);if(!transitioning)ShowWindow(container,visible?SW_SHOW:SW_HIDE);arrange();}}
 void mount(HWND page,int cropTop){
     if(!container||!page||!IsWindow(page))return;
+    if(active==page&&GetParent(page)==container){if(cropTop)pages[page].crop=cropTop;arrange();return;}
     if(active&&active!=page)ShowWindow(active,SW_HIDE);
     auto found=pages.find(page);
     if(found==pages.end()){
@@ -96,4 +100,14 @@ void close(){if(hook)UnhookWindowsHookEx(hook);hook=nullptr;while(!pages.empty()
 bool contains(HWND page){return container&&GetParent(page)==container;}
 HWND host(){return container;}HWND current(){return active;}
 unsigned generation(){return revision;}
+void beginTransition(){
+    if(!container||transitioning)return;transitioning=true;
+    SendMessageW(container,WM_SETREDRAW,FALSE,0);
+    InvalidateRect(mainWindow,nullptr,FALSE);UpdateWindow(mainWindow);
+}
+void endTransition(){
+    if(!container||!transitioning)return;transitioning=false;
+    SendMessageW(container,WM_SETREDRAW,TRUE,0);ShowWindow(container,wantVisible?SW_SHOW:SW_HIDE);
+    if(wantVisible)RedrawWindow(container,nullptr,nullptr,RDW_INVALIDATE|RDW_ERASE|RDW_ALLCHILDREN|RDW_UPDATENOW);
+}
 }

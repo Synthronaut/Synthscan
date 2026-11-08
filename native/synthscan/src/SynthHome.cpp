@@ -135,7 +135,7 @@ void paint(){
 LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM w,LPARAM l){
     if(message==WM_PAINT){paint();return 0;}
     if(message==WM_SIZE){layout();return 0;}
-    if(message==WM_ERASEBKGND)return 1;
+    if(message==WM_ERASEBKGND){RECT r{};GetClientRect(hwnd,&r);static HBRUSH surface=CreateSolidBrush(RGB(15,16,19));FillRect(reinterpret_cast<HDC>(w),&r,surface);return 1;}
     if(message==WM_DRAWITEM){paintButton(*reinterpret_cast<DRAWITEMSTRUCT*>(l));return TRUE;}
     if(message==WM_COMMAND&&HIWORD(w)==BN_CLICKED){
         int id=LOWORD(w);
@@ -143,7 +143,7 @@ LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM w,LPARAM l){
         auto found=std::find_if(buttons.begin(),buttons.end(),[&](const auto& b){return b.id==id;});
         if(found!=buttons.end()){
             lastAction=found->action;
-            if(found->navigation){selectPage(lastAction);if(lastAction!="home"&&action)action(lastAction);publish();}
+            if(found->navigation){SynthPages::beginTransition();selectPage(lastAction);if(lastAction!="home"&&action)action(lastAction);SynthPages::endTransition();publish();}
             else if(action)action(lastAction);
             publish();
         }return 0;

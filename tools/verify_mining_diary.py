@@ -42,7 +42,10 @@ def main():
     result=json.loads((out/'ui_test.json').read_text(encoding='utf-8'))
     for name in ['plain_q_does_not_quit','escape_does_not_quit','dialog_cancel_does_not_quit',
                  'window_close_keeps_app_running','hud_restores_after_window_close',
-                 'keyboard_actions_disabled','hotkey_messages_ignored','mouse_visibility_route']:
+                 'keyboard_actions_disabled','hotkey_messages_ignored','mouse_visibility_route',
+                 'page_ready_mount_is_idempotent','page_transition_holds_redraw_until_ready',
+                 'stale_page_ready_cannot_hide_reused_page',
+                 'finder_categories_scoped_to_type']:
         assert result[name],name
     for name in ['hangars_tab_compact_and_pauses_scanner','hangars_blocks_mining_diary','hangars_mining_resume']:
         assert result[name],name

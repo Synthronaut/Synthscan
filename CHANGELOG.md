@@ -1,5 +1,17 @@
 ## Unreleased
 
+- Prevent redundant hide/show cycles when sidebar pages receive a second ready
+  notification. Keep page transitions on a dark surface until mounting finishes.
+- Add stock ship overview cards: body-part HP, stock shield-generator capacity,
+  physical/energy armor multipliers, crew, cargo and dimensions. Match installed
+  ship records by exact UUID; show unavailable values rather than substitute a
+  different variant. Label UEX specification patches separately from game files.
+- Narrow Finder categories by selected type. Group ship roles into fighters,
+  haulers, exploration, mining, salvage and support; split blueprint browsing into
+  ship equipment, armor, clothing, personal weapons/ammo and tools. Preserve full
+  source roles and categories in search and item details.
+- Refresh older vehicle metadata caches and local ship references automatically.
+
 - Add a dark Home window with direct feature navigation and current/previous
   game-session recaps. Record blueprint/contract notifications and verified
   reputation balance changes without substituting configured mission rewards.
