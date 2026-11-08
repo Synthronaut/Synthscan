@@ -1179,6 +1179,7 @@ private:
     // Ore Finder window ("planner" in the code)
     HWND planner_ = nullptr;
     bool plannerVisible_ = false;
+    std::vector<std::string> plannerTargets_;
     std::string plannerMineral_ = "Quantainium";   // whose places are listed
     std::string plannerSystem_ = "ALL";           // ALL / STANTON / PYRO / NYX
     // Set from a [[place]] link: the finder then lists what is mined HERE
@@ -1464,6 +1465,7 @@ private:
     int craftSlider_ = 0;            // slot the arrow keys move
     int craftSourceOpen_ = -1;       // contract row whose briefing is unfolded
     bool craftCardApart_ = false;    // the recipe is being drawn under that card, without it
+    Gdiplus::RectF craftSourceViewport_;
     int craftSourceScroll_ = 0;      // first contract row shown
     std::string craftSourceSystem_;  // "", "Stanton", "Pyro", "Nyx"
     std::vector<std::string> systemHits_;   // what the filter chips stand for

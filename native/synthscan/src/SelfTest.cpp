@@ -1,3 +1,5 @@
+#include "MiningTrip.h"
+#include "CraftingBonus.h"
 #include "HudHotkeys.h"
 #include "MiningReference.h"
 #include "SynthFinderHUD.h"
@@ -11,6 +13,7 @@
 #include "SignatureTiming.h"
 #include "OverlayPlacement.h"
 #include "FinderLayout.h"
+#include "WorkspaceLayout.h"
 #include "FinderItems.h"
 #include "HudVisibility.h"
 #include "OverlayInput.h"
@@ -5090,6 +5093,43 @@ int runSelfTest() {
         allPassed &= check(FinderItems::classify("Ship","Ships","","Crusader M2 Hercules")==Icon::Ship&&FinderItems::classify("Item","Equipment & other items","Usable","M2 Hercules Starlifter Plushie")==Icon::Collectible,"Finder distinguishes an actual ship from a plush collectible with the same ship name");
         allPassed &= check(FinderItems::classify("Item","Armor & clothing","Char_Armor_Torso","ORC torso")==Icon::Armor&&FinderItems::classify("Item","Armor & clothing","Char_Clothing_Torso_1","shirt")==Icon::Clothing&&FinderItems::classify("Item","Weapons & ammunition","WeaponPersonal","C54")==Icon::Gun&&FinderItems::classify("Item","Weapons & ammunition","WeaponMagazine","C54 magazine")==Icon::Ammo,"Finder separates armor, clothing, personal weapons and ammunition using game item types");
         allPassed &= check(FinderItems::classify("Component","Weapons & ammunition","WeaponGun","ship cannon")==Icon::ShipGun&&FinderItems::classify("Component","Ship components","Shield","FR-86")==Icon::Component&&FinderItems::classify("Material","Materials & commodities","Resource","Copper")==Icon::Commodity&&FinderItems::classify("Item","Consumables","Drink","water")==Icon::Consumable&&FinderItems::classify("Blueprint","Weapons","WeaponPersonal","C54")==Icon::Blueprint,"Finder distinguishes ship weapons, components, commodities, consumables and blueprint records");
+    }
+    {
+        using namespace SCMiner;
+        const std::vector<OreLocation> fixture={
+            {"One",MiningFamily::Ship,"Shared","Stanton","moon","",20},
+            {"Two",MiningFamily::Ship,"Shared","Stanton","moon","",10},
+            {"One",MiningFamily::Ship,"Shared","Pyro","moon","",99},
+            {"Two",MiningFamily::ROC,"Ignored","Stanton","moon","",100}};
+        auto both=miningTripStops({"One","Two"},"ALL",fixture);
+        auto scoped=miningTripStops({"One","Two"},"Pyro",fixture);
+        allPassed &= check(both.size()==2&&both[0].system=="Stanton"&&both[0].materials.size()==2&&scoped.size()==1&&scoped[0].materials.size()==1,
+            "Mining trip recomputes multi-material overlap, separates systems and excludes other mining families");
+        auto missing=miningTripStops({"Unknown"},"ALL",fixture);
+        allPassed &= check(missing.empty(),"Mining trip leaves unavailable materials unresolved rather than inventing a source");
+        const RockPart* secondary=nullptr;for(int i=0;i<ROCK_PART_COUNT;i++)if(std::string(ROCK_PARTS[i].rock)!=ROCK_PARTS[i].ore&&ROCK_PARTS[i].most>0){secondary=&ROCK_PARTS[i];break;}
+        bool side=false;if(secondary){std::vector<OreLocation> loc={{secondary->rock,MiningFamily::Ship,"Side","Stanton","moon","",10}};auto stops=miningTripStops({secondary->ore},"ALL",loc);side=stops.size()==1&&stops[0].materials.size()==1;}
+        allPassed &= check(side,"Mining trip includes possible secondary ores from actual rock compositions");
+        allPassed &= check(std::abs(craftingBonusPercent(.8588,1)-14.12)<.00001&&craftingBonusPercent(1.1,1)<0&&craftingBonusPercent(1.1,0)>0,
+            "Crafting bonus treats a lower-is-better reduction as positive without changing its actual multiplier");
+        bool quality=true;for(const auto& effect:CRAFT_EFFECTS)if(effect.better<2&&effectMovesStat(effect))quality &= craftingBonusPercent(effectFactor(effect,863),effect.better)>=-.00001;
+        allPassed &= check(quality,"Known crafting curves show improvements at Q863 for both stat directions");
+    }
+    {
+        bool fits=true;
+        for(auto size:std::vector<std::pair<int,int>>{{860,650},{1040,900},{1600,1100},{2400,1400}}){
+            auto l=WorkspaceLayout::history(size.first,size.second);
+            auto inside=[&](WorkspaceLayout::Box b){return b.x>=20&&b.y>=100&&b.width>0&&b.height>0&&b.x+b.width<=size.first-20&&b.y+b.height<=size.second;};
+            for(auto b:{l.results,l.previous,l.next,l.count,l.detail,l.notes,l.saveNote,l.name,l.nameButton,l.minutes,l.cooldown,l.status})fits&=inside(b);
+            for(int i=0;i<5;i++){auto b=l.filters[i];b.height=30;fits&=inside(b)&&l.labels[i].y>=100;if(i)fits&=l.filters[i-1].x+l.filters[i-1].width<l.filters[i].x;}
+            fits&=l.results.y+l.results.height<l.previous.y&&l.detail.y+l.detail.height<l.notes.y&&l.notes.y+l.notes.height<l.name.y;
+        }
+        auto small=WorkspaceLayout::history(860,650),large=WorkspaceLayout::history(1600,1100);
+        allPassed &= check(fits&&large.results.height>small.results.height*2&&large.results.width>small.results.width,"Server history expands its table and keeps filters, exports, notes and shard controls inside the page");
+        auto list=WorkspaceLayout::diary({20,214,510,276},411,1800,1200),story=WorkspaceLayout::diary({550,620,528,100},433,1800,1200),save=WorkspaceLayout::diary({550,770,528,30},440,1800,1200);
+        allPassed &= check(list.height==666&&list.width>510&&story.height==490&&story.y+story.height<save.y&&save.x+save.width<=1780,"Mining diary gives spare height to entries and story text while keeping save controls accessible");
+        auto marks=WorkspaceLayout::bookmarks({20,295,310,220},704,1800,1200),details=WorkspaceLayout::bookmarks({350,295,530,220},705,1800,1200),button=WorkspaceLayout::bookmarks({705,532,175,32},716,1800,1200);
+        allPassed &= check(marks.height==760&&details.height==760&&marks.x+marks.width<details.x&&details.x+details.width==1780&&button.y+button.height<1200,"Rock bookmarks expand both panes and keep actions below the lists");
     }
     std::cout << "\n=== Self-test " << (allPassed ? "PASSED" : "FAILED") << " ===\n" << std::endl;
     return allPassed ? 0 : 1;

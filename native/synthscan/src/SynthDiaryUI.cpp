@@ -2,6 +2,8 @@
 #define UNICODE
 #define _UNICODE
 #include "SynthDiaryUI.h"
+#include "SynthHome.h"
+#include "NativePageLayout.h"
 #include <commctrl.h>
 #include <commdlg.h>
 #include <dwmapi.h>
@@ -20,6 +22,7 @@ std::filesystem::path directory;
 std::function<void(Json)> send;
 Json model,current;std::vector<Json> rows;
 std::map<std::string,HWND> edits;
+NativePageLayout::Controls controls;
 std::unique_ptr<Gdiplus::Bitmap> picture;
 bool testing=false,busy=false,dirty=false,pendingSave=false,pendingShare=false;
 double scale=1;int offset=0;std::string lastRows,lastOptions,lastResult;
@@ -27,6 +30,10 @@ const char* types[]={"scanned","mined","haul","refined","sale","trip"};
 const wchar_t* labels[]={L"Rock scanned",L"Rock mined · confirmed",L"Collected haul · confirmed",L"Refined output · confirmed",L"Completed sale · confirmed",L"Trip / memory"};
 constexpr COLORREF BG=RGB(20,23,29),CARD=RGB(29,33,41),TEXT=RGB(233,237,241),GOLD=RGB(98,204,255),MUTED=RGB(149,160,173);
 int px(int n){return int(n*scale+.5);}
+void layout(){
+    if(!win)return;controls.apply(win,scale,WorkspaceLayout::diary);
+    if(list){RECT r{};GetClientRect(list,&r);int available=std::max(0,int(r.right)-GetSystemMetrics(SM_CXVSCROLL));ListView_SetColumnWidth(list,0,available*44/100);ListView_SetColumnWidth(list,1,available*28/100);ListView_SetColumnWidth(list,2,available*28/100);}
+}
 std::wstring text(HWND h){int n=GetWindowTextLengthW(h);std::wstring s(n+1,0);GetWindowTextW(h,s.data(),n+1);s.resize(n);return s;}
 std::wstring lines(std::string s){std::wstring out;for(auto c:wide(s)){if(c==L'\n'&&(out.empty()||out.back()!=L'\r'))out+=L'\r';out+=c;}return out;}
 HWND ctl(const wchar_t* cls,const wchar_t* label,DWORD style,int x,int y,int w,int h,int id){
@@ -69,6 +76,7 @@ bool fileDialog(bool saving,std::wstring& path,bool asText=false){
     bool result=saving?GetSaveFileNameW(&f)!=FALSE:GetOpenFileNameW(&f)!=FALSE;if(result)path=name;return result;
 }
 void act(int id){
+    if(id==460){if(discard())SynthHome::navigate("bookmarks");return;}
     if(id==405){filters();return;}if(id==406){filters(std::max(0,offset-200));return;}if(id==407){if(offset+200<model.numberOr("count"))filters(offset+200);return;}
     if(id>=470&&id<476){const auto& records=field(model,"records").items;if(id-470<int(records.size())&&!field(records[id-470],"entry").textOr("id").empty()&&discard())fill(field(records[id-470],"entry"));return;}
     if(id==408){if(discard())fill(obj());return;}
@@ -110,6 +118,7 @@ void showPreview(const std::string& path){
 }
 LRESULT CALLBACK proc(HWND h,UINT m,WPARAM w,LPARAM l){
     switch(m){
+    case WM_SIZE:layout();return 0;
     case WM_CLOSE:if(discard()){fill(current);ShowWindow(h,SW_HIDE);}return 0;
     case WM_COMMAND:{int id=LOWORD(w),code=HIWORD(w);if(!busy&&((id>=420&&id<=439&&code==EN_CHANGE)||(id==430&&code==CBN_SELCHANGE)))dirty=true;act(id);return 0;}
     case WM_NOTIFY:{auto n=reinterpret_cast<NMHDR*>(l);if(n->hwndFrom==list&&n->code==LVN_ITEMCHANGED&&!busy){int i=ListView_GetNextItem(list,-1,LVNI_SELECTED);if(i>=0&&i<int(rows.size())&&!dirty)fill(field(rows[i],"entry"));else if(dirty)message("Unsaved edits: Save entry, or New entry to discard them.");}if(n->hwndFrom==list&&n->code==NM_CUSTOMDRAW){auto d=(NMLVCUSTOMDRAW*)l;if(d->nmcd.dwDrawStage==CDDS_PREPAINT)return CDRF_NOTIFYITEMDRAW;if(d->nmcd.dwDrawStage==CDDS_ITEMPREPAINT){bool chosen=(ListView_GetItemState(list,int(d->nmcd.dwItemSpec),LVIS_SELECTED)&LVIS_SELECTED)!=0;d->clrText=TEXT;d->clrTextBk=chosen?RGB(25,58,82):CARD;d->nmcd.uItemState&=~CDIS_SELECTED;return CDRF_NEWFONT;}}return 0;}
@@ -143,6 +152,7 @@ void open(){
         win=CreateWindowW(c.lpszClassName,L"SynthScan · Mining diary",style,testing?-32000:CW_USEDEFAULT,testing?-32000:CW_USEDEFAULT,r.right-r.left,r.bottom-r.top,parent,nullptr,c.hInstance,nullptr);
         BOOL dark=TRUE;DwmSetWindowAttribute(win,20,&dark,sizeof(dark));SetWindowDisplayAffinity(win,WDA_EXCLUDEFROMCAPTURE);
         ctl(L"STATIC",L"Your discoveries, journeys and confirmed hauls. Share a memory, not a mandatory competition.",SS_LEFT,20,55,800,20,0);
+        ctl(L"BUTTON",L"Rock bookmarks",BS_PUSHBUTTON,610,24,190,28,460);
         ctl(L"BUTTON",L"Automatically log settled scans",BS_AUTOCHECKBOX,820,24,265,24,458);CheckDlgButton(win,458,flag(read(directory/L"diary_settings.json"),"auto_log",true)?BST_CHECKED:BST_UNCHECKED);
         for(int i=0;i<6;i++)ctl(L"BUTTON",L"No record yet",BS_PUSHBUTTON,20+i*178,88,166,60,470+i);
         ctl(L"EDIT",L"",ES_AUTOHSCROLL,20,166,300,28,401);SendDlgItemMessageW(win,401,EM_SETCUEBANNER,TRUE,(LPARAM)L"Search material, site, ship, notes or date");
@@ -171,7 +181,7 @@ void open(){
         ctl(L"BUTTON",L"Save entry",BS_PUSHBUTTON,550,770,528,30,440);
         status=ctl(L"STATIC",L"Local diary. Share exports never upload anything.",SS_LEFT,20,782,510,22,0);
         ctl(L"STATIC",L"",SS_LEFT,20,196,510,17,413);
-        fill(obj());
+        controls.capture(win,scale);layout();fill(obj());
     }
     lastRows.clear();lastOptions.clear();update(model,obj(),"");
     if(testing)ShowWindow(win,SW_SHOWNOACTIVATE);else{ShowWindow(win,SW_SHOW);SetForegroundWindow(win);filters();}
@@ -193,5 +203,5 @@ void update(const Json& value,const Json& result,const std::string& note){
     if(!note.empty())message(note);
     if(note.find("Invalid")!=std::string::npos||note.find("Enter ")!=std::string::npos||note.find("needs ")!=std::string::npos||note.find("Choose ")!=std::string::npos||note.find("Date/time")!=std::string::npos||note.find("Quality")!=std::string::npos){pendingSave=false;pendingShare=false;}
 }
-void close(){if(preview)DestroyWindow(preview);preview=nullptr;picture.reset();if(win)DestroyWindow(win);win=nullptr;if(body)DeleteObject(body);if(heading)DeleteObject(heading);if(bg)DeleteObject(bg);if(card)DeleteObject(card);edits.clear();}
+void close(){if(preview)DestroyWindow(preview);preview=nullptr;picture.reset();if(win)DestroyWindow(win);win=nullptr;if(body)DeleteObject(body);if(heading)DeleteObject(heading);if(bg)DeleteObject(bg);if(card)DeleteObject(card);edits.clear();controls.clear();}
 }

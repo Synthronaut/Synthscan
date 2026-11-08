@@ -83,6 +83,7 @@ void paint(HWND window){
                 }
                 text(g,"Stock, full-rate burst · excludes spin-up, recharge, heat pauses, hit chance and crafted bonuses",pad,y,width-32,32,10,MUTED);y+=38;
             }
+            if(m.item.textOr("kind")!="Blueprint"){
             text(g,"WHERE TO BUY",pad,y,200,20,10,MUTED,true);
             text(g,"UEX CORP · IN-GAME SHOPS",width-228,y,212,20,10,MUTED);y+=26;
             const auto& rows=field(m.shops,"rows").items;
@@ -112,9 +113,10 @@ void paint(HWND window){
                 if(!rows.empty()){text(g,"Community-reported prices · current stock is not guaranteed",pad,y,width-32,19,10,MUTED);y+=26;}
                 if(flag(m.shops,"error")&&!rows.empty()){text(g,"Refresh unavailable · showing the last successful lookup",pad,y,width-32,20,11,GOLD);y+=25;}
             }
+            }
             auto notes=m.item.textOr("detail");
             if(!notes.empty()){
-                text(g,"ITEM DETAILS",pad,y,width-32,20,10,MUTED,true);y+=24;
+                text(g,m.item.textOr("kind")=="Blueprint"?"CRAFTING & ACQUISITION":"ITEM DETAILS",pad,y,width-32,20,10,MUTED,true);y+=24;
                 Gdiplus::Font f(L"Segoe UI",12,Gdiplus::FontStyleRegular,Gdiplus::UnitPixel);Gdiplus::RectF bounds;auto value=wide(notes);
                 g.MeasureString(value.c_str(),-1,&f,Gdiplus::RectF(pad,y,width-32,100000),&bounds);
                 text(g,notes,pad,y,width-32,bounds.Height+8,12,MUTED);y+=bounds.Height+16;

@@ -4,9 +4,14 @@
 #include "SynthScanShell.h"
 #include "SynthFinderHUD.h"
 #include "SynthHome.h"
+#include "SynthPrivacy.h"
+#include "SynthFrameTransfer.h"
+#include "SynthCapturePrivacy.h"
+#include "SynthCompanion.h"
 #include "SynthPages.h"
 #include "SynthDirectoryCard.h"
 #include "FinderLayout.h"
+#include "WorkspaceLayout.h"
 #include "SynthItemIcons.h"
 #include "HudVisibility.h"
 #include "SynthMenu.h"
@@ -49,6 +54,7 @@ bool isAutomatic=false,testing=false,attached=false,hudVisible=true,scanOnLaunch
 bool pirateDetails=false,quest=false,pirate=false,miningResume=true,placementLocked=false,activityExpanded=true;
 bool manualHudPreview=false;
 std::string activityCommandId;
+FrameTransfer::Lease fabricatorFrame;
 std::string directoryRowId,directoryItemId,directoryRequestId,directoryText,libraryRevision,libraryLoadingRevision,relatedItemId;
 std::future<Json> libraryJob;
 int currentTab=0,hotkeyChoice=0,selected=-1;
@@ -238,6 +244,9 @@ void homeAction(const std::string& value){
         ShowWindow(mining->windowHandle(),SW_HIDE);
         if(mining->isOverlayMode())mining->toggleOverlayMode(false);
         modeControls();SynthPages::mount(mining->windowHandle());
+    }else if(value=="privacy"){SynthPrivacy::show(SynthHome::pageHost(),data);
+    }else if(value=="people"||value=="buyer_alerts"){
+        SynthCompanion::show(SynthHome::pageHost(),data,value);
     }else if(value=="directory"||value=="servers"||value=="settings"||value=="acceptance"){
         workspace(value=="directory"?0:value=="servers"?2:value=="acceptance"?5:4);
         SynthPages::mount(panel,px(100));
@@ -339,7 +348,7 @@ void listRows(){
 void renderDirectoryDetail(const Json& row){
     if(currentTab==0){SynthDirectoryCard::update(detail,row,directoryShops,favorites.count(row.textOr("id"))!=0);return;}
     std::string body=row.textOr("detail");
-    if(currentTab==0&&!row.textOr("item_id").empty())body=row.textOr("name")+"\n\n"+directoryText+"\n\n"+body;
+    if(currentTab==0&&row.textOr("kind")!="Blueprint"&&!row.textOr("item_id").empty())body=row.textOr("name")+"\n\n"+directoryText+"\n\n"+body;
     if(favorites.count(row.textOr("id")))body="★ Favorite\n\n"+body;
     std::wstring rendered=wide(body);for(size_t p=0;(p=rendered.find(L'\n',p))!=std::wstring::npos;p+=2)rendered.replace(p,1,L"\r\n");
     SetWindowTextW(detail,rendered.c_str());
@@ -347,7 +356,7 @@ void renderDirectoryDetail(const Json& row){
 void selection(){
     int i=ListView_GetNextItem(listing,-1,LVNI_SELECTED);if(i<0||i>=int(visible.size()))return;selected=i;
     const auto& row=visible[i];
-    if(currentTab==0&&!row.textOr("item_id").empty()){
+    if(currentTab==0&&row.textOr("kind")!="Blueprint"&&!row.textOr("item_id").empty()){
         if(directoryRowId!=row.textOr("id")||directoryItemId!=row.textOr("item_id")){
             directoryRowId=row.textOr("id");directoryItemId=row.textOr("item_id");directoryRequestId=std::to_string(GetTickCount64())+":"+directoryRowId;
             directoryText="IN-GAME PURCHASE LOCATIONS — UEX Corp\nChecking shops in the background…";
@@ -379,14 +388,29 @@ LRESULT CALLBACK headerPaint(HWND hwnd,UINT message,WPARAM w,LPARAM l,UINT_PTR,D
     return DefSubclassProc(hwnd,message,w,l);
 }
 void layoutDirectory(){
-    if(currentTab!=0||!panel||!listing||!detail||!search||!kind||!category)return;
+    if(!panel||!listing||!detail||!search||!kind||!category)return;
     RECT rect{};GetClientRect(panel,&rect);float scale=GetDpiForWindow(panel)/96.f;
+    if(currentTab==2){
+        auto layout=WorkspaceLayout::history(int(rect.right/scale),int(rect.bottom/scale));
+        auto move=[&](int id,const WorkspaceLayout::Box& b){MoveWindow(GetDlgItem(panel,id),int(b.x*scale),int(b.y*scale),int(b.width*scale),int(b.height*scale),TRUE);};
+        int filters[]{201,202,203,221,222};for(int i=0;i<5;i++){move(filters[i],layout.filters[i]);move(228+i,layout.labels[i]);}
+        move(204,layout.results);move(225,layout.previous);move(226,layout.next);move(227,layout.count);move(205,layout.detail);
+        move(223,layout.csv);move(224,layout.json);move(233,layout.timezone);move(220,layout.notes);move(219,layout.saveNote);
+        move(215,layout.name);move(216,layout.nameButton);move(217,layout.minutes);move(218,layout.cooldown);move(200,layout.status);
+        int base[]{160,160,85,65,140,90,150},weights[]{18,18,10,6,22,10,16};int total=0;for(int w:base)total+=w;
+        int extra=std::max(0,int(layout.results.width*scale)-GetSystemMetrics(SM_CXVSCROLL)-int(total*scale));
+        for(int i=0;i<7;i++)ListView_SetColumnWidth(listing,i,int(base[i]*scale)+extra*weights[i]/100);
+        return;
+    }
+    if(currentTab!=0&&currentTab!=1&&currentTab!=3)return;
     auto layout=FinderLayout::calculate(int(rect.right/scale),int(rect.bottom/scale));
     auto move=[&](HWND child,const FinderLayout::Box& box){MoveWindow(child,int(box.x*scale),int(box.y*scale),int(box.width*scale),int(box.height*scale),TRUE);};
     move(search,layout.query);move(kind,layout.type);move(category,layout.category);move(listing,layout.results);move(detail,layout.details);
     int available=int(layout.results.width*scale)-GetSystemMetrics(SM_CXVSCROLL);
     ListView_SetColumnWidth(listing,0,available*54/100);ListView_SetColumnWidth(listing,1,available*18/100);ListView_SetColumnWidth(listing,2,available*28/100);
     move(GetDlgItem(panel,210),{20,layout.actions,196,32});
+    move(GetDlgItem(panel,212),{20,layout.actions,260,32});
+    move(GetDlgItem(panel,213),{20,layout.actions,300,32});move(GetDlgItem(panel,214),{340,layout.actions,250,32});
     move(status,{20,layout.footer,int(rect.right/scale)-40,22});
 }
 void rebuild(int tab){
@@ -435,6 +459,7 @@ void rebuild(int tab){
         SendMessageW(sessionCheck,BM_SETCHECK,showSession?BST_CHECKED:BST_UNCHECKED,0);
         control(L"BUTTON",L"Snare Watch: sound + banner for logged interdiction reports",BS_AUTOCHECKBOX,28,284,720,24,311);SendDlgItemMessageW(panel,311,BM_SETCHECK,snareAlerts?BST_CHECKED:BST_UNCHECKED,0);
         control(L"BUTTON",L"HUD keyboard / mouse shortcuts…",BS_PUSHBUTTON,28,314,390,28,340);
+        control(L"BUTTON",L"Privacy & capture…",BS_PUSHBUTTON,432,314,396,28,341);
         control(L"BUTTON",L"Open Hangars HUD",BS_PUSHBUTTON,28,346,300,30,312);
         control(L"BUTTON",L"Compboard inventory",BS_PUSHBUTTON,608,346,220,30,313);
         control(L"BUTTON",L"Save startup & HUD settings",BS_PUSHBUTTON,28,390,300,34,306);
@@ -455,7 +480,7 @@ void rebuild(int tab){
     search=control(L"EDIT",L"",ES_AUTOHSCROLL,20,112,tab==2?260:370,28,201);
     SendMessageW(search,EM_SETCUEBANNER,TRUE,reinterpret_cast<LPARAM>(tab==2?L"Search time, shard, name or notes":L"Search items, blueprints or mission rewards"));
     kind=control(L"COMBOBOX",L"",CBS_DROPDOWNLIST|WS_VSCROLL,tab==2?295:405,112,tab==2?170:160,200,202);
-    if(tab==2){control(L"STATIC",L"Search name, shard, time or notes",SS_LEFT,20,94,260,17,0);control(L"STATIC",L"Region",SS_LEFT,295,94,170,17,0);category=control(L"EDIT",L"",ES_AUTOHSCROLL,480,112,145,28,203);control(L"EDIT",L"",ES_AUTOHSCROLL,640,112,145,28,221);control(L"BUTTON",L"Filter",BS_PUSHBUTTON,795,112,45,28,222);control(L"STATIC",L"From date",SS_LEFT,480,94,145,17,0);control(L"STATIC",L"Through date",SS_LEFT,640,94,145,17,0);SendMessageW(category,EM_SETCUEBANNER,TRUE,(LPARAM)L"YYYY-MM-DD");SendDlgItemMessageW(panel,221,EM_SETCUEBANNER,TRUE,(LPARAM)L"YYYY-MM-DD");}
+    if(tab==2){control(L"STATIC",L"Search name, shard, time or notes",SS_LEFT,20,112,260,20,228);control(L"STATIC",L"Region",SS_LEFT,295,112,170,20,229);category=control(L"EDIT",L"",ES_AUTOHSCROLL,480,134,145,30,203);control(L"EDIT",L"",ES_AUTOHSCROLL,640,134,145,30,221);control(L"BUTTON",L"Filter",BS_PUSHBUTTON,795,134,64,30,222);control(L"STATIC",L"From date",SS_LEFT,480,112,145,20,230);control(L"STATIC",L"Through date",SS_LEFT,640,112,145,20,231);SendMessageW(category,EM_SETCUEBANNER,TRUE,(LPARAM)L"YYYY-MM-DD");SendDlgItemMessageW(panel,221,EM_SETCUEBANNER,TRUE,(LPARAM)L"YYYY-MM-DD");}
     else category=control(L"COMBOBOX",L"",CBS_DROPDOWNLIST|WS_VSCROLL,580,112,260,250,203);
     if(tab==0){
         for(auto value:{L"All",L"Blueprint",L"Item",L"Material",L"Component",L"Ship",L"Vehicle",L"Favorites"})SendMessageW(kind,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(value));
@@ -483,7 +508,7 @@ void rebuild(int tab){
     if(tab==1)control(L"BUTTON",L"Find mining destinations",BS_PUSHBUTTON,20,551,240,30,212);
     if(tab==2){
         control(L"BUTTON",L"Previous visits",BS_PUSHBUTTON,20,319,130,26,225);control(L"BUTTON",L"Next visits",BS_PUSHBUTTON,160,319,130,26,226);control(L"STATIC",L"",SS_LEFT,310,323,530,22,227);
-        control(L"BUTTON",L"CSV…",BS_PUSHBUTTON,20,355,70,30,223);control(L"BUTTON",L"JSON…",BS_PUSHBUTTON,20,395,70,30,224);control(L"STATIC",L"Times:\r\nUTC+08",SS_LEFT,20,435,75,45,0);
+        control(L"BUTTON",L"CSV…",BS_PUSHBUTTON,20,355,70,30,223);control(L"BUTTON",L"JSON…",BS_PUSHBUTTON,20,395,70,30,224);control(L"STATIC",L"Times:\r\nUTC+08",SS_LEFT,20,435,75,45,233);
         MoveWindow(detail,px(100),px(355),px(740),px(102),TRUE);
         editReminder=control(L"EDIT",L"",ES_MULTILINE|ES_AUTOVSCROLL|WS_VSCROLL,100,468,550,65,220);
         control(L"BUTTON",L"Save session note",BS_PUSHBUTTON,660,468,180,30,219);
@@ -513,6 +538,7 @@ void saveOptions(){
     InvalidateRect(mining->windowHandle(),nullptr,FALSE);SetWindowTextW(status,wide(note).c_str());
 }
 void handleAction(int id){
+    if(id==341){SynthPrivacy::show(SynthHome::pageHost(),data);return;}
     if(id==340){rebuild(7);return;}
     if(currentTab==7&&id==356){rebuild(4);return;}
     if(currentTab==7&&id==355){editedKeys[0]={VK_F23,0};editedKeys[1]={VK_F24,0};SetDlgItemTextW(panel,352,L"F23");SetDlgItemTextW(panel,353,L"F24");SendDlgItemMessageW(panel,351,BM_SETCHECK,BST_CHECKED,0);SetWindowTextW(status,L"Recommended keys loaded. Save to apply.");return;}
@@ -570,8 +596,9 @@ void handleAction(int id){
         auto viewport=SCMiner::ScreenCapture::gameViewport();if(!viewport){note="Star Citizen window is unavailable.";return;}
         ShowWindow(panel,SW_HIDE);DwmFlush();SCMiner::ScreenCapture capture;SCMiner::CaptureRegion region;
         region.x=viewport->x;region.y=viewport->y;region.width=viewport->width;region.height=viewport->height;region.autoDetect=false;
-        auto frame=capture.captureRegion(region);auto path=data/L"fabricator_frame.png";
-        if(!frame.empty()&&cv::imwrite(path.string(),frame))command(obj({{"action",str("fabricator_file")},{"path",str(utf8(path.wstring()))}}));
+        auto frame=capture.captureRegion(region);
+        auto transfer=frame.empty()?Json{}:fabricatorFrame.create(frame);
+        if(transfer.kind==Json::Kind::Object){transfer.members.push_back({"action",str("fabricator_memory")});command(transfer);}
         else note="Could not capture the game frame.";
         ShowWindow(panel,SW_SHOWNOACTIVATE);return;
     }
@@ -618,7 +645,7 @@ void publishNativeStatus(){
             {"reader_note",str(mining->contentsReadNote())}});
     }
 
-    if(!testing&&mining)write(data/L"native_status.json",obj({{"window_handle",num(double(reinterpret_cast<UINT_PTR>(mining->windowHandle())))},{"at",num(epoch())},{"pid",num(GetCurrentProcessId())},{"afk_jiggler",obj({{"armed",boolean(afk.armed)},{"status",str(afk.status)},{"nudges",num(afk.nudges)},{"interval_seconds",num(AfkNudge::interval/1000)},{"next_in_seconds",num(afk.nextInSeconds)},{"first_pulse",boolean(afk.firstPulse())},{"pulse_active",boolean(afkPulse.active)},{"last_pulse_at",num(lastAfkPulseAt)},{"pulse_counts",num(15)}})},{"mining_scan",scan},{"scanner_active",boolean(!pirate&&!quest&&!hangars&&!finder&&text(GetDlgItem(mining->windowHandle(),1002))==L"Live on")},{"piracy_details",boolean(pirateDetails)},{"hud_mode",str(finder?"finder":hangars?"hangars":quest?"questing":pirate?"piracy":"mining")},{"hud_locked",boolean(placementLocked)},{"activity_expanded",boolean(activityExpanded)},{"activity_command_id",str(activityCommandId)},{"hud_visible",boolean(IsWindowVisible(mining->windowHandle())!=FALSE)},{"overlay_mode",boolean(mining->isOverlayMode())},{"hud_topmost",boolean((GetWindowLongPtrW(mining->windowHandle(),GWL_EXSTYLE)&WS_EX_TOPMOST)!=0)},{"hud_position",obj({{"left",num(overlayRect.left)},{"top",num(overlayRect.top)},{"right",num(overlayRect.right)},{"bottom",num(overlayRect.bottom)}})},{"hotkey_registered",boolean(hotkeyOK)},{"hud_hotkeys",obj({{"enabled",boolean(hudKeys.enabled)},{"game_only",boolean(hudKeys.gameOnly)},{"active_scope",boolean(keyScopeActive)},{"toggle_registered",boolean(toggleKeyOK)},{"cycle_registered",boolean(cycleKeyOK)},{"error",str(keyError)},{"windows_messages",num(windowsKeyMessages)},{"polled_edges",num(polledKeyEdges)},{"toggle_presses",num(togglePresses)},{"cycle_presses",num(cyclePresses)},{"last_action_at",num(lastHudKeyAt)}})},{"bridge_age",num(lastStateAt?epoch()-lastStateAt:-1)}}));
+    if(!testing&&mining)write(data/L"native_status.json",obj({{"window_handle",num(double(reinterpret_cast<UINT_PTR>(mining->windowHandle())))},{"at",num(epoch())},{"pid",num(GetCurrentProcessId())},{"afk_jiggler",obj({{"armed",boolean(afk.armed)},{"status",str(afk.status)},{"nudges",num(afk.nudges)},{"interval_seconds",num(AfkNudge::interval/1000)},{"next_in_seconds",num(afk.nextInSeconds)},{"first_pulse",boolean(afk.firstPulse())},{"pulse_active",boolean(afkPulse.active)},{"last_pulse_at",num(lastAfkPulseAt)},{"pulse_counts",num(15)}})},{"mining_scan",scan},{"scanner_active",boolean(!pirate&&!quest&&!hangars&&!finder&&text(GetDlgItem(mining->windowHandle(),1002))==L"Live on")},{"piracy_details",boolean(pirateDetails)},{"hud_mode",str(finder?"finder":hangars?"hangars":quest?"questing":pirate?"piracy":"mining")},{"hud_locked",boolean(placementLocked)},{"activity_expanded",boolean(activityExpanded)},{"activity_command_id",str(activityCommandId)},{"hud_visible",boolean(IsWindowVisible(mining->windowHandle())!=FALSE)},{"overlay_mode",boolean(mining->isOverlayMode())},{"hud_topmost",boolean((GetWindowLongPtrW(mining->windowHandle(),GWL_EXSTYLE)&WS_EX_TOPMOST)!=0)},{"hud_position",obj({{"left",num(overlayRect.left)},{"top",num(overlayRect.top)},{"right",num(overlayRect.right)},{"bottom",num(overlayRect.bottom)}})},{"capture_privacy",CapturePrivacy::snapshot()},{"hotkey_registered",boolean(hotkeyOK)},{"hud_hotkeys",obj({{"enabled",boolean(hudKeys.enabled)},{"game_only",boolean(hudKeys.gameOnly)},{"active_scope",boolean(keyScopeActive)},{"toggle_registered",boolean(toggleKeyOK)},{"cycle_registered",boolean(cycleKeyOK)},{"error",str(keyError)},{"windows_messages",num(windowsKeyMessages)},{"polled_edges",num(polledKeyEdges)},{"toggle_presses",num(togglePresses)},{"cycle_presses",num(cyclePresses)},{"last_action_at",num(lastHudKeyAt)}})},{"bridge_age",num(lastStateAt?epoch()-lastStateAt:-1)}}));
 }
 bool afkHeldInput(){
     for(int key=1;key<255;key++)if(GetAsyncKeyState(key)&0x8000)return true;
@@ -744,7 +771,7 @@ void timer(){
         if(readyHandle&&state.numberOr("owner_pid")==GetCurrentProcessId())SetEvent(readyHandle);
     }else if(summary!="Session service unavailable"){SynthHome::update(field(state,"home"),"",false);summary="Session service unavailable";SynthScanNav::update(obj({{"message",str("Session service unavailable; capture and navigation paused.")},{"guidance",obj({{"unavailable",str("No fresh service state")}})}}));if(mining)InvalidateRect(mining->windowHandle(),nullptr,FALSE);}
     if(controlProcess){DWORD code=STILL_ACTIVE;GetExitCodeProcess(controlProcess,&code);if(code!=STILL_ACTIVE){CloseHandle(controlProcess);controlProcess=nullptr;note=code==0?controlCompleted:read(data/L"control_status.json").textOr("error","Helper action failed. See native_control.log in your data folder.");if(status)SetWindowTextW(status,wide(note).c_str());}}
-    tickAfk();applyHotkey();
+    fabricatorFrame.expire(data);tickAfk();applyHotkey();
     publishNativeStatus();
 }
 LRESULT CALLBACK hostProc(HWND hwnd,UINT message,WPARAM w,LPARAM l){
@@ -754,7 +781,7 @@ LRESULT CALLBACK hostProc(HWND hwnd,UINT message,WPARAM w,LPARAM l){
     if(message==WM_TIMER){if(w==AFK_PULSE_TIMER)pulseAfk();else if(w==HUD_KEY_TIMER)pollHudKeys();else timer();return 0;}
     if(message==HOTKEY_REFRESH){applyHotkey();return 0;}
     if(message==WM_HOTKEY){handleHudHotkey(int(w),l);return 0;}
-    if(message==TRAY){if(l==WM_LBUTTONDBLCLK){desktop();return 0;}if(l==WM_RBUTTONUP){HMENU menu=CreatePopupMenu();AppendMenuW(menu,MF_STRING,1,L"Open SynthScan");AppendMenuW(menu,MF_STRING,2,L"Show / hide HUD");AppendMenuW(menu,MF_STRING,3,L"Startup & HUD settings");AppendMenuW(menu,MF_STRING,4,L"Exit SynthScan");AppendMenuW(menu,MF_STRING|(activityMode()?0:MF_CHECKED),5,L"HUD mode: Mining");AppendMenuW(menu,MF_STRING|(pirate?MF_CHECKED:0),6,L"HUD mode: Piracy");AppendMenuW(menu,MF_STRING|(quest?MF_CHECKED:0),8,L"HUD mode: Missions");AppendMenuW(menu,MF_STRING|(placementLocked?MF_CHECKED:0),7,L"Lock HUD position");AppendMenuW(menu,MF_STRING,20,L"Dock HUD top right");AppendMenuW(menu,MF_STRING|(finder?MF_CHECKED:0),19,L"HUD mode: Finder");AppendMenuW(menu,MF_STRING|(hangars?MF_CHECKED:0),9,L"HUD mode: Hangars");AppendMenuW(menu,MF_STRING,10,L"Compboard inventory");AppendMenuW(menu,MF_STRING,11,L"Daylight planner");appendAfkMenu(menu,12);AppendMenuW(menu,MF_STRING,13,L"Automatic acceptance…");POINT at;GetCursorPos(&at);SetForegroundWindow(hwnd);appendProfileMenu(menu);int choice=SynthMenus::track(menu,TPM_RETURNCMD|TPM_RIGHTBUTTON,at.x,at.y,0,hwnd,nullptr);DestroyMenu(menu);if(choice==20){dockHud();return 0;}if(handleProfileChoice(choice))return 0;if(choice==19){setMode(4);showHud(true);setActivityExpanded(true);return 0;}if(choice==1)desktop();if(choice==2)showHud(!hudVisible);if(choice==3)workspace(4);if(choice==5||choice==6)setMode(choice==6);if(choice==8)setMode(2);if(choice==7)togglePlacement();if(choice==9){setMode(3);showHud(true);setActivityExpanded(true);}if(choice==10)spawnPython(L"compboard_tracker.py",{});if(choice==11)spawnPython(L"daylight_planner.py",{});if(choice==12)toggleAfk();if(choice==13)spawnPython(L"contract_share_helper.py",{L"--owner",std::to_wstring(GetCurrentProcessId())});if(choice==4&&mining){markUserExit();PostMessageW(mining->windowHandle(),WM_CLOSE,0,0);}return 0;}}
+    if(message==TRAY){if(l==WM_LBUTTONDBLCLK){desktop();return 0;}if(l==WM_RBUTTONUP){HMENU menu=CreatePopupMenu();AppendMenuW(menu,MF_STRING,1,L"Open SynthScan");AppendMenuW(menu,MF_STRING,2,L"Show / hide HUD");AppendMenuW(menu,MF_STRING,3,L"Startup & HUD settings");AppendMenuW(menu,MF_STRING,4,L"Exit SynthScan");AppendMenuW(menu,MF_STRING|(activityMode()?0:MF_CHECKED),5,L"HUD mode: Mining");AppendMenuW(menu,MF_STRING|(pirate?MF_CHECKED:0),6,L"HUD mode: Piracy");AppendMenuW(menu,MF_STRING|(quest?MF_CHECKED:0),8,L"HUD mode: Missions");AppendMenuW(menu,MF_STRING|(placementLocked?MF_CHECKED:0),7,L"Lock HUD position");AppendMenuW(menu,MF_STRING,20,L"Dock HUD top right");AppendMenuW(menu,MF_STRING|(finder?MF_CHECKED:0),19,L"HUD mode: Finder");AppendMenuW(menu,MF_STRING|(hangars?MF_CHECKED:0),9,L"HUD mode: Hangars");AppendMenuW(menu,MF_STRING,10,L"Compboard inventory");AppendMenuW(menu,MF_STRING,11,L"Day/Night Forecast");appendAfkMenu(menu,12);AppendMenuW(menu,MF_STRING,13,L"Automatic acceptance…");POINT at;GetCursorPos(&at);SetForegroundWindow(hwnd);appendProfileMenu(menu);int choice=SynthMenus::track(menu,TPM_RETURNCMD|TPM_RIGHTBUTTON,at.x,at.y,0,hwnd,nullptr);DestroyMenu(menu);if(choice==20){dockHud();return 0;}if(handleProfileChoice(choice))return 0;if(choice==19){setMode(4);showHud(true);setActivityExpanded(true);return 0;}if(choice==1)desktop();if(choice==2)showHud(!hudVisible);if(choice==3)workspace(4);if(choice==5||choice==6)setMode(choice==6);if(choice==8)setMode(2);if(choice==7)togglePlacement();if(choice==9){setMode(3);showHud(true);setActivityExpanded(true);}if(choice==10)spawnPython(L"compboard_tracker.py",{});if(choice==11)spawnPython(L"daylight_planner.py",{});if(choice==12)toggleAfk();if(choice==13)spawnPython(L"contract_share_helper.py",{L"--owner",std::to_wstring(GetCurrentProcessId())});if(choice==4&&mining){markUserExit();PostMessageW(mining->windowHandle(),WM_CLOSE,0,0);}return 0;}}
     return DefWindowProcW(hwnd,message,w,l);
 }
 LRESULT CALLBACK mainSubclass(HWND hwnd,UINT message,WPARAM w,LPARAM l,UINT_PTR,DWORD_PTR){
@@ -780,10 +807,10 @@ LRESULT CALLBACK mainSubclass(HWND hwnd,UINT message,WPARAM w,LPARAM l,UINT_PTR,
     if(message==WM_COMMAND&&LOWORD(w)==1017){
         if(mining&&!mining->isOverlayMode()){SynthHome::selectPage("home");desktop();return 0;}
         if(mining&&mining->isOverlayMode()){
-            HMENU mode=CreatePopupMenu();AppendMenuW(mode,MF_STRING|(activityMode()?0:MF_CHECKED),10,L"Mining HUD");AppendMenuW(mode,MF_STRING|(pirate?MF_CHECKED:0),11,L"Piracy HUD");AppendMenuW(mode,MF_STRING|(quest?MF_CHECKED:0),13,L"Missions HUD");AppendMenuW(mode,MF_STRING|(finder?MF_CHECKED:0),19,L"Finder HUD");AppendMenuW(mode,MF_STRING|(hangars?MF_CHECKED:0),15,L"Hangars HUD");AppendMenuW(mode,MF_STRING|(placementLocked?MF_CHECKED:0),12,L"Lock HUD position");AppendMenuW(mode,MF_STRING,20,L"Dock HUD top right");AppendMenuW(mode,MF_STRING,16,L"Daylight planner");appendAfkMenu(mode,17);AppendMenuW(mode,MF_STRING,18,L"Automatic acceptance…");AppendMenuW(mode,MF_SEPARATOR,0,nullptr);AppendMenuW(mode,MF_STRING,4,L"Server log & interdiction history");AppendMenuW(mode,MF_STRING,6,L"Startup & HUD settings");AppendMenuW(mode,MF_STRING,14,L"Setup & reputation status");
+            HMENU mode=CreatePopupMenu();AppendMenuW(mode,MF_STRING|(activityMode()?0:MF_CHECKED),10,L"Mining HUD");AppendMenuW(mode,MF_STRING|(pirate?MF_CHECKED:0),11,L"Piracy HUD");AppendMenuW(mode,MF_STRING|(quest?MF_CHECKED:0),13,L"Missions HUD");AppendMenuW(mode,MF_STRING|(finder?MF_CHECKED:0),19,L"Finder HUD");AppendMenuW(mode,MF_STRING|(hangars?MF_CHECKED:0),15,L"Hangars HUD");AppendMenuW(mode,MF_STRING|(placementLocked?MF_CHECKED:0),12,L"Lock HUD position");AppendMenuW(mode,MF_STRING,20,L"Dock HUD top right");AppendMenuW(mode,MF_STRING,16,L"Day/Night Forecast");appendAfkMenu(mode,17);AppendMenuW(mode,MF_STRING,18,L"Automatic acceptance…");AppendMenuW(mode,MF_SEPARATOR,0,nullptr);AppendMenuW(mode,MF_STRING,4,L"Server log & interdiction history");AppendMenuW(mode,MF_STRING,6,L"Startup & HUD settings");AppendMenuW(mode,MF_STRING,14,L"Setup & reputation status");
             POINT at;GetCursorPos(&at);appendProfileMenu(mode);int choice=SynthMenus::track(mode,TPM_RETURNCMD,at.x,at.y,0,hwnd,nullptr);DestroyMenu(mode);if(choice==20){dockHud();return 0;}if(handleProfileChoice(choice))return 0;if(choice==19){setMode(4);showHud(true);setActivityExpanded(true);return 0;}if(choice==18)spawnPython(L"contract_share_helper.py",{L"--owner",std::to_wstring(GetCurrentProcessId())});if(choice==17)toggleAfk();if(choice==16)spawnPython(L"daylight_planner.py",{});if(choice==12)togglePlacement();if(choice==15)setMode(3);if(choice==13)setMode(2);if(choice==10||choice==11)setMode(choice==11);if(choice==4)workspace(2);if(choice==6)workspace(4);if(choice==14)spawnPython(L"app_launcher.py",{L"--status"});return 0;
         }
-        HMENU menu=CreatePopupMenu();AppendMenuW(menu,MF_STRING,2,L"Item directory");AppendMenuW(menu,MF_STRING,3,L"Material picker");AppendMenuW(menu,MF_STRING,4,L"Server log");AppendMenuW(menu,MF_STRING,5,L"Review imported records");AppendMenuW(menu,MF_STRING,6,L"Startup & HUD settings");AppendMenuW(menu,MF_STRING,7,L"Show / hide HUD");AppendMenuW(menu,MF_STRING,8,L"Mining diary & personal records");AppendMenuW(menu,MF_STRING,9,L"Rock bookmarks & return test");AppendMenuW(menu,MF_STRING,16,L"Daylight planner");AppendMenuW(menu,MF_STRING,14,L"Setup & reputation status");
+        HMENU menu=CreatePopupMenu();AppendMenuW(menu,MF_STRING,2,L"Item directory");AppendMenuW(menu,MF_STRING,3,L"Material picker");AppendMenuW(menu,MF_STRING,4,L"Server log");AppendMenuW(menu,MF_STRING,5,L"Review imported records");AppendMenuW(menu,MF_STRING,6,L"Startup & HUD settings");AppendMenuW(menu,MF_STRING,7,L"Show / hide HUD");AppendMenuW(menu,MF_STRING,8,L"Mining diary & personal records");AppendMenuW(menu,MF_STRING,9,L"Rock bookmarks & return test");AppendMenuW(menu,MF_STRING,16,L"Day/Night Forecast");AppendMenuW(menu,MF_STRING,14,L"Setup & reputation status");
         appendAfkMenu(menu,17);AppendMenuW(menu,MF_STRING,18,L"Automatic acceptance…");AppendMenuW(menu,MF_SEPARATOR,0,nullptr);AppendMenuW(menu,MF_STRING|(activityMode()?0:MF_CHECKED),10,L"HUD mode: Mining");AppendMenuW(menu,MF_STRING|(pirate?MF_CHECKED:0),11,L"HUD mode: Piracy");
         AppendMenuW(menu,MF_STRING|(quest?MF_CHECKED:0),13,L"HUD mode: Missions");AppendMenuW(menu,MF_STRING|(finder?MF_CHECKED:0),19,L"HUD mode: Finder");AppendMenuW(menu,MF_STRING|(hangars?MF_CHECKED:0),15,L"HUD mode: Hangars");AppendMenuW(menu,MF_STRING|(placementLocked?MF_CHECKED:0),12,L"Lock HUD position");AppendMenuW(menu,MF_STRING,20,L"Dock HUD top right");POINT at;GetCursorPos(&at);appendProfileMenu(menu);int choice=SynthMenus::track(menu,TPM_RETURNCMD,at.x,at.y,0,hwnd,nullptr);DestroyMenu(menu);if(choice==20){dockHud();return 0;}if(handleProfileChoice(choice))return 0;if(choice==19){setMode(4);showHud(true);setActivityExpanded(true);return 0;}
         if(choice==18){spawnPython(L"contract_share_helper.py",{L"--owner",std::to_wstring(GetCurrentProcessId())});return 0;}
@@ -822,6 +849,7 @@ bool begin(bool value){
 }
 void attach(SCMiner::MinerGUI* gui,std::function<bool(const std::string&)> confirm,std::function<int(int,const std::string&)> ownership){
     mining=gui;confirmOwned=std::move(confirm);attached=true;uiScale=GetDpiForWindow(gui->windowHandle())/96.0;if(uiScale<.75)uiScale=1;data=SCMiner::AppPaths::data();
+    if(!std::filesystem::exists(data/L"capture_privacy.json"))write(data/L"capture_privacy.json",obj({{"schema",num(1)},{"paused",boolean(false)},{"pause_unfocused",boolean(true)},{"account_access",boolean(false)}}));
     Json runtime=read(SCMiner::AppPaths::program()/L"native_runtime.json");root=std::filesystem::u8path(runtime.textOr("workspace"));
     hudKeys=HudHotkeys::decodeConfig(read(data/L"hud_hotkeys.json"));
     settings=read(data/L"native_settings.json");scanOnLaunch=flag(settings,"scan_on_launch",true);hudVisible=flag(settings,"show_hud",true);activityExpanded=flag(settings,"activity_expanded",true);showSession=flag(settings,"session_strip",true);finder=settings.textOr("hud_mode")=="finder";hangars=settings.textOr("hud_mode")=="hangars";snareAlerts=flag(settings,"snare_alerts",true);pirate=settings.textOr("hud_mode")=="piracy";pirateDetails=flag(settings,"piracy_details",false);quest=settings.textOr("hud_mode")=="questing";miningResume=flag(settings,"mining_resume",scanOnLaunch);placementLocked=flag(settings,"hud_locked",false);gui->updateClickThrough();hotkeyChoice=int(settings.numberOr("hotkey"));if(hotkeyChoice<0||hotkeyChoice>2)hotkeyChoice=0;
@@ -1002,7 +1030,7 @@ void shutdown(){
     if(foregroundHook){UnhookWinEvent(foregroundHook);foregroundHook=nullptr;}
     if(host)KillTimer(host,AFK_PULSE_TIMER);afkPulse.cancel();afk=AfkNudge{};
     hangarImage.reset();icon.reset();
-    SynthHome::close();SynthFinder::close();SynthScanDiary::close();SynthScanNav::close();
+    fabricatorFrame.clear();SynthPrivacy::close();SynthCompanion::close();SynthHome::close();SynthFinder::close();SynthScanDiary::close();SynthScanNav::close();
     if(attached&&!testing){Json exit=obj({{"at",num(epoch())},{"pid",num(GetCurrentProcessId())},{"reason",str(userExitRequested?"user":"shutdown")},{"game_pids",field(state,"game_pids")}});write(data/L"native_exit.json",exit);}
     if(host){KillTimer(host,1);KillTimer(host,HUD_KEY_TIMER);UnregisterHotKey(host,HOTKEY);UnregisterHotKey(host,HOTKEY_CYCLE);Shell_NotifyIconW(NIM_DELETE,&tray);}
     if(bridgeProcess){write(data/L"bridge_stop.json",obj({{"owner_pid",num(GetCurrentProcessId())}}));WaitForSingleObject(bridgeProcess,2000);}
@@ -1012,6 +1040,76 @@ void shutdown(){
     if(font)DeleteObject(font);if(titleFont)DeleteObject(titleFont);if(background)DeleteObject(background);if(card)DeleteObject(card);
     if(readyHandle)CloseHandle(readyHandle);if(showHandle)CloseHandle(showHandle);if(mutexHandle)CloseHandle(mutexHandle);
     readyHandle=showHandle=mutexHandle=nullptr;attached=false;mining=nullptr;
+}
+int workspacePreview(const std::filesystem::path& directory){
+    if(std::filesystem::exists(directory/L"companion_private.json")||std::filesystem::exists(directory/L"native_settings.json"))return 2;
+    std::filesystem::create_directories(directory);testing=true;data=directory/L"profile";std::filesystem::create_directories(data);
+    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+    INITCOMMONCONTROLSEX common{sizeof(common),ICC_LISTVIEW_CLASSES|ICC_STANDARD_CLASSES};InitCommonControlsEx(&common);
+    Gdiplus::GdiplusStartupInput input;ULONG_PTR token=0;Gdiplus::GdiplusStartup(&token,&input,nullptr);
+    HWND before=GetForegroundWindow(),fixture=CreateWindowExW(WS_EX_NOACTIVATE,L"STATIC",L"Synthetic page layout",WS_POPUP,-32000,-32000,2600,1900,nullptr,nullptr,GetModuleHandleW(nullptr),nullptr);
+    uiScale=GetDpiForWindow(fixture)/96.;background=CreateSolidBrush(BG);card=CreateSolidBrush(CARD);
+    font=CreateFontW(-px(15),0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,0,0,CLEARTYPE_QUALITY,0,L"Segoe UI");titleFont=CreateFontW(-px(24),0,0,0,FW_SEMIBOLD,FALSE,FALSE,FALSE,DEFAULT_CHARSET,0,0,CLEARTYPE_QUALITY,0,L"Segoe UI");
+    SynthPages::initialize(fixture);
+    Json rows=arr();for(int i=0;i<100;i++)rows.items.push_back(obj({{"id",str("fixture-"+std::to_string(i))},{"joined_local",str("2026-11-08 20:07:08")},{"left_local",str(i?"2026-11-08 21:05:59":"Still playing")},{"kind",str("APE1A")},{"shard_id",str("100")},{"name",str("DEMO · shard 100")},{"duration",str("1h 02m")},{"visit",str(i?"First recorded visit":"Return #3")},{"notes",str("Synthetic fixture note")},{"detail",str("DEMO · shard 100\nFull shard ID: synthetic-fixture\nRegion: ASIA-EAST\nFixture data only; no live session is read.")}}));
+    state=obj({{"session_rows",rows},{"session_log",obj({{"count",num(100)},{"regions",arr()}})}});
+    bool saved=true,fit=true,preserved=true,grown=true,selectionPreserved=true;Json pages=arr();
+    const CLSID png={0x557cf406,0x1a04,0x11d3,{0x9a,0x73,0x00,0x00,0xf8,0x1e,0xf3,0x2e}};
+    auto render=[&](HWND window,const std::string& name,int crop){
+        RECT client{};GetClientRect(window,&client);HDC dc=GetDC(window),memory=CreateCompatibleDC(dc);HBITMAP bitmap=CreateCompatibleBitmap(dc,client.right,client.bottom-crop);auto previous=SelectObject(memory,bitmap);
+        RECT image{0,0,client.right,client.bottom-crop};FillRect(memory,&image,background);SetViewportOrgEx(memory,0,-crop,nullptr);
+        SendMessageW(window,WM_PRINT,reinterpret_cast<WPARAM>(memory),PRF_CLIENT|PRF_CHILDREN|PRF_ERASEBKGND);
+        // Hidden native edit/combobox controls can omit text from WM_PRINT.
+        for(HWND c=GetWindow(window,GW_CHILD);c;c=GetWindow(c,GW_HWNDNEXT)){
+            wchar_t type[64]{};GetClassNameW(c,type,64);bool edit=std::wstring(type)==L"Edit",combo=std::wstring(type)==L"ComboBox";if(!edit&&!combo)continue;
+            RECT r{};GetWindowRect(c,&r);MapWindowPoints(nullptr,window,reinterpret_cast<POINT*>(&r),2);FillRect(memory,&r,card);FrameRect(memory,&r,(HBRUSH)GetStockObject(GRAY_BRUSH));r.left+=px(5);r.top+=px(2);
+            SelectObject(memory,font);SetTextColor(memory,TEXT);SetBkMode(memory,TRANSPARENT);auto value=text(c);DrawTextW(memory,value.c_str(),-1,&r,DT_LEFT|DT_NOPREFIX|(combo?DT_SINGLELINE:DT_WORDBREAK));
+        }
+        {Gdiplus::Bitmap picture(bitmap,nullptr);saved&=picture.Save((directory/std::filesystem::u8path(name+".png")).c_str(),&png,nullptr)==Gdiplus::Ok;}
+        SelectObject(memory,previous);DeleteObject(bitmap);DeleteDC(memory);ReleaseDC(window,dc);
+    };
+    auto checkBounds=[&](HWND window,int crop){
+        RECT client{};GetClientRect(window,&client);Json failures=arr();
+        for(HWND c=GetWindow(window,GW_CHILD);c;c=GetWindow(c,GW_HWNDNEXT)){
+            RECT r{};GetWindowRect(c,&r);MapWindowPoints(nullptr,window,reinterpret_cast<POINT*>(&r),2);if(r.bottom<=crop)continue;
+            if(r.left<0||r.top<crop||r.right>client.right||r.bottom>client.bottom){fit=false;failures.items.push_back(obj({{"id",num(GetDlgCtrlID(c))},{"left",num(r.left)},{"top",num(r.top)},{"right",num(r.right)},{"bottom",num(r.bottom)}}));}
+        }
+        return failures;
+    };
+    for(const auto& name:{std::string("history"),std::string("diary"),std::string("bookmarks")}){
+        HWND window;int crop=0;std::vector<std::pair<int,int>> sizes;
+        if(name=="history"){workspace(2);window=panel;crop=px(100);sizes={{860,650},{1040,900},{1600,1100}};SetWindowTextW(editReminder,L"Unsaved session note — retain across resize");}
+        else if(name=="diary"){
+            SynthScanDiary::initialize(fixture,data,true,[](Json){});SynthScanDiary::open();window=SynthScanDiary::window();sizes={{1100,810},{1350,950},{1800,1200}};
+            Json entries=arr();for(int i=0;i<100;i++)entries.items.push_back(obj({{"id",str("diary-"+std::to_string(i))},{"name",str("DEMO · Memory "+std::to_string(i))},{"kind",str("Rock scanned")},{"category",str("Stanton · Wala")},{"entry",obj()}}));
+            SynthScanDiary::update(obj({{"count",num(100)},{"rows",entries}}),obj(),"");
+        }else{
+            SynthScanNav::initialize(fixture,true,[](Json){});SynthScanNav::open();window=SynthScanNav::window();sizes={{900,660},{1200,900},{1800,1200}};SetDlgItemTextW(window,702,L"Unsaved bookmark name — retain across resize");
+        }
+        SynthPages::mount(window,crop);int baseHeight=0;int mainId=name=="history"?204:name=="diary"?411:704;HWND mainControl=GetDlgItem(window,mainId);
+        if(name=="bookmarks"){for(int i=0;i<100;i++)SendMessageW(mainControl,LB_ADDSTRING,0,reinterpret_cast<LPARAM>(L"DEMO · rock bookmark"));SendMessageW(mainControl,LB_SETCURSEL,3,0);}
+        else{ListView_SetItemState(mainControl,3,LVIS_SELECTED,LVIS_SELECTED);if(name=="diary"){ListView_SetItemState(mainControl,7,LVIS_SELECTED,LVIS_SELECTED);}else SetWindowTextW(editReminder,L"Unsaved session note — retain across resize");}
+        if(name=="diary"){SetDlgItemTextW(window,433,L"Unsaved story — retain across resize");SendMessageW(window,WM_COMMAND,MAKEWPARAM(433,EN_CHANGE),reinterpret_cast<LPARAM>(GetDlgItem(window,433)));}
+        for(size_t index=0;index<sizes.size();index++){
+            auto size=sizes[index];SynthPages::place(0,0,px(size.first),px(size.second)-crop,true);
+            // Account for the host's scrollbar/minimum fallback: validate the
+            // actual final client and its controls, not assumed window borders.
+            RECT viewport{};GetClientRect(window,&viewport);
+            auto failures=checkBounds(window,crop);RECT main{};GetWindowRect(mainControl,&main);
+            selectionPreserved&=name=="bookmarks"?SendMessageW(mainControl,LB_GETCURSEL,0,0)==3:(ListView_GetItemState(mainControl,3,LVIS_SELECTED)&LVIS_SELECTED)!=0;
+            if(name=="diary")selectionPreserved&=ListView_GetSelectedCount(mainControl)==2;
+            if(index==0)baseHeight=main.bottom-main.top;else grown&=main.bottom-main.top>baseHeight;
+            auto draft=text(GetDlgItem(window,name=="history"?220:name=="diary"?433:702));preserved&=draft.find(L"Unsaved")!=std::wstring::npos;
+            std::string imageName=name+"_"+std::to_string(size.first)+"x"+std::to_string(size.second);render(window,imageName,crop);
+            pages.items.push_back(obj({{"page",str(name)},{"width",num(viewport.right)},{"height",num(viewport.bottom-crop)},{"clipped_controls",failures},{"image",str(imageName+".png")}}));
+        }
+        SynthPages::hide();
+    }
+    bool foreground=GetForegroundWindow()==before;
+    write(directory/L"layout_validation.json",obj({{"rendered",boolean(saved)},{"controls_fit",boolean(fit)},{"main_content_grows",boolean(grown)},{"unsaved_text_preserved",boolean(preserved)},{"selection_preserved",boolean(selectionPreserved)},{"foreground_unchanged",boolean(foreground)},{"game_capture_calls",num(0)},{"game_input_events",num(0)},{"pages",pages}}));
+    SynthScanDiary::close();SynthScanNav::close();SynthPages::close();if(panel)DestroyWindow(panel);panel=nullptr;DestroyWindow(fixture);
+    DeleteObject(font);DeleteObject(titleFont);DeleteObject(background);DeleteObject(card);font=titleFont=nullptr;background=card=nullptr;Gdiplus::GdiplusShutdown(token);
+    return saved&&fit&&grown&&preserved&&selectionPreserved&&foreground?0:3;
 }
 int uiTest(const std::string& directory){
     testing=true;SCMiner::AppPaths::useDataFolder(std::filesystem::u8path(directory)/"data");

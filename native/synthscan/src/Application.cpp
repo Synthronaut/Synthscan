@@ -582,7 +582,10 @@ Application::~Application() {
 bool Application::initialize() {
     // Load the saved capture region first
     loadRegionConfig();
-    g_debugImages = recordScans_;
+#ifndef BEDROCK_DEV_TOOLS
+    recordScans_=false;
+#endif
+    g_debugImages = false;
 
     // How much of the machine one scan may take at once. Left alone,
     // OpenCV spreads across every core there is, and measured on a
@@ -1571,7 +1574,7 @@ void Application::lookForRock() {
         // with, and the only way to find out why they miss the MOLE's pilot
         // seat is to look at a frame where they did. Two a session, and only
         // in a build with the rock view on.
-        if (panel.labels.x < 0 && rockMissShots_ < 2) {
+        if (g_debugImages && panel.labels.x < 0 && rockMissShots_ < 2) {
             rockMissShots_++;
             std::error_code ec;
             std::filesystem::create_directories(dataPath("debug"), ec);
@@ -2939,6 +2942,7 @@ CaptureRegion Application::trackingSearchArea() const {
 
 void Application::applyLiveMode(bool active) {
     liveModeActive_ = active;
+    if(!active)screenCapture_.releaseWindowCapture();
     std::cout << "Live mode: " << (active ? "ON" : "OFF") << std::endl;
     // What the player flies may have changed while nothing was looked at: the
     // first look reads the loadout, so a ship switched while live was off is
@@ -3677,7 +3681,13 @@ void Application::loadRegionConfig() {
                 // record=0 turns the rolling recording off. It is lossless and
                 // therefore large - about 90 MB per minute of scanning, ~460 MB
                 // for the full ring of five.
-                else if (key == "record") recordScans_ = (value != 0);
+                else if (key == "record") {
+#ifdef BEDROCK_DEV_TOOLS
+                    recordScans_ = (value != 0);
+#else
+                    recordScans_ = false;
+#endif
+                }
                 // ease=0 makes the scan run flat out. threads= caps how much of the
                 // machine one scan may take at once; 0 works it out from the core count.
                 else if (key == "ease") easeIdle_ = (value != 0);
@@ -3742,17 +3752,7 @@ void Application::loadRegionConfig() {
 // the monitor under the aim box - the box was made for that monitor too
 static cv::Rect pictureFor(const CaptureRegion& aim) {
     if (auto viewport = ScreenCapture::gameViewport()) return *viewport;
-    const POINT centre{aim.x + aim.width / 2, aim.y + aim.height / 2};
-    if (HMONITOR monitor = MonitorFromPoint(centre, MONITOR_DEFAULTTONEAREST)) {
-        MONITORINFO info{};
-        info.cbSize = sizeof(info);
-        if (GetMonitorInfo(monitor, &info)) {
-            return cv::Rect(info.rcMonitor.left, info.rcMonitor.top,
-                            info.rcMonitor.right - info.rcMonitor.left,
-                            info.rcMonitor.bottom - info.rcMonitor.top);
-        }
-    }
-    return cv::Rect(0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN));
+    return {};
 }
 
 bool Application::refreshHudScale() {
@@ -3779,6 +3779,8 @@ bool Application::refreshHudScale() {
 
 static const char* sourceName(ScreenCapture::Source source) {
     switch (source) {
+        case ScreenCapture::Source::Window: return "Star Citizen window surface (Windows Graphics Capture)";
+        case ScreenCapture::Source::WindowHdr: return "Star Citizen window surface, HDR tone mapped locally";
         case ScreenCapture::Source::DxgiHdr: return "Desktop Duplication, HDR (tone mapped in the app)";
         case ScreenCapture::Source::Dxgi: return "Desktop Duplication, SDR";
         case ScreenCapture::Source::Gdi: return "GDI BitBlt (duplication unavailable)";

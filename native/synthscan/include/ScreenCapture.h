@@ -13,6 +13,7 @@
 #include "GlyphReader.h"
 #ifdef _WIN32
 #include "DxgiCapture.h"
+#include "SynthGameCapture.h"
 #endif
 
 namespace SCMiner {
@@ -22,12 +23,18 @@ public:
     ScreenCapture();
     ~ScreenCapture();
 
-    // Captures the entire (virtual) screen. On Linux: the game's window, in
-    // its own coordinates - see LinuxCapture.h for why that is the picture
+    // Captures only the game window surface. Never falls back to a desktop.
+    // Windows uses verified-window WGC; Linux uses the game's Composite surface.
     cv::Mat captureScreen();
 
-    // Captures a specific region (in the same coordinates captureScreen uses)
+    // Windows requests use screen coordinates, sampled only from the game surface.
     cv::Mat captureRegion(const CaptureRegion& region);
+
+    void releaseWindowCapture(){
+#ifdef _WIN32
+        windowCapture_.stop();
+#endif
+    }
 
     // Extracts the number area from the image (for the signature values)
     cv::Mat extractNumberRegion(const cv::Mat& image);
@@ -82,9 +89,9 @@ public:
 #endif
 
     // Which path the last capture actually used, for diagnostics: callers
-    // need to be able to say whether they are looking at an HDR desktop
-    // through duplication or at GDI's clipped 8-bit version of it.
-    enum class Source { None, Dxgi, DxgiHdr, Gdi, Composite };
+    // need to distinguish window SDR/HDR capture from legacy diagnostic sources.
+    // Production Windows capture reports only Window, WindowHdr or None.
+    enum class Source { None, Dxgi, DxgiHdr, Gdi, Composite, Window, WindowHdr };
     Source lastSource() const { return lastSource_; }
 #ifdef _WIN32
     // What the last HDR capture measured, in scRGB units; empty for SDR
@@ -99,8 +106,9 @@ public:
 
 private:
 #ifdef _WIN32
-    // Desktop Duplication, tried before GDI. See DxgiCapture for why.
+    // Legacy HDR diagnostic helper; production capture never calls grab().
     DxgiCapture dxgi_;
+    GameWindowCapture windowCapture_;
 #endif
     std::function<void()> yield_;
     Source lastSource_ = Source::None;

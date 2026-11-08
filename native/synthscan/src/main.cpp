@@ -31,6 +31,8 @@
 #include "MiningLocations.h"
 #include "AppPaths.h"
 #include "SynthScanShell.h"
+namespace SynthScan {int workspacePreview(const std::filesystem::path& directory);}
+#include "SynthCompanion.h"
 #include "Updater.h"
 #include "resource.h"
 #include "MiningLocations.h"
@@ -193,7 +195,7 @@ Switch to Star Citizen - capturing in " << left << " ... " << std::flush;
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
     std::cout << "
-                                          
+
 " << std::flush;
 
     SCMiner::ScreenCapture capture;
@@ -4128,6 +4130,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         LocalFree(setupArgv);return prices&&value.rawKnown&&value.refinedKnown?0:2;
     }
     if(setupArgv)LocalFree(setupArgv);
+    for(int i=1;i+1<__argc;i++)if(std::string(__argv[i])=="--companion-preview") {
+        setupConsole(true);return SynthCompanion::preview(std::filesystem::u8path(__argv[i+1]));
+    }
+    for(int i=1;i+1<__argc;i++)if(std::string(__argv[i])=="--workspace-preview") {
+        // Synthetic controls under a hidden parent; no game capture or input.
+        setupConsole(true);return SynthScan::workspacePreview(std::filesystem::u8path(__argv[i+1]));
+    }
     for(int i=1;i+1<__argc;i++)if(std::string(__argv[i])=="--ui-test") {
         // Interactive window fixtures are never run alongside the game.
         if(SCMiner::ScreenCapture::gameWindow())return 4;

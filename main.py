@@ -3714,12 +3714,10 @@ class SynthScanApp:
                             except Exception:
                                 failed_hwnd = hwnd
                                 capture.stop()
-                                logging.exception("Window telemetry capture unavailable; using foreground desktop capture")
+                                logging.exception("Window telemetry capture unavailable; desktop fallback is disabled")
                         if capture.hwnd == hwnd:
                             frame = capture.take_latest()
-                        elif is_star_citizen_foreground():
-                            at, token = time.time(), self.top_hud.state.get("session_token")
-                            frame = (self.detector.grab_displayinfo_pil(self.top_hud.get_capture_rect()), at, token)
+
                     else:
                         if capture.hwnd is not None:
                             capture.stop()

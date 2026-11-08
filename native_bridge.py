@@ -19,7 +19,7 @@ ROOT=Path(__file__).resolve().parent
 
 def ribbon_snapshot(state):
     """Publish the small server ribbon before optional catalog/reputation work."""
-    keys=('schema','written_at','owner_pid','game_pids','session_token','full_shard_id',
+    keys=('schema','written_at','owner_pid','game_pids','session_token','full_shard_id','joined_at',
           'region','shard_name','hop','location','hud_state','shard_observation','sessions','interdictions')
     return {key:state[key] for key in keys if key in state}
 
@@ -122,6 +122,7 @@ class SessionService:
                    sessions=sessions[:100],session_count=len(sessions),session_rows=session_rows,session_log=session_view,plans=self.plans,note=self.note,
                    storage_warning=self.history.read_only or self.sessions.read_only)
         state['shard_observation']=observations.get(r.full_shard_id,{}) if token else {}
+        state['joined_at']=r.joined_at if token else None
         self.diary_inbox()
         state['diary']=self.diary.view(**self.diary_filters)
         state['diary_result']=self.diary_result
@@ -180,6 +181,21 @@ class SessionService:
         elif action=='session_note':
             if not self.sessions.set_session_note(command['session_id'],command.get('text','')[:5000]):raise ValueError('That session is no longer available')
             self.note='Session note saved.'
+        elif action=='fabricator_memory':
+            import mmap,re
+            import cv2,numpy as np
+            from screen_readers import read_image,fabricator_candidates
+            from fabricator_inbox import FabricatorInbox
+            name=command.get('frame_name','');size=command.get('frame_size',0)
+            if not re.fullmatch(r'Local\\SynthScan\.Fabricator\.[0-9]+\.\{[A-Fa-f0-9-]{36}\}',name) or not isinstance(size,int) or not 0<size<=32*1024*1024:raise ValueError('Invalid frame transfer')
+            try:
+                with mmap.mmap(-1,size,tagname=name,access=mmap.ACCESS_READ) as memory:
+                    frame=cv2.imdecode(np.frombuffer(memory[:],dtype=np.uint8),cv2.IMREAD_COLOR)
+                if frame is None:raise ValueError('Invalid game image')
+                candidates=fabricator_candidates(read_image(frame))
+                FabricatorInbox(self.directory/'fabricator_scan_inbox.json').add(candidates)
+                self.note=f'{len(candidates)} blueprint candidates saved for review; image not saved.'
+            finally:atomic_json(self.directory/'fabricator_frame_ack.json',{'frame_name':name})
         elif action=='fabricator_file':
             from screen_readers import read_image,fabricator_candidates
             from fabricator_inbox import FabricatorInbox
@@ -231,7 +247,9 @@ def run(data_dir,owner):
     from finder_market import FinderMarketService
     finder_market=FinderMarketService(directory,owner)
     from finder_services import FinderServices
-    finder_services=FinderServices(item_directory,finder_market)
+    from companion_features import CompanionRunner
+    companion=CompanionRunner(directory,owner)
+    finder_services=FinderServices(item_directory,finder_market,extras=(companion,))
     finder_services.current_patch=updates.local.get('patch','')
     finder_services.start()
     top_hud=subprocess.Popen([str(Path(sys.executable).with_name('pythonw.exe')),'-B',str(ROOT/'native_session_hud.py'),'--owner',str(owner)],

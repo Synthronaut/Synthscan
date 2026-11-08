@@ -39,8 +39,9 @@ def main():
         logs.append(dict(args=list(map(str,args)),exit=p.returncode,output=p.stdout+p.stderr))
         if p.returncode:raise RuntimeError((p.stdout+p.stderr)[-12000:])
     flags=['/nologo','/std:c++20','/EHsc','/MD','/O2','/utf-8','/D_CRT_SECURE_NO_WARNINGS','/DNOMINMAX','/Gy',
+           '/Brepro','/experimental:deterministic','/pathmap:'+str(ROOT)+'=SYNTHSCAN',
            '/I'+str(SOURCE/'vendor/include'),'/I'+str(OPENCV/'include')]
-    files=list((SOURCE/'vendor/src').glob('*.cpp'))+list(SOURCE.glob('*.cpp'))
+    files=sorted((SOURCE/'vendor/src').glob('*.cpp'))+sorted(SOURCE.glob('*.cpp'))
     def compile(path):
         obj=build/(path.stem+'.obj')
         run([MSVC/'bin/Hostx64/x64/cl.exe',*flags,'/c',path,'/Fo'+str(obj)])
@@ -51,7 +52,7 @@ def main():
         resource=build/'worker.res'
         run([SDK/'bin'/VERSION/'x64/rc.exe','/nologo','/fo',resource,SOURCE/'worker.rc'],SOURCE)
         binary=build/'synthscan-mining.exe'
-        run([MSVC/'bin/Hostx64/x64/link.exe','/nologo','/OUT:'+str(binary),'/SUBSYSTEM:CONSOLE','/OPT:REF',
+        run([MSVC/'bin/Hostx64/x64/link.exe','/nologo','/OUT:'+str(binary),'/SUBSYSTEM:CONSOLE','/OPT:REF','/Brepro',
              *objects,resource,OPENCV/'x64/vc16/lib/opencv_world4120.lib','gdi32.lib','user32.lib','d3d11.lib','dxgi.lib','dwmapi.lib'])
         if adapter_hashes()!=adapters:
             raise ValueError('Adapter source changed during compilation; rebuild before publishing')

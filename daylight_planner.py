@@ -59,7 +59,7 @@ class DaylightPlanner:
             self.saved = {}
         if not isinstance(self.saved, dict):
             self.saved = {}
-        root.title('SynthScan · Daylight planner')
+        root.title('SynthScan · Day/Night Forecast')
         root.configure(bg='#14171d')
         root.minsize(720, 640)
         style = ttk.Style(root)
@@ -74,7 +74,7 @@ class DaylightPlanner:
         body = ttk.Frame(root, padding=24, style='Day.TFrame')
         body.grid(sticky='nsew');root.columnconfigure(0, weight=1);root.rowconfigure(0, weight=1)
         body.columnconfigure(0, weight=1)
-        ttk.Label(body, text='Daylight planner', style='Title.Day.TLabel').grid(row=0, sticky='w')
+        ttk.Label(body, text='Day/Night Forecast', style='Title.Day.TLabel').grid(row=0, sticky='w')
         ttk.Label(body, text='Pick your destination. Plan for the light when you arrive.', style='Muted.Day.TLabel').grid(row=1, sticky='w', pady=(3, 18))
         choices = ttk.Frame(body, style='Day.TFrame');choices.grid(row=2, sticky='ew')
         self.system = tk.StringVar(root)
@@ -287,8 +287,8 @@ def main():
         if not embedded:root.deiconify()
         root.mainloop()
     except Exception:
-        logging.exception('Daylight planner failed')
-        if not args.embedded:messagebox.showerror('Daylight planner','Unable to open daylight data. No game files were changed.',parent=root)
+        logging.exception('Day/Night Forecast failed')
+        if not args.embedded:messagebox.showerror('Day/Night Forecast','Unable to open daylight data. No game files were changed.',parent=root)
         root.destroy()
     finally:show.close();lock.close()
 

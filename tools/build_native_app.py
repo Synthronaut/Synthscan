@@ -28,16 +28,17 @@ def main():
     BUILD.mkdir(exist_ok=True);OUT.mkdir(parents=True,exist_ok=True)
     env=os.environ.copy()
     env['PATH']=str(MSVC/'bin/Hostx64/x64')+os.pathsep+str(SDK/'bin'/VERSION/'x64')+os.pathsep+env['PATH']
-    env['INCLUDE']=';'.join(map(str,[MSVC/'include',SDK/'Include'/VERSION/'ucrt',SDK/'Include'/VERSION/'shared',SDK/'Include'/VERSION/'um',SDK/'Include'/VERSION/'winrt']))
+    env['INCLUDE']=';'.join(map(str,[MSVC/'include',SDK/'Include'/VERSION/'ucrt',SDK/'Include'/VERSION/'shared',SDK/'Include'/VERSION/'um',SDK/'Include'/VERSION/'winrt',SDK/'Include'/VERSION/'cppwinrt']))
     env['LIB']=';'.join(map(str,[MSVC/'lib/x64',SDK/'Lib'/VERSION/'ucrt/x64',SDK/'Lib'/VERSION/'um/x64']))
     flags=['/nologo','/std:c++20','/EHsc','/MD','/O2','/utf-8','/bigobj','/D_CRT_SECURE_NO_WARNINGS','/DNOMINMAX','/Gy',
+           '/Brepro','/experimental:deterministic','/pathmap:'+str(ROOT)+'=SYNTHSCAN',
            '/I'+str(SOURCE/'include'),'/I'+str(OPENCV/'include'),'/I'+str(ZSTD_SOURCE),'/FI'+str(SOURCE/'include/SynthCompatibility.h')]
     cmake=(SOURCE/'CMakeLists.txt').read_text()
     files=[]
     for group in ['CORE_SOURCES','SOURCES']:
         body=re.search(r'set\('+group+r'\s+(.*?)\n\)',cmake,re.S)[1]
         files.extend(SOURCE/name for name in re.findall(r'src/[A-Za-z_0-9]+\.cpp',body))
-    files=list(dict.fromkeys(files))+[p for p in (SOURCE/'src').glob('Synth*.cpp') if p not in files]
+    files=list(dict.fromkeys(files))+[p for p in sorted((SOURCE/'src').glob('Synth*.cpp')) if p not in files]
     def dependencies(path,seen=None):
         seen=set() if seen is None else seen
         if path in seen:return ''
@@ -55,18 +56,21 @@ def main():
         logs.append(dict(args=list(map(str,args)),exit=p.returncode,output=p.stdout+p.stderr))
         if p.returncode:raise RuntimeError((p.stdout+p.stderr)[-18000:])
     def compile(path):
-        obj=BUILD/(path.stem+'.obj');key=signature+dependencies(path)
+        # The pinned 19041 C++/WinRT headers use the pre-standard coroutine
+        # implementation. Keep that SDK translation unit on its supported mode.
+        local_flags=flags+(['/std:c++17','/await'] if path.name=='SynthGameCapture.cpp' and VERSION=='10.0.19041.0' else [])
+        obj=BUILD/(path.stem+'.obj');key=signature+dependencies(path)+(str(local_flags[len(flags):]) if len(local_flags)>len(flags) else '')
         if not obj.exists() or cache.get(path.name)!=key:
-            run([MSVC/'bin/Hostx64/x64/cl.exe',*flags,'/c',path,'/Fo'+str(obj)])
+            run([MSVC/'bin/Hostx64/x64/cl.exe',*local_flags,'/c',path,'/Fo'+str(obj)])
             print('Compiled '+path.name,flush=True)
         next_cache[path.name]=key
         return obj
     try:
         with ThreadPoolExecutor(max_workers=2) as pool:objects=list(pool.map(compile,files))
         def compile_zstd(path):
-            obj=BUILD/('zstd_'+path.stem+'.obj');key=digest(path)+'msvc-md-o2-noasm'
+            obj=BUILD/('zstd_'+path.stem+'.obj');key=digest(path)+'msvc-md-o2-noasm-repro-v1'
             if not obj.exists() or cache.get('zstd_'+path.name)!=key:
-                run([MSVC/'bin/Hostx64/x64/cl.exe','/nologo','/TC','/MD','/O2','/W0','/DZSTD_DISABLE_ASM',
+                run([MSVC/'bin/Hostx64/x64/cl.exe','/nologo','/TC','/MD','/O2','/W0','/DZSTD_DISABLE_ASM','/Brepro','/experimental:deterministic','/pathmap:'+str(ROOT)+'=SYNTHSCAN',
                      '/D_CRT_SECURE_NO_WARNINGS','/I'+str(ZSTD_SOURCE),'/c',path,'/Fo'+str(obj)])
                 print('Compiled zstd/'+path.name,flush=True)
             next_cache['zstd_'+path.name]=key
@@ -77,10 +81,10 @@ def main():
         resource=BUILD/'app.res'
         run([SDK/'bin'/VERSION/'x64/rc.exe','/nologo','/fo',resource,SOURCE/'resources/bedrock.rc'],SOURCE/'resources')
         binary=BUILD/'SynthScan.exe'
-        run([MSVC/'bin/Hostx64/x64/link.exe','/nologo','/OUT:'+str(binary),'/SUBSYSTEM:WINDOWS','/OPT:REF',*objects,resource,
+        run([MSVC/'bin/Hostx64/x64/link.exe','/nologo','/OUT:'+str(binary),'/SUBSYSTEM:WINDOWS','/OPT:REF','/Brepro',*objects,resource,
              OPENCV/'x64/vc16/lib/opencv_world4120.lib',*zstd_objects,
              'gdi32.lib','gdiplus.lib','user32.lib','comctl32.lib','dwmapi.lib','d3d11.lib','dxgi.lib',
-             'comdlg32.lib','shell32.lib','ole32.lib','winhttp.lib','bcrypt.lib','advapi32.lib'])
+             'windowsapp.lib','runtimeobject.lib','comdlg32.lib','shell32.lib','ole32.lib','winhttp.lib','bcrypt.lib','advapi32.lib'])
         shutil.copy2(binary,OUT/binary.name)
         shutil.copy2(OPENCV/'x64/vc16/bin/opencv_world4120.dll',OUT)
         for name in ['LICENSE','NOTICE.txt','THIRD-PARTY-NOTICES.txt']:
@@ -91,7 +95,7 @@ def main():
         shutil.copy2(ZSTD_SOURCE.parent/'LICENSE',OUT/'LICENSE-zstd')
         manifest=dict(upstream=json.loads((ROOT/'native/synthscan-upstream.json').read_text())['commit'],
                       source_files={p.relative_to(SOURCE).as_posix():digest(p) for p in files+list((SOURCE/'include').glob('*.h'))+[SOURCE/'resources/bedrock.rc',SOURCE/'resources/synthscan.ico']},
-                      binary_files={p.name:digest(p) for p in OUT.glob('*') if p.suffix in ('.exe','.dll')},toolchain=dict(msvc=str(MSVC),sdk=VERSION),
+                      binary_files={p.name:digest(p) for p in OUT.glob('*') if p.suffix in ('.exe','.dll')},toolchain=dict(msvc=str(MSVC),sdk=VERSION),reproducibility=dict(deterministic=True,path_prefix='SYNTHSCAN'),
                       zstd=json.loads((ROOT/'third_party/build_tools/zstd_source.json').read_text()))
         (OUT/'build_manifest.json').write_text(json.dumps(manifest,indent=2))
         print('Built '+str(OUT/binary.name),flush=True)

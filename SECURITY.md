@@ -22,6 +22,20 @@ packaging rejects `.dpapi` files. Never publish or log the private key.
 This signature authenticates the update channel; it is separate from Windows
 Authenticode. The app remains a community alpha without an Authenticode certificate.
 Download the initial installer from this repository.
+
+The native builder uses deterministic MSVC compilation/linking and normalized
+source paths. `tools/verify_reproducible.py` checks independently built unsigned
+artifacts against their manifests. The manual Verify native release provenance
+workflow builds twice and can issue GitHub provenance attestations after its
+checks pass. A workflow file is not evidence of a successful run; publish the
+actual run and artifact verification with a release.
+
+`tools/sign_windows_release.ps1` supports an installed publisher code-signing
+certificate without exporting its private key. A trusted signing identity still
+has to be supplied by the publisher. Never describe an unsigned build as signed,
+a self-check as an independent audit, or a normal process as an offline sandbox.
+The concrete review checklist and outstanding requirements are in
+`docs/privacy-review.md`.
 Extraction and schema parsing never execute extracted game code or access game
 process memory. Unknown game builds or unavailable account data must produce an
 unavailable state rather than invented reputation numbers.

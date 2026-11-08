@@ -148,14 +148,15 @@ J Engine::request(const J& req) {
         if(!file.read(reinterpret_cast<char*>(bytes.data()),size))throw std::runtime_error("Could not read frame file");
         return scan(cv::imdecode(bytes,cv::IMREAD_COLOR),req);
     }
-    if(op=="scan_live") {
-        HWND game=ScreenCapture::gameWindow();
-        if(!game||GetForegroundWindow()!=game)return object({{"inactive",j(true)}});
-        auto view=ScreenCapture::gameViewport();if(!view)return object({{"inactive",j(true)}});
-        CaptureRegion region;region.x=view->x;region.y=view->y;region.width=view->width;region.height=view->height;region.autoDetect=false;
-        auto taken=std::chrono::system_clock::now();
-        auto out=scan(capture.captureRegion(region),req);
-        out.members.push_back({"observed_at",j(std::chrono::duration<double>(taken.time_since_epoch()).count())});return out;
+    if(op=="scan_live")throw std::runtime_error("Desktop capture is disabled; use the verified game-window client");
+    if(op=="scan_mapping") {
+        auto name=req.textOr("mapping");int width=int(req.numberOr("width")),height=int(req.numberOr("height"));
+        if(name.rfind("Local\\SynthScan.Scan.",0)!=0||width<1||height<1||width>8192||height>8192)throw std::runtime_error("Invalid frame mapping");
+        size_t size=size_t(width)*height*3;if(size>128*1024*1024)throw std::runtime_error("Frame too large");
+        struct View {HANDLE handle=nullptr;void* data=nullptr;~View(){if(data)UnmapViewOfFile(data);if(handle)CloseHandle(handle);}} view;
+        view.handle=OpenFileMappingA(FILE_MAP_READ,FALSE,name.c_str());if(!view.handle)throw std::runtime_error("Frame mapping unavailable");
+        view.data=MapViewOfFile(view.handle,FILE_MAP_READ,0,0,size);if(!view.data)throw std::runtime_error("Frame mapping is smaller than requested");
+        return scan(cv::Mat(height,width,CV_8UC3,view.data),req);
     }
     throw std::runtime_error("Unknown operation");
 }

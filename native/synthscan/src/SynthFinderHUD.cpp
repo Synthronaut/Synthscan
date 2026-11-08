@@ -228,7 +228,9 @@ void paint(HWND hwnd){
             }
             if(!loading){
                 FinderCards::Canvas cards{g,w,ui};cards.clipTop=contentTop;cards.clipBottom=h-6*ui;
-                if(playerMarket){
+                if(row.textOr("kind")=="Blueprint"){
+                    y=cards.note("Crafting recipe and acquisition sources",y);
+                }else if(playerMarket){
                     if(marketView.numberOr("presentation_schema")==1)y=cards.market(marketView,y,qualityMinimum);
                     else y=cards.note("Player-market presentation unavailable; refreshing automatically.",y);
                 }else{y=cards.shops(shopView,y);y=cards.mounts(row,y);}

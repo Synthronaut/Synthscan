@@ -24,7 +24,7 @@ PRIVATE={'quantum_timer_status.json','quantum_timer_status.json.tmp','quantum_ti
     'compboard_inventory.sqlite3','compboard_inventory.sqlite3-journal',
     'compboard_inventory.sqlite3-wal','compboard_inventory.sqlite3-shm',
     'native_status.json','top_hud_status.json','session_state.json','credentials.json','.env'}
-IGNORED={'.git','__pycache__','.venv','node_modules','synthscan-build','build'}
+IGNORED={'debug','recordings','.git','__pycache__','.venv','node_modules','synthscan-build','build'}
 PRIVATE.update({'directory_vehicles.json','item_directory_request.json','item_directory_detail.json','item_directory_catalog.json','data_update_status.json','data_update_command.json','hangar_update_status.json',
     'hangar_update_command.json','hangar_reset_sync.json','catalogue_current.json'})
 PRIVATE.update({'update_preferences.json','app_update_status.json','reference_source_status.json','reference_source_current.json',
@@ -33,13 +33,21 @@ PRIVATE.update({'finder_market_index.json','finder_market_request.json','finder_
 PRIVATE.add('session_ribbon.json')
 PRIVATE.add('session_overview.json')
 PRIVATE.add('hud_hotkeys.json')
+PRIVATE.update({'capture_privacy.json','capture_privacy.json.tmp','fabricator_frame.png','fabricator_frame_ack.json','fabricator_frame_ack.json.tmp','privacy_diagnostics.json','ocr_isolation_status.json'})
+PRIVATE.add('capture_activity.json')
 PRIVATE.add('home_status.json')
 PRIVATE.update({'refinery_orders.txt','refinery_orders.txt.tmp'})
 PRIVATE.add('daylight_embed_request.json')
+PRIVATE.update({'companion_private.json','companion_private.json.tmp','companion_state.json','companion_state.json.tmp',
+                'companion_alerts.json','companion_alerts.json.tmp','companion_commands'})
+
+
+def is_private(name):
+    return name in PRIVATE or name.startswith('capture_activity.')
 
 
 def copy_tree(source,destination):
-    def ignore(folder,names):return [n for n in names if n in IGNORED or n in PRIVATE or n.endswith(('.pyc','.pdb','.obj','.log'))]
+    def ignore(folder,names):return [n for n in names if n in IGNORED or is_private(n) or n.endswith(('.pyc','.pdb','.obj','.log'))]
     shutil.copytree(source,destination,dirs_exist_ok=True,ignore=ignore)
 
 
@@ -66,13 +74,14 @@ def stage_source(destination):
         shutil.copy2(ROOT/'third_party/build_tools'/name,target)
     (destination/'data').mkdir()
     for file in (ROOT/'data').iterdir():
-        if file.is_file() and file.name not in PRIVATE and not file.name.startswith('local_'):shutil.copy2(file,destination/'data'/file.name)
+        if file.is_file() and not is_private(file.name) and not file.name.startswith('local_'):shutil.copy2(file,destination/'data'/file.name)
     (destination/'assets').mkdir()
     (destination/'docs').mkdir(exist_ok=True)
     shutil.copy2(ROOT/'docs/material-quality-values.md',destination/'docs/material-quality-values.md')
     shutil.copy2(ROOT/'docs/shopping-list-plan.md',destination/'docs/shopping-list-plan.md')
     shutil.copy2(ROOT/'docs/piracy-population-sources.md',destination/'docs/piracy-population-sources.md')
     shutil.copy2(ROOT/'docs/hud-shortcuts.md',destination/'docs/hud-shortcuts.md')
+    shutil.copy2(ROOT/'docs/privacy-review.md',destination/'docs/privacy-review.md')
     shutil.copy2(ROOT/'assets/snare_watch.wav',destination/'assets/snare_watch.wav')
     copy_tree(ROOT/'assets/branding',destination/'assets/branding')
     if (ROOT/'.github').exists():copy_tree(ROOT/'.github',destination/'.github')
@@ -86,7 +95,7 @@ def audit(destination):
     files=list(destination.rglob('*'))
     for file in files:
         if not file.is_file():continue
-        if file.name in PRIVATE or file.suffix.lower()=='.dpapi':raise ValueError('Private file included: '+str(file.relative_to(destination)))
+        if is_private(file.name) or file.suffix.lower()=='.dpapi':raise ValueError('Private file included: '+str(file.relative_to(destination)))
         relative=file.relative_to(destination)
         if relative.parts[0] in ('research','backups','release-validation','voice_cache'):
             raise ValueError('Development data included: '+str(relative))

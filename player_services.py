@@ -1,0 +1,218 @@
+"""Own-session social reads and explicitly selected, one-shot social actions."""
+import re
+import time
+from pathlib import Path
+
+PLAYER_PREFIX='urn:sc:global:player:geid:'
+READS={('social','SocialService','ListGroups'),('identity','IdentityService','GetPlayersNames'),
+       ('contacts','ContactsService','SearchAccount'),('contacts','ContactsService','ListContacts')}
+WRITES={('contacts','ContactsService','SendFriendRequest'),('social','SocialService','InviteToParty')}
+
+
+def public_error(error):
+    try:code=error.code().name
+    except Exception:code='UNAVAILABLE'
+    return {'UNAUTHENTICATED':'Sign in to Star Citizen again to refresh social access.',
+            'PERMISSION_DENIED':'The game service did not permit this action.',
+            'UNIMPLEMENTED':'This action is unavailable at the current game service.',
+            'ALREADY_EXISTS':'A friendship or pending request already exists.',
+            'RESOURCE_EXHAUSTED':'The game service is busy or a social limit was reached.',
+            'DEADLINE_EXCEEDED':'No confirmation received. Check in-game before trying again.',
+            'INVALID_ARGUMENT':'The game service rejected this recipient or party state.'}.get(code,'Social service unavailable. Try refreshing.' )
+
+
+class PlayerClient:
+    def __init__(self):
+        from game_account import OwnAccount
+        from installation import reference_paths
+        from google.protobuf.descriptor_pb2 import FileDescriptorSet
+        self.account=OwnAccount()
+        self.descriptors={d.name:d for d in FileDescriptorSet.FromString(reference_paths()['schemas'].read_bytes()).file}
+
+    def close(self):self.account.close()
+
+    def message(self,domain,name):
+        from google.protobuf import message_factory
+        prefix='sc.external.services.'+domain+'.v1.'
+        def add(name):
+            try:self.account.pool.FindFileByName(name);return
+            except KeyError:pass
+            for dependency in self.descriptors[name].dependency:add(dependency)
+            self.account.pool.AddSerializedFile(self.descriptors[name].SerializeToString())
+        target=next(k for k,v in self.descriptors.items() if v.package==prefix.rstrip('.') and any(m.name==name for m in v.message_type))
+        add(target)
+        return message_factory.GetMessageClass(self.account.pool.FindMessageTypeByName(prefix+name))
+
+    def call(self,domain,service,method,request,confirmed=False):
+        route=(domain,service,method)
+        if route not in READS and not (route in WRITES and confirmed):raise ValueError('Social action requires explicit confirmation')
+        from capture_privacy import require_account_access
+        require_account_access()
+        response=self.message(domain,method+'Response')
+        return self.account.channel.unary_unary('/sc.external.services.'+domain+'.v1.'+service+'/'+method,
+            request_serializer=lambda v:v.SerializeToString(),response_deserializer=response.FromString)(request,timeout=8,metadata=self.account.metadata)
+
+    def scope(self,context):
+        from app_lifecycle import game_process_ids
+        from installation import game_directory
+        from telemetry_core import IncrementalGameLog
+        if not context.get('session_token') or not game_process_ids():raise ValueError('Join a shard to use social tools.')
+        reader=IncrementalGameLog(game_directory(True)/'Game.log');length=Path(reader.log_path).stat().st_size
+        while reader.last_pos<length:
+            previous=reader.last_pos;reader.poll()
+            if reader.last_pos==previous:break
+        if not reader.connected or reader.full_shard_id!=context.get('full_shard_id') or reader.joined_at!=context.get('joined_at'):
+            raise ValueError('Session changed. Refresh the player list.')
+
+    def search(self,query,context):
+        query=query.strip()
+        if not re.fullmatch(r'[A-Za-z0-9_-]{2,64}',query):raise ValueError('Enter at least two handle characters (letters, numbers, _ or -).')
+        self.scope(context)
+        request=self.message('contacts','SearchAccountRequest')();request.search=query;request.pagination.first=25
+        response=self.call('contacts','ContactsService','SearchAccount',request)
+        rows=[]
+        for account in response.accounts:
+            if not account.nickname or not account.player_id or not account.account_id:continue
+            rows.append(dict(id=PLAYER_PREFIX+str(account.player_id),handle=account.nickname,display_name=account.display_name,
+                             account_id=account.account_id,player_id=str(account.player_id),is_self=PLAYER_PREFIX+str(account.player_id)==self.account.subject))
+        self.scope(context)
+        return dict(rows=rows,limited=response.page_info.has_next_page,observed_at=time.time())
+
+    def roster(self,context,known=None):
+        self.scope(context);known=known or {};groups=[];cursor=''
+        for _ in range(4):
+            request=self.message('social','ListGroupsRequest')();request.filters.types.append(2);request.pagination.first=5
+            if cursor:request.pagination.after=cursor
+            response=self.call('social','SocialService','ListGroups',request)
+            pattern=r'(?<![a-z0-9_])'+re.escape(context['full_shard_id'].casefold())+r'(?![a-z0-9_])'
+            groups.extend(g for g in response.groups if g.type==2 and re.search(pattern,g.name.casefold())
+                          and any(m.urn==self.account.subject for m in g.members))
+            if not response.page_info.has_next_page:break
+            next_cursor=response.page_info.end_cursor
+            if not next_cursor or next_cursor==cursor:raise ValueError('Incomplete shard group response.')
+            cursor=next_cursor
+        else:raise ValueError('Shard group result limit reached.')
+        if len(groups)!=1:raise ValueError('Current shard member group is not available yet.')
+        urns={m.urn for m in groups[0].members}
+        if not 0<len(urns)<=4096 or any(not u.startswith(PLAYER_PREFIX) or not u[len(PLAYER_PREFIX):].isdigit() for u in urns):
+            raise ValueError('Unrecognised shard member identities.')
+        names={u:known[u] for u in urns if known.get(u)}
+        missing=sorted(int(u[len(PLAYER_PREFIX):]) for u in urns if u not in names)
+        for start in range(0,len(missing),256):
+            batch=set(missing[start:start+256]);request=self.message('identity','GetPlayersNamesRequest')();request.player_geids.extend(sorted(batch))
+            result=self.call('identity','IdentityService','GetPlayersNames',request)
+            if any(n.geid not in batch for n in result.names):raise ValueError('Unexpected player-name response.')
+            for row in result.names:
+                if row.name.strip():names[PLAYER_PREFIX+str(row.geid)]=row.name.strip()
+        self.scope(context)
+        if len(names)!=len(urns):raise ValueError('Some player names are unavailable; previous list retained.')
+        return dict(rows=[dict(id=u,handle=names[u],is_self=u==self.account.subject) for u in sorted(urns,key=lambda u:names[u].casefold())],
+                    observed_at=time.time(),full_shard_id=context['full_shard_id'],session_token=context['session_token'],
+                    coverage='Current shard server-group members; complete online population is unverified')
+
+    def send(self,action,person,context,confirmed=False):
+        if action not in ('friend','party') or confirmed is not True:raise ValueError('Choose and confirm a social action.')
+        self.scope(context)
+        found=self.search(person['handle'],context)
+        exact=[r for r in found['rows'] if r['id']==person['id'] and r['handle'].casefold()==person['handle'].casefold()]
+        if len(exact)!=1 or exact[0]['id']==self.account.subject:raise ValueError('Exact recipient could not be verified. Refresh and select again.')
+        target=exact[0]
+        self.scope(context)
+        if action=='friend':
+            request=self.message('contacts','SendFriendRequestRequest')();request.account_id=target['account_id'];request.player_id=int(target['player_id'])
+            response=self.call('contacts','ContactsService','SendFriendRequest',request,confirmed=True)
+            if not response.request_id:raise ValueError('No request receipt returned. Check in-game before retrying.')
+            return 'Friend request sent to '+target['handle']+'. Awaiting their acceptance.'
+        request=self.message('social','InviteToPartyRequest')();request.member_urn=target['id'];request.name=target['handle']
+        response=self.call('social','SocialService','InviteToParty',request,confirmed=True)
+        if not response.invitation.id:raise ValueError('No invitation receipt returned. Check in-game before retrying.')
+        return 'Party invitation sent to '+target['handle']+'. Awaiting their acceptance.'
+
+    def relationships(self,context):
+        self.scope(context)
+        output=dict(friends=[],party=[],friends_at=0,party_at=0,friends_error='',party_error='')
+        try:
+            friends=set();cursor=''
+            for _ in range(20):
+                request=self.message('contacts','ListContactsRequest')();request.relationship_types.append(1);request.pagination.first=100
+                if cursor:request.pagination.after=cursor
+                response=self.call('contacts','ContactsService','ListContacts',request)
+                for contact in response.contacts:
+                    types={r.type for r in contact.relationships}
+                    if 1 in types and 2 not in types and contact.account.player_id:
+                        friends.add(PLAYER_PREFIX+str(contact.account.player_id))
+                if not response.page_info.has_next_page:break
+                next_cursor=response.page_info.end_cursor
+                if not next_cursor or next_cursor==cursor:raise ValueError('Incomplete friends response')
+                cursor=next_cursor
+            else:raise ValueError('Friends result limit reached')
+            output.update(friends=sorted(friends),friends_at=time.time())
+        except Exception:output['friends_error']='Friends list unavailable'
+        try:
+            groups=[];cursor=''
+            for _ in range(4):
+                request=self.message('social','ListGroupsRequest')();request.filters.types.append(4);request.pagination.first=5
+                if cursor:request.pagination.after=cursor
+                response=self.call('social','SocialService','ListGroups',request)
+                groups.extend(g for g in response.groups if g.type==4 and any(m.urn==self.account.subject for m in g.members))
+                if not response.page_info.has_next_page:break
+                next_cursor=response.page_info.end_cursor
+                if not next_cursor or next_cursor==cursor:raise ValueError('Incomplete party response')
+                cursor=next_cursor
+            else:raise ValueError('Party result limit reached')
+            if len(groups)>1:raise ValueError('Current party is ambiguous')
+            members={m.urn for g in groups for m in g.members}
+            if any(not u.startswith(PLAYER_PREFIX) for u in members):raise ValueError('Unrecognised party identities')
+            output.update(party=sorted(members),party_at=time.time())
+        except Exception:output['party_error']='Party membership unavailable'
+        self.scope(context)
+        return output
+
+    def invite_many(self,people,context,confirmed=False,previous=(),cancel=None):
+        if confirmed is not True:raise ValueError('Confirm the selected recipients first.')
+        if not people or len(people)>4096 or len({p['id'] for p in people})!=len(people):raise ValueError('Invalid party recipients.')
+        # Recheck shard and party immediately before the first outgoing invitation.
+        roster={p['id'] for p in self.roster(context)['rows']}
+        relations=self.relationships(context)
+        if not relations.get('party_at'):raise ValueError('Party membership unavailable. No invitations sent; refresh and try again.')
+        party=set(relations['party']);attempted=set(previous);results=[];stopped=False;sent=0
+        for person in people:
+            row=dict(id=person['id'],handle=person['handle'])
+            reason='You' if person['id']==self.account.subject else 'Already in party' if person['id'] in party else 'No longer on shard' if person['id'] not in roster else 'Already attempted this session' if person['id'] in attempted else ''
+            if reason:row.update(outcome='Skipped',detail=reason)
+            elif cancel is not None and cancel.is_set():row.update(outcome='Not sent',detail='Batch cancelled after app shutdown or a session change.')
+            elif stopped:row.update(outcome='Not sent',detail='Batch stopped after an unsuccessful invitation.')
+            else:
+                try:
+                    if sent:
+                        if cancel is not None:cancel.wait(.75)
+                        else:time.sleep(.75)
+                    if cancel is not None and cancel.is_set():
+                        row.update(outcome='Not sent',detail='Batch cancelled after app shutdown or a session change.');results.append(row);continue
+                    detail=self.send('party',person,context,True)
+                    row.update(outcome='Sent',detail=detail);sent+=1
+                except Exception as error:
+                    message=str(error)[:240] if isinstance(error,ValueError) else public_error(error)
+                    row.update(outcome='Check in game',detail=message+' Batch stopped; check in-game before retrying.');stopped=True
+            results.append(row)
+        skipped=sum(r['outcome']=='Skipped' for r in results)
+        unsent=sum(r['outcome']=='Not sent' for r in results)
+        return dict(status=f'Party invites: {sent} sent, {skipped} skipped'+(', 1 needs checking' if stopped else '')+(f', {unsent} not sent' if unsent else '')+'. See Invite results.',results=results)
+
+
+def social_job(kind,context,**options):
+    client=None
+    try:
+        client=PlayerClient()
+        if kind=='roster':return client.roster(context,options.get('known'))
+        if kind=='search':return client.search(options['query'],context)
+        if kind=='relationships':return client.relationships(context)
+        if kind=='party_many':return client.invite_many(options['people'],context,options.get('confirmed'),options.get('previous',()),options.get('cancel'))
+        if kind in ('friend','party'):return client.send(kind,options['person'],context,options.get('confirmed'))
+        raise ValueError('Unknown social operation')
+    except (ValueError,FileNotFoundError) as error:
+        if isinstance(error,FileNotFoundError):raise ValueError('Sign in to Star Citizen to use social tools.') from None
+        raise ValueError(str(error)) from None
+    except Exception as error:raise ValueError(public_error(error)) from None
+    finally:
+        if client is not None:client.close()

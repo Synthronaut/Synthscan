@@ -7,7 +7,8 @@ from pathlib import Path
 import queue
 import subprocess
 import threading
-import tempfile
+import mmap
+import uuid
 
 ROOT=Path(__file__).resolve().parent
 ENGINE_DIR=ROOT/'third_party/mining_core'
@@ -63,7 +64,7 @@ class NativeMiningClient:
                     self.diagnostics.append(line.strip()[:500])
             threading.Thread(target=output,daemon=True).start()
             threading.Thread(target=errors,daemon=True).start()
-            self.hello=self._exchange(dict(op='hello'),20)
+            self.hello=self._exchange(dict(op='hello'),30)
             if not isinstance(self.hello,dict) or self.hello.get('schema')!=1 or not self.hello.get('neural_ready') or self.hello.get('templates',0)<=0:
                 self.close()
                 raise NativeMiningError('Native mining reader did not initialize all readers')
@@ -91,27 +92,37 @@ class NativeMiningClient:
         return result['result']
 
     def request(self, operation, timeout=15, **fields):
+        if operation=='scan_live':
+            from capture_privacy import GameCapture
+            if not hasattr(self,'_capture'):self._capture=GameCapture()
+            frame=self._capture.grab()
+            if frame is None:return {'inactive':True}
+            return self.request_image(frame,**fields)
         with self.lock:
             self.start()
             return self._exchange(dict(fields,op=operation),timeout)
 
     def request_image(self, image, **fields):
-        # An isolated frame file, deleted after the worker has finished reading.
-        with tempfile.TemporaryDirectory(prefix='SynthScan_NativeFrame_') as directory:
-            path=Path(directory)/'frame.png'
-            if isinstance(image,(str,Path)):
-                from PIL import Image
-                with Image.open(image) as source:source.convert('RGB').save(path,compress_level=1)
-            elif hasattr(image,'save'):
-                image.convert('RGB').save(path,compress_level=1)
-            else:
-                import cv2
-                if not cv2.imwrite(str(path),image):raise NativeMiningError('Could not encode frame')
-            return self.request('scan_file',path=str(path),**fields)
+        import cv2,numpy as np
+        if isinstance(image,(str,Path)):
+            from PIL import Image
+            with Image.open(image) as source:frame=cv2.cvtColor(np.asarray(source.convert('RGB')),cv2.COLOR_RGB2BGR)
+        elif hasattr(image,'convert'):frame=cv2.cvtColor(np.asarray(image.convert('RGB')),cv2.COLOR_RGB2BGR)
+        else:frame=np.asarray(image)
+        if frame.ndim!=3 or frame.shape[2]!=3 or frame.dtype!=np.uint8:raise NativeMiningError('Expected a BGR image')
+        height,width=frame.shape[:2];size=width*height*3
+        if not 0<width<=8192 or not 0<height<=8192 or size>128*1024*1024:raise NativeMiningError('Frame size is outside capture limits')
+        with self.lock:self.start()
+        frame=np.ascontiguousarray(frame);name='Local\\SynthScan.Scan.'+str(os.getpid())+'.'+uuid.uuid4().hex
+        with mmap.mmap(-1,size,tagname=name,access=mmap.ACCESS_WRITE) as memory:
+            memory.write(frame.tobytes())
+            try:return self.request('scan_mapping',mapping=name,width=width,height=height,**fields)
+            finally:memory.seek(0);memory.write(bytes(size))
 
     def close(self):
         # Closing from the UI thread must not wait behind an in-flight read.
         self.closed=True
+        if hasattr(self,"_capture"):self._capture.stop()
         p=self.process
         if p:
             if p.poll() is None:

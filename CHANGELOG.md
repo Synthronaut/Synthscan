@@ -1,5 +1,17 @@
 ## Unreleased
 
+- Replace Windows desktop/region capture fallback with a verified game-window
+  surface. Keep off-game crop areas zeroed, expire stale frames, preserve local
+  HDR tone mapping, and pause on focus loss by default.
+- Add an embedded Privacy & capture page with pause/resume, an in-memory preview,
+  explicit PNG export and separate account-service permission. New profiles opt
+  in to account features; existing authorized access can be preserved locally.
+- Disable automatic screenshot/debug recording in community builds and transfer
+  terminal/helper frames through bounded shared memory instead of temporary PNGs.
+- Add deterministic build settings, artifact comparison, signing support and a
+  manual CI provenance workflow. Document independent-review/signing requirements
+  and that full OS-enforced offline OCR isolation is not enabled.
+
 - Add a focused, configured-key-only HUD shortcut fallback when Windows hotkey
   messages do not arrive during play. Ignore held keys on focus return and
   suppress repeats; expose separate message and fallback counters for diagnosis.

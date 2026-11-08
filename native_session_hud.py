@@ -134,6 +134,8 @@ def main():
                 self._last_rendered_key=None;return
             super().render_bar()
     root=tk.Tk();root.withdraw();ribbon=Ribbon(root);gate=AlertGate(started_at);alert=SnareAlertWindow(root,game_window_rect);activity=ActivityButton(root,DATA,args.owner);collapse=ActivityQuickControls(root,DATA,args.owner);ribbon.activity_button=activity
+    from companion_toasts import NoticeGate,CompanionToast
+    companion_gate=NoticeGate(started_at);companion_toast=CompanionToast(root,game_window_rect)
     session_view=RibbonSessionState();cached_settings={};last_feed_status=None
     def callback_error(kind,value,traceback):
         logging.error('HUD input callback failed',exc_info=(kind,value,traceback))
@@ -200,6 +202,11 @@ def main():
             enabled=piracy_alerts_enabled(settings,bool(game_window_rect()))
             notices=gate.consume(snapshot,args.owner,time.time(),enabled)
             alert.update(notices,ribbon.state.get('session_token'),enabled)
+            try:companion_snapshot=read_shared_json(DATA/'companion_alerts.json',limit=65536)
+            except (OSError,ValueError):companion_snapshot={}
+            companion_enabled=bool(settings.get('show_hud',True) and game_window_rect())
+            companion_events=companion_gate.consume(companion_snapshot,args.owner,ribbon.state.get('session_token'),companion_enabled,now)
+            companion_toast.update(companion_events,companion_enabled,now,ribbon.state.get('session_token'))
             # The HUD body stays passive; the region dropdown and compact
             # controls accept bounded clicks without activating the app.
             protected=protect_input()
@@ -214,6 +221,7 @@ def main():
             except OSError:games=None
             ribbon.state=session_view.update({},args.owner,time.time(),games)
             ribbon.render_bar();alert.update([],None,False)
+            companion_toast.update([],False)
             logging.exception('Top HUD refresh failed')
         root.after(250,poll)
     try:poll();root.mainloop()

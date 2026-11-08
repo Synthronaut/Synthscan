@@ -1,0 +1,61 @@
+name: Verify native release provenance
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: windows-2022
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.14'
+      - name: Download verified build inputs
+        run: python -B tools/fetch_native_build_inputs.py
+      - name: Build twice with separate object directories
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force artifacts,build | Out-Null
+          python -B -c "from tools import build_native_app as b; b.BUILD=b.ROOT/'build/first'; b.OUT=b.ROOT/'artifacts/first'; b.main()"
+          if ($LASTEXITCODE -ne 0) { throw 'First build failed' }
+          python -B -c "from tools import build_native_app as b; b.BUILD=b.ROOT/'build/second'; b.OUT=b.ROOT/'artifacts/second'; b.main()"
+          if ($LASTEXITCODE -ne 0) { throw 'Second build failed' }
+          python -B tools/verify_reproducible.py artifacts/first artifacts/second --report artifacts/reproducibility.json
+          if ($LASTEXITCODE -ne 0) { throw 'Reproducibility verification failed' }
+      - name: Run headless checks
+        shell: pwsh
+        run: |
+          $env:SYNTHSCAN_DATA_DIR = "$env:RUNNER_TEMP\SynthScan-selftest"
+          $env:BEDROCK_DATA_DIR = $env:SYNTHSCAN_DATA_DIR
+          $process = Start-Process -FilePath (Resolve-Path artifacts/first/SynthScan.exe) -ArgumentList '--selftest' -WindowStyle Hidden -PassThru -Wait -RedirectStandardOutput artifacts/selftest.log
+          if ($process.ExitCode -ne 0) { throw 'Native selftest failed' }
+      - name: Install hash-pinned privacy-test dependencies
+        run: python -m pip install --require-hashes -r requirements-release.lock
+      - name: Run privacy and artifact-verification tests
+        shell: pwsh
+        run: |
+          $env:SYNTHSCAN_DATA_DIR = "$env:RUNNER_TEMP\SynthScan-python-tests"
+          $env:BEDROCK_DATA_DIR = $env:SYNTHSCAN_DATA_DIR
+          python -B -m unittest discover -s tests -p test_capture_privacy.py
+          if ($LASTEXITCODE -ne 0) { throw 'Capture privacy checks failed' }
+          python -B -m unittest discover -s tests -p test_window_capture.py
+          if ($LASTEXITCODE -ne 0) { throw 'Window capture checks failed' }
+          python -B -m unittest discover -s tests -p test_release_verification.py
+          if ($LASTEXITCODE -ne 0) { throw 'Artifact verification checks failed' }
+      - name: Attest the verified executable
+        uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3
+        with:
+          subject-path: artifacts/first/SynthScan.exe
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: verified-unsigned-native
+          path: |
+            artifacts/first/
+            artifacts/reproducibility.json
+            artifacts/selftest.log
+          if-no-files-found: error

@@ -6,6 +6,7 @@
 #endif
 #ifdef _WIN32
 #include <dwmapi.h>   // DWMWA_CLOAKED, for ownWindows
+#include "SynthCapturePrivacy.h"
 #endif
 #include <cmath>
 #include <iostream>
@@ -29,6 +30,9 @@ namespace {
 // Saves OCR debug snapshots into ./debug (relative to the working directory,
 // which main() sets to the executable's folder). Fails silently if not writable.
 void saveDebugImage(const std::string& name, const cv::Mat& image) {
+#ifndef BEDROCK_DEV_TOOLS
+    return;
+#endif
     std::error_code ec;
     std::filesystem::create_directories("debug", ec);
     if (!ec) {
@@ -102,52 +106,15 @@ ScreenCapture::~ScreenCapture() {
 }
 
 #ifdef _WIN32
-// Taking the picture: the desktop DC, and finding the game in the window
-// list. Both are Win32 through and through. The Linux counterpart lives in
+// The Windows path captures a verified game-window surface, never a desktop DC.
+// The Linux counterpart lives in
 // LinuxCapture.cpp and reads the window through Composite instead, because
 // the root window is not readable on a Wayland session.
 cv::Mat ScreenCapture::captureScreen() {
-    // Get the virtual screen size (all monitors combined)
-    int virtualX = GetSystemMetrics(SM_XVIRTUALSCREEN);      // X offset (can be negative)
-    int virtualY = GetSystemMetrics(SM_YVIRTUALSCREEN);      // Y offset (can be negative)
-    int screenWidth = GetSystemMetrics(SM_CXVIRTUALSCREEN);  // Total width of all monitors
-    int screenHeight = GetSystemMetrics(SM_CYVIRTUALSCREEN); // Total height of all monitors
-
-    // Duplication covers one output, so it can only serve this when there is
-    // a single monitor; with several, fall through to GDI for the whole
-    // virtual desktop (only region captures run in the hot path anyway).
-    if (GetSystemMetrics(SM_CMONITORS) == 1) {
-        if (cv::Mat frame = dxgi_.grab(cv::Rect(virtualX, virtualY, screenWidth, screenHeight));
-            !frame.empty()) {
-            lastSource_ = dxgi_.lastFrameWasHdr() ? Source::DxgiHdr : Source::Dxgi;
-            return frame;
-        }
-    }
-    lastSource_ = Source::Gdi;
-
-    // Create device contexts
-    hdcScreen_ = GetDC(nullptr);
-    hdcMemDC_ = CreateCompatibleDC(hdcScreen_);
-
-    // Create the bitmap
-    hBitmap_ = CreateCompatibleBitmap(hdcScreen_, screenWidth, screenHeight);
-    SelectObject(hdcMemDC_, hBitmap_);
-
-    // Copy all screens into the bitmap (starting at virtualX, virtualY)
-    BitBlt(hdcMemDC_, 0, 0, screenWidth, screenHeight, hdcScreen_, virtualX, virtualY, SRCCOPY);
-
-    // Convert to cv::Mat
-    cv::Mat result = hBitmapToMat(hBitmap_, screenWidth, screenHeight);
-
-    // Clean up
-    DeleteObject(hBitmap_);
-    DeleteDC(hdcMemDC_);
-    ReleaseDC(nullptr, hdcScreen_);
-    hBitmap_ = nullptr;
-    hdcMemDC_ = nullptr;
-    hdcScreen_ = nullptr;
-
-    return result;
+    auto view=gameViewport();
+    if(!view){windowCapture_.stop();captureNote_="Waiting for Star Citizen";return {};}
+    CaptureRegion region;region.x=view->x;region.y=view->y;region.width=view->width;region.height=view->height;
+    return captureRegion(region);
 }
 
 // Bedrock's own windows as the picture of the screen shows them, to be
@@ -213,84 +180,11 @@ static std::vector<cv::Rect> ownWindows() {
 }
 
 cv::Mat ScreenCapture::captureRegion(const CaptureRegion& region) {
-    // IMPORTANT: region.x and region.y are already VIRTUAL screen coordinates
-    // (coming from the drag-and-drop overlay window),
-    // so do NOT add the virtual screen offset again!
-    const cv::Rect area(region.x, region.y, region.width, region.height);
-
-    // Duplication first. On an HDR display GDI hands back an image whose
-    // highlights have all been cut to pure white - measured on one scene,
-    // 22.7 % of the screen centre against 0.4 % with HDR off - and the HUD
-    // text drowns in it. Duplication reads the float buffer instead and tone
-    // maps it here. On an SDR display it returns the same bytes GDI would,
-    // and when it is unavailable at all the GDI path below still runs.
-    if (cv::Mat frame = dxgi_.grab(area); !frame.empty()) {
-        lastSource_ = dxgi_.lastFrameWasHdr() ? Source::DxgiHdr : Source::Dxgi;
-        captureNote_.clear();
-        // The picture is only the part of the area on that monitor, so the masks
-        // are clipped to it; an area reaching past its left or top edge would
-        // otherwise shift them by as much.
-        if (maskOwnWindows) maskCovered(frame, area & dxgi_.outputRect(), ownWindows());
-        return frame;
-    }
-    lastSource_ = Source::Gdi;
-    captureNote_ = dxgi_.lastError();
-
-    // Capture the screen
-    hdcScreen_ = GetDC(nullptr);
-    hdcMemDC_ = CreateCompatibleDC(hdcScreen_);
-
-    // Create a bitmap for the region
-    hBitmap_ = CreateCompatibleBitmap(hdcScreen_, region.width, region.height);
-    SelectObject(hdcMemDC_, hBitmap_);
-
-    // Copy the region (coordinates are already virtual)
-    BitBlt(hdcMemDC_, 0, 0, region.width, region.height,
-           hdcScreen_, region.x, region.y, SRCCOPY);
-
-    // Convert to cv::Mat
-    cv::Mat result = hBitmapToMat(hBitmap_, region.width, region.height);
-
-    // Clean up
-    DeleteObject(hBitmap_);
-    DeleteDC(hdcMemDC_);
-    ReleaseDC(nullptr, hdcScreen_);
-    hBitmap_ = nullptr;
-    hdcMemDC_ = nullptr;
-    hdcScreen_ = nullptr;
-
-    if (maskOwnWindows) maskCovered(result, area, ownWindows());
-    return result;
-}
-
-cv::Mat ScreenCapture::hBitmapToMat(HBITMAP hBitmap, int width, int height) {
-    BITMAP bmp;
-    GetObject(hBitmap, sizeof(BITMAP), &bmp);
-
-    BITMAPINFOHEADER bi;
-    bi.biSize = sizeof(BITMAPINFOHEADER);
-    bi.biWidth = width;
-    bi.biHeight = -height;  // Negative for a top-down DIB
-    bi.biPlanes = 1;
-    bi.biBitCount = 32;
-    bi.biCompression = BI_RGB;
-    bi.biSizeImage = 0;
-    bi.biXPelsPerMeter = 0;
-    bi.biYPelsPerMeter = 0;
-    bi.biClrUsed = 0;
-    bi.biClrImportant = 0;
-
-    cv::Mat mat(height, width, CV_8UC4);
-
-    HDC hdc = GetDC(nullptr);
-    GetDIBits(hdc, hBitmap, 0, height, mat.data, (BITMAPINFO*)&bi, DIB_RGB_COLORS);
-    ReleaseDC(nullptr, hdc);
-
-    // Convert BGRA to BGR
-    cv::Mat result;
-    cv::cvtColor(mat, result, cv::COLOR_BGRA2BGR);
-
-    return result;
+    auto game=gameWindow();auto policy=CapturePrivacy::policy();
+    if(policy.paused||(policy.pauseUnfocused&&game&&!CapturePrivacy::focused(game))){windowCapture_.stop();captureNote_=policy.paused?"Capture paused by you":"Capture paused: game is not focused";lastSource_=Source::None;return {};}
+    auto frame=windowCapture_.grab(game,cv::Rect(region.x,region.y,region.width,region.height));
+    captureNote_=windowCapture_.error();CapturePrivacy::observed(!frame.empty(),windowCapture_.milliseconds(),captureNote_);lastSource_=frame.empty()?Source::None:(windowCapture_.hdr()?Source::WindowHdr:Source::Window);
+    return frame;
 }
 
 HWND ScreenCapture::gameWindow() {
@@ -308,7 +202,7 @@ HWND ScreenCapture::gameWindow() {
         if (!IsWindowVisible(hwnd) || IsIconic(hwnd)) return TRUE;
         char cls[64] = {};
         if (GetClassNameA(hwnd, cls, sizeof(cls)) == 0) return TRUE;
-        if (std::strcmp(cls, "CryENGINE") != 0) return TRUE;
+        if (std::strcmp(cls, "CryENGINE") != 0 || !GameWindowCapture::validGame(hwnd)) return TRUE;
         reinterpret_cast<Search*>(param)->hwnd = hwnd;
         return FALSE;   // found it, stop walking
     }, reinterpret_cast<LPARAM>(&search));

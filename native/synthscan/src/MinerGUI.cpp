@@ -1,4 +1,6 @@
 #include "MinerGUI.h"
+#include "MiningTrip.h"
+#include "CraftingBonus.h"
 #include "OverlayPlacement.h"
 #include "ScreenCapture.h"
 #include "SynthScanShell.h"
@@ -1155,9 +1157,6 @@ void MinerGUI::createControls() {
     btnPlan_ = CreateWindowW(L"BUTTON", L"Ore Finder", btnStyle,
         0, 0, 10, 10, hwnd_, (HMENU)ID_BTN_PLAN, hInstance_, nullptr);
 
-    btnCraft_ = CreateWindowW(L"BUTTON", L"Blueprints", btnStyle,
-        0, 0, 10, 10, hwnd_, (HMENU)ID_BTN_CRAFT, hInstance_, nullptr);
-
     btnNotes_ = CreateWindowW(L"BUTTON", L"Notes", btnStyle,
         0, 0, 10, 10, hwnd_, (HMENU)ID_BTN_NOTES, hInstance_, nullptr);
 
@@ -1233,15 +1232,14 @@ void MinerGUI::layoutControls() {
 
     // The ore pick is drawn rather than a child window - see drawLookingField.
 
-    // Action row: refinery, ore finder, blueprints and notes, a quarter of the
-    // width each. Tracking has no switch; it is always on.
+    // Blueprints live in the sidebar library. Keep the remaining shortcuts
+    // evenly spaced and route embedded pages through the same navigation.
     const int rowY = scale(LY_CONTROLS) + extraTop();
     const int rowH = scale(28);
-    const int actW = (cw - 2 * M - 3 * gap) / 4;
+    const int actW = (cw - 2 * M - 2 * gap) / 3;
     MoveWindow(btnRefinery_, M, rowY, actW, rowH, TRUE);
     MoveWindow(btnPlan_, M + actW + gap, rowY, actW, rowH, TRUE);
-    MoveWindow(btnCraft_, M + 2 * (actW + gap), rowY, actW, rowH, TRUE);
-    MoveWindow(btnNotes_, M + 3 * (actW + gap), rowY, cw - M - (M + 3 * (actW + gap)), rowH, TRUE);
+    MoveWindow(btnNotes_, M + 2 * (actW + gap), rowY, cw - M - (M + 2 * (actW + gap)), rowH, TRUE);
 
 }
 
@@ -2574,10 +2572,10 @@ LRESULT MinerGUI::handleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                 }
             }
             else if (wmId == ID_BTN_NOTES) {
-                toggleNotes();
+                if(SynthPages::contains(hwnd_))SynthHome::navigate("notes");else toggleNotes();
             }
             else if (wmId == ID_BTN_REFINERY) {
-                toggleRefinery();
+                if(SynthPages::contains(hwnd_))SynthHome::navigate("refinery");else toggleRefinery();
             }
             else if (wmId == ID_BTN_ABOUT) {
                 aboutCopied_ = false;
@@ -2587,10 +2585,10 @@ LRESULT MinerGUI::handleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                 showKeys(!keysOpen_);
             }
             else if (wmId == ID_BTN_CRAFT) {
-                toggleCrafting();
+                if(SynthPages::contains(hwnd_))SynthHome::navigate("blueprints");else toggleCrafting();
             }
             else if (wmId == ID_BTN_PLAN) {
-                togglePlanner();
+                if(SynthPages::contains(hwnd_))SynthHome::navigate("planner");else togglePlanner();
             }
             else if (wmId == ID_BTN_OVERLAY) {
                 toggleOverlayMode();
@@ -10653,6 +10651,7 @@ void MinerGUI::showComponentsForShot() {
 }
 
 void MinerGUI::paintCrafting(HDC hdc) {
+    craftSourceViewport_=Gdiplus::RectF();
     RECT rc;
     GetClientRect(crafting_, &rc);
     const int cw = rc.right, ch = rc.bottom;
@@ -12744,7 +12743,7 @@ void MinerGUI::paintCraftingDetail(Gdiplus::Graphics& g, int cw, int ch) {
             const double factor = effectFactor(eff, quality);
             totals[eff.stat] = (totals.count(eff.stat) ? totals[eff.stat] : 1.0) * factor;
             totalBetter[eff.stat] = eff.better;
-            const double pct = (factor - 1.0) * 100.0;
+            const double pct = craftingBonusPercent(factor,eff.better);
             std::wstringstream line;
             line << toW(CRAFT_STAT_NAMES[eff.stat]) << L"   \u00D7" << std::fixed
                  << std::setprecision(3) << factor;
@@ -12904,6 +12903,7 @@ void MinerGUI::paintCraftingDetail(Gdiplus::Graphics& g, int cw, int ch) {
             }
         }
         float sy2 = y + scaleF(32);
+        craftSourceViewport_=Gdiplus::RectF(M,sy2,(float)cw-2*M,std::max(0.f,float(ch)-scaleF(95)-sy2));
         if (craftSourceScroll_ > bp.srcCount - 1) craftSourceScroll_ = bp.srcCount - 1;
         if (craftSourceScroll_ < 0) craftSourceScroll_ = 0;
         // The rows end above the result when there is one, or a long contract
@@ -13001,13 +13001,13 @@ void MinerGUI::paintCraftingDetail(Gdiplus::Graphics& g, int cw, int ch) {
         const float rowH = scaleF(19);
         const float ty = (float)ch - scaleF(68) - rowH;
         hairline(g, M, ty - scaleF(8), (float)cw - M);
-        g.DrawString(L"RESULT", -1, &tinyFont, Gdiplus::PointF(M, ty + scaleF(1)), &faintBrush);
+        g.DrawString(L"BONUS", -1, &tinyFont, Gdiplus::PointF(M, ty + scaleF(1)), &faintBrush);
         const float tLeft = M + scaleF(64);
         const float tRight = (float)cw - M;
         float tx = tLeft;
         float tyRow = ty;
         for (const auto& [stat, factor] : totals) {
-            const double pct = (factor - 1.0) * 100.0;
+            const double pct = craftingBonusPercent(factor,totalBetter.count(stat)?totalBetter[stat]:2);
             std::wstringstream line;
             line << toW(CRAFT_STAT_NAMES[stat]) << L" \u00D7" << std::fixed << std::setprecision(3) << factor;
             Gdiplus::RectF w;
@@ -13039,7 +13039,7 @@ void MinerGUI::paintCraftingDetail(Gdiplus::Graphics& g, int cw, int ch) {
 
     const float fy = (float)ch - scaleF(24);
     hairline(g, M, fy - scaleF(10), (float)cw - M);
-    g.DrawString(L"Quality: drag, click a tooth of the comb, or use the arrow keys  \u00B7  "
+    g.DrawString(L"Bonus: + improves / - worsens; multipliers show actual stat change  \u00B7  "
                  L"material \u2192 mining places  \u00B7  contract \u2192 its card  \u00B7  Esc back",
                  -1, &subFont, Gdiplus::PointF(M, fy), &faintBrush);
     Gdiplus::RectF fr(M, fy, (float)cw - 2 * M, scaleF(16));
@@ -13344,7 +13344,11 @@ LRESULT MinerGUI::handleCraftingMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
             return 0;
         case WM_MOUSEWHEEL: {
             if (craftOpen_ >= 0) {
-                // In an open recipe the wheel walks its contract list
+                POINT point{(short)LOWORD(lParam),(short)HIWORD(lParam)};ScreenToClient(hwnd,&point);
+                if(!craftSourceViewport_.Contains(float(point.x),float(point.y))){
+                    if(SynthPages::contains(hwnd))return SendMessageW(GetParent(hwnd),WM_MOUSEWHEEL,wParam,lParam);
+                    return DefWindowProcW(hwnd,uMsg,wParam,lParam);
+                }
                 const int step = GET_WHEEL_DELTA_WPARAM(wParam) / WHEEL_DELTA;
                 craftSourceScroll_ -= step * 2;
                 if (craftSourceScroll_ < 0) craftSourceScroll_ = 0;
@@ -14973,6 +14977,10 @@ LRESULT MinerGUI::handlePlannerMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPAR
                     // ...and the main window has to hear about it: the field
                     // up there lists what is being watched for
                     toggleLookingFor(watchName(hit.value));
+                    plannerMineral_=hit.value;
+                    plannerTargets_=lookingFor_;
+                    if(plannerTargets_.size()==1)plannerMineral_=plannerTargets_.front();
+                    plannerPlace_.clear();plannerUex_=false;
                     if (hwnd_) InvalidateRect(hwnd_, nullptr, TRUE);
                 }
                 else if (hit.kind == 4) {
@@ -15611,6 +15619,8 @@ void MinerGUI::paintMarketColumn(Gdiplus::Graphics& g, int cw, int ch, float car
 }
 
 void MinerGUI::paintPlanner(HDC hdc) {
+    plannerTargets_=lookingFor_;
+    plannerTargets_.erase(std::remove_if(plannerTargets_.begin(),plannerTargets_.end(),[](const auto& value){return value=="ROC Deposit"||value=="FPS Minable";}),plannerTargets_.end());
     RECT rc;
     GetClientRect(planner_, &rc);
     const int cw = rc.right, ch = rc.bottom;
@@ -15809,6 +15819,30 @@ void MinerGUI::paintPlanner(HDC hdc) {
         // The UEX tab puts the marketplace where the places are
         if (plannerUex_) {
             paintMarketColumn(g, cw, ch, M + leftW + M, listTop);
+        } else if(plannerTargets_.size()>1&&!byPlace){
+            const float x=M+leftW+M,w=float(cw)-M-x;
+            auto stops=miningTripStops(plannerTargets_,plannerSystem_);
+            float y=listTop;
+            std::wstring targets=L"PLAN: ";for(size_t i=0;i<plannerTargets_.size();++i){if(i)targets+=L" + ";targets+=toW(plannerTargets_[i]);}
+            g.DrawString(targets.c_str(),-1,&placeFont,Gdiplus::RectF(x,y,w,scaleF(45)),nullptr,&textBrush);y+=scaleF(48);
+            bool overlap=!stops.empty()&&stops.front().materials.size()==plannerTargets_.size();
+            g.DrawString(overlap?L"Shared sources, including possible secondary ores":L"No shared source listed; separate sources below",-1,&subFont,Gdiplus::RectF(x,y,w,scaleF(30)),nullptr,&accentBrush);y+=scaleF(34);
+            if(stops.empty()){g.DrawString(L"No configured sources in this system. Try All systems.",-1,&subFont,Gdiplus::PointF(x,y),&dimBrush);}
+            std::vector<std::string> covered;
+            int shown=0;
+            for(const auto& stop:stops){
+                if(overlap&&stop.materials.size()!=plannerTargets_.size())continue;
+                bool adds=false;for(const auto& m:stop.materials)if(std::find(covered.begin(),covered.end(),m)==covered.end())adds=true;
+                if(!overlap&&!adds)continue;
+                if(y+scaleF(68)>ch-scaleF(58)||shown++>=8)break;
+                std::wstring title=toW(stop.location)+L" · "+toW(stop.system);
+                g.DrawString(title.c_str(),-1,&placeFont,Gdiplus::RectF(x,y,w,scaleF(22)),nullptr,&textBrush);
+                std::wstring materials;for(const auto& m:stop.materials){if(!materials.empty())materials+=L", ";materials+=toW(m);covered.push_back(m);}
+                g.DrawString(materials.c_str(),-1,&subFont,Gdiplus::RectF(x,y+scaleF(25),w,scaleF(34)),nullptr,&dimBrush);y+=scaleF(68);
+            }
+            for(const auto& target:plannerTargets_){bool found=false;for(const auto& stop:stops)if(std::find(stop.materials.begin(),stop.materials.end(),target)!=stop.materials.end())found=true;
+                if(!found&&y+scaleF(24)<ch-scaleF(50)){g.DrawString((L"No source listed: "+toW(target)).c_str(),-1,&subFont,Gdiplus::PointF(x,y),&dimBrush);y+=scaleF(24);}}
+            g.DrawString(L"Configured deposits, not guaranteed spawns. No travel-distance ranking.\nUntick materials to change the plan.",-1,&subFont,Gdiplus::RectF(x,float(ch)-scaleF(48),w,scaleF(42)),nullptr,&dimBrush);
         } else {
             // Right column: where the picked ore is, on a card of its own - the
             // answer to the pick on the left, and as tall as the answer is. The

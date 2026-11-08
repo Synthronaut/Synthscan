@@ -1,5 +1,17 @@
 # Building the Windows release
 
+For a public-source native build, run `python -B tools/fetch_native_build_inputs.py`
+to download hash-pinned OpenCV and zstd inputs (7-Zip and tar must be installed).
+The compiler, SDK and pinned inputs must match when comparing builds. The builder
+normalizes source paths and requests deterministic compiler/linker output.
+Compile into separate object/output directories, then run
+`python -B tools/verify_reproducible.py FIRST_OUTPUT SECOND_OUTPUT --report reproducibility.json`.
+Personal runtime paths/settings are excluded from the binary comparison.
+The manually dispatched Verify native release provenance workflow performs this
+comparison and native headless checks before issuing an executable attestation.
+It does not publish an installer, sign a Windows publisher identity, or constitute
+an independent security audit. See `docs/privacy-review.md` for the release gates.
+
 Windows x64, CPython 3.14, Visual Studio C++ Build Tools and Windows SDK are needed
 only on the build machine. Users normally download the guided Windows installer;
 the complete release ZIP is an alternative.

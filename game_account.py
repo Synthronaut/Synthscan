@@ -12,6 +12,8 @@ ROOT = Path(__file__).resolve().parent
 
 class OwnAccount:
     def __init__(self):
+        from capture_privacy import require_account_access
+        require_account_access()
         sys.path.insert(0, str(ROOT / 'third_party/python_services'))
         import grpc
         from google.protobuf import descriptor_pool, message_factory
@@ -54,6 +56,8 @@ class OwnAccount:
         return self.factory(self.pool.FindMessageTypeByName(name))()
 
     def read(self, domain, service, method, request):
+        from capture_privacy import require_account_access
+        require_account_access()
         # This allowlist prevents accidental invocation of a mutating RPC.
         if (service, method) not in {('MissionService', 'QueryActiveMissions'), ('MissionService', 'QueryMissions'), ('ReputationService', 'QueryReputations')}:
             raise ValueError('Read method not allowed')

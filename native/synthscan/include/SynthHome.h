@@ -15,5 +15,6 @@ bool visible();
 bool active();
 HWND pageHost();
 void selectPage(const std::string& name);
+void navigate(const std::string& name);
 std::string selectedPage();
 }

@@ -2,6 +2,7 @@
 #include "SynthJson.h"
 #include "resource.h"
 #include "SynthPages.h"
+#include "SynthCapturePrivacy.h"
 #include <gdiplus.h>
 #include <dwmapi.h>
 #include <algorithm>
@@ -46,9 +47,10 @@ void layout(){
     if(!window)return;RECT r{};GetClientRect(window,&r);
     scale=std::max(.7f,std::min(float(GetDpiForWindow(window))/96.f,std::min(r.right/900.f,r.bottom/760.f)));
     float width=r.right/scale,main=width-248,gap=12,tile=(main-3*gap)/4;
-    int nav=0;
+    int nav=0;int navCount=int(std::count_if(buttons.begin(),buttons.end(),[](const auto& b){return b.navigation;}));
+    float navStep=std::min(39.f,(r.bottom/scale-198.f)/std::max(1,navCount));
     for(auto& b:buttons){
-        float x=16,y=110+nav*39,w=170,h=34;
+        float x=16,y=110+nav*navStep,w=170,h=std::min(34.f,navStep-4);
         if(b.navigation)nav++;
         else if(b.id>=200&&b.id<=203){x=224+(b.id-200)*(tile+gap);y=119;w=tile;h=82;}
         else if(b.id==210||b.id==211){w=114;h=30;x=width-264+(b.id-210)*120;y=234;}
@@ -88,6 +90,8 @@ void paint(){
         HDC iconDC=g.GetHDC();DrawIconEx(iconDC,int(24*scale),int(29*scale),logo,int(32*scale),int(32*scale),0,nullptr,DI_NORMAL);g.ReleaseHDC(iconDC);
         words(g,L"SynthScan",66,29,130,31,20,INK,true);
         words(g,L"YOUR VERSE, CONNECTED",24,73,164,20,9,MUTED,true);
+        auto cap=CapturePrivacy::snapshot();double age=cap.numberOr("frame_age_ms",-1);
+        words(g,CapturePrivacy::policy().paused?L"CAPTURE PAUSED":age>=0&&age<1500?L"READING GAME WINDOW":L"CAPTURE IDLE · GAME ONLY",24,height-91,164,20,10,ACCENT,true);
         words(g,L"LOCAL PROFILE",24,height-66,164,20,9,ACCENT,true);
         words(g,L"Your records stay on this PC",24,height-45,166,30,10,MUTED);
         std::wstring heading=L"Home";
@@ -143,7 +147,7 @@ LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM w,LPARAM l){
         auto found=std::find_if(buttons.begin(),buttons.end(),[&](const auto& b){return b.id==id;});
         if(found!=buttons.end()){
             lastAction=found->action;
-            if(found->navigation){SynthPages::beginTransition();selectPage(lastAction);if(lastAction!="home"&&action)action(lastAction);SynthPages::endTransition();publish();}
+            if(found->navigation)navigate(lastAction);
             else if(action)action(lastAction);
             publish();
         }return 0;
@@ -161,8 +165,8 @@ void create(){
         info.rcWork.left+(info.rcWork.right-info.rcWork.left-width)/2,info.rcWork.top+(info.rcWork.bottom-info.rcWork.top-height)/2,width,height,nullptr,nullptr,cls.hInstance,nullptr);
     BOOL dark=TRUE;DwmSetWindowAttribute(window,20,&dark,sizeof(dark));
     SynthPages::initialize(window);
-    const wchar_t* names[]={L"Home",L"Mining",L"Item & ship finder",L"Blueprint library",L"Refinery",L"Mining planner",L"Piracy",L"Server history",L"Mining diary",L"Personal notes",L"Rock bookmarks",L"Daylight",L"Automatic acceptance",L"Settings"};
-    const char* actions[]={"home","mining","directory","blueprints","refinery","planner","hud_piracy","servers","diary","notes","bookmarks","daylight","acceptance","settings"};
+    const wchar_t* names[]={L"Home",L"Item & Ship Finder",L"People",L"Server History",L"Blueprint Library",L"Mining Planner",L"Mining Diary",L"Refinery",L"Piracy",L"Day/Night Forecast",L"Automatic Acceptance",L"Personal Notes",L"Settings",L"Privacy & capture"};
+    const char* actions[]={"home","directory","people","servers","blueprints","planner","diary","refinery","hud_piracy","daylight","acceptance","notes","settings","privacy"};
     for(int i=0;i<int(sizeof(names)/sizeof(names[0]));i++)add(100+i,names[i],actions[i],true);
     add(200,L"Mining HUD\nAutomatic scan reading","hud_mining",false);add(201,L"Finder HUD\nShops & player market","hud_finder",false);
     add(202,L"Missions HUD\nContracts & reputation","hud_missions",false);add(203,L"Hangars HUD\nContested-zone timing","hud_hangars",false);
@@ -172,7 +176,8 @@ void create(){
 }
 void initialize(HWND parent,const std::filesystem::path& data,std::function<void(const std::string&)> callback){owner=parent;directory=data;action=std::move(callback);}
 void update(const SCMiner::JsonValue& value,const std::string& label,bool live){
-    bool changed=encode(value)!=encode(overview)||identity!=label||connected!=live;
+    static bool wasPaused=false;bool paused=CapturePrivacy::policy().paused;
+    bool changed=encode(value)!=encode(overview)||identity!=label||connected!=live||paused!=wasPaused;wasPaused=paused;
     overview=value;identity=label;connected=live;
     if(!sessionChosen&&value.kind==Json::Kind::Object){
         const auto& current=field(value,"current");
@@ -186,9 +191,24 @@ void show(){create();if(owner&&(GetWindowLongPtrW(owner,GWL_EXSTYLE)&WS_EX_TOPMO
 void hide(){if(window){ShowWindow(window,SW_HIDE);publish();}}
 HWND pageHost(){create();return SynthPages::host();}
 void selectPage(const std::string& name){activePage=name;SynthPages::hide();layout();publish();}
+void navigate(const std::string& name){
+    // Copy before dispatch: navigation may update the selected action itself.
+    const std::string destination=name;lastAction=destination;
+    SynthPages::beginTransition();selectPage(destination=="bookmarks"?"diary":destination);
+    if(destination!="home"&&action)action(destination);
+    SynthPages::endTransition();publish();
+}
 std::string selectedPage(){return activePage;}
 bool visible(){return window&&IsWindowVisible(window);}
 bool active(){return visible()&&GetAncestor(GetForegroundWindow(),GA_ROOT)==window;}
-bool routeMessage(MSG& message){return window&&(message.hwnd==window||IsChild(window,message.hwnd))&&IsDialogMessage(window,&message);}
+bool routeMessage(MSG& message){
+    if(window&&message.message==WM_MOUSEWHEEL&&activePage=="blueprints"){
+        HWND page=SynthPages::current();POINT at{GET_X_LPARAM(message.lParam),GET_Y_LPARAM(message.lParam)};
+        // Wheel ownership follows the hovered recipe, not the last focused
+        // sidebar button. Its own handler chooses sources versus page scroll.
+        if(page&&WindowFromPoint(at)==page){SendMessageW(page,message.message,message.wParam,message.lParam);return true;}
+    }
+    return window&&(message.hwnd==window||IsChild(window,message.hwnd))&&IsDialogMessage(window,&message);
+}
 void close(){SynthPages::close();if(window)DestroyWindow(window);window=nullptr;buttons.clear();}
 }

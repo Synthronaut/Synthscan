@@ -3,6 +3,13 @@
 A Windows companion for Star Citizen: mining assistance, blueprints, SynthStrings,
 reputation labels, a server HUD, and Mining / Piracy / Missions / Hangars / Finder activity tabs.
 
+**People** in the desktop sidebar shows reported shard members and handle search,
+with separate friend/party actions, multiple preset/custom player tags and
+optional appearance alerts. **Buyer alerts** saves UEX material/quality watches
+and checks for new matching buy ads every 30 minutes. Both use background data
+reads without additional OCR. See [People and buyer-alerts guide](docs/people-and-buyer-alerts.md)
+for first-use steps, coverage and validation limits.
+
 The desktop and HUD use a navy/cyan theme and an original spacecraft/scanner
 brand mark. The same multi-size icon is embedded in the application, tray,
 bootstrap launcher and installer; desktop shortcuts use that artwork. The

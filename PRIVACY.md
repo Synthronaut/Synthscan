@@ -1,5 +1,32 @@
 # Privacy and local data
 
+This describes the updated source and builds verified against it. It is not a
+certification of previously published installers; check the release's build and
+validation evidence before distributing it as privacy-hardened.
+
+Windows screen reading targets the Star Citizen window surface, not a monitor
+or desktop rectangle. The process name and game window class are checked, and
+off-game crop areas are zero-filled. If window capture is unavailable, screen
+reading waits; it does not fall back to desktop screenshots.
+
+Open **Privacy & capture** in the sidebar, or Settings → Privacy & capture.
+Pause stops new captures. Automatic pause on focus loss is enabled by default;
+the game's own HUD and SynthScan's windows remain usable. A recent result or
+request already in progress may finish. The page previews a game image in memory;
+leaving the page clears that preview. Only its explicit Save action writes a PNG.
+Normal community builds do not automatically save OCR/debug images, even if an
+older recording setting remains in the profile. Existing saved images are not
+silently deleted. Manual imports and explicit capture/export commands are separate
+user actions.
+
+Game-account access is a separate permission. New profiles require opt-in before
+session credentials are loaded. Disabling it prevents subsequent account requests;
+an already-running request may finish. OCR does not require this permission.
+
+These controls describe implemented behavior, not an OS sandbox around the whole
+application. The current release must not be advertised as independently audited
+or as having OS-enforced offline OCR. See [verification and remaining requirements](docs/privacy-review.md).
+
 SynthScan has no SynthScan account server, shared player database, analytics,
 crash upload, or automatic sharing service in this release.
 
@@ -14,16 +41,20 @@ profile, are not uploaded, and are excluded from community source and packages.
 - Game definitions, icons and service schemas are generated locally from the
   selected installation. `loginData.json`, game logs and personal screenshots
   are never included in a distribution.
-- To read reputation and active missions, the app uses the existing signed-in
+- To read reputation, active missions and optional social information, the app uses the existing signed-in
   game's credential in memory, over TLS, directly to the game's
   `*.cloudimperiumgames.com` service. It does not request your password, sign in,
   refresh credentials, or accept another player's identity as an input.
   Returned reputation subjects must exactly match the locally verified character.
+  Social requests identify the selected recipient to CIG. Friend/party actions
+  require an explicit action; incoming-request automation has separate controls.
 - Credentials are not written to SynthScan's snapshots or diagnostics. Service
   errors shown by the app contain only the exception category.
 - The OCR overlay processes frames locally. Clipboard coordinates are read only
   when you arm coordinate capture. Explicit diary/bookmark exports include the
   information you choose to share; review those files before posting them.
+  Manual clipboard-image import also requires a user action. Terminal image
+  transfers between SynthScan processes use bounded memory, not temporary PNGs.
 - Mining valuations fetch public commodity, terminal and marketplace-average
   lists from UEX over HTTPS without an account or token. Quotes are cached
   locally. These requests do not send your rock scans, location, game credentials

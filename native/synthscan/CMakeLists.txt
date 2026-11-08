@@ -216,6 +216,7 @@ set(SOURCES
     src/main.cpp
     src/ScreenCapture.cpp
     src/DxgiCapture.cpp
+    src/SynthGameCapture.cpp
     src/FrameRecorder.cpp
     src/Application.cpp
     src/MiningReference.cpp
@@ -269,6 +270,22 @@ if(WIN32)
     # Source files are UTF-8 (without BOM) - required for the unicode UI strings
     if(MSVC)
         target_compile_options(${PROJECT_NAME} PRIVATE /utf-8)
+        set(_sdk_root "$ENV{WindowsSdkDir}")
+        if(NOT _sdk_root)
+            set(_sdk_root "C:/Program Files (x86)/Windows Kits/10")
+        endif()
+        set(_cppwinrt "${_sdk_root}/Include/${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION}/cppwinrt")
+        if(NOT EXISTS "${_cppwinrt}/winrt/base.h")
+            file(GLOB _cppwinrt_dirs "${_sdk_root}/Include/*/cppwinrt")
+            list(SORT _cppwinrt_dirs COMPARE NATURAL ORDER DESCENDING)
+            if(_cppwinrt_dirs)
+                list(GET _cppwinrt_dirs 0 _cppwinrt)
+            endif()
+        endif()
+        target_include_directories(${PROJECT_NAME} PRIVATE "${_cppwinrt}")
+        if(_cppwinrt MATCHES "10\\.0\\.19041\\.0")
+            set_source_files_properties(src/SynthGameCapture.cpp PROPERTIES COMPILE_OPTIONS "/std:c++17;/await")
+        endif()
     endif()
 
     # The app token beside the exe, where it is looked for (see above)
@@ -286,6 +303,8 @@ if(WIN32)
         comctl32
         dwmapi
         d3d11
+        windowsapp
+        runtimeobject
         dxgi
         comdlg32
         shell32

@@ -4,8 +4,8 @@ import threading
 
 
 class FinderServices:
-    def __init__(self, shops, market):
-        self.services = (shops, market)
+    def __init__(self, shops, market, extras=()):
+        self.services = (shops, market, *extras)
         self.current_patch = ''
         self.stop = threading.Event()
         self.thread = threading.Thread(target=self.run, name='finder-services', daemon=True)

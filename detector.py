@@ -11,8 +11,7 @@ import threading
 import time
 import cv2
 import numpy as np
-import mss
-from PIL import Image, ImageGrab
+from PIL import Image
 from radar_db import parse_signature
 from config import get_monitor_by_id
 
@@ -147,11 +146,6 @@ class SignatureDetector:
                                 det_model_path=None, det_limit_type="max", det_limit_side_len=1280)
         return self.ocr
 
-    def _get_sct(self):
-        if not hasattr(self._tls, "sct") or self._tls.sct is None:
-            self._tls.sct = mss.MSS()
-        return self._tls.sct
-
     def set_game_monitor(self, mon_id):
         self.game_monitor = int(mon_id)
         self.update_roi()
@@ -203,39 +197,18 @@ class SignatureDetector:
             "height": h
         }
 
-    def _grab_rect_pil(self, rect):
-        left = rect["left"]
-        top = rect["top"]
-        width = rect["width"]
-        height = rect["height"]
-        bbox = (left, top, left + width, top + height)
-
-        try:
-            sct = self._get_sct()
-            sct_img = sct.grab(rect)
-            return Image.frombytes("RGB", sct_img.size, sct_img.bgra, "raw", "BGRX")
-        except Exception:
-            pass
-
-        try:
-            return ImageGrab.grab(bbox=bbox, all_screens=True).convert("RGB")
-        except Exception:
-            pass
-
-        try:
-            return ImageGrab.grab(bbox=bbox).convert("RGB")
-        except Exception:
-            return ImageGrab.grab().convert("RGB")
+    def _grab_rect_pil(self, rect=None):
+        from capture_privacy import GameCapture
+        if not hasattr(self._tls,'game_capture'):self._tls.game_capture=GameCapture()
+        frame=self._tls.game_capture.grab(rect)
+        if frame is None:raise RuntimeError('Game capture is paused or waiting for a fresh Star Citizen frame')
+        return Image.fromarray(cv2.cvtColor(frame,cv2.COLOR_BGR2RGB))
 
     def grab_full_game_monitor_pil(self):
-        mon = get_monitor_by_id(self.game_monitor)
-        rect = {
-            "left": mon["left"],
-            "top": mon["top"],
-            "width": mon["width"],
-            "height": mon["height"]
-        }
-        return self._grab_rect_pil(rect)
+        # Kept as a compatibility name: now returns only the game window.
+        try:return self._grab_rect_pil()
+        finally:
+            if hasattr(self._tls,"game_capture"):self._tls.game_capture.stop()
 
     def grab_displayinfo_pil(self, rect):
         """
