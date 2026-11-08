@@ -13,7 +13,10 @@ class PopulationWatchTests(unittest.TestCase):
     def test_fresh_values_expire_and_zero_is_valid(self):
         self.watch.observe(sample(0,0),1000,'join-a',1000)
         self.assertEqual(self.watch.view(1001)['metrics']['shard_pop'],0)
-        self.assertEqual(self.watch.view(1005)['metrics'],{})
+        held=self.watch.view(1005)
+        self.assertFalse(held['fresh']);self.assertEqual(held['metrics']['shard_pop'],0)
+        self.assertEqual(held['field_ages']['shard_pop'],5)
+        self.assertEqual(self.watch.view(1011)['metrics'],{})
         self.assertIsNone(self.watch.view(1005)['delta_5m'])
 
     def test_old_frames_and_other_shards_cannot_publish(self):
@@ -56,13 +59,28 @@ class PopulationWatchTests(unittest.TestCase):
         self.assertEqual(view['waiting_s'],0);self.assertFalse(view['waiting_active'])
         self.assertEqual(view['points'],[])
 
-    def test_turning_displayinfo_off_clears_metrics_not_history(self):
+    def test_failed_frames_do_not_erase_or_refresh_last_good_observations(self):
         self.watch.observe(sample(),1000,'join-a',1000)
         self.watch.observe({},1001,'join-a',1001)
         view=self.watch.view(1001)
-        self.assertFalse(view['fresh']);self.assertEqual(view['metrics'],{})
+        self.assertEqual(view['metrics']['shard_pop'],500)
+        self.assertEqual(view['observed_at'],1000)
+        self.assertEqual(view['field_ages']['shard_pop'],1)
+        self.assertEqual(self.watch.view(1011)['metrics'],{})
         self.assertEqual(len(view['points']),1)
         self.assertNotIn('catch',view)
+
+    def test_partial_frames_never_refresh_other_fields(self):
+        self.watch.observe(sample(),1000,'join-a',1000)
+        self.watch.observe(dict(server_fps=25,_validated_fields=['server_fps']),1006,'join-a',1006)
+        view=self.watch.view(1006)
+        self.assertFalse(view['fresh'])
+        self.assertEqual(view['field_ages']['shard_pop'],6)
+        self.assertEqual(view['field_ages']['server_fps'],0)
+        self.assertIn('shard_pop',view['held_fields'])
+        self.assertIsNone(view['delta_5m'])
+        self.assertNotIn('shard_pop',self.watch.view(1011)['metrics'])
+        self.assertEqual(self.watch.view(1011)['metrics']['server_fps'],25)
 
     def test_series_is_bounded_and_downsampled(self):
         for i in range(3000):self.watch.observe(sample(),1000+i,'join-a',1000+i)

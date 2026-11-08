@@ -70,6 +70,7 @@ def stage_source(destination):
     (destination/'docs').mkdir(exist_ok=True)
     shutil.copy2(ROOT/'docs/material-quality-values.md',destination/'docs/material-quality-values.md')
     shutil.copy2(ROOT/'docs/shopping-list-plan.md',destination/'docs/shopping-list-plan.md')
+    shutil.copy2(ROOT/'docs/piracy-population-sources.md',destination/'docs/piracy-population-sources.md')
     shutil.copy2(ROOT/'assets/snare_watch.wav',destination/'assets/snare_watch.wav')
     copy_tree(ROOT/'assets/branding',destination/'assets/branding')
     if (ROOT/'.github').exists():copy_tree(ROOT/'.github',destination/'.github')

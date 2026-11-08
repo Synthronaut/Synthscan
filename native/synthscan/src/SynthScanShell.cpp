@@ -826,16 +826,24 @@ void drawPiracy(Gdiplus::Graphics& g,float width,float height,float scale){
     const bool joined=fresh&&!state.textOr("session_token").empty();
     const auto& watch=field(state,"piracy_watch");const auto& metrics=field(watch,"metrics");
     const bool live=joined&&flag(watch,"fresh")&&(testing||(epoch()-watch.numberOr("observed_at")>=0&&epoch()-watch.numberOr("observed_at")<5));
-    auto value=[&](const char* key,int precision=0){auto n=metrics.find(key);if(!live||!n||n->kind!=Json::Kind::Number)return std::string("--");std::ostringstream out;out<<std::fixed<<std::setprecision(precision)<<n->number;return out.str();};
+    const bool available=joined&&!metrics.members.empty()&&(testing||(epoch()-watch.numberOr("observed_at")>=0&&epoch()-watch.numberOr("observed_at")<=10));
+    auto value=[&](const char* key,int precision=0){auto n=metrics.find(key);if(!available||!n||n->kind!=Json::Kind::Number)return std::string("--");std::ostringstream out;out<<std::fixed<<std::setprecision(precision)<<n->number;return out.str();};
     text("PIRACY",10,8,12,&gold,130);
     const char* labels[]={"SHARD PLAYERS","SERVER PLAYERS","SERVER FPS","PING (ms)"};
     const char* keys[]={"shard_pop","srv_pop","server_fps","ping_ms"};
     float col=(logicalWidth-20)/4;
-    for(int i=0;i<4;i++){text(labels[i],10+col*i,40,10,&muted,col-6);text(value(keys[i],i>=2?1:0),10+col*i,55,28,&ink,col-6);}
+    if(available){
+        for(int i=0;i<4;i++){double age=field(watch,"field_ages").numberOr(keys[i]);auto label=std::string(labels[i])+(age>4?" · "+std::to_string(int(age))+"s":"");text(label,10+col*i,40,10,&muted,col-6);text(value(keys[i],i>=2?1:0),10+col*i,55,28,age>4?&muted:&ink,col-6);}
+    }else{
+        const auto& logged=field(state,"interdictions");text("LOGGED INTERDICTION REPORTS",10,40,10,&muted,logicalWidth/2-20);
+        text(joined?std::to_string(int(logged.numberOr("current_count"))):"--",10,55,28,&ink,logicalWidth/2-20);
+        int seconds=joined?int(watch.numberOr("waiting_s")):0;std::ostringstream wait;wait<<std::setfill('0')<<std::setw(2)<<seconds/3600<<":"<<std::setw(2)<<(seconds/60)%60<<":"<<std::setw(2)<<seconds%60;
+        text("MANUAL WAIT · "+std::string(flag(watch,"waiting_active")?"RUNNING":"PAUSED"),logicalWidth/2,40,10,&muted,logicalWidth/2-12);text(wait.str(),logicalWidth/2,55,26,&ink,logicalWidth/2-12);
+    }
     std::string status=!fresh?"Session service unavailable":!joined?"Join a shard to watch population":watch.textOr("status","Waiting for readable DisplayInfo");
     text(status,10,99,10,live?&green:&muted,275);
     auto delta=[&](const char* key){const auto& n=field(watch,key);if(!live||n.kind!=Json::Kind::Number)return std::string("--");return (n.number>=0?"+":"")+std::to_string(int(n.number));};
-    text("Shard change   5m "+delta("delta_5m")+"   15m "+delta("delta_15m"),10,126,12,&ink,280);
+    text(available?"Shard change   5m "+delta("delta_5m")+"   15m "+delta("delta_15m"):"Log alerts and wait timer work without debug text",10,126,available?12:10,&ink,280);
     const auto& points=field(watch,"points").items;
     double low=1e9,high=-1;for(auto& point:points){low=std::min(low,point.numberOr("value"));high=std::max(high,point.numberOr("value"));}
     std::string range=points.empty()?"15 MIN HISTORY":"15 MIN · "+std::to_string(int(low))+"–"+std::to_string(int(high));

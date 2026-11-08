@@ -54,6 +54,25 @@ class CapturedDiagnosticTests(unittest.TestCase):
         self.assertIsNone(result["shard_pop"])
         self.assertEqual(result["server_name"], "--")
 
+    def test_population_survives_unreadable_fps_anchor_and_lower_layout(self):
+        reader=ValidatedDisplayInfoReader()
+        frame=cv2.imread(str(FIXTURES/'clear.png'))
+        expected=json.loads((FIXTURES/'labels.json').read_text())['clear.png']
+        kw=reader.anchors.kw.pop('kw_sfps')
+        try:
+            result=reader.parse_image(frame)
+            self.assertEqual(result['shard_pop'],expected['shard_pop'])
+            self.assertEqual(result['srv_pop'],expected['srv_pop'])
+            self.assertIsNone(result['server_fps'])
+        finally:reader.anchors.kw['kw_sfps']=kw
+        # Extra DisplayInfo rows can move the server block below the old 210px cap.
+        shifted=np.zeros((640,frame.shape[1],3),dtype=np.uint8)
+        shifted[230:230+min(frame.shape[0],410)]=frame[:410]
+        result=reader.parse_image(shifted)
+        self.assertEqual(result['shard_pop'],expected['shard_pop'])
+        self.assertEqual(result['srv_pop'],expected['srv_pop'])
+        self.assertEqual(result['server_fps'],expected['server_fps'])
+
     def test_disagreeing_recognitions_are_rejected(self):
         def recognize(images):
             self.calls += 1

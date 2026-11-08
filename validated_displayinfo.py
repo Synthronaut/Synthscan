@@ -137,17 +137,18 @@ class ValidatedDisplayInfoReader:
             _, score, _, (x, y) = cv2.minMaxLoc(cv2.matchTemplate(roi, template, cv2.TM_CCOEFF_NORMED))
             return (x, max(0, low)+y, x+template.shape[1]) if score >= threshold else None
 
-        fps = locate("kw_sfps", 10, min(height, 210), .80)
-        if not fps:
-            return state
-        # Nested zones add lines; do not assume a fixed vertical location.
-        y = fps[1]
-        game = locate("kw_game", y+10, y+25, .70)
-        shard = locate("kw_shard", y+10, y+25, .60)
-        local = locate("kw_srv", y+10, y+25, .80)
-        restart = locate("kw_restarts", y+10, y+25, .55)
+        # Diagnostic levels and nested zones move rows independently. Population
+        # must not depend on the FPS anchor being readable in the same frame.
+        fps = locate("kw_sfps", 0, height-10, .80)
+        shard = locate("kw_shard", 0, height-10, .60)
+        local = locate("kw_srv", max(0,shard[1]-1), shard[1]+11, .80) if shard else None
+        row_y=shard[1] if shard else fps[1] if fps else 0
+        game = locate("kw_game", max(0,row_y-1), row_y+11, .70)
+        restart = locate("kw_restarts", max(0,row_y-1), row_y+11, .55)
         row_valid = (shard and local and shard[0] < local[0]
                      and abs(shard[1]-local[1]) <= 1)
+
+        if not fps and not row_valid:return state
 
         # The 9-pixel font profile ends this right-aligned row in ', srv N]'.
         # Exclude the closing bracket, which OCR otherwise sometimes calls '1'.
@@ -167,18 +168,16 @@ class ValidatedDisplayInfoReader:
             node = self._number(frame, (game[2], game[1], restart[0]-1), "node", "server_name")
             if node is not None:
                 state["server_name"], state["srv_id"] = f"GAME-{node}", str(node)
-        fps_candidates = []
-        for span in (40, 47, 55):
-            value = self._number(frame, (fps[2], y, min(width, fps[2]+span)), "fps", f"server_fps_{span}")
-            if value is not None:
-                fps_candidates.append(value)
-        if fps_candidates and len(set(fps_candidates)) == 1:
-            state["server_fps"] = fps_candidates[0]
-        ping = locate("kw_ping", y+21, y+40, .80)
-        if ping:
-            state["ping_ms"] = self._number(frame, (ping[2], ping[1], min(width, ping[2]+65)), "ping", "ping_ms")
+        if fps:
+            y=fps[1];fps_candidates=[]
+            for span in (40,47,55):
+                value=self._number(frame,(fps[2],y,min(width,fps[2]+span)),"fps",f"server_fps_{span}")
+                if value is not None:fps_candidates.append(value)
+            if fps_candidates and len(set(fps_candidates))==1:state["server_fps"]=fps_candidates[0]
+        ping=locate("kw_ping",0,height-10,.80)
+        if ping:state["ping_ms"]=self._number(frame,(ping[2],ping[1],min(width,ping[2]+65)),"ping","ping_ms")
         state["detected_lines"] = 3
-        state["max_y"] = (ping[1]+11) if ping else ((local[1]+11) if local else y+11)
+        state["max_y"] = (ping[1]+11) if ping else ((local[1]+11) if local else fps[1]+11 if fps else row_y+11)
         state["last_seen_ts"] = time.time()
         state["_validated_fields"] = [key for key in ("ping_ms", "server_fps", "shard_pop", "srv_pop")
                                        if state.get(key) is not None]

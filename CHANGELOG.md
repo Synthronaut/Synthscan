@@ -1,5 +1,14 @@
 ## Unreleased
 
+- Keep piracy metrics independently through brief OCR misses, preserving their
+  original capture times. Dim and age delayed values, expire them after ten
+  seconds, and never use held population values for live deltas.
+- Read population independently of the FPS anchor and allow diagnostic rows
+  below the former 210-pixel limit. Preserve strict numeric validation.
+- Show logged interdiction counts and the manual wait timer when population is
+  unavailable. Document that live counts still require rendered DisplayInfo;
+  the app does not silently toggle debug text or claim a debug-off count source.
+
 - Apply readable purchase cards to the in-game Finder HUD: prominent prices,
   compact locations and green/red retail price comparisons. Preserve the existing
   layered-window transparency and input behavior.
