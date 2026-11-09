@@ -44,6 +44,7 @@ begin
     end;
     CardTitles[I].Font.Color := Ink;
     CardIcons[I].Font.Color := $00F2D177;
+    if I=2 then CardIcons[I].Font.Color := $008DCDEE;
     CardPaint[I].Invalidate;
   end;
   for I:=0 to 1 do SelectionLabels[I].Caption := IntToStr(Count)+' features included  /  Core always included';
@@ -215,7 +216,7 @@ begin
   AddCard(13,ToolsPage,6,'notes','Personal Notes','Keep the details worth remembering, close at hand.','LOCAL NOTEBOOK',#$E70B);
   AddAssurance(ToolsPage,'Your records stay yours.','Blueprints, history, notes and ledgers stay on this Windows account. No SynthScan account, analytics signup or usage beacon. Signed packages and integrity checks protect updates; changing modules keeps your saved records.');
 #ifdef ValidationBuild
-  WizardForm.WelcomeLabel2.Caption := 'ISOLATED INSTALLER TEST'+#13#10+#13#10+'A separate app folder, empty profile and uninstall entry. Your normal SynthScan records are not imported or changed.'+#13#10+#13#10+'Game-text and permission changes are blocked in this test copy. You can explore installation and read-only library setup safely.';
+  WizardForm.WelcomeLabel2.Caption := WizardForm.WelcomeLabel2.Caption+#13#10+#13#10+'ISOLATED TEST: A separate, empty profile. Game-text and permission changes are blocked. Your regular SynthScan records are untouched.';
 #endif
 end;
 
