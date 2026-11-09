@@ -1,5 +1,7 @@
 ## 0.1.0-alpha.9 — 2026-11-09
 
+- Centralize SynthStrings writes behind an AppData ownership/recovery journal. Add HUD-only setup and explicit safe removal; preserve unrelated game settings and third-party text edits. Keep backups outside LIVE, journal text-permission repair and clean recorded changes on uninstall. Document legacy conflicts and the completed footprint cleanup.
+
 - Replace Windows desktop/region capture fallback with a verified game-window
   surface. Keep off-game crop areas zeroed, expire stale frames, preserve local
   HDR tone mapping, and pause on focus loss by default.

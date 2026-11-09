@@ -38,6 +38,7 @@ PRIVATE.add('capture_activity.json')
 PRIVATE.add('home_status.json')
 PRIVATE.update({'refinery_orders.txt','refinery_orders.txt.tmp'})
 PRIVATE.add('daylight_embed_request.json')
+PRIVATE.update({'game_text','localization_backups','uninstall_result.json'})
 PRIVATE.update({'companion_private.json','companion_private.json.tmp','companion_state.json','companion_state.json.tmp',
                 'companion_alerts.json','companion_alerts.json.tmp','companion_commands'})
 PRIVATE.update({'party_invite_attempts.json','party_invite_attempts.json.tmp'})
@@ -106,7 +107,7 @@ def audit(destination):
     files=list(destination.rglob('*'))
     for file in files:
         if not file.is_file():continue
-        if is_private(file.name) or file.suffix.lower()=='.dpapi':raise ValueError('Private file included: '+str(file.relative_to(destination)))
+        if any(is_private(part) for part in file.relative_to(destination).parts) or file.suffix.lower()=='.dpapi':raise ValueError('Private file included: '+str(file.relative_to(destination)))
         relative=file.relative_to(destination)
         if relative.parts[0] in ('research','backups','release-validation','voice_cache'):
             raise ValueError('Development data included: '+str(relative))

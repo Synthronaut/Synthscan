@@ -1,53 +1,71 @@
-# Installation footprint audit — 2026-11-09
+# Installation footprint audit
 
-Scope: the guided Windows community installer and its normal startup/setup paths. This is a source and filesystem footprint review, not an independent security audit. Experimental developer scripts are distinguished from automatic setup.
+**Amended 2026-11-09 after the managed-cleanup implementation.** Scope: guided Windows setup, native SynthStrings generation, blueprint/reputation updates, permission repair and uninstall. This is a source review with local regression tests, not an independent security certification. Previously downloaded installers do not acquire these fixes merely because this report changed.
 
-## Files inside the selected Star Citizen channel
+## Normal game-folder footprint
 
-| Path relative to LIVE/PTU | What SynthScan does |
+| Path relative to LIVE/PTU | Behavior |
 | --- | --- |
-| `Data/Localization/english/global.ini` | Creates or updates the loose English localization override used by SynthStrings for blueprint markers, shortened labels and organization reputation numbers. Guided setup enables it by default. |
-| `user.cfg` | Creates the file or appends `g_language = english` when no language is configured. Existing unrelated settings are retained. Another configured language is rejected rather than silently switched. Windows may display the filename as `USER.cfg`. |
-| `Data/Localization/english/global.ini.synthscan-blueprints.bak` | A one-time backup before the Python blueprint annotator's first change. Its size is approximately one copy of the localization file. |
-| Temporary siblings of `global.ini` | Setup, reputation and blueprint updates write replacement files beside the destination, then replace it. Names include `.synthscan`, `.synthscan-reputation.tmp`, and `.synthscan-bp-*.tmp`. Normal completion removes/replaces them; an interrupted process can leave a temporary file. |
+| `Data/Localization/english/global.ini` | Optional loose localization override: blueprint ownership, reputation labels and shortened names. Native generation preserves existing foreign packs; annotation uses the same ownership journal. |
+| `user.cfg` | Adds `g_language = english` only if no language is configured. Keeps unrelated settings; refuses to silently switch another configured language. Windows may display this as `USER.cfg`. |
+| `.synthscan-*.tmp` beside the target | Temporary atomic replacement file. Normal completion/failure removes it. Interrupted update recovery recognizes the recorded filename and file identity; unknown temporary files are preserved. |
 
-The legacy Python text editor can also create `global.ini.synthscan_bak`; it is not the normal guided native setup path. It remains relevant when reviewing older installations.
+**Two persistent text targets; no persistent backups inside LIVE.** Normal setup does not patch archives, executables, anti-cheat binaries, personal control maps or launcher files. It does not install a packet-capture driver, service, console pulse config, extracted artwork or catalogs into LIVE.
 
-Game archives, the Star Citizen executable and anti-cheat binaries are read, not patched or replaced, by these setup paths. Extracted game records, artwork and service definitions are not unpacked into LIVE. The normal installer does not install the developer's console pulse configuration, replace personal action maps, install a packet-capture driver or register a Windows service.
+The game-text option is visible before first setup. Uncheck it for HUD/library use without new game-text writes. An existing legacy override is preserved and reported for review; HUD-only setup does not silently delete an older pack.
 
-## Files outside Star Citizen
+## Outside the game
 
-- `%LOCALAPPDATA%/Programs/SynthScan`: application, bundled Python/runtime libraries, OCR models and normal signed-update version directories.
-- `%LOCALAPPDATA%/SynthScan/native`: settings, ownership, reputation snapshots, tags, diary, refinery records, caches and diagnostic/status files.
-- `%LOCALAPPDATA%/SynthScan/reference/<build-id>` and `reference/active`: locally extracted records, artwork and generated catalogs. Build generations may occupy substantial disk space here; they are outside LIVE.
-- `native/localization_backups`: setup and reputation restoration copies are kept inside the user's SynthScan profile.
-- Ordinary per-user Start Menu/desktop shortcuts and the optional Startup shortcut. Inno Setup also creates the usual Windows uninstall registration. Launch-with-game is a user-process watcher, not a Windows service.
+- `%LOCALAPPDATA%/Programs/SynthScan`: per-user app/runtime and versioned app updates. Edition-specific installers may use a corresponding suffix.
+- `%LOCALAPPDATA%/SynthScan/native`: this Windows account's settings, ownership, reputation snapshots, diary, notes, refinery records, caches and status files. An explicitly configured development/portable profile can change this root.
+- `native/game_text/<channel-path-hash>/journal.json`: original existence/hashes, owned versions, created directories, cleanup outcomes and recorded discretionary permissions.
+- The same directory holds original and recovery copies. Repeated updates retain only the latest referenced full written copy, avoiding a new full localization backup on every reputation change. Original recovery copies and explicit legacy archives remain available.
+- `%LOCALAPPDATA%/SynthScan/reference/<build-id>` and `reference/active`: locally extracted records/artwork, outside LIVE. Reference generations can use substantial disk space.
+- Ordinary per-user shortcuts, optional Startup watcher shortcut and Windows uninstall registration. Launch-with-game uses a user process, not a service.
 
-The installer is per-user and requests no administrator rights by default. There is a separate, user-invoked elevated text-permission repair if Program Files prevents localization updates. It grants that Windows user Modify permission on the English localization directory and relevant text files, including user.cfg. It rejects linked text targets and does not grant broader rights to the game directory, executable or archive.
+Player records and restoration journals are excluded from public source/package staging and retained during uninstall so the library and recovery evidence are not lost.
 
-## Current uninstall limitation
+## Removal and recovery
 
-Uninstall removes installed application files and the owned startup shortcut, and preserves player records. Its localization cleanup currently restores recorded organization-name reputation annotations only. It does **not** fully remove the SynthStrings override, blueprint/shortened-text changes, the language line, localization backups, or previously granted text-file permissions. Generic foreign localization edits are deliberately not deleted blindly.
+Native generation, blueprint annotation, reputation annotation and older Python editors now use one managed transaction layer. It records originals **before** changing game text and rejects linked/hard-linked targets.
 
-Therefore this release has a contained game-folder footprint, but it is **not** a zero-footprint install or a complete automatic restoration of the original game folder.
+Setup provides **Remove SynthStrings** separately from uninstall. Uninstall also cleans recorded channels:
 
-## Recommended cleanup work
+1. Disable further managed writes.
+2. Verify recovery hashes. Restore unchanged owned files byte for byte, or remove a file SynthScan created when it still matches the owned version.
+3. Preserve later user.cfg settings; remove only SynthScan's added language line when applicable.
+4. For pre-existing localization files, undo unchanged owned key lines while keeping unrelated later edits. Preserve/report same-key conflicts. Do not delete a newly created override later edited by another tool.
+5. Restore recorded permissions only if the current ACL matches the recorded grant. Preserve externally changed permissions. Remove only recorded directories that are empty.
 
-1. Record an installation ownership journal: pre-existing files, pre-install hashes, exact changes and original permissions.
-2. Keep persistent backups under AppData; leave only atomic replacement files temporarily beside game text.
-3. Offer explicit removal of SynthStrings on uninstall. Restore only unchanged, owned changes; preserve third-party edits and unrelated user.cfg settings.
-4. Make the game's text-file changes visible in setup and provide a HUD-only choice.
-5. Remove abandoned temporary files only when their ownership and inactivity can be established. Do not delete generic game backups based on their filenames alone.
+Interrupted updates retain a durable pending record. Cleanup conflicts prevent silent re-enablement. Permission restoration may require elevation; Setup offers **Restore text permissions** when needed. Uninstall records unresolved cleanup in `native/uninstall_result.json`, rather than claiming all changes were removed.
 
-This audit made no changes to the user's game installation.
+## Permission repair
+
+The per-user installer requests no administrator rights by default. **Allow game-text access** is a separate explicit elevation request for protected Program Files installations. It records the original and granted discretionary ACLs in AppData. New grants target the English localization directory and relevant text files; they are not recursive or inheritable across unrelated content. Alternate-administrator credentials are refused to avoid mixing Windows accounts' journals.
+
+Historical broad grants without a recorded original ACL cannot safely be represented as automatically reversible.
+
+## Older installations and local cleanup
+
+Older versions created `global.ini.synthscan-blueprints.bak` and `global.ini.synthscan_bak` beside game text. The old developer experiment also left `synthscan_pulse_test.cfg` in LIVE. Those **three artifacts were archived in AppData with SHA-256 records and removed from their old locations** during this cleanup. The active localization override and user.cfg were retained so gameplay and SynthStrings remain available.
+
+Generic `global.ini.bak`, `global.ini.bak_before_hud_shortening` and `global.ini.pre_weight_backup` files were preserved: their names do not establish ownership. The new installer does not create them.
+
+An older generated override has no trustworthy pre-install baseline. The removal UI explains this and offers explicit archival of the complete marked legacy override before removing it. Custom content remains recoverable in the archive; this is not exact restoration of an unknown original file. The old language line is also retained when its ownership is unknown.
+
+## Validation and limits
+
+- Full local Python suite: **807 tests, 23 skipped**, passed. The subsequent interrupted-temp-recovery and package-exclusion cases also passed in the **23-case cleanup suite**. Tests use temporary fixture game folders, not live player files.
+- Coverage: fresh install/removal, exact originals, later settings/foreign edits, same-key conflicts, failed replacement, crash recovery, opt-out, repeated enable/remove, backup retention, legacy archival, hard-link refusal, tampered recovery copies and a Windows ACL roundtrip on a private temporary fixture.
+- Native rebuild and all 512 self-tests passed. A synthetic ZIP64 game installation exercised the actual native-to-Python setup bridge, confirmed the pre-write journal, and restored the original game-folder contents without sidecar backups. The public checkout passed 753 Python tests (56 skipped). Regression tests do not replace an elevated install/uninstall exercise on a clean Windows account.
+- Unknown backups, old unrecorded ACLs and externally edited files are not deleted blindly. The app is contained and reversible for recorded changes; it is not a zero-footprint application.
 
 ## Reviewed implementation
 
-- [Installer](../installer/SynthScan.iss)
-- [Setup and backups](../community_setup.py)
-- [Native localization writer/removal](../native/synthscan/src/GameTexts.cpp)
-- [Blueprint localization updates](../blueprint_strings.py)
-- [Reputation updates](../tools/sync_reputation_names.py)
-- [Text permission repair](../game_text_access.py)
-- [Uninstall cleanup](../community_uninstall.py)
-- [Application/profile/reference locations](../installation.py)
+- [Managed transaction/recovery](../game_text_lifecycle.py)
+- [Setup/removal controls](../app_launcher.py), [setup](../community_setup.py)
+- [Native delegation](../native/synthscan/include/ManagedGameTexts.h), [generation](../native/synthscan/src/GameTexts.cpp)
+- [Blueprint updates](../blueprint_strings.py), [reputation updates](../tools/sync_reputation_names.py)
+- [Permission repair](../game_text_access.py), [uninstall](../community_uninstall.py)
+- [Paths](../installation.py), [package exclusions](../tools/package_community.py)
+- [Cleanup tests](../tests/test_game_text_lifecycle.py)
