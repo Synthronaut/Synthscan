@@ -33,7 +33,7 @@ begin
       Fill := $001E1C1A; Border := $003B3732; Ink := $00827D76;
       CardButtons[I].Caption := 'Not installing';
     end;
-    if (I=2) and CardSelected[I] then Border := $008DCDEE;
+    if (I=2) and CardSelected[I] then begin Fill:=$001E2C3A;Border:=$006BC9FF;end;
     Cards[I].Color := Fill;
     with CardPaint[I].Bitmap do begin
       Width := CardPaint[I].Width; Height := CardPaint[I].Height;
@@ -41,7 +41,14 @@ begin
       Canvas.Rectangle(0,0,Width,Height);
       Canvas.Brush.Color := Fill; Canvas.Pen.Color := Border;
       if CardSelected[I] then Canvas.Pen.Width:=ScaleX(2) else Canvas.Pen.Width:=1;
-      Canvas.RoundRect(0,0,Width,Height,ScaleX(22),ScaleY(22));
+      if (I=2) and CardSelected[I] then Canvas.Pen.Width:=ScaleX(4);
+      Canvas.RoundRect(ScaleX(2),ScaleY(2),Width-ScaleX(2),Height-ScaleY(2),ScaleX(22),ScaleY(22));
+      if I=2 then begin
+        if CardSelected[I] then Canvas.Brush.Color:=$006BC9FF else Canvas.Brush.Color:=$003B3732;
+        Canvas.Pen.Color:=Canvas.Brush.Color;Canvas.Pen.Width:=1;
+        Canvas.RoundRect(ScaleX(16),Height-ScaleY(48),Width-ScaleX(16),Height-ScaleY(12),ScaleX(10),ScaleY(10));
+        Canvas.Ellipse(ScaleX(12),ScaleY(9),ScaleX(56),ScaleY(52));
+      end;
     end;
     CardTitles[I].Font.Color := Ink;
     if CardSelected[I] then begin
@@ -49,8 +56,8 @@ begin
       CardDescriptions[I].Font.Color := $00F1DAC3;
       CardBadges[I].Font.Color := $00D1BA9C;
       if I=2 then begin
-        CardIcons[I].Font.Color := $008DCDEE;
-        CardBadges[I].Font.Color := $008DCDEE;
+        CardIcons[I].Font.Color := $001E1B14;
+        CardBadges[I].Font.Color := $001E1B14;
       end;
     end else begin
       CardIcons[I].Font.Color := $006B6660;
@@ -60,6 +67,40 @@ begin
     CardPaint[I].Invalidate;
   end;
   for I:=0 to 1 do SelectionLabels[I].Caption := IntToStr(Count)+' features included  /  Core always included';
+end;
+
+function TextFits(LabelText: TLabel): Boolean;
+var Bitmap: TBitmap;Words: TStringList;I,Lines: Integer;Line,Candidate: String;
+begin
+  Bitmap:=TBitmap.Create;Words:=TStringList.Create;
+  try
+    Bitmap.Width:=1;Bitmap.Height:=1;Bitmap.Canvas.Font.Assign(LabelText.Font);
+    Words.Delimiter:=' ';Words.StrictDelimiter:=True;Words.DelimitedText:=LabelText.Caption;
+    Lines:=1;Line:='';
+    for I:=0 to Words.Count-1 do begin
+      Candidate:=Line;
+      if Candidate<>'' then Candidate:=Candidate+' ';
+      Candidate:=Candidate+Words[I];
+      if (Line<>'') and (Bitmap.Canvas.TextWidth(Candidate)>LabelText.Width) then begin
+        Lines:=Lines+1;Line:=Words[I];
+      end else Line:=Candidate;
+    end;
+    Result:=Lines*Bitmap.Canvas.TextHeight('Ag')<=LabelText.Height;
+  finally Words.Free;Bitmap.Free;end;
+end;
+
+procedure ExplainCard(Index: Integer; const Detail: String);
+var Summary: String;OriginalSize: Integer;
+begin
+  Summary:=CardDescriptions[Index].Caption;
+  OriginalSize:=CardDescriptions[Index].Font.Size;
+  CardDescriptions[Index].Caption:=Detail;
+  CardDescriptions[Index].Font.Size:=13;
+  while (CardDescriptions[Index].Font.Size>OriginalSize) and not TextFits(CardDescriptions[Index]) do
+    CardDescriptions[Index].Font.Size:=CardDescriptions[Index].Font.Size-1;
+  if not TextFits(CardDescriptions[Index]) then begin
+    CardDescriptions[Index].Caption:=Summary;CardDescriptions[Index].Font.Size:=OriginalSize;
+  end;
 end;
 
 procedure SelectCards;
@@ -218,9 +259,12 @@ begin
   PageHeading(ToolsPage,'Make every session count.','Your selection carries across both pages. Grey means not installing.',1);
   AddCard(0,ModulesPage,0,'synthstrings','SynthStrings + Reputation','Your reputation and owned blueprints, right in the game text.','IN-GAME TEXT  /  ACCOUNT ACCESS',#$E8D4);
   AddCard(1,ModulesPage,1,'mining_tools','Mining Tools','Plan trips, keep a mining diary and manage refinery records.','PLANNING + LOCAL RECORDS',#$E90F);
-  AddCard(2,ModulesPage,2,'mining_recognition','Live Mining Recognition','Reads the game screen to identify rocks, composition, quality and ore values.','!  READS YOUR GAME SCREEN  /  OCR',#$E890);
+  AddCard(2,ModulesPage,2,'mining_recognition','Live Mining Recognition','Reads rock details and refinery terminals from the game screen.','!  READS YOUR GAME SCREEN  /  OCR',#$E890);
+  CardBadges[2].SetBounds(ScaleX(24),Cards[2].Height-ScaleY(40),Cards[2].Width-ScaleX(48),ScaleY(26));
+  CardDescriptions[2].Height:=CardDescriptions[2].Height-ScaleY(20);
+  CardBadges[2].Caption:='SCREEN READER  /  READS THE GAME WINDOW';
   CardBadges[2].Font.Size:=11;CardBadges[2].Font.Style:=[fsBold];
-  if GridColumns=4 then begin CardBadges[2].Font.Size:=9;CardBadges[2].Caption:='! SCREEN READER (OCR)';end;
+  if GridColumns=4 then begin CardBadges[2].Font.Size:=9;CardBadges[2].Caption:='SCREEN READER (OCR)';end;
   AddCard(3,ModulesPage,3,'blueprints','Crafting + Blueprints','Your collection, recipes, quality effects and acquisition routes.','LIBRARY + CRAFTING',#$E8F1);
   AddCard(4,ModulesPage,4,'item_finder','Item + Ship Finder','Find equipment, ships, shops and public market information.','SEARCH + PUBLIC PRICES',#$E721);
   AddCard(5,ModulesPage,5,'server_hud','Server HUD','A clear, permanent region and shard ribbon above the action.','BACKGROUND DATA  /  NO OCR',#$E9D9);
@@ -234,6 +278,20 @@ begin
   AddCard(12,ToolsPage,5,'acceptance','Automatic Acceptance','An optional helper for incoming game notifications.','AUTOMATED INPUT  /  OFF UNTIL ENABLED',#$E73E);
   AddCard(13,ToolsPage,6,'notes','Personal Notes','Keep the details worth remembering, close at hand.','LOCAL NOTEBOOK',#$E70B);
   AddAssurance(ToolsPage,'Your records stay yours.','Blueprints, history, notes and ledgers stay on this Windows account. No SynthScan account, analytics signup or usage beacon. Signed packages and integrity checks protect updates; changing modules keeps your saved records.');
+  ExplainCard(0,'Make the game menus work harder for you. Add verified reputation beside organizations, show owned blueprint markers in supported mission text, and shorten distracting labels. Managed backups and patch checks protect your existing game text.');
+  ExplainCard(1,'Turn a mining trip into a plan. Find material locations and overlaps, keep a diary of standout rocks and hauls, bookmark coordinates, and manage manual refinery records. Planning and saved records work without screen reading.');
+  ExplainCard(2,'Let the rock tell you what it is worth. Reads visible signatures, mass, composition and quality for a clearer rock breakdown and ore-value estimate. Also supports refinery-terminal imports. This is the only feature that captures the game window.');
+  ExplainCard(3,'Know what you can build and what to chase next. Browse your blueprint collection, mark older unlocks as owned, review recipes and material-quality effects, and find supported mission unlocks. Keep crafting information together in one library.');
+  ExplainCard(4,'Spend less time hunting through tabs. Search items, ships and equipment, compare available shop locations and public prices, and inspect useful item details. Public price information needs no UEX token.');
+  ExplainCard(5,'Keep your session identity in sight. A compact permanent ribbon shows your region, shard identity and supported background readings, with quick access to the activity HUD. Get clearer session context without a screen-reading dependency.');
+  ExplainCard(6,'Make server hopping less of a guessing game. Look back through timestamped shard visits, spot servers you have already tried, and keep session notes. History reflects your own recorded visits, not the lifetime of a server.');
+  ExplainCard(7,'Put familiar names in context. Browse reported shard members, search handles, add player tags and relationships, and enable optional appearance alerts. Friend and party actions stay separate from passive information.');
+  ExplainCard(8,'Keep your piracy session organized. Use a manual waiting timer and review interdiction-related reports that appear in the game log. It works without OCR; the available reports do not identify every catch.');
+  ExplainCard(9,'See what your time earned. Follow supported contracts, compare configured rewards with observed outcomes, track completion times, and review money and verified reputation changes in your local ledger. Unknown changes remain visible.');
+  ExplainCard(10,'Arrive with a plan and the right boards. Keep the five-light executive hangar estimate in view, count your compboards and complete sets, and record a set used for a claim. Timings refresh from community data and are clearly labeled as estimates.');
+  ExplainCard(11,'Choose your destination before choosing your moment. Select a system, body and supported location to forecast daylight, sunrise and sunset. Use it to plan a trip or operation; special event instances may need separate verification.');
+  ExplainCard(12,'Miss fewer fleeting notifications. An opt-in helper can respond to supported incoming requests with your configured game key. It starts off, and sends input only when enabled and the game is focused. No screen reading is required.');
+  ExplainCard(13,'Keep the details that never fit in a waypoint. Save routes, plans, reminders and session notes in your local notebook. Your notes remain on this Windows account and are kept when you remove the feature.');
 #ifdef ValidationBuild
   WizardForm.WelcomeLabel2.Caption := WizardForm.WelcomeLabel2.Caption+#13#10+#13#10+'ISOLATED TEST: A separate, empty profile. Game-text and permission changes are blocked. Your regular SynthScan records are untouched.';
 #endif

@@ -28,6 +28,7 @@ begin
   for I:=0 to 13 do begin
     SelectAllCards(Selector);
     RequireState(WizardIsComponentSelected(CardIds[I]),'initial included '+CardIds[I]);
+    RequireState(TextFits(CardDescriptions[I]),'readable description '+CardIds[I]);
     ToggleCard(CardPaint[I]);
     RequireState(not WizardIsComponentSelected(CardIds[I]),'card excludes '+CardIds[I]);
     RequireState(CardButtons[I].Caption='Not installing','off label '+CardIds[I]);
