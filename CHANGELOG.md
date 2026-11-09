@@ -1,6 +1,7 @@
 ## 0.1.0-alpha.11 — 2026-11-10
 
 - Ship one modular installer with 13 optional features. Keep the existing feature-card design and preserve installed choices across verified updates.
+- Adapt the existing installer pages to the actual Windows card area and font bounds, including a 1024×768 check. Keep direct installation from the last feature page and verify public startup defaults.
 - Match desktop navigation, pop-out HUD modes, shortcuts and server-history controls to installed modules. Hide stale warnings and stop SynthStrings patch watching when its module is absent.
 - Keep Privacy & Capture inside Settings. Remove redundant Hangars, desktop-view and immediate HUD-toggle buttons from Settings.
 - Remove Personal Notes, including its editor, media viewer, shortcuts and installer choice. Existing saved module selections update without bringing it back.

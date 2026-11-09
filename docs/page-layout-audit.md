@@ -66,4 +66,10 @@ and 20 People interaction checks passed. The previous executable and manifest
 were retained in a local backup. A 35-second observation of the normal app kept
 a fresh UI heartbeat throughout (about 0.02 seconds old at the last sample) and
 used 1.25 CPU seconds in total, including startup. No profile or game files were
-replaced to install this repair. Public release validation is still pending.
+replaced to install this repair. Subsequent alpha.11 validation passed the
+[clean Windows modular release gates](https://github.com/Synthronaut/Synthscan/actions/runs/42664111917),
+including the real message-pump regression, all 29 feature selections and the
+production installer lifecycle. The final cleanup removes Notes and redundant
+Settings controls while retaining the existing picker design. Installer paging
+uses the actual available card surface; measured text/badge gaps and card clicks
+pass both local display scaling and the clean runner's Windows fonts.

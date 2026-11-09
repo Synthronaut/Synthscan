@@ -5,12 +5,26 @@ modular packaging had not been built. The GitHub release identifies its exact
 commit and includes machine-readable validation reports. This is not an
 independent security audit or a guarantee of compatibility with future patches.
 
-**Release hold:** a live Home/People repaint freeze was reported during local
-testing. Whole-window Windows compositing reproduced the fault on an isolated
-desktop. The source fix and a real message-pump regression gate are in place;
-the alpha.11 release must be rebuilt and pass its gates again before publishing.
-Earlier bitmap-only layout checks did not cover this failure. See the amended
+**Release gates cleared — 10 November 2026.** The Home/People repaint fix and
+final modular cleanup passed the [clean Windows release gates](https://github.com/Synthronaut/Synthscan/actions/runs/42664111917)
+for commit `3ab3f805690b3d89f3389a4049e64ab9c9356bbb`: both engines, regression
+suites, 29 packaged startups, 29 rendered module selections, installer-card
+interaction/layout, and the production install/upgrade/reader-removal/uninstall
+lifecycle. Fixture records survived each lifecycle step. The separate
+[native provenance run](https://github.com/Synthronaut/Synthscan/actions/runs/42664117242)
+passed reproducibility, native, privacy and artifact checks. Versioned release
+assets carry the validation reports. See the amended
 [layout audit](page-layout-audit.md#9-november-live-repaint-regression).
+
+
+[Alpha.11 is published](https://github.com/Synthronaut/Synthscan/releases/tag/v0.1.0-alpha.11)
+with 29 verified assets and matching signed Full, Standard and module update
+channels. The original publishing job failed when GitHub could not resolve a
+new draft through its not-yet-created tag. Publication resumed by release ID only
+after all 29 draft asset digests matched the successful assembly's exact workflow
+artifact; public metadata, report downloads and signatures were then rechecked.
+The publisher now resolves and publishes drafts by ID. The failed publish step
+remains visible in the original run; its engine and assembly gates passed.
 
 ## Implemented release
 
@@ -44,6 +58,10 @@ Earlier bitmap-only layout checks did not cover this failure. See the amended
 
 - Local Python suite: **974 tests, 12 skipped, passed**. Unavailable private/live
   fixtures are skipped; this is not a claim of live verification.
+- Clean Windows CI: **974 tests, 45 skipped, passed in both engines**. The
+  additional skips cover unavailable private captures, local game-reference
+  extractions, the historical optional worker, and opt-in renderer fixtures. Native Full self-tests pass all **474** checks; Standard separately
+  confirms its capture providers/models are absent.
 - Real per-user validation installer: server ribbon + Hangars, all features,
   then all without recognition. Installed modules, reader removal and retained
   fixture records verified. Uninstall passed and retained records. A separate
@@ -67,7 +85,7 @@ Earlier bitmap-only layout checks did not cover this failure. See the amended
   command-line installation tests did not cover: excluded components require
   explicit `!name` instructions. Both forms of validation are release gates.
 - Layout checks cover welcome text, every card's title/body/badge, page
-  headings and both information panels at 2240×1222, 1680×945 and 1152×648.
+  headings and both information panels at 2240×1222, 1680×945, 1152×648 and 1024×768.
   They measure the real Windows font handle, enforce wrapped text bounds and
   verify controls stay within their parent. These checks caught autosizing
   information labels extending beyond the page. Rounded controls preserve
