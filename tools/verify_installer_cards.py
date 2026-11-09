@@ -17,21 +17,54 @@ ROOT=Path(__file__).resolve().parents[1]
 CHECKS=r'''
 procedure RequireState(Condition: Boolean; const Detail: String);
 begin
-  if not Condition then RaiseException('Card interaction failed: '+Detail);
+  if not Condition then begin
+    SaveStringsToUTF8File(ExpandConstant('{param:REPORT|}'),['FAILED: '+Detail+LastTextMeasure],False);
+    RaiseException('Card interaction failed: '+Detail);
+  end;
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
-var I: Integer; Selector: TNewButton; Report: String;
+var I: Integer; Selector,SourceButton: TNewButton; Report: String;
 begin
   if CurStep<>ssInstall then exit;
   Selector:=TNewButton.Create(WizardForm);Selector.Tag:=0;
+  for I:=0 to 2 do begin
+    case I of
+      0:SourceButton:=WizardForm.BackButton;
+      1:SourceButton:=WizardForm.NextButton;
+      2:SourceButton:=WizardForm.CancelButton;
+    end;
+    RequireState(NavigationTarget(I)=SourceButton,'navigation route');
+    RequireState(NavigationButtons[I].TabStop,'keyboard navigation target');
+  end;
+  RequireState(ContentFits(WizardForm.WelcomeLabel1.Caption,WizardForm.WelcomeLabel1.Font,WizardForm.WelcomeLabel1.Width,WizardForm.WelcomeLabel1.Height),'welcome heading fits');
+  RequireState(ContentFits(WizardForm.WelcomeLabel2.Caption,WizardForm.WelcomeLabel2.Font,WizardForm.WelcomeLabel2.Width,WizardForm.WelcomeLabel2.Height),'welcome body fits');
+  for I:=0 to 1 do begin
+    RequireState(ContentFits(Headings[I].Caption,Headings[I].Font,Headings[I].Width,Headings[I].Height),'page heading fits');
+    RequireState(ContentFits(Subheadings[I].Caption,Subheadings[I].Font,Subheadings[I].Width,Subheadings[I].Height),'page subtitle fits');
+    RequireState(not AssuranceBodies[I].AutoSize,'bounded assurance body');
+    RequireState(not AssuranceTitles[I].AutoSize,'bounded assurance heading');
+    RequireState(TextFits(AssuranceBodies[I]),'wrapped assurance body');
+    RequireState(TextFits(AssuranceTitles[I]),'wrapped assurance heading');
+    RequireState(AssuranceBodies[I].Left+AssuranceBodies[I].Width<=AssuranceBodies[I].Parent.ClientWidth,'assurance right edge');
+    RequireState(AssuranceBodies[I].Top+AssuranceBodies[I].Height<=AssuranceBodies[I].Parent.ClientHeight,'assurance bottom edge');
+  end;
+  for I:=2 to FeaturePageCount-1 do begin
+    RequireState(ContentFits(Headings[I].Caption,Headings[I].Font,Headings[I].Width,Headings[I].Height),'extra page heading fits');
+    RequireState(ContentFits(Subheadings[I].Caption,Subheadings[I].Font,Subheadings[I].Width,Subheadings[I].Height),'extra page subtitle fits');
+  end;
   for I:=0 to 13 do begin
     SelectAllCards(Selector);
     RequireState(WizardIsComponentSelected(CardIds[I]),'initial included '+CardIds[I]);
     RequireState(TextFits(CardDescriptions[I]),'readable description '+CardIds[I]);
+    RequireState(TextFits(CardTitles[I]),'readable title '+CardIds[I]);
+    RequireState(TextFits(CardBadges[I]),'readable badge '+CardIds[I]);
+    RequireState(Cards[I].Left+Cards[I].Width<=Cards[I].Parent.ClientWidth,'card right edge '+CardIds[I]);
+    RequireState(Cards[I].Top+Cards[I].Height<=Cards[I].Parent.ClientHeight,'card bottom edge '+CardIds[I]);
     ToggleCard(CardPaint[I]);
     RequireState(not WizardIsComponentSelected(CardIds[I]),'card excludes '+CardIds[I]);
-    RequireState(CardButtons[I].Caption='Not installing','off label '+CardIds[I]);
+    RequireState(Pos('Not installing',CardButtons[I].Caption)>0,'off label '+CardIds[I]);
+    RequireState(Pos(CardTitles[I].Caption,CardButtons[I].Caption)>0,'accessible feature name '+CardIds[I]);
     RequireState(CardTitles[I].Font.Color=$00827D76,'dim title '+CardIds[I]);
     RequireState(CardDescriptions[I].Font.Color=$00736F68,'dim body '+CardIds[I]);
     ToggleCard(CardButtons[I]);
@@ -73,6 +106,7 @@ def verify(output):
     source=(ROOT/'installer/SynthScan-Modular.iss').read_text(encoding='utf-8')
     types=source.split('[Types]',1)[1].split('[Components]',1)[0]
     components=source.split('[Components]',1)[1].split('[Tasks]',1)[0]
+    messages=source.split('[Messages]',1)[1].split('[Code]',1)[0]
     with tempfile.TemporaryDirectory(prefix='SynthScan-card-tests-') as temporary:
         folder=Path(temporary);report=folder/'result.json'
         script=folder/'cards.iss'
@@ -93,10 +127,20 @@ DisableProgramGroupPage=yes
 OutputDir='''+str(folder)+'''
 OutputBaseFilename=CardTest
 [Types]
-'''+types+'\n[Components]\n'+components+'\n[Code]\n#include "'+str(ROOT/'installer/FeatureCards.iss')+'"\n'+CHECKS,encoding='utf-8-sig')
-        subprocess.run([str(compiler()),'/Q',str(script)],check=True,capture_output=True,text=True)
-        subprocess.run([str(folder/'CardTest.exe'),'/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-','/REPORT='+str(report)],check=True,timeout=60,creationflags=0x08000000)
-        value=json.loads(report.read_text(encoding='utf-8-sig'))
+'''+types+'\n[Components]\n'+components+'\n[Messages]\n'+messages+'\n[Code]\n#include "'+str(ROOT/'installer/FeatureCards.iss')+'"\n'+CHECKS,encoding='utf-8-sig')
+        compiled=subprocess.run([str(compiler()),'/Q','/DSelectionTestBuild=1','/DValidationBuild=1',str(script)],capture_output=True,text=True)
+        if compiled.returncode:raise ValueError(compiled.stdout+compiled.stderr)
+        cases=[]
+        for width,height in ((2240,1222),(1680,945),(1152,648)):
+            report.unlink(missing_ok=True)
+            process=subprocess.Popen([str(folder/'CardTest.exe'),'/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-','/WIDTH='+str(width),'/HEIGHT='+str(height),'/REPORT='+str(report)],creationflags=0x08000000)
+            try:code=process.wait(timeout=60)
+            except subprocess.TimeoutExpired:
+                subprocess.run(['taskkill.exe','/PID',str(process.pid),'/T','/F'],capture_output=True,creationflags=0x08000000)
+                raise
+            if code:raise ValueError(str((width,height))+': '+(report.read_text(encoding='utf-8-sig') if report.exists() else 'No report'))
+            value=json.loads(report.read_text(encoding='utf-8-sig'));value.update(width=width,height=height);cases.append(value)
+        value=dict(passed=True,resolutions=cases)
         if output:Path(output).write_text(json.dumps(value,indent=2),encoding='utf-8')
         return value
 

@@ -8,8 +8,9 @@ independent security audit or a guarantee of compatibility with future patches.
 ## Implemented release
 
 - One per-user Windows installer, all 14 optional features checked by default.
-  Feature choices use two spacious, clickable card pages with a visible OCR
-  capability badge and an all-without-screen-reading shortcut.
+  Feature choices use spacious, clickable card pages with a visible OCR
+  capability banner and an all-without-screen-reading shortcut. Smaller
+  viewports use additional pages to preserve readable text.
   No Python, build tools or separate downloads are required from users. Initial
   game-reference extraction can take several minutes.
 - Live Mining Recognition is the only SCREEN READING component. Omitting it
@@ -57,6 +58,12 @@ independent security audit or a guarantee of compatibility with future patches.
   Core-only selection. This caught a selection API mistake that silent
   command-line installation tests did not cover: excluded components require
   explicit `!name` instructions. Both forms of validation are release gates.
+- Layout checks cover welcome text, every card's title/body/badge, page
+  headings and both information panels at 2240×1222, 1680×945 and 1152×648.
+  They measure the real Windows font handle, enforce wrapped text bounds and
+  verify controls stay within their parent. These checks caught autosizing
+  information labels extending beyond the page. Rounded controls preserve
+  the wizard's native actions; no global input hooks are used by setup.
 - The **Unified modular release** workflow repeats builds, regression checks,
   signed package checks, the six selections and the actual production installer
   identity on a fresh Windows runner. Publishing requires all gates to pass.

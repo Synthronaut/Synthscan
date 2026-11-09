@@ -28,3 +28,12 @@ app, not a generic Windows utility. These rules apply to future UI work.
   a test with the real player's records without an explicit request.
 - Verify actual rendered layout and interaction, not just source or compilation.
   Stop UI input immediately when the user stops computer control.
+- Bound every text block explicitly. Inno static labels can autosize beyond
+  their intended columns; use fixed bounds and wrapping for explanatory text.
+  Validate headings, welcome text and information panels as well as cards.
+  Use the actual control font handle for Windows text measurements.
+- Use restrained surface gradients and rounded state pills, with a clear grey
+  off state. Avoid heavy cyan outlines around every selected card and stock
+  grey action buttons. Reserve the filled amber banner for screen reading.
+- Exercise the full feature picker at 2240×1222, 1680×945 and 1152×648. Use
+  additional pages on small displays instead of clipping or unreadable text.
