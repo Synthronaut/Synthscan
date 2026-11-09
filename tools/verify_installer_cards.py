@@ -28,6 +28,14 @@ var I: Integer; Selector,SourceButton: TNewButton; Report: String;
 begin
   if CurStep<>ssInstall then exit;
   Selector:=TNewButton.Create(WizardForm);Selector.Tag:=0;
+  RequireState(ShouldSkipPage(wpSelectTasks),'additional tasks page is skipped');
+#ifdef ValidationBuild
+  RequireState(not WizardIsTaskSelected('startup'),'test startup remains off');
+  RequireState(not WizardIsTaskSelected('desktop'),'test desktop shortcut remains off');
+#else
+  RequireState(WizardIsTaskSelected('startup'),'normal startup defaults on');
+  RequireState(WizardIsTaskSelected('desktop'),'normal desktop shortcut defaults on');
+#endif
   for I:=0 to 2 do begin
     case I of
       0:SourceButton:=WizardForm.BackButton;
@@ -57,6 +65,7 @@ begin
     SelectAllCards(Selector);
     RequireState(WizardIsComponentSelected(CardIds[I]),'initial included '+CardIds[I]);
     RequireState(TextFits(CardDescriptions[I]),'readable description '+CardIds[I]);
+    RequireState(CardDescriptions[I].Top+CardDescriptions[I].Height<=CardBadges[I].Top-ScaleY(4),'description stays above badge '+CardIds[I]);
     RequireState(TextFits(CardTitles[I]),'readable title '+CardIds[I]);
     RequireState(TextFits(CardBadges[I]),'readable badge '+CardIds[I]);
     RequireState(Cards[I].Left+Cards[I].Width<=Cards[I].Parent.ClientWidth,'card right edge '+CardIds[I]);
@@ -86,6 +95,8 @@ begin
   RequireState(WizardIsComponentSelected('mining_tools'),'reader restores dependency');
   RequireState(WizardIsComponentSelected('mining_recognition'),'reader restored');
   Selector.Tag:=1;SelectAllCards(Selector);
+  CurPageChanged(FeaturePages[FeaturePageCount-1].ID);
+  RequireState(WizardForm.NextButton.Caption='Install features','last feature page installs directly');
   CurPageChanged(ToolsPage.ID);CurPageChanged(ModulesPage.ID);
   for I:=0 to 12 do
     RequireState(WizardIsComponentSelected(CardIds[I])=(I<>2),'reader-free preset '+CardIds[I]);
@@ -97,7 +108,7 @@ begin
   for I:=0 to 12 do RequireState(WizardIsComponentSelected(CardIds[I]),'restore all '+CardIds[I]);
   Report:=ExpandConstant('{param:REPORT|}');
   RequireState(Report<>'','missing report destination');
-  RequireState(SaveStringsToUTF8File(Report,['{"passed":true,"feature_cards":13,"event_targets_per_card":6,"dependency_rules":true,"reader_free_preset":true,"page_persistence":true,"core_only":true,"inactive_state_dimmed":true}'],False),'save report');
+  RequireState(SaveStringsToUTF8File(Report,['{"passed":true,"feature_cards":13,"event_targets_per_card":6,"dependency_rules":true,"reader_free_preset":true,"page_persistence":true,"core_only":true,"inactive_state_dimmed":true,"surface_width":'+IntToStr(ModulesPage.SurfaceWidth)+',"surface_height":'+IntToStr(ModulesPage.SurfaceHeight)+',"columns":'+IntToStr(GridColumns)+',"rows":'+IntToStr(GridRows)+',"pages":'+IntToStr(FeaturePageCount)+'}'],False),'save report');
 end;
 '''
 
@@ -106,7 +117,9 @@ def verify(output):
     source=(ROOT/'installer/SynthScan-Modular.iss').read_text(encoding='utf-8')
     types=source.split('[Types]',1)[1].split('[Components]',1)[0]
     components=source.split('[Components]',1)[1].split('[Tasks]',1)[0]
+    tasks=source.split('[Tasks]',1)[1].split('[Files]',1)[0]
     messages=source.split('[Messages]',1)[1].split('[Code]',1)[0]
+    if 'disablereadypage=yes' not in {line.strip().lower() for line in source.splitlines()}:raise ValueError('The separate ready page must remain disabled')
     with tempfile.TemporaryDirectory(prefix='SynthScan-card-tests-') as temporary:
         folder=Path(temporary);report=folder/'result.json'
         script=folder/'cards.iss'
@@ -124,22 +137,25 @@ WizardSizePercent=150,150
 DisableWelcomePage=no
 DisableDirPage=yes
 DisableProgramGroupPage=yes
+DisableReadyPage=yes
 OutputDir='''+str(folder)+'''
 OutputBaseFilename=CardTest
 [Types]
-'''+types+'\n[Components]\n'+components+'\n[Messages]\n'+messages+'\n[Code]\n#include "'+str(ROOT/'installer/FeatureCards.iss')+'"\n'+CHECKS,encoding='utf-8-sig')
-        compiled=subprocess.run([str(compiler()),'/Q','/DSelectionTestBuild=1','/DValidationBuild=1',str(script)],capture_output=True,text=True)
-        if compiled.returncode:raise ValueError(compiled.stdout+compiled.stderr)
+'''+types+'\n[Components]\n'+components+'\n[Tasks]\n'+tasks+'\n[Messages]\n'+messages+'\n[Code]\n#include "'+str(ROOT/'installer/FeatureCards.iss')+'"\n'+CHECKS,encoding='utf-8-sig')
         cases=[]
-        for width,height in ((2240,1222),(1680,945),(1152,648)):
-            report.unlink(missing_ok=True)
-            process=subprocess.Popen([str(folder/'CardTest.exe'),'/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-','/WIDTH='+str(width),'/HEIGHT='+str(height),'/REPORT='+str(report)],creationflags=0x08000000)
-            try:code=process.wait(timeout=60)
-            except subprocess.TimeoutExpired:
-                subprocess.run(['taskkill.exe','/PID',str(process.pid),'/T','/F'],capture_output=True,creationflags=0x08000000)
-                raise
-            if code:raise ValueError(str((width,height))+': '+(report.read_text(encoding='utf-8-sig') if report.exists() else 'No report'))
-            value=json.loads(report.read_text(encoding='utf-8-sig'));value.update(width=width,height=height);cases.append(value)
+        for mode in ('validation','public'):
+            compiled=subprocess.run([str(compiler()),'/Q','/DSelectionTestBuild=1',*(['/DValidationBuild=1'] if mode=='validation' else []),str(script)],capture_output=True,text=True)
+            if compiled.returncode:raise ValueError(compiled.stdout+compiled.stderr)
+            sizes=((2240,1222),(1680,945),(1152,648),(1024,768)) if mode=='validation' else ((2240,1222),)
+            for width,height in sizes:
+                report.unlink(missing_ok=True)
+                process=subprocess.Popen([str(folder/'CardTest.exe'),'/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-','/WIDTH='+str(width),'/HEIGHT='+str(height),'/REPORT='+str(report)],creationflags=0x08000000)
+                try:code=process.wait(timeout=60)
+                except subprocess.TimeoutExpired:
+                    subprocess.run(['taskkill.exe','/PID',str(process.pid),'/T','/F'],capture_output=True,creationflags=0x08000000)
+                    raise
+                if code:raise ValueError(str((mode,width,height))+': '+(report.read_text(encoding='utf-8-sig') if report.exists() else 'No report'))
+                value=json.loads(report.read_text(encoding='utf-8-sig'));value.update(width=width,height=height,mode=mode);cases.append(value)
         value=dict(passed=True,resolutions=cases)
         if output:Path(output).write_text(json.dumps(value,indent=2),encoding='utf-8')
         return value

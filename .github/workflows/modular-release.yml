@@ -24,6 +24,9 @@ jobs:
           python-version: '3.14'
           architecture: x64
       - run: python -m pip install --require-hashes -r requirements-release.lock
+      - name: Preflight installer layout on runner fonts
+        if: matrix.edition == 'standard'
+        run: python -B tools/verify_installer_cards.py
       - run: python -B tools/fetch_build_dependencies.py
       - run: python -B tools/build_native_app.py
       - name: Native engine checks

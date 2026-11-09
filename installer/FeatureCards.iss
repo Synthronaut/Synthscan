@@ -367,10 +367,16 @@ begin
 #endif
   X:=(GetSystemMetrics(0)-W) div 2;Y:=(GetSystemMetrics(1)-H) div 2;
   WizardForm.SetBounds(X,Y,W,H);
-  GridColumns:=3;GridRows:=3;CardGridTop:=104;FeaturePageCount:=2;NoticeReserve:=0;
-  if H<ScaleY(760) then begin GridColumns:=2;GridRows:=2;CardGridTop:=92;FeaturePageCount:=4;end;
-  if H<ScaleY(560) then begin GridRows:=1;FeaturePageCount:=7;NoticeReserve:=80;end;
   WizardForm.Font.Name:='Segoe UI';WizardForm.Font.Size:=11;
+  ModulesPage:=CreateCustomPage(wpSelectComponents,'BUILD YOUR TOOLKIT','01 / 02   •   Your everyday essentials');
+  ToolsPage:=CreateCustomPage(ModulesPage.ID,'MAKE IT YOURS','02 / 02   •   More ways to play');
+  // Windows can constrain the wizard's requested bounds. Choose the existing
+  // paged layout from the space the cards actually receive, including fonts/DPI.
+  GridColumns:=3;GridRows:=3;CardGridTop:=104;FeaturePageCount:=2;NoticeReserve:=0;
+  if (ModulesPage.SurfaceWidth<ScaleX(1100)) or (ModulesPage.SurfaceHeight<ScaleY(730)) then begin
+    GridColumns:=2;GridRows:=2;CardGridTop:=92;FeaturePageCount:=4;
+  end;
+  if ModulesPage.SurfaceHeight<ScaleY(400) then begin GridRows:=1;FeaturePageCount:=7;NoticeReserve:=80;end;
   WizardForm.WizardBitmapImage.Width:=WizardForm.WelcomePage.Width*28 div 100;
   WizardForm.WelcomeLabel1.Left:=WizardForm.WizardBitmapImage.Width+ScaleX(60);
   WizardForm.WelcomeLabel1.Top:=ScaleY(52);
@@ -414,8 +420,6 @@ begin
     NavigationButtons[I].Tag:=I;NavigationButtons[I].OnClick:=@NavigationClick;
     NavigationButtons[I].BringToFront;
   end;
-  ModulesPage:=CreateCustomPage(wpSelectComponents,'BUILD YOUR TOOLKIT','01 / 02   •   Your everyday essentials');
-  ToolsPage:=CreateCustomPage(ModulesPage.ID,'MAKE IT YOURS','02 / 02   •   More ways to play');
   FeaturePages[0]:=ModulesPage;FeaturePages[1]:=ToolsPage;
   if FeaturePageCount=4 then begin
     ModulesPage.Description:='01 / 04   •   Your everyday essentials';ToolsPage.Description:='02 / 04   •   Explore your verse';
@@ -465,6 +469,8 @@ begin
   AddCard(11,ToolsPage,4,'daylight','Day / Night Forecast','Check destination lighting before you head out.','DESTINATION PLANNING',#$E706);
   AddCard(12,ToolsPage,5,'acceptance','Automatic Acceptance','An optional helper for incoming game notifications.','AUTOMATED INPUT  /  OFF UNTIL ENABLED',#$E73E);
   AddAssurance(ToolsPage,'Your records stay yours.','Blueprints, history, notes and ledgers stay on this Windows account. No SynthScan account, analytics signup or usage beacon. Signed packages and integrity checks protect updates; changing modules keeps your saved records.');
+  // Keep a measured gap above each badge, using its final OCR/non-OCR bounds.
+  for I:=0 to 12 do CardDescriptions[I].Height:=CardBadges[I].Top-CardDescriptions[I].Top-ScaleY(4);
   ExplainCard(0,'Make the game menus work harder for you. Add verified reputation beside organizations, show owned blueprint markers in supported mission text, and shorten distracting labels. Managed backups and patch checks protect your existing game text.');
   ExplainCard(1,'Turn a mining trip into a plan. Find material locations and overlaps, keep a diary of standout rocks and hauls, bookmark coordinates, and manage manual refinery records. Planning and saved records work without screen reading.');
   ExplainCard(2,'Let the rock tell you what it is worth. Reads visible signatures, mass, composition and quality for a clearer rock breakdown and ore-value estimate. Also supports refinery-terminal imports. This is the only feature that captures the game window.');
@@ -487,7 +493,7 @@ end;
 
 function ShouldSkipPage(PageID: Integer): Boolean;
 begin
-  Result:=PageID=wpSelectComponents;
+  Result:=(PageID=wpSelectComponents) or (PageID=wpSelectTasks);
 end;
 
 procedure CurPageChanged(CurPageID: Integer);
@@ -497,7 +503,8 @@ begin
   for I:=0 to FeaturePageCount-1 do if FeaturePages[I]<>nil then IsFeaturePage:=IsFeaturePage or (CurPageID=FeaturePages[I].ID);
   if IsFeaturePage then begin
     RefreshCards;
-    WizardForm.NextButton.Caption:='Continue  '+#$2192;
+    if CurPageID=FeaturePages[FeaturePageCount-1].ID then WizardForm.NextButton.Caption:='Install features'
+    else WizardForm.NextButton.Caption:='Continue  '+#$2192;
   end;
   SyncNavigation;
 end;

@@ -30,6 +30,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
 DisableDirPage=yes
 DisableProgramGroupPage=yes
+DisableReadyPage=yes
 DisableWelcomePage=no
 WizardStyle=modern dark polar includetitlebar hidebevels
 WizardBackColor=#10151D
