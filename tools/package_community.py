@@ -51,6 +51,7 @@ PRIVATE.update({'party_invite_attempts.json','party_invite_attempts.json.tmp'})
 PRIVATE.update({'friend_request_attempts.json','friend_request_attempts.json.tmp'})
 PRIVATE.update({'game_text','localization_backups','uninstall_result.json'})
 PRIVATE.update({'module_selection.json','module_install_error.json','module_text_cleanup.json'})
+PRIVATE.add('validation-install.txt')
 
 
 def is_private(name):
@@ -72,7 +73,7 @@ def stage_source(destination,edition="full"):
     for file in ROOT.glob('*.py'):
         if file.name.startswith('test_') or file.name=='make_shortcut.py':continue
         shutil.copy2(file,destination/file.name)
-    for name in ['LICENSES.md','README.md','CHANGELOG.md','PRIVACY.md','SECURITY.md','BUILDING.md','requirements-release.lock','DISTRIBUTION.md','SERVER_HISTORY.md','update_trust.json','.gitignore']:
+    for name in ['AGENTS.md','DESIGN.md','LICENSES.md','README.md','CHANGELOG.md','PRIVACY.md','SECURITY.md','BUILDING.md','requirements-release.lock','DISTRIBUTION.md','SERVER_HISTORY.md','update_trust.json','.gitignore']:
         shutil.copy2(ROOT/name,destination/name)
     shutil.copy2(ROOT/'requirements-standard.lock',destination/'requirements-standard.lock')
     shutil.copy2(ROOT/'native/synthscan/LICENSE',destination/'LICENSE')

@@ -10,7 +10,21 @@ def installation_root(path):
     if path.parent.name=='versions' and re.fullmatch('[0-9a-f]{64}',path.name) and (path.parent.parent/'SynthScan.exe').is_file():return path.parent.parent
     return path
 INSTALL_ROOT=installation_root(ROOT)
-PROFILE=Path(os.environ.get('SYNTHSCAN_DATA_DIR',str(Path(os.environ.get('LOCALAPPDATA',Path.home()))/'SynthScan/native')))
+
+def profile_scope(root,environment):
+    marker=Path(root)/'validation-install.txt'
+    normal=Path(environment.get('LOCALAPPDATA',Path.home()))/'SynthScan/native'
+    if marker.exists():
+        profile=Path(marker.read_text(encoding='utf-8-sig').strip())
+        if not profile.is_absolute() or profile.resolve()==normal.resolve():
+            raise ValueError('Invalid isolated test profile; the personal profile will not be used')
+        return True,profile
+    return False,Path(environment.get('SYNTHSCAN_DATA_DIR',str(normal)))
+
+ISOLATED_TEST,PROFILE=profile_scope(INSTALL_ROOT,os.environ)
+if ISOLATED_TEST:
+    # Propagate the isolated profile to native and detached child processes.
+    os.environ['SYNTHSCAN_DATA_DIR']=str(PROFILE)
 RELEASE=(ROOT/'release.json').exists() or os.environ.get('SYNTHSCAN_RELEASE')=='1'
 
 def valid_game(path):

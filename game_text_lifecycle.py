@@ -55,6 +55,8 @@ def write_dacl(path,sddl):
         if not adv.SetFileSecurityW(str(path),flags,descriptor):raise c.WinError(c.get_last_error())
     finally:kernel.LocalFree(descriptor)
 def enabled(game,profile=PROFILE):
+    from installation import ISOLATED_TEST
+    if ISOLATED_TEST:return False
     return Manager(game,profile).read().get('enabled',True)
 
 class Manager:
@@ -63,6 +65,8 @@ class Manager:
         key=digest(os.path.normcase(str(self.game)).encode())
         self.folder=self.profile/'game_text'/key;self.journal=self.folder/'journal.json'
     def target(self,name):
+        from installation import ISOLATED_TEST
+        if ISOLATED_TEST:raise ValueError('Isolated installer test: changes to game text are disabled. Your regular SynthScan text is protected.')
         if name not in ALLOWED:raise ValueError('Unmanaged game-text target')
         path=self.game/name
         if path.resolve()!=path or not path.resolve().is_relative_to(self.game) or (path.exists() and path.stat().st_nlink>1):raise ValueError('Linked game text cannot be changed automatically')
@@ -78,6 +82,8 @@ class Manager:
     def store(self,state):save(self.journal,state)
     def state(self):return self.read() or dict(schema=1,game=str(self.game),enabled=True,files={},directories=[],permissions={},phase='active')
     def set_enabled(self,value):
+        from installation import ISOLATED_TEST
+        if ISOLATED_TEST and value:raise ValueError('Game-text changes are disabled in the isolated installer test')
         with localization_lock(self.game/INI):
             state=self.state()
             if value and state.get('phase')=='conflict':raise ValueError('Resolve the recorded cleanup conflicts before enabling SynthStrings again')
@@ -199,6 +205,8 @@ class Manager:
     def backup(self,name,raw,kind='recovery'):
         target=self.folder/(time.strftime('%Y%m%d_%H%M%S')+'-'+uuid.uuid4().hex+'-'+kind+'.bin');atomic(target,raw);return target
     def restore(self,archive_legacy=False):
+        from installation import ISOLATED_TEST
+        if ISOLATED_TEST:return dict(restored=[],preserved=[],conflicts=[],legacy=[],permissions_pending=[],isolated_test=True)
         with localization_lock(self.game/INI,timeout_ms=330000):
             state=self.state();state['enabled']=False;self.store(state);result=dict(restored=[],preserved=[],conflicts=[],legacy=[],permissions_pending=[])
             for name,entry in state['files'].items():
@@ -300,6 +308,8 @@ def write_localization(path,raw,profile=PROFILE):
 
 def archive_legacy_artifacts(game,profile=PROFILE):
     """Explicit cleanup of our named old artifacts; never glob generic backups."""
+    from installation import ISOLATED_TEST
+    if ISOLATED_TEST:raise ValueError('Legacy game-text cleanup is disabled in the isolated installer test')
     manager=Manager(game,profile);result=[]
     with localization_lock(manager.game/INI):
         for name in [INI+'.synthscan-blueprints.bak',INI+'.synthscan_bak','synthscan_pulse_test.cfg']:

@@ -8,6 +8,8 @@ import sys
 from installation import ROOT,PROFILE,valid_game,game_directory
 
 def text_targets(game):
+    from installation import ISOLATED_TEST
+    if ISOLATED_TEST:raise ValueError('Game permission changes are disabled in the isolated installer test')
     game=Path(game).resolve()
     if not valid_game(game):raise ValueError('Star Citizen installation was not found')
     folder=(game/'Data/Localization/english').resolve()

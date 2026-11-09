@@ -33,7 +33,7 @@ DisableProgramGroupPage=yes
 DisableWelcomePage=no
 WizardStyle=modern dark polar includetitlebar hidebevels
 WizardBackColor=#10151D
-WizardSizePercent=125,125
+WizardSizePercent=150,150
 WizardImageFile=branding\welcome.bmp
 WizardSmallImageFile=branding\mark.bmp
 WizardImageBackColor=#10151D
@@ -78,8 +78,13 @@ Name: "acceptance"; Description: "Automatic Acceptance [AUTOMATED INPUT] - optio
 Name: "notes"; Description: "Personal Notes - your local notebook"; Types: complete
 
 [Tasks]
+#ifdef ValidationBuild
+Name: "startup"; Description: "Start this separate test copy with RSI Launcher"; Flags: unchecked
+Name: "desktop"; Description: "Create a SynthScan Validation desktop shortcut"; Flags: unchecked
+#else
 Name: "startup"; Description: "Open SynthScan automatically with RSI Launcher"; Flags: checkedonce
 Name: "desktop"; Description: "Create a desktop shortcut"; Flags: checkedonce
+#endif
 
 [Files]
 Source: "{#Payload}\core\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -94,8 +99,13 @@ Type: files; Name: "{app}\activation_pending.txt"
 [Icons]
 Name: "{group}\SynthScan"; Filename: "{app}\SynthScan.exe"
 Name: "{group}\Setup and reputation status"; Filename: "{app}\SynthScan.exe"; Parameters: "--status"
+#ifdef ValidationBuild
+Name: "{autodesktop}\SynthScan Validation"; Filename: "{app}\SynthScan.exe"; Tasks: desktop
+Name: "{userstartup}\SynthScan Validation Watcher"; Filename: "{app}\SynthScan.exe"; Parameters: "--watch"; Tasks: startup
+#else
 Name: "{autodesktop}\SynthScan"; Filename: "{app}\SynthScan.exe"; Tasks: desktop
 Name: "{userstartup}\SynthScan Game Watcher"; Filename: "{app}\SynthScan.exe"; Parameters: "--watch"; Tasks: startup
+#endif
 
 [Run]
 Filename: "{app}\SynthScan.exe"; Description: "Open SynthScan and prepare my game"; Check: InstallationReady; Flags: postinstall nowait skipifsilent
@@ -110,9 +120,11 @@ Type: files; Name: "{app}\activation_pending.txt"
 Type: files; Name: "{app}\dist\native\native_runtime.json"
 Type: files; Name: "{app}\dist\native\workspace_library.json"
 Type: files; Name: "{app}\launch_target.json"
+Type: files; Name: "{app}\validation-install.txt"
 
 [Messages]
-WelcomeLabel2=Your verse, connected.%n%nOne app. Choose your features. Everything is selected by default; uncheck anything you do not want.%n%nYour player records stay on this Windows account. No passwords, telemetry signup or extra downloads to manage.
+WelcomeLabel1=Less friction.%nMore Star Citizen.
+WelcomeLabel2=SynthScan brings the information you need into one place, so you can spend more time playing.%n%n  •  Clear, movable HUDs for the way you play%n  •  Reputation and owned blueprints where they matter%n  •  Mining, crafting and mission planning together%n  •  Your records, kept on your PC%n%nBuild your own toolkit. Everything starts included; switch off whatever you don't need.
 SelectComponentsDesc=Choose the features to install. Unchecked features are not installed. Live Mining Recognition is the only screen-reading add-on.
 SelectComponentsLabel2=Screen reading processes the Star Citizen window locally; it does not upload screenshots. Server HUD, hangars, blueprints, reputation and piracy work without it. Recognition needs Mining Tools.
 FinishedHeadingLabel=SynthScan is ready
@@ -123,6 +135,8 @@ var
   Ready: Boolean;
   PreviousInventory: String;
 
+#include "FeatureCards.iss"
+
 function InstallationReady: Boolean;
 begin
   Result := Ready;
@@ -131,8 +145,12 @@ end;
 function SelectedProfile(Param: String): String;
 begin
   Result := ExpandConstant('{param:SYNTHSCANPROFILE|}');
+#ifdef ValidationBuild
+  if Result = '' then Result := ExpandConstant('{localappdata}\SynthScan-Validation\native');
+#else
   if Result = '' then Result := GetEnv('SYNTHSCAN_DATA_DIR');
   if Result = '' then Result := ExpandConstant('{localappdata}\SynthScan\native');
+#endif
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
@@ -176,6 +194,10 @@ var
   Args: String;
 begin
   if CurStep = ssPostInstall then begin
+#ifdef ValidationBuild
+    if not SaveStringsToUTF8File(ExpandConstant('{app}\validation-install.txt'), [SelectedProfile('')], False) then
+      RaiseException('Could not establish the isolated test profile. Installation stopped before setup.');
+#endif
     Args := '-I -B "' + ExpandConstant('{app}\module_setup.py') + '" --root "' + ExpandConstant('{app}') + '" --profile "' + SelectedProfile('') + '" --offline "' + ExpandConstant('{tmp}\SynthScanComponents') + '" --selected "' + WizardSelectedComponents(False) + '"';
     if FileExists(PreviousInventory) then Args := Args + ' --previous-inventory "' + PreviousInventory + '"';
     Ready := Exec(ExpandConstant('{app}\runtime\pythonw.exe'), Args, ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, Code) and (Code = 0);

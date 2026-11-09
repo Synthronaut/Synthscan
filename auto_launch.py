@@ -32,7 +32,9 @@ def spawn(script, *args):
 
 
 def shortcut_path():
-    return Path(os.environ["APPDATA"]) / "Microsoft/Windows/Start Menu/Programs/Startup/SynthScan Game Watcher.lnk"
+    from installation import ISOLATED_TEST
+    name='SynthScan Validation Watcher.lnk' if ISOLATED_TEST else 'SynthScan Game Watcher.lnk'
+    return Path(os.environ["APPDATA"]) / 'Microsoft/Windows/Start Menu/Programs/Startup' / name
 
 
 def install():

@@ -8,6 +8,8 @@ independent security audit or a guarantee of compatibility with future patches.
 ## Implemented release
 
 - One per-user Windows installer, all 14 optional features checked by default.
+  Feature choices use two spacious, clickable card pages with a visible OCR
+  capability badge and an all-without-screen-reading shortcut.
   No Python, build tools or separate downloads are required from users. Initial
   game-reference extraction can take several minutes.
 - Live Mining Recognition is the only SCREEN READING component. Omitting it
@@ -32,12 +34,18 @@ independent security audit or a guarantee of compatibility with future patches.
 
 ## Validation evidence
 
-- Local Python suite: **960 tests, 12 skipped, passed**. Unavailable private/live
+- Local Python suite: **962 tests, 12 skipped, passed**. Unavailable private/live
   fixtures are skipped; this is not a claim of live verification.
 - Real per-user validation installer: server ribbon + Hangars, all features,
   then all without recognition. Installed modules, reader removal and retained
   fixture records verified. Uninstall passed and retained records. A separate
   registration identity protects the developer's installed app.
+- Interactive validation builds default to a separate empty profile and
+  shortcut names. A local receipt anchors that profile across version switches.
+  Game-text writes/restoration and permission repair are blocked in test mode.
+  Tests verify that an inherited personal-profile environment cannot redirect
+  the test into the normal profile. Reference extraction may read game files;
+  it does not replace the production user's game text.
 - Packaged verifier checks Core only, ribbon + Hangars, People, SynthStrings,
   all without recognition and all features. It imports each selection with
   bundled Python, runs native self-tests and starts the real native host/bridge

@@ -52,10 +52,15 @@ class SetupWindow:
         self.strings=tk.BooleanVar(value=strings)
         from feature_modules import enabled
         self.strings_available=enabled('synthstrings')
+        from installation import ISOLATED_TEST
+        if ISOLATED_TEST:
+            self.strings_available=False
+            self.strings.set(False)
+            ttk.Label(outer,text='ISOLATED TEST — separate empty profile. Changes to game text and game permissions are disabled.',style='Sub.TLabel',wraplength=630).pack(anchor='w',pady=(0,10))
         if not enabled('synthstrings'):self.strings.set(False)
         self.strings_choice=ttk.Checkbutton(outer,text='Enable SynthStrings — reputation and blueprint labels in game',variable=self.strings)
         self.strings_choice.pack(anchor='w',pady=(12,4))
-        if not enabled('synthstrings'):self.strings_choice.state(['disabled'])
+        if not self.strings_available:self.strings_choice.state(['disabled'])
         ttk.Label(outer,text='Optional: updates only Data/Localization/english/global.ini and the language setting in user.cfg. Recovery copies stay in AppData. Uncheck for HUD and library only.',style='Sub.TLabel',wraplength=680).pack(anchor='w')
         from telemetry_ipc import read_shared_json
         try:privacy=read_shared_json(PROFILE/'capture_privacy.json') or {}
