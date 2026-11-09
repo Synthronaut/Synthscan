@@ -35,8 +35,8 @@ FEATURES = {
         'Plan daylight at a selected system, body and destination.'),
     'acceptance': ('Automatic Acceptance', (), ('automated_input',),
         'Opt-in notification helper. Sends the configured accept key to the focused game.'),
-    'notes': ('Personal Notes', (), (), 'Local notes, kept when the feature is removed.'),
 }
+RETIRED = {'notes'}  # Accept old saved selections without reinstalling retired features.
 DEFAULTS = tuple(FEATURES)  # One installer, everything checked; the player opts out.
 NOTICES = {
     'screen_reading': 'SCREEN READING · Captures the game window for local recognition. Screen frames are not uploaded. This is optional and adds capture/OCR components.',
@@ -48,9 +48,9 @@ NOTICES = {
 
 
 def resolve(selected):
-    if not isinstance(selected, (list, tuple, set)) or any(not isinstance(v, str) or v not in FEATURES for v in selected):
+    if not isinstance(selected, (list, tuple, set)) or any(not isinstance(v, str) or v not in FEATURES and v not in RETIRED for v in selected):
         raise ValueError('Unknown feature selection')
-    result = set(selected)
+    result = set(selected) - RETIRED
     for feature in tuple(result):
         result.update(FEATURES[feature][1])
     return sorted(result)
@@ -67,7 +67,7 @@ def installed(root=ROOT):
         if value.get('edition') == 'standard': result.discard('mining_recognition')
         return result
     resolved = resolve(selected)
-    if set(resolved) != set(selected): raise ValueError('Installed feature dependencies are incomplete')
+    if set(resolved) != set(selected) - RETIRED: raise ValueError('Installed feature dependencies are incomplete')
     return set(resolved)
 
 

@@ -37,6 +37,16 @@ class LauncherActivityTests(unittest.TestCase):
             for _ in range(10):self.update(launchers=(),games=(50,))
             read.assert_not_called();self.request.assert_not_called();self.discovery.assert_not_called()
 
+    def test_uninstalled_strings_never_queues_or_watches_patch_checks(self):
+        activity=LauncherActivity(self.root/'without-strings',FakeWatch,enabled=False)
+        with patch('launcher_activity.signature') as read,patch('launcher_activity.launcher_session_key') as session:
+            for launchers,games in (((10,),()),((10,),(50,)),((),())):
+                self.assertFalse(activity.update(launchers,games,self.now))
+            session.assert_not_called();read.assert_not_called()
+        self.request.assert_not_called();self.discovery.assert_not_called()
+        self.assertEqual(activity.rows,{})
+        self.assertFalse((self.root/'without-strings').exists())
+
     def test_launcher_opens_one_check_not_a_recurring_scan(self):
         from launcher_activity import signature
         with patch('launcher_activity.signature',wraps=signature) as read:

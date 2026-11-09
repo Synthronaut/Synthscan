@@ -55,7 +55,8 @@ class ContractShareTests(unittest.TestCase):
     def test_ignored_accept_retries_same_prompt_and_fresh_reshare(self):
         q=self.queue();q.feed(action());q.attempted_once(q.candidate(115.8),115.8)
         self.assertIsNone(q.candidate(115.9))
-        retry=q.candidate(116.6);self.assertIsNotNone(retry);self.assertTrue(q.attempted_once(retry,116.6))
+        self.assertIsNone(q.candidate(117.7))
+        retry=q.candidate(117.8);self.assertIsNotNone(retry);self.assertTrue(q.attempted_once(retry,117.8))
         q.feed(push(120));q.feed(added(120.2,qid='10'));q.feed(action(121,qid='10'))
         self.assertEqual(q.candidate(121.1)['queue_id'],'10');self.assertEqual(q.view(121.1)['attempts'],2)
     def test_menu_closing_after_five_seconds_still_retries_until_prompt_closes(self):
@@ -78,6 +79,15 @@ class ContractShareTests(unittest.TestCase):
         q=self.queue();q.feed(action());q.attempted_once(q.candidate(115.8),115.8)
         q.feed(action(116));self.assertIsNone(q.candidate(116.1))
         q.feed(action(140));self.assertIsNone(q.candidate(146))
+    def test_three_press_limit_survives_prompt_reappearing(self):
+        q=self.queue();q.feed(action())
+        for at in (116,118,120):self.assertTrue(q.attempted_once(q.candidate(at),at))
+        self.assertIsNone(q.candidate(122));self.assertIn('stopped after 3 attempts',q.view(122)['message'])
+        q.feed(action(123,title='Ordinary message',qid='9'))
+        q.feed(action(124))
+        self.assertIsNone(q.candidate(125));self.assertEqual(q.view(125)['attempts'],3)
+        q.feed(push(126));q.feed(added(126.2,qid='10'));q.feed(action(127,qid='10'))
+        self.assertIsNotNone(q.candidate(128))
     def test_prompt_replaced_during_input_preparation_cancels_old_candidate(self):
         q=self.queue();q.feed(action());candidate=q.candidate(115.8)
         q.feed(action(115.9,title='Party Invite Received: Accept Invitation?',qid='9'))
@@ -132,7 +142,7 @@ class SocialAcceptanceTests(unittest.TestCase):
                     c=q.candidate(115.8);self.assertEqual(c['kind'],kind)
                     self.assertTrue(q.attempted_once(c,115.8))
                     self.assertIsNone(q.candidate(116))
-                    self.assertIsNotNone(q.candidate(116.6))
+                    self.assertIsNone(q.candidate(116.6));self.assertIsNotNone(q.candidate(117.8))
                     q.feed(action(117,title=title,verb='StartFade'));self.assertIsNone(q.candidate(118))
     def test_social_requires_matching_added_and_active_prompt(self):
         title='Friend Request: Add to Friends?'

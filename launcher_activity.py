@@ -43,11 +43,13 @@ class DirectoryChanges:
 
 
 class LauncherActivity:
-    def __init__(self,profile=PROFILE,watch_factory=DirectoryChanges):
+    def __init__(self,profile=PROFILE,watch_factory=DirectoryChanges,enabled=True):
         self.profile=Path(profile);self.watch_factory=watch_factory
+        self.enabled=enabled
         self.session=None;self.rows={};self.playing=False;self.pending_start=False
 
     def update(self,launchers,games=(),now=None):
+        if not self.enabled:return False
         now=time.time() if now is None else now
         session=launcher_session_key(launchers) if launchers else None
         opened=session is not None and session!=self.session

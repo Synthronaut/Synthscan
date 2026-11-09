@@ -1,3 +1,12 @@
+## 0.1.0-alpha.11 — 2026-11-10
+
+- Ship one modular installer with 13 optional features. Keep the existing feature-card design and preserve installed choices across verified updates.
+- Match desktop navigation, pop-out HUD modes, shortcuts and server-history controls to installed modules. Hide stale warnings and stop SynthStrings patch watching when its module is absent.
+- Keep Privacy & Capture inside Settings. Remove redundant Hangars, desktop-view and immediate HUD-toggle buttons from Settings.
+- Remove Personal Notes, including its editor, media viewer, shortcuts and installer choice. Existing saved module selections update without bringing it back.
+- Preserve the Home repaint-freeze fix, per-player invite results and the completed request/jiggler timing safeguards.
+- Gate publication on engine tests, regression checks, real rendered module controls, signed packages and isolated installer lifecycle checks.
+
 ## 0.1.0-alpha.9 — 2026-11-09
 
 - Add an Executive Hangar desktop tab with a large countdown, power-cell lights

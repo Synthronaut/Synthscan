@@ -7,7 +7,7 @@ to download them separately or supply a UEX token for normal public prices.
 
 **Live Mining Recognition [SCREEN READING]** is the only screen-reading add-on.
 It covers signatures, detailed rock composition/quality and supported refinery
-imports. It needs Mining Tools, which the checklist selects automatically.
+imports. It needs Mining Tools, which the feature cards select automatically.
 Unchecked recognition archives are not extracted by the installer. The resulting
 app uses the screen-free engine with no capture providers, OCR models, ONNX
 runtime or mining reader worker. Planning and manual records work without it.
@@ -24,7 +24,7 @@ Open **Feature modules** in SynthScan's sidebar. Check or uncheck features and
 choose **Download & apply selected features**. This retrieves Core and the
 selected packages from the pinned signed release catalog. Close the game and
 SynthScan desktop windows so the verified selection can activate. Do not download
-or unzip module assets yourself. Saved ownership, tags, notes, ledgers, board
+or unzip module assets yourself. Saved ownership, tags, ledgers, board
 counts and other player records remain in AppData when modules are removed.
 
 Updates preserve the installed selection. New features are not silently added.
@@ -42,10 +42,20 @@ stay in AppData.
 
 ## What is shared
 
+HUDs and navigation show only installed features. Mining HUD also requires Live
+Mining Recognition; Mining Tools alone provides planning and manual records.
+The server ribbon requires Server HUD, and its visit-history dropdown separately
+requires Server History. No installed activity HUD means no activity toggle,
+cycle shortcut or empty HUD window. Saved modes fall back to an installed mode.
+
+Removing SynthStrings also stops patch watching and hides its old notifications.
+Retained session records remain readable in Core without suggesting that an
+uninstalled account feature is still collecting information.
+
 Core retains native UI, common catalogs/calculations, profile storage, cleanup
 and the updater. Optional Python providers and resources are separate packages.
-Small native-only features such as Notes use a signed capability declaration and
-the shared UI; they are not independent DLLs. Their checkbox controls
+Native interfaces use signed capability declarations and shared UI; they are
+not independent DLLs. Their checkbox controls
 availability, not complete code isolation. Download/resource savings are largest
 for recognition; no saving is promised for every checkbox.
 

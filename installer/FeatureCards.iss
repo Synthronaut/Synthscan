@@ -7,15 +7,15 @@ var
   ModulesPage, ToolsPage: TWizardPage;
   ExtraPage1,ExtraPage2:TWizardPage;
   FeaturePages:array[0..6] of TWizardPage;
-  CardIds: array[0..13] of String;
-  Cards: array[0..13] of TPanel;
-  CardPaint: array[0..13] of TBitmapImage;
-  CardButtons: array[0..13] of TBitmapButton;
-  CardTitles: array[0..13] of TLabel;
-  CardDescriptions: array[0..13] of TLabel;
-  CardBadges: array[0..13] of TLabel;
-  CardIcons: array[0..13] of TLabel;
-  CardSelected: array[0..13] of Boolean;
+  CardIds: array[0..12] of String;
+  Cards: array[0..12] of TPanel;
+  CardPaint: array[0..12] of TBitmapImage;
+  CardButtons: array[0..12] of TBitmapButton;
+  CardTitles: array[0..12] of TLabel;
+  CardDescriptions: array[0..12] of TLabel;
+  CardBadges: array[0..12] of TLabel;
+  CardIcons: array[0..12] of TLabel;
+  CardSelected: array[0..12] of Boolean;
   SelectionLabels: array[0..6] of TNewStaticText;
   Headings,Subheadings: array[0..6] of TNewStaticText;
   AssuranceTitles,AssuranceBodies: array[0..1] of TLabel;
@@ -106,7 +106,7 @@ procedure RefreshCards;
 var I,Count: Integer; Fill,TopFill,Border,Ink: TColor;Clip: NativeUInt;Vertices:TGradientVertices;Mesh:TGradientRect;
 begin
   Count := 0;
-  for I := 0 to 13 do begin
+  for I := 0 to 12 do begin
     CardSelected[I] := WizardIsComponentSelected(CardIds[I]);
     if CardSelected[I] then begin
       Count := Count+1; Fill := $00312114;TopFill:=$004C3825;Border:=$00655038; Ink := $00FFFFFF;
@@ -211,7 +211,7 @@ begin
   Chosen := 'core';
   // WizardSelectComponents leaves unspecified components unchanged. Send an
   // explicit exclusion for every off card, otherwise refresh reselects it.
-  for I:=0 to 13 do begin
+  for I:=0 to 12 do begin
     if CardSelected[I] then Chosen := Chosen+','+CardIds[I]
     else Chosen := Chosen+',!'+CardIds[I];
   end;
@@ -231,7 +231,7 @@ end;
 procedure SelectAllCards(Sender: TObject);
 var I: Integer;
 begin
-  for I:=0 to 13 do CardSelected[I] := True;
+  for I:=0 to 12 do CardSelected[I] := True;
   if TComponent(Sender).Tag=1 then CardSelected[2] := False;
   SelectCards;
 end;
@@ -464,7 +464,6 @@ begin
   AddCard(10,ToolsPage,3,'hangars','Hangars + Compboards','Executive hangar timing and your saved compboard sets.','COMMUNITY SCHEDULE ESTIMATES',#$E7C1);
   AddCard(11,ToolsPage,4,'daylight','Day / Night Forecast','Check destination lighting before you head out.','DESTINATION PLANNING',#$E706);
   AddCard(12,ToolsPage,5,'acceptance','Automatic Acceptance','An optional helper for incoming game notifications.','AUTOMATED INPUT  /  OFF UNTIL ENABLED',#$E73E);
-  AddCard(13,ToolsPage,6,'notes','Personal Notes','Keep the details worth remembering, close at hand.','LOCAL NOTEBOOK',#$E70B);
   AddAssurance(ToolsPage,'Your records stay yours.','Blueprints, history, notes and ledgers stay on this Windows account. No SynthScan account, analytics signup or usage beacon. Signed packages and integrity checks protect updates; changing modules keeps your saved records.');
   ExplainCard(0,'Make the game menus work harder for you. Add verified reputation beside organizations, show owned blueprint markers in supported mission text, and shorten distracting labels. Managed backups and patch checks protect your existing game text.');
   ExplainCard(1,'Turn a mining trip into a plan. Find material locations and overlaps, keep a diary of standout rocks and hauls, bookmark coordinates, and manage manual refinery records. Planning and saved records work without screen reading.');
@@ -479,7 +478,6 @@ begin
   ExplainCard(10,'Arrive with a plan and the right boards. Keep the five-light executive hangar estimate in view, count your compboards and complete sets, and record a set used for a claim. Timings refresh from community data and are clearly labeled as estimates.');
   ExplainCard(11,'Choose your destination before choosing your moment. Select a system, body and supported location to forecast daylight, sunrise and sunset. Use it to plan a trip or operation; special event instances may need separate verification.');
   ExplainCard(12,'Miss fewer fleeting notifications. An opt-in helper can respond to supported incoming requests with your configured game key. It starts off, and sends input only when enabled and the game is focused. No screen reading is required.');
-  ExplainCard(13,'Keep the details that never fit in a waypoint. Save routes, plans, reminders and session notes in your local notebook. Your notes remain on this Windows account and are kept when you remove the feature.');
 #ifdef ValidationBuild
   WizardForm.WelcomeLabel2.Caption := WizardForm.WelcomeLabel2.Caption+#13#10+#13#10+'ISOLATED TEST: A separate, empty profile. Game-text and permission changes are blocked. Your regular SynthScan records are untouched.';
 #endif

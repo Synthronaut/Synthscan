@@ -250,7 +250,7 @@ def run(data_dir,owner,native=None):
     from synthstrings_guard import GuardService,view as strings_view
     strings_guard=GuardService(directory,native) if enabled('synthstrings') else IdleProvider()
     from launcher_activity import LauncherActivity
-    launcher_activity=LauncherActivity(directory)
+    launcher_activity=LauncherActivity(directory,enabled=enabled('synthstrings'))
     from data_updates import DataUpdateService
     updates=DataUpdateService(directory,exclusive=True)
     item_directory=finder_market=companion=None;extras=[]
@@ -322,17 +322,18 @@ def run(data_dir,owner,native=None):
                 # including the development app used before packaging.
                 state['questing']=quests.tick(True,bool(games))
                 try:
-                    service.overview.reputation(read_shared_json(directory/'reputation_snapshot.json',limit=2*1024*1024))
+                    if enabled('synthstrings') or enabled('missions'):
+                        service.overview.reputation(read_shared_json(directory/'reputation_snapshot.json',limit=2*1024*1024))
                 except (OSError,ValueError,TypeError):pass
                 if not instance_running('watcher'):launcher_activity.update(launcher_process_ids(),games)
                 strings_guard.tick()
                 state['home']=service.overview.view(quests.balance_names,quests.scopes);service.overview.save()
                 if not enabled('mining_tools'):state['home']['refinery_notice']=''
-                state['home']['synthstrings']=strings_view(directory,games)
+                state['home']['synthstrings']=strings_view(directory,games) if enabled('synthstrings') else {}
                 blueprint_texts.tick()
-                rep_view=reputation_view(directory,time.time(),state)
+                rep_view=reputation_view(directory,time.time(),state) if enabled('synthstrings') or enabled('missions') else {}
                 if rep_notices.consume(rep_view,games):rep_notice='restart:'+','.join(map(str,sorted(games)))
-                state['reputation_notice']=rep_notice if rep_view['state']=='restart' else ''
+                state['reputation_notice']=rep_notice if rep_view.get('state')=='restart' else ''
                 state['fps_permission_required']=bool(games and not read_client_fps(time.time()))
                 if not publish_json(directory/'session_state.json',state):logging.warning('Session snapshot is temporarily locked; consumers will expire the old reading')
             except Exception:

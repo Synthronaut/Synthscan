@@ -55,4 +55,9 @@ inline int next(const std::vector<int>& modes,int current){
     for(size_t at=0;at<modes.size();++at)if(modes[at]==current)return modes[(at+1)%modes.size()];
     return modes.front();
 }
+inline bool workspaceAvailable(const Json& release,int tab,bool screenReading){
+    static const char* actions[]={"directory","planner","servers","blueprints","settings","acceptance","hud_piracy"};
+    if(tab==7)return !modes(release,screenReading).empty();
+    return tab>=0&&tab<7&&actionAvailable(release,actions[tab],screenReading);
+}
 }

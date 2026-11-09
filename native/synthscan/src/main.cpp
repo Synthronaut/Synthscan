@@ -43,7 +43,6 @@ namespace SynthScan {int workspacePreview(const std::filesystem::path& directory
 #include "CraftingData.h"
 #include "BlueprintLibrary.h"
 #include "GameTexts.h"
-#include "NoteBook.h"
 #include "DataBackup.h"
 
 namespace {

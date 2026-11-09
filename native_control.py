@@ -96,7 +96,7 @@ def watch():
     from feature_services import IdleProvider
     strings_guard=GuardService(DATA,BINARY) if enabled('synthstrings') else IdleProvider()
     from launcher_activity import LauncherActivity
-    launcher_activity=LauncherActivity(DATA);launcher_launch=LaunchPolicy()
+    launcher_activity=LauncherActivity(DATA,enabled=enabled('synthstrings'));launcher_launch=LaunchPolicy()
     last_error='';process=None
     try:
         while True:

@@ -17,6 +17,24 @@ from module_distribution import catalog,prepare,inspect_package,activation_paylo
 from update_signing import canonical,envelope,generate_key
 
 
+class ModuleMatrixTests(unittest.TestCase):
+    def test_retired_notes_are_removed_from_existing_choices(self):
+        self.assertNotIn('notes',FEATURES)
+        self.assertEqual(resolve(['notes','people']),['people'])
+        with tempfile.TemporaryDirectory() as temporary:
+            write(Path(temporary)/'release.json',dict(module_schema=1,modules=['notes','people']))
+            self.assertEqual(installed(temporary),{'people'})
+    def test_release_matrix_covers_each_feature_alone_and_removed(self):
+        from tools.verify_modules import selection_matrix
+        cases=[set(row) for row in selection_matrix()]
+        self.assertEqual(len(cases),len({tuple(sorted(row)) for row in cases}))
+        self.assertIn(set(),cases);self.assertIn(set(FEATURES),cases)
+        for name in FEATURES:
+            self.assertIn(set(resolve([name])),cases)
+            self.assertTrue(any(name not in row and len(row)>=len(FEATURES)-2 for row in cases),name)
+        for row in cases:self.assertEqual(row,set(resolve(row)))
+
+
 @unittest.skipUnless(os.name=='nt','Windows release-signing primitives')
 class ModuleTests(unittest.TestCase):
     @classmethod
@@ -87,8 +105,8 @@ class ModuleTests(unittest.TestCase):
             with self.assertRaises(ValueError):catalog(candidate,self.trust,self.now)
         with self.assertRaises(ValueError):catalog(self.signed(),dict(keys={}),self.now)
     def test_conflicting_module_files_rejected_before_activation(self):
-        self.package('notes',{'dist/native/SynthScan.exe':b'bad override'})
-        self.prepare(['notes'])
+        self.package('acceptance',{'dist/native/SynthScan.exe':b'bad override'})
+        self.prepare(['acceptance'])
         with self.assertRaisesRegex(ValueError,'Conflicting'):self.apply()
         self.assertIsNone(active_token(self.root))
     def test_partial_download_retains_working_install_and_no_pending_plan(self):
@@ -114,12 +132,22 @@ class ModuleTests(unittest.TestCase):
         self.value['sequence']=1;self.value['expires_at']-=1
         with self.assertRaisesRegex(ValueError,'reuse'):self.prepare([])
     def test_automatic_updates_preserve_selection(self):
-        self.prepare(['notes']);self.apply();root=self.active()
+        self.prepare(['acceptance']);self.apply();root=self.active()
         result=stage(root,self.profile,self.trust,self.opener,self.now)
-        self.assertEqual(result['status'],'current');self.assertEqual(installed(root),{'notes'})
+        self.assertEqual(result['status'],'current');self.assertEqual(installed(root),{'acceptance'})
+
+    def test_pending_selection_from_before_notes_removal_can_activate(self):
+        self.prepare(['people'])
+        path=self.profile/'updates/pending.json';pending=load(path)
+        pending['modules']=['notes','people']
+        pending['sha256']=hashlib.sha256(canonical(dict(schema=1,catalog=pending['catalog'],modules=['notes','people']))).hexdigest()
+        write(path,pending);self.apply()
+        self.assertEqual(installed(self.active()),{'people'})
+        self.assertEqual(load(self.active()/'release.json')['modules'],['people'])
+        self.assertEqual((self.profile/'inventory.json').read_bytes(),b'private record')
     def test_windows_path_alias_and_traversal_rejected(self):
         for relative in ('../escape','a//b','CON.txt','a\\b'):
-            self.package('notes',{relative:b'bad'});item=self.items['notes'];path=self.base/'unsafe.zip';path.write_bytes(self.archives[item['url']])
+            self.package('acceptance',{relative:b'bad'});item=self.items['acceptance'];path=self.base/'unsafe.zip';path.write_bytes(self.archives[item['url']])
             with self.assertRaises(ValueError):inspect_package(path,item)
 
     def legacy_inventory(self):

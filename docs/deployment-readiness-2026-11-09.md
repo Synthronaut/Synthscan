@@ -14,7 +14,7 @@ Earlier bitmap-only layout checks did not cover this failure. See the amended
 
 ## Implemented release
 
-- One per-user Windows installer, all 14 optional features checked by default.
+- One per-user Windows installer, all 13 optional features checked by default.
   Feature choices use spacious, clickable card pages with a visible OCR
   capability banner and an all-without-screen-reading shortcut. Smaller
   viewports use additional pages to preserve readable text.
@@ -42,7 +42,7 @@ Earlier bitmap-only layout checks did not cover this failure. See the amended
 
 ## Validation evidence
 
-- Local Python suite: **962 tests, 12 skipped, passed**. Unavailable private/live
+- Local Python suite: **974 tests, 12 skipped, passed**. Unavailable private/live
   fixtures are skipped; this is not a claim of live verification.
 - Real per-user validation installer: server ribbon + Hangars, all features,
   then all without recognition. Installed modules, reader removal and retained
@@ -55,11 +55,12 @@ Earlier bitmap-only layout checks did not cover this failure. See the amended
   the test into the normal profile. Reference extraction may read game files;
   it does not replace the production user's game text.
 - Packaged verifier checks Core only, ribbon + Hangars, People, SynthStrings,
-  all without recognition and all features. It imports each selection with
+  each feature alone, each removal, all without recognition and all features
+  (29 selections). It imports each selection with
   bundled Python, runs native self-tests and starts the real native host/bridge
   against synthetic game files with account access disabled.
 - A separate, file-free Inno harness exercises the real card event handlers
-  for all 14 features through six targets each (card surface, status button,
+  for all 13 features through six targets each (card surface, status button,
   title, description, badge and icon). It checks inclusion/exclusion, visible
   dimming, dependency rules, the reader-free preset, page persistence and a
   Core-only selection. This caught a selection API mistake that silent
@@ -72,7 +73,7 @@ Earlier bitmap-only layout checks did not cover this failure. See the amended
   information labels extending beyond the page. Rounded controls preserve
   the wizard's native actions; no global input hooks are used by setup.
 - The **Unified modular release** workflow repeats builds, regression checks,
-  signed package checks, the six selections and the actual production installer
+  signed package checks, the 29 selections and the actual production installer
   identity on a fresh Windows runner. Publishing requires all gates to pass.
   Release assets include both validation JSON reports.
 - Allowlisted staging excludes profiles, credentials, logs, captured images,

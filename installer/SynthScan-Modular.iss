@@ -75,7 +75,6 @@ Name: "missions"; Description: "Missions & Ledger - contracts, durations, wallet
 Name: "hangars"; Description: "Hangars & Compboards - five-light schedule and local board inventory (no OCR)"; Types: complete
 Name: "daylight"; Description: "Day/Night Forecast - plan daylight at your destination"; Types: complete
 Name: "acceptance"; Description: "Automatic Acceptance [AUTOMATED INPUT] - optional helper, off until enabled"; Types: complete
-Name: "notes"; Description: "Personal Notes - your local notebook"; Types: complete
 
 [Tasks]
 #ifdef ValidationBuild
@@ -160,10 +159,12 @@ var
   Services: Variant;
 begin
   Result := '';
+#ifndef ValidationBuild
   if CheckForMutexes('Local\SynthScan.Native.App') then begin
-    Result := 'Please exit SynthScan from its tray menu before installing. Your records will be kept.';
+    Result := 'Please exit SynthScan before installing. Your records will be kept.';
     exit;
   end;
+#endif
   try
     Locator := CreateOleObject('WbemScripting.SWbemLocator');
     Services := Locator.ConnectServer('', 'root\CIMV2');

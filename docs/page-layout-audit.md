@@ -19,7 +19,6 @@ labels are below the cropped legacy toolbar rather than partly hidden by it.
 | Piracy | Short settings/summary form fits its minimum page; host scrolling remains available below that size. |
 | Server history | Fixed: full-width filters and table, growing history area, anchored details/notes/actions. |
 | Mining diary | Fixed: both columns use spare width; entry list and story editor use spare height; lower actions stay accessible. |
-| Personal notes | Existing client-size rich text editor/tree layout. |
 | Rock bookmarks | Fixed: growing bookmark/details panes and anchored capture/export actions. |
 | Daylight | Existing weighted grid and embedded-window resizing. |
 | Automatic acceptance | Short settings form fits its minimum page. |

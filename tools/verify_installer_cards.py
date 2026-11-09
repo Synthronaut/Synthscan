@@ -53,7 +53,7 @@ begin
     RequireState(ContentFits(Headings[I].Caption,Headings[I].Font,Headings[I].Width,Headings[I].Height),'extra page heading fits');
     RequireState(ContentFits(Subheadings[I].Caption,Subheadings[I].Font,Subheadings[I].Width,Subheadings[I].Height),'extra page subtitle fits');
   end;
-  for I:=0 to 13 do begin
+  for I:=0 to 12 do begin
     SelectAllCards(Selector);
     RequireState(WizardIsComponentSelected(CardIds[I]),'initial included '+CardIds[I]);
     RequireState(TextFits(CardDescriptions[I]),'readable description '+CardIds[I]);
@@ -87,17 +87,17 @@ begin
   RequireState(WizardIsComponentSelected('mining_recognition'),'reader restored');
   Selector.Tag:=1;SelectAllCards(Selector);
   CurPageChanged(ToolsPage.ID);CurPageChanged(ModulesPage.ID);
-  for I:=0 to 13 do
+  for I:=0 to 12 do
     RequireState(WizardIsComponentSelected(CardIds[I])=(I<>2),'reader-free preset '+CardIds[I]);
-  for I:=0 to 13 do
+  for I:=0 to 12 do
     if WizardIsComponentSelected(CardIds[I]) then ToggleCard(CardPaint[I]);
   RequireState(WizardSelectedComponents(False)='core','Core-only install selection');
   RequireState(SelectionLabels[0].Caption='0 features included  /  Core always included','zero-feature summary');
   Selector.Tag:=0;SelectAllCards(Selector);
-  for I:=0 to 13 do RequireState(WizardIsComponentSelected(CardIds[I]),'restore all '+CardIds[I]);
+  for I:=0 to 12 do RequireState(WizardIsComponentSelected(CardIds[I]),'restore all '+CardIds[I]);
   Report:=ExpandConstant('{param:REPORT|}');
   RequireState(Report<>'','missing report destination');
-  RequireState(SaveStringsToUTF8File(Report,['{"passed":true,"feature_cards":14,"event_targets_per_card":6,"dependency_rules":true,"reader_free_preset":true,"page_persistence":true,"core_only":true,"inactive_state_dimmed":true}'],False),'save report');
+  RequireState(SaveStringsToUTF8File(Report,['{"passed":true,"feature_cards":13,"event_targets_per_card":6,"dependency_rules":true,"reader_free_preset":true,"page_persistence":true,"core_only":true,"inactive_state_dimmed":true}'],False),'save report');
 end;
 '''
 

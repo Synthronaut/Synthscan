@@ -4,10 +4,10 @@ from pathlib import Path
 import tempfile
 from threading import Event,Thread
 import unittest
-from unittest.mock import Mock,patch
+from unittest.mock import Mock,patch,call
 
 from companion_features import CompanionService
-from party_invites import InviteHistory,PartyInviteQueue,INVITE_INTERVAL
+from party_invites import InviteHistory,PartyInviteQueue,INVITE_INTERVAL_MIN,INVITE_INTERVAL_MAX,MAX_BATCH_REQUESTS
 from player_services import PlayerClient,PLAYER_PREFIX,PlayerLeftShard
 
 PEOPLE=[dict(id=PLAYER_PREFIX+str(i),handle='Pilot'+str(i)) for i in (2,3,4)]
@@ -15,15 +15,33 @@ CONTEXT=dict(session_token='join',full_shard_id='fixture',joined_at=100)
 
 
 class QueueTests(unittest.TestCase):
-    def test_four_second_gap_is_measured_after_previous_completion(self):
-        clock=[10.];q=PartyInviteQueue(PEOPLE,clock=lambda:clock[0])
-        self.assertEqual(INVITE_INTERVAL,4)
+    def test_fifty_recipient_boundary_applies_to_friend_and_party_queues(self):
+        people=[dict(id=PLAYER_PREFIX+str(i+2),handle=f'Pilot{i}') for i in range(51)]
+        self.assertEqual(MAX_BATCH_REQUESTS,50)
+        for operation in ('friend','party'):
+            self.assertEqual(PartyInviteQueue(people[:50],operation=operation).snapshot()['total'],50)
+            with self.assertRaisesRegex(ValueError,'Nothing was sent'):PartyInviteQueue(people,operation=operation)
+    def test_random_gap_is_sampled_per_completion_and_measured_after_it(self):
+        clock=[10.];sample=Mock(side_effect=[.09,.99])
+        q=PartyInviteQueue(PEOPLE,clock=lambda:clock[0],sample_interval=sample)
+        self.assertEqual((INVITE_INTERVAL_MIN,INVITE_INTERVAL_MAX),(.09,.99))
         self.assertTrue(q.before_send(PEOPLE[0]));clock[0]=13.
         q.update(dict(PEOPLE[0],outcome='Sent',detail='Receipt'))
+        self.assertAlmostEqual(q.due,13.09)
         def advance(seconds):clock[0]+=seconds
         with patch.object(q.condition,'wait',side_effect=advance):self.assertTrue(q.before_send(PEOPLE[1]))
-        self.assertGreaterEqual(clock[0],17.)
+        self.assertGreaterEqual(clock[0],13.09)
         self.assertEqual(q.snapshot()['sent'],1);self.assertEqual(q.snapshot()['current_handle'],'Pilot3')
+        self.assertEqual(sample.call_count,1)
+        q.update(dict(PEOPLE[1],outcome='Sent',detail='Receipt'))
+        self.assertAlmostEqual(q.due,clock[0]+.99)
+        self.assertEqual(sample.call_args_list,[call(.09,.99),call(.09,.99)])
+    def test_default_random_gaps_stay_in_requested_range_for_both_operations(self):
+        for operation in ('friend','party'):
+            q=PartyInviteQueue(PEOPLE,operation=operation)
+            for _ in range(100):
+                q.inflight=True;q.update(dict(PEOPLE[0],outcome='Sent',detail='Receipt'))
+                self.assertGreaterEqual(q.last_interval,.09);self.assertLessEqual(q.last_interval,.99)
     def waiter(self,q,person):
         entered=Event();finished=Event();answer=[];original=q.condition.wait
         def wait(timeout=None):entered.set();return original(timeout)
@@ -51,9 +69,11 @@ class QueueTests(unittest.TestCase):
         self.assertTrue(finished.wait(1));thread.join(1);self.assertEqual(answer,[False])
         q.finish();s=q.snapshot();self.assertEqual(s['sent'],1);self.assertEqual(s['results'][0]['detail'],'Receipt')
     def test_skipped_recipient_does_not_restart_cooldown(self):
-        clock=[1.];q=PartyInviteQueue(PEOPLE,clock=lambda:clock[0]);q.before_send(PEOPLE[0]);q.update(dict(PEOPLE[0],outcome='Sent',detail='Receipt'))
-        clock[0]=3.;q.update(dict(PEOPLE[1],outcome='Skipped',detail='Already in party'))
-        self.assertEqual(q.snapshot()['next_in_seconds'],2)
+        clock=[1.];sample=Mock(return_value=.99);q=PartyInviteQueue(PEOPLE,clock=lambda:clock[0],sample_interval=sample)
+        q.before_send(PEOPLE[0]);q.update(dict(PEOPLE[0],outcome='Sent',detail='Receipt'))
+        clock[0]=1.5;q.update(dict(PEOPLE[1],outcome='Skipped',detail='Already in party'))
+        self.assertAlmostEqual(q.due,1.99);self.assertEqual(q.snapshot()['next_in_seconds'],1)
+        sample.assert_called_once_with(.09,.99)
 
 
 class HistoryTests(unittest.TestCase):
@@ -90,6 +110,18 @@ class QueueServiceTests(unittest.TestCase):
     def tearDown(self):self.service.close();self.temp.cleanup()
     def command(self,action,**extra):return dict(id=action,action=action,owner_pid=42,session_token='join',at=1001,**extra)
     def start(self,**extra):self.service.command(self.command('party_many',player_ids=[p['id'] for p in PEOPLE],confirmed=True,**extra),1001)
+    def test_oversized_batch_is_rejected_before_persisting_or_submitting(self):
+        people=[dict(id=PLAYER_PREFIX+str(i+2),handle=f'Pilot{i}') for i in range(51)]
+        self.service.roster=people
+        for operation in ('friend_many','party_many'):
+            with self.assertRaisesRegex(ValueError,'Nothing was sent'):
+                self.service.command(self.command(operation,player_ids=[p['id'] for p in people],confirmed=True),1001)
+            self.assertFalse(self.pool.calls);self.assertIsNone(self.service.invite_queue)
+            self.assertNotIn(operation,self.service.store.data['commands'])
+        self.service.command(self.command('tag_many',player_ids=[p['id'] for p in people],label='Org'),1001)
+        self.assertEqual(len(self.service.store.data['tags']),51)
+        self.service.command(self.command('party_many',player_ids=[p['id'] for p in people[:50]],confirmed=True),1001)
+        self.assertEqual(self.service.invite_queue.snapshot()['total'],50)
     def test_queue_controls_require_matching_queue_and_session(self):
         self.start();q=self.service.invite_queue
         bad=self.command('pause_invites',queue_id='old')
@@ -128,6 +160,35 @@ class ActionListTests(unittest.TestCase):
     command=QueueServiceTests.command
     def stage(self,ids,identifier='stage'):
         command=self.command('stage_people',player_ids=ids);command['id']=identifier;self.service.command(command,1001)
+    def test_action_list_stops_at_fifty_and_removal_makes_room(self):
+        people=[dict(id=PLAYER_PREFIX+str(i+2),handle=f'Pilot{i:02}') for i in range(51)]
+        self.service.roster=people
+        self.stage([p['id'] for p in people])
+        self.assertEqual(len(self.service.store.data['actions']),50)
+        self.assertIn('1 not added',self.service.action_status)
+        self.assertFalse(self.pool.calls)
+        self.stage([people[0]['id'],people[50]['id']],'full-list')
+        self.assertEqual(len(self.service.store.data['actions']),50)
+        self.service.command(self.command('unstage_people',player_ids=[people[0]['id']]),1001)
+        self.stage([people[50]['id']],'fill-space')
+        self.assertEqual(len(self.service.store.data['actions']),50)
+        self.assertIn(people[50]['id'],{p['id'] for p in self.service.store.data['actions']})
+        self.service.publish(1002)
+        self.assertEqual(json.loads((Path(self.temp.name)/'companion_state.json').read_text())['action_limit'],50)
+    def test_add_by_tag_and_add_friends_share_action_list_capacity(self):
+        people=[dict(id=PLAYER_PREFIX+str(i+2),handle=f'Pilot{i:02}') for i in range(60)]
+        self.service.roster=people
+        for p in people:self.service.store.data['tags'][p['id']]=dict(handle=p['handle'],label='Org',alert=False)
+        self.service.command(self.command('stage_tag',label='Org'),1001)
+        self.assertEqual(len(self.service.store.data['actions']),50);self.assertIn('10 not added',self.service.action_status)
+        self.service.relationships=dict(friends=[p['id'] for p in people],friends_at=1001,friend_rows=people)
+        self.service.command(dict(self.command('stage_tag',label='Friend'),id='stage-friends'),1001)
+        self.assertEqual(len(self.service.store.data['actions']),50);self.assertFalse(self.pool.calls)
+    def test_saved_oversized_action_list_is_reduced_on_restart(self):
+        people=[dict(id=PLAYER_PREFIX+str(i+2),handle=f'Pilot{i:02}') for i in range(51)]
+        self.service.store.data.update(actions=people,actions_session='join');self.service.store.save();self.service.close()
+        self.service=CompanionService(self.temp.name,42,social=Mock(),pool=self.pool)
+        self.assertEqual(self.service.store.data['actions'],people[:50]);self.assertIn('first 50 saved players',self.service.action_status)
     def test_staging_is_incremental_deduplicated_and_survives_roster_filtering(self):
         self.stage([PEOPLE[0]['id']]);self.stage([PEOPLE[0]['id'],PEOPLE[1]['id']],'stage-again')
         self.assertEqual([p['id'] for p in self.service.store.data['actions']],[PEOPLE[0]['id'],PEOPLE[1]['id']])
@@ -151,7 +212,8 @@ class ActionListTests(unittest.TestCase):
         ids=[PEOPLE[0]['id'],PEOPLE[2]['id']]
         self.service.command(self.command('party_many',player_ids=ids,from_actions=True,confirmed=True),1001)
         self.assertEqual([p['id'] for p in self.pool.calls[-1][1]['people']],ids)
-        self.assertEqual(self.service.invite_queue.snapshot()['interval_seconds'],4)
+        self.assertEqual(self.service.invite_queue.snapshot()['interval_min_seconds'],.09)
+        self.assertEqual(self.service.invite_queue.snapshot()['interval_max_seconds'],.99)
     def test_off_shard_search_result_cannot_be_staged_or_used_for_any_action(self):
         other=dict(id=PLAYER_PREFIX+'99',handle='OffShard');self.service.search=[other]
         with self.assertRaises(ValueError):self.stage([other['id']])
@@ -186,6 +248,12 @@ class ActionListTests(unittest.TestCase):
 
 
 class WorkerTests(unittest.TestCase):
+    def test_direct_worker_cannot_bypass_fifty_recipient_limit(self):
+        people=[dict(id=PLAYER_PREFIX+str(i+2),handle=f'Pilot{i}') for i in range(51)]
+        for operation in ('friend','party'):
+            c=self.client()
+            with self.assertRaisesRegex(ValueError,'Nothing was sent'):c.invite_many(people,CONTEXT,True,operation=operation)
+            c.server_member_ids.assert_not_called();c.relationships.assert_not_called();c.send.assert_not_called()
     def client(self):
         c=object.__new__(PlayerClient);c.account=Mock(subject=PLAYER_PREFIX+'1')
         c.roster=Mock(return_value=dict(rows=PEOPLE));c.relationships=Mock(return_value=dict(party_at=1000,party=[]));c.send=Mock(return_value='Receipt')

@@ -151,24 +151,26 @@ def main():
     def callback_error(kind,value,traceback):
         logging.error('HUD input callback failed',exc_info=(kind,value,traceback))
     root.report_callback_exception=callback_error
-    history=RegionHistory(root);ribbon.region_history=history
+    history=RegionHistory(root) if feature_enabled('server_history') else None
+    if history:ribbon.region_history=history
     def protected_now():
         from overlay_input import foreground_process_id,protect_game_input
         return protect_game_input(foreground_process_id(),{os.getpid(),args.owner},bool(game_window_rect()))
     ribbon.input_guard=protected_now
     # The region arrow/popup are explicit controls, like HUD +/-. Keep their
     # non-activating click handling available while the ribbon body is passive.
-    for control in (history,history.window,history.popup):control.input_guard=lambda:False
+    if history:
+        for control in (history,history.window,history.popup):control.input_guard=lambda:False
     def protect_input():
         from overlay_input import set_passthrough
         protected=protected_now()
-        history.input_protected=False
+        if history:history.input_protected=False
         api=ctypes.windll.user32
         from ctypes import wintypes as w
         api.GetParent.argtypes=[w.HWND];api.GetParent.restype=w.HWND
         bar_hwnd=api.GetParent(ribbon.bar_win.winfo_id()) or ribbon.bar_win.winfo_id()
         set_passthrough(bar_hwnd,protected)
-        for hwnd in (history.hwnd,history.popup_hwnd,activity.hwnd,collapse.hwnd):set_passthrough(hwnd,False)
+        for hwnd in ((history.hwnd,history.popup_hwnd) if history else ())+(activity.hwnd,collapse.hwnd):set_passthrough(hwnd,False)
         return protected
     def poll():
         nonlocal last_feed_status
@@ -193,7 +195,8 @@ def main():
                 logging.info('Session ribbon feed: %s',feed_status);last_feed_status=feed_status
             history_snapshot=snapshot
             if ribbon.state.get('last_known_identity'):history_snapshot=dict(session_view.last,session_token=None)
-            ribbon.shard_tracker.snapshot=history_snapshot;history.snapshot=history_snapshot
+            ribbon.shard_tracker.snapshot=history_snapshot
+            if history:history.snapshot=history_snapshot
             ribbon.enabled=server_hud_enabled(settings)
             editable=not ribbon.server_bar_locked and not protected
             if ribbon.editing!=editable:ribbon.set_editing(editable)
@@ -202,7 +205,7 @@ def main():
             except (OSError,ValueError):native={}
             activity.sync(ribbon,native,game_window_rect() or get_monitor_by_id(ribbon.game_monitor))
             collapse.sync(ribbon,native,game_window_rect() or get_monitor_by_id(ribbon.game_monitor))
-            history.follow(ribbon,game_window_rect() or get_monitor_by_id(ribbon.game_monitor))
+            if history:history.follow(ribbon,game_window_rect() or get_monitor_by_id(ribbon.game_monitor))
             enabled=feature_enabled('piracy') and piracy_alerts_enabled(settings,bool(game_window_rect()))
             notices=gate.consume(snapshot,args.owner,time.time(),enabled)
             alert.update(notices,ribbon.state.get('session_token'),enabled)
@@ -219,7 +222,7 @@ def main():
                         visible=bool(ribbon._visible),geometry=ribbon._last_geometry,input_protected=protected,
                         session_token=ribbon.state.get('session_token'),callsign=ribbon.state.get('callsign'),layout='ribbon',
                         connection_status=feed_status,last_known_identity=bool(ribbon.state.get('last_known_identity')),feed_age_seconds=ribbon.state.get('feed_age_seconds',0),
-                        draggable=ribbon.editing,server_bar_locked=ribbon.server_bar_locked,position=ribbon.position,region_history_visible=history.visible,region_history_open=history.open,region_color=(getattr(ribbon,'region_hit',None) or {}).get('color'),region_text=(getattr(ribbon,'region_hit',None) or {}).get('text'),region_last_input=getattr(history,'last_input',None),region_transition=getattr(history,'last_transition',None),region_canvas_size=[history.canvas.winfo_width(),history.canvas.winfo_height()],region_geometry=history.geometry,region_popup_geometry=getattr(history,'popup_rect',None),activity_button_visible=activity.visible,activity_button_geometry=activity.geometry,collapse_button_visible=collapse.visible,collapse_button_geometry=collapse.geometry,activity_expanded=native.get('activity_expanded',True),snare_watch_enabled=enabled,snare_alerts_shown=alert.shown))
+                        draggable=ribbon.editing,server_bar_locked=ribbon.server_bar_locked,position=ribbon.position,region_history_available=bool(history),region_history_visible=bool(history and history.visible),region_history_open=bool(history and history.open),region_color=(getattr(ribbon,'region_hit',None) or {}).get('color'),region_text=(getattr(ribbon,'region_hit',None) or {}).get('text'),region_last_input=getattr(history,'last_input',None),region_transition=getattr(history,'last_transition',None),region_canvas_size=[history.canvas.winfo_width(),history.canvas.winfo_height()] if history else [],region_geometry=getattr(history,'geometry',None),region_popup_geometry=getattr(history,'popup_rect',None),activity_button_visible=activity.visible,activity_button_geometry=activity.geometry,collapse_button_visible=collapse.visible,collapse_button_geometry=collapse.geometry,activity_expanded=native.get('activity_expanded',True),snare_watch_enabled=enabled,snare_alerts_shown=alert.shown))
         except (OSError,ValueError,TypeError,KeyError):
             try:games=game_process_ids()
             except OSError:games=None

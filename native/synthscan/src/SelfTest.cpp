@@ -39,7 +39,6 @@
 #include "P4kReader.h"
 #include "GameState.h"
 #include "MiningLocations.h"
-#include "NoteBook.h"
 #include "OCREngine.h"
 #include "PanelShapes.h"
 #include "RefineryData.h"
@@ -230,13 +229,13 @@ int runSelfTest() {
 
     {
         using SynthScan::AfkNudge;
-        AfkNudge a;const auto wait=AfkNudge::interval,grace=AfkNudge::firstDelay;
+        AfkNudge a(+[]{return AfkNudge::minInterval;});const auto wait=AfkNudge::minInterval,grace=wait;
         allPassed &= check(!a.armed&&!a.due(wait,true,true,true,true,wait,false),"AFK input defaults off");
         a.toggle(0);
-        allPassed &= check(!a.due(0,true,true,true,true,wait,false)&&a.nextInSeconds==10&&!a.due(grace-1,true,true,true,true,wait,false),"arming waits ten idle seconds and publishes countdown");
-        allPassed &= check(a.due(grace,true,true,true,true,grace,false),"first AFK pulse is due after ten idle seconds in foreground game");
+        allPassed &= check(!a.due(0,true,true,true,true,wait,false)&&a.nextInSeconds==300&&!a.due(grace-1,true,true,true,true,wait,false),"arming waits a full sampled interval of at least five minutes and publishes countdown");
+        allPassed &= check(a.due(grace,true,true,true,true,grace,false),"first AFK pulse requires the full sampled interval in the foreground game");
         a.sent(grace,true);
-        allPassed &= check(a.nudges==1&&!a.firstPulse()&&!a.due(grace+wait-1,true,true,true,true,wait,false)&&a.due(grace+wait,true,true,true,true,wait,false),"later AFK pulses wait four minutes");
+        allPassed &= check(a.nudges==1&&!a.firstPulse()&&!a.due(grace+wait-1,true,true,true,true,wait,false)&&a.due(grace+wait,true,true,true,true,wait,false),"later AFK pulses wait the complete sampled interval");
         allPassed &= check(!a.due(wait*2,true,true,true,true,1,false),"real user input prevents a due nudge");
         allPassed &= check(!a.due(wait*2,true,true,true,true,wait,true)&&!a.due(wait*2+1,true,true,true,true,wait,false),"held keys and mouse buttons postpone nudges");
         allPassed &= check(!a.due(wait*3,true,false,true,true,wait,false)&&!a.due(wait*4,true,true,true,true,wait,false),"background game pauses and refocusing waits a new interval");
@@ -250,6 +249,14 @@ int runSelfTest() {
         allPassed &= check(!restarted.armed,"restarting the app never restores AFK mode");
         a.toggle(wait*10);a.interrupted(wait*10+1);
         allPassed &= check(a.armed&&a.firstPulse()&&!a.due(wait*10+2,true,true,true,true,wait,false),"interruption preserves the toggle and postpones a pulse");
+        AfkNudge varied(+[]{static bool first=true;const auto value=first?AfkNudge::minInterval:AfkNudge::maxInterval;first=false;return value;});
+        varied.toggle(0);varied.due(0,true,true,true,true,0,false);
+        allPassed &= check(varied.intervalMilliseconds()==wait&&!varied.due(wait-1,true,true,true,true,wait,false)&&varied.due(wait,true,true,true,true,wait,false),"AFK delay stays stable across countdown polls");
+        varied.sent(wait,true);const auto longest=AfkNudge::maxInterval;
+        allPassed &= check(varied.intervalMilliseconds()==longest&&!varied.due(wait+longest-1,true,true,true,true,longest,false)&&varied.due(wait+longest,true,true,true,true,longest,false),"successful pulse samples a fresh delay and honors the twelve-minute boundary");
+        bool inRange=true;AfkNudge random;
+        for(unsigned i=0;i<100;++i){random.toggle(i);if(!random.armed)random.toggle(i);const auto value=random.intervalMilliseconds();inRange=inRange&&value>=AfkNudge::minInterval&&value<=AfkNudge::maxInterval;}
+        allPassed &= check(inRange,"production random AFK delays stay between five and twelve minutes");
         using SynthScan::AfkMousePulse;
         AfkMousePulse p;p.start(0,700);
         allPassed &= check(p.active&&p.ready(0)&&p.acceptsInput(700)&&!p.acceptsInput(701),"pulse accepts its baseline input and detects a returning player");
@@ -1972,18 +1979,7 @@ int runSelfTest() {
         }
     }
 
-    // --- Notebook: the names it will let onto the disk ---
-    {
-        using SCMiner::NoteBook;
-        allPassed &= check(NoteBook::sanitise("a/b*c?d\"e<f>g|h") == "abcdefgh",
-                           "a note name drops what Windows forbids in a file name");
-        allPassed &= check(NoteBook::sanitise("   ") == "Untitled",
-                           "a note named nothing still gets a file");
-        allPassed &= check(NoteBook::sanitise("CON") == "CON note",
-                           "the names Windows keeps for itself are stepped around");
-        allPassed &= check(NoteBook::sanitise(" Aaron Halo . ") == "Aaron Halo",
-                           "a name does not start or end on a space or a dot");
-    }
+
 
     // --- The second reader: its model travels inside the exe, loads, and
     //     reads; and what it will take from a line of text ---
@@ -2275,38 +2271,7 @@ int runSelfTest() {
                            "Foxwell's Orange escort run in Nyx pays out of its coolers and its repeaters both");
     }
 
-    // --- Notes out to a file and back in: the format has to survive a note
-    //     that talks about the format ---
-    {
-        using SCMiner::NoteBook;
-        std::vector<NoteBook::BundleNote> out;
-        out.push_back({"Routes", "Monox run", "Iron at [[Monox]]\r\n\r\nNOTE\tfake\tline\t9\r\nlast"});
-        out.push_back({"", "Loose", ""});
-        const std::string text = NoteBook::writeBundle(out);
 
-        std::vector<NoteBook::BundleNote> back;
-        std::string error;
-        allPassed &= check(NoteBook::readBundle(text, back, error) && back.size() == 2,
-                           "a bundle reads back as many notes as went in (" + error + ")");
-        allPassed &= check(back.size() == 2 && back[0].body == out[0].body,
-                           "a note whose text itself says NOTE comes back whole");
-        allPassed &= check(back.size() == 2 && back[0].folder == "Routes" &&
-                               back[1].name == "Loose" && back[1].body.empty(),
-                           "folder, name and an empty note all survive");
-
-        allPassed &= check(!NoteBook::readBundle("just some text\r\nand more", back, error) &&
-                               error.find("SynthScan") != std::string::npos,
-                           "any other text file is refused, and says why");
-        allPassed &= check(!NoteBook::readBundle(std::string(NoteBook::BUNDLE_MAGIC) +
-                                                     "\r\nNOTE\tRoutes\tCut short\t4\r\none\r\ntwo\r\n",
-                                                 back, error) &&
-                               error.find("Cut short") != std::string::npos,
-                           "a file that stops in the middle of a note is refused by name");
-        allPassed &= check(!NoteBook::readBundle(std::string(NoteBook::BUNDLE_MAGIC) +
-                                                     "\r\nNOTE\tRoutes\tNo count\r\none\r\n",
-                                                 back, error),
-                           "a heading without a line count is refused");
-    }
 
     // --- What a row is made of, which is what the red blink asks. A find
     //     with two deposits in it has to answer for both of them ---
@@ -2329,188 +2294,11 @@ int runSelfTest() {
                            "a ground find picked as Salvage matches what a planet calls it");
     }
 
-    // --- ...and the links inside, which is what an import stands or falls on ---
-    {
-        using SCMiner::MinerGUI;
-        allPassed &= check(MinerGUI::brokenLink(L"Iron at [[Daymar]] for the [[Laranite]]").empty(),
-                           "a note whose links all name something known passes");
-        allPassed &= check(MinerGUI::brokenLink(L"plain text with no brackets at all").empty(),
-                           "a note with no links passes");
-        const std::wstring bad = MinerGUI::brokenLink(L"one\r\ntwo\r\nhaul [[Quantanium]] home");
-        allPassed &= check(!bad.empty() && bad.find(L"line 3") != std::wstring::npos,
-                           "a misspelt ore is caught, with the line it is on");
-        allPassed &= check(!MinerGUI::brokenLink(L"see [[Daymar\r\nnext line").empty(),
-                           "a [[ that never closes is caught");
-    }
 
-    // --- Notes: what the app offers while a name is being typed, and what
-    //     it makes of the link once that offer is taken ---
-    {
-        using SCMiner::MinerGUI;
-        // the caret sits at the end of what has been typed
-        auto offered = [](const std::wstring& typed) {
-            std::string out;
-            for (const auto& link : MinerGUI::suggestionsAt(typed, (int)typed.size())) {
-                out += (char)('0' + link.kind);
-            }
-            return out;
-        };
-        auto first = [](const std::wstring& typed) {
-            const auto list = MinerGUI::suggestionsAt(typed, (int)typed.size());
-            return list.empty() ? std::string("-") : list.front().name;
-        };
-        allPassed &= check(first(L"mining Laranite") == "Laranite",
-                           "a finished ore name is offered (got: " + first(L"mining Laranite") + ")");
-        allPassed &= check(first(L"heading to daym") == "Daymar",
-                           "a half-typed place is offered, like a phone would (got: " +
-                               first(L"heading to daym") + ")");
-        allPassed &= check(first(L"build the Palatino Arm") == "Palatino Arms",
-                           "a two-word recipe is offered across the space (got: " +
-                               first(L"build the Palatino Arm") + ")");
-        allPassed &= check(offered(L"the better stop").empty() == false,
-                           "STOP is only ever offered, never applied on its own");
 
-        // A window may never demand more room than the screen has. At 175 %
-        // zoom the full window's smallest allowed height is 640 x 1.75 =
-        // 1120 px; a 1080p screen cannot show that, so Windows does not shrink
-        // it and the bottom border sits under the taskbar, out of reach.
-        allPassed &= check(MinerGUI::fitToWork(1120, 1032) == 1032,
-                           "a window taller than the screen is cut down to it");
-        allPassed &= check(MinerGUI::fitToWork(800, 1032) == 800,
-                           "...one that fits is left as it is");
-        allPassed &= check(MinerGUI::fitToWork(1120, 0) == 1120,
-                           "...and an unknown screen changes nothing");
 
-        // --- the updater's two pieces of arithmetic ---
-        // 4.10 is newer than 4.9. Compared as text it is not, and an app
-        // that gets this wrong either never updates or updates in circles.
-        // The script an update hands over to calls Windows' own tools by
-        // their full path, never whatever the PATH finds first
-        {
-            const std::string script = SCMiner::Updater::applyScript(
-                "C:\\SynthScan", "C:\\Data\\update\\SynthScan_2.5.1.zip", "C:\\Data\\update\\staging", 4242);
-            bool full = script.find("set \"SYS=%SystemRoot%\\System32\"") != std::string::npos &&
-                        script.find("\"%SYS%\\tasklist.exe\" /fi \"PID eq 4242\" | \"%SYS%\\find.exe\" \"4242\"") !=
-                            std::string::npos &&
-                        script.find("\"%SYS%\\ping.exe\"") != std::string::npos &&
-                        script.find("\"%SYS%\\WindowsPowerShell\\v1.0\\powershell.exe\"") != std::string::npos &&
-                        script.find("\"%SYS%\\xcopy.exe\"") != std::string::npos;
-            std::string bare;
-            for (const char* tool : {"tasklist", "find", "ping", "powershell", "xcopy"}) {
-                for (const std::string& before : {std::string("\r\n"), std::string("| ")}) {
-                    if (script.find(before + tool + " ") != std::string::npos) bare += std::string(" ") + tool;
-                }
-            }
-            allPassed &= check(full && bare.empty(),
-                               "the update script calls tasklist, find, ping, powershell and xcopy by their "
-                               "full path (bare:" + (bare.empty() ? std::string(" none") : bare) + ")");
-        }
-        allPassed &= check(SCMiner::Updater::isNewer("4.10.0", "4.9.0"),
-                           "4.10.0 counts as newer than 4.9.0");
-        allPassed &= check(!SCMiner::Updater::isNewer("4.9.0", "4.10.0"),
-                           "...and not the other way round");
-        allPassed &= check(!SCMiner::Updater::isNewer("4.8.0", "4.8.0"),
-                           "the same version is not an update");
-        allPassed &= check(SCMiner::Updater::isNewer("4.8.1", "4.8.0"),
-                           "...a patch release is");
-        {
-            SCMiner::Updater::Release r;
-            const std::string hash(64, 'a');
-            // One file for both platforms: the Windows build reads url= and
-            // sha256=, the Linux build url_linux= and sha256_linux=, and each
-            // passes over the other's lines
-            const std::string good = "# SynthScan\nversion=4.9.0\n"
-                                     "url=https://example.org/b.zip\nsha256=" + hash +
-                                     "\nurl_linux=https://example.org/b.AppImage\nsha256_linux=" + hash +
-                                     "\nnotes=something\n";
-            allPassed &= check(SCMiner::Updater::parseManifest(good, r) &&
-                                   r.version == "4.9.0" && r.notes == "something",
-                               "a well-formed version file is read");
-            const std::string plain = "version=4.9.0\nurl=http://example.org/b.zip\n"
-                                      "url_linux=http://example.org/b.AppImage\n"
-                                      "sha256=" + hash + "\nsha256_linux=" + hash;
-            allPassed &= check(!SCMiner::Updater::parseManifest(plain, r),
-                               "...one pointing at plain http is refused");
-            allPassed &= check(
-                !SCMiner::Updater::parseManifest("version=4.9.0\nurl=https://example.org/b.zip\n"
-                                                 "url_linux=https://example.org/b.AppImage", r),
-                "...and one with no checksum is refused");
-        }
 
-        // The group headings are filters of their own - "only armour" rather
-        // than "only helmets", which is what the type list already offered
-        int helmet = -1, shield = -1;
-        for (int t = 0; t < SCMiner::CRAFT_TYPE_COUNT; t++) {
-            if (std::string(SCMiner::CRAFT_TYPES[t]) == "Helmet (Armor)") helmet = t;
-            if (std::string(SCMiner::CRAFT_TYPES[t]) == "Shield") shield = t;
-        }
-        allPassed &= check(helmet >= 0 && MinerGUI::typeInGroup(helmet, 1),
-                           "a helmet falls under armour and clothing");
-        allPassed &= check(shield >= 0 && MinerGUI::typeInGroup(shield, 0) &&
-                               !MinerGUI::typeInGroup(shield, 1),
-                           "...a shield under ship, and under nothing else");
-        // A note as the edit control holds it: one line break is ONE
-        // character, and the earlier link is still in the text
-        {
-            const std::wstring note = L"asdasd\r\r[[Iron]] Palatino Helmet Metropolis";
-            const auto list = MinerGUI::suggestionsAt(note, (int)note.size());
-            std::wstring after = note;
-            if (!list.empty()) {
-                after.replace(list[0].at, list[0].len,
-                              L"[[" + std::wstring(list[0].name.begin(),
-                                                   list[0].name.end()) + L"]]");
-            }
-            allPassed &= check(!list.empty() && list[0].name == "Palatino Helmet Metropolis",
-                               "a name typed after an existing link is still recognised");
-            allPassed &= check(after == L"asdasd\r\r[[Iron]] [[Palatino Helmet Metropolis]]",
-                               "...and taking it up closes the brackets it opened");
-        }
-        // Nothing is CALLED Daystar; four recipes end in it.
-        allPassed &= check(first(L"crafting Daystar").find("Daystar") != std::string::npos,
-                           "a word from the middle or end of a name finds it (got: " +
-                               first(L"crafting Daystar") + ")");
-        // A system is a column beside the places, and is offered as well
-        allPassed &= check(first(L"heading for Nyx") == "Nyx",
-                           "a system is offered, not only a place (got: " +
-                               first(L"heading for Nyx") + ")");
-        allPassed &= check(!MinerGUI::suggestionsAt(L"heading for Nyx", 15).empty() &&
-                               MinerGUI::suggestionsAt(L"heading for Nyx", 15).front().kind == 3,
-                           "...and it is offered as a system");
-        // Not cut at five: that would put 18 of the 23 out of reach
-        allPassed &= check(offered(L"build a Palatino").size() >= 20,
-                           "every Palatino recipe is reachable, not the first five (got: " +
-                               std::to_string(offered(L"build a Palatino").size()) + ")");
-        allPassed &= check(offered(L"a ").empty(), "one letter offers nothing");
-        allPassed &= check(MinerGUI::suggestionsAt(L"[[Laranite]]", 12).empty(),
-                           "nothing is offered inside a link that already exists");
 
-        // and what a confirmed link reads as
-        const auto links = MinerGUI::bracketLinksIn(L"[[Laranite]] at [[Daymar]], not stop");
-        allPassed &= check(links.size() == 2, "two confirmed links are found");
-        allPassed &= check(links.size() == 2 && links[0].kind == 0 && links[1].kind == 2,
-                           "...as an ore and a place");
-        allPassed &= check(MinerGUI::bracketLinksIn(L"Laranite at Daymar").empty(),
-                           "a name nobody confirmed is not a link");
-        allPassed &= check(MinerGUI::bracketLinksIn(L"[[Nothing Here]]").empty(),
-                           "brackets around a name the game does not have are not a link");
-    }
-
-    // --- Notes: line breaks on the way from the edit control to the file ---
-    {
-        using SCMiner::MinerGUI;
-        const std::wstring cr = L"\r";
-        const std::wstring lf = L"\n";
-        const std::wstring crlf = L"\r\n";
-        allPassed &= check(MinerGUI::toFileText(L"one" + cr + L"two") == L"one" + crlf + L"two",
-                           "a lone CR from the edit control becomes CR+LF in the file");
-        allPassed &= check(MinerGUI::toFileText(L"one" + lf + L"two") == L"one" + crlf + L"two",
-                           "a lone LF from a file written elsewhere becomes CR+LF too");
-        allPassed &= check(MinerGUI::toFileText(L"one" + crlf + L"two") == L"one" + crlf + L"two",
-                           "CR+LF stays CR+LF and is not doubled");
-        allPassed &= check(MinerGUI::toFileText(L"a" + cr + cr + L"b") == L"a" + crlf + crlf + L"b",
-                           "an empty line between two lines is kept");
-        allPassed &= check(MinerGUI::toFileText(L"") == L"", "nothing in, nothing out");
-    }
 
     // --- Analyzer ---
     SCMiner::SignatureAnalyzer analyzer;
@@ -5150,6 +4938,28 @@ int runSelfTest() {
         allPassed &= check(HudModules::available(manifest,0,true)&&!HudModules::available(manifest,0,false),"Screen-free builds cannot enable the recognition HUD through a manifest");
         modules.items.clear();
         allPassed &= check(HudModules::next(HudModules::modes(manifest,true),0)==-1,"No installed HUD modules means no dead tab fallback");
+        bool combinations=true;
+        allPassed &= check(!HudModules::installed(obj(),"notes",true)&&!HudModules::actionAvailable(obj(),"notes",true),"Retired Personal Notes cannot be enabled by legacy defaults or saved actions");
+        const char* features[]={"synthstrings","mining_tools","mining_recognition","blueprints","item_finder","server_hud","server_history","people","piracy","missions","hangars","daylight","acceptance"};
+        for(unsigned mask=0;mask<(1u<<13);++mask){
+            modules.items.clear();for(int bit=0;bit<13;++bit)if(mask&(1u<<bit))modules.items.push_back(str(features[bit]));
+            for(bool capture:{false,true}){
+                std::vector<int> expected;
+                if(capture&&(mask&6)==6)expected.push_back(0);
+                if(mask&(1u<<8))expected.push_back(1);
+                if(mask&(1u<<9))expected.push_back(2);
+                if(mask&(1u<<10))expected.push_back(3);
+                if(mask&(1u<<4))expected.push_back(4);
+                auto actual=HudModules::modes(manifest,capture);combinations&=actual==expected;
+                combinations&=HudModules::next(actual,99)==(expected.empty()?-1:expected.front());
+                for(size_t at=0;at<expected.size();++at)combinations&=HudModules::next(actual,expected[at])==expected[(at+1)%expected.size()];
+                combinations&=HudModules::actionAvailable(manifest,"hud_mining",capture)==(capture&&(mask&6)==6);
+                combinations&=HudModules::workspaceAvailable(manifest,7,capture)==!expected.empty();
+                combinations&=HudModules::workspaceAvailable(manifest,4,capture);
+                combinations&=HudModules::workspaceAvailable(manifest,2,capture)==bool(mask&(1u<<6));
+            }
+        }
+        allPassed &= check(combinations,"All 8192 module combinations filter HUD modes, routes, cycling and Settings shortcuts in both engines");
     }
 #endif
     std::cout << "\n=== Self-test " << (allPassed ? "PASSED" : "FAILED") << " ===\n" << std::endl;

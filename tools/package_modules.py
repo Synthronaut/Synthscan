@@ -16,7 +16,7 @@ import time
 import zipfile
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from app_updates import config, digest
-from feature_modules import FEATURES
+from feature_modules import FEATURES, RETIRED as RETIRED_FEATURES
 from module_distribution import inspect_package, catalog, REPLACEMENTS
 from update_signing import envelope, private_key, signature
 
@@ -39,7 +39,6 @@ OWNERS = {
     # Notes are implemented in the shared native UI, with no background process.
     # Their pack carries its signed capability declaration; no dedicated native
     # DLL or resource-saving claim is made for this small feature.
-    'notes': set(),
 }
 RETIRED = {'main.py','detector.py','telemetry_hud.py','blueprint_library_ui.py',
     'telemetry_hud.py','overlay.py','performance_lab_ui.py','performance_lab.py',
@@ -71,7 +70,7 @@ def write_component(folder,name,version,output,url_base):
     with zipfile.ZipFile(path) as archive:unpacked=sum(i.file_size for i in archive.infolist())
     item=dict(id=name,version=version,size=path.stat().st_size,unpacked_size=unpacked,
         sha256=digest(path),inventory_sha256=digest(folder/'component.json'),url=url_base+'/'+path.name,
-        requires=[] if name=='core' else list(FEATURES[name][1]))
+        requires=list(FEATURES[name][1]) if name in FEATURES else [])
     inspect_package(path,item)
     return item
 
@@ -88,7 +87,7 @@ def build(standard,full,output,url_base,key_file=None,sequence=None):
     a=json.loads((standard/'release.json').read_text());b=json.loads((full/'release.json').read_text())
     if a['version']!=b['version'] or a.get('edition')!='standard' or b.get('edition')!='full':raise ValueError('Matched Standard and Full builds are required')
     output.mkdir(parents=True);version=a['version'];trees=output/'trees';trees.mkdir()
-    destinations={name:trees/name for name in ('core',*FEATURES)}
+    destinations={name:trees/name for name in ('core',*FEATURES,*sorted(RETIRED_FEATURES))}
     for folder in destinations.values():folder.mkdir()
     reverse={relative:name for name,files in OWNERS.items() for relative in files}
     standard_files={p.relative_to(standard).as_posix() for p in standard.rglob('*') if p.is_file()}
@@ -108,6 +107,12 @@ def build(standard,full,output,url_base,key_file=None,sequence=None):
     for name,(label,requires,capabilities,detail) in FEATURES.items():
         path=destinations[name]/'features'/(name+'.json');path.parent.mkdir(exist_ok=True)
         path.write_text(json.dumps(dict(schema=1,id=name,label=label,requires=requires,capabilities=capabilities,description=detail,shared_native_ui=True)),encoding='utf-8')
+    # Older installed managers expect every former catalog ID. A signed
+    # retirement marker lets them update; it contains no feature implementation
+    # and is never offered by the installer or the current module manager.
+    for name in RETIRED_FEATURES:
+        path=destinations[name]/'retired_features'/(name+'.json');path.parent.mkdir(exist_ok=True)
+        path.write_text(json.dumps(dict(schema=1,id=name,retired=True)),encoding='utf-8')
     packages={name:write_component(folder,name,version,output,url_base) for name,folder in destinations.items()}
     trust=config(standard);now=time.time()
     payload=dict(schema=1,kind='modules',platform='windows-x64',version=version,sequence=sequence or time.time_ns()//1000000,

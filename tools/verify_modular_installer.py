@@ -28,40 +28,48 @@ def verify(installer,validation=False,output=None):
         marker=b'{"fixture":"ownership and player records must survive"}'
         (profile/'inventory.json').write_bytes(marker)
         env=dict(os.environ,SYNTHSCAN_DATA_DIR=str(profile))
-        sequences=[['server_hud','hangars'],list(FEATURES),[name for name in FEATURES if name!='mining_recognition']]
-        for number,selected in enumerate(sequences):
-            log=base/('install-'+str(number)+'.log')
-            process=subprocess.run([str(installer),'/CURRENTUSER','/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-',
-                '/DIR='+str(root),'/SYNTHSCANPROFILE='+str(profile),'/COMPONENTS=core,'+','.join(selected),'/TASKS=','/LOG='+str(log)],
-                env=env,timeout=360,creationflags=0x08000000)
-            if process.returncode:raise RuntimeError('Installer failed: '+str(process.returncode)+'\n'+log.read_text(encoding='utf-8',errors='replace')[-5000:])
-            token=(root/'active_version.txt').read_text().strip();active=root/'versions'/token
-            release=json.loads((active/'release.json').read_text())
-            assert set(release['modules'])==set(selected),release
-            assert (profile/'inventory.json').read_bytes()==marker
-            probe="import sys;sys.path.insert(0,sys.argv[1]);from module_setup import verify_runtime;verify_runtime(sys.argv[1])"
-            subprocess.run([str(active/'runtime/python.exe'),'-I','-B','-c',probe,str(active)],env=env,check=True,timeout=90,creationflags=0x08000000)
-            if 'mining_recognition' not in selected:
-                for path in root.rglob('release.json'):
-                    value=json.loads(path.read_text())
-                    assert value.get('edition')!='full',str(path)
-                assert not any(root.rglob('*.onnx'))
-                assert not any(root.rglob('onnxruntime'))
-            result.append(dict(case=number,modules=selected,installer_passed=True,records_preserved=True))
-        log=base/'uninstall.log'
         try:
-            subprocess.run([str(root/'unins000.exe'),'/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SYNTHSCANPROFILE='+str(profile),'/LOG='+str(log)],env=env,check=True,timeout=120,creationflags=0x08000000)
-        except (subprocess.TimeoutExpired,subprocess.CalledProcessError) as error:
-            tail=log.read_text(encoding='utf-8',errors='replace')[-6000:] if log.exists() else 'No uninstall log'
-            raise RuntimeError('Uninstaller did not complete: '+str(error)+'\n'+tail) from error
-        # Inno may finish cleanup in its temporary process after the original
-        # executable returns; observe removal before cleaning the fixture.
-        deadline=time.monotonic()+30
-        while (root/'versions').exists() and time.monotonic()<deadline:time.sleep(.2)
-        assert (profile/'inventory.json').read_bytes()==marker
-        assert not (root/'versions').exists()
-        assert (profile/'uninstall_result.json').is_file()
-        result.append(dict(uninstall_passed=True,records_preserved=True))
+            sequences=[['server_hud','hangars'],list(FEATURES),[name for name in FEATURES if name!='mining_recognition']]
+            for number,selected in enumerate(sequences):
+                log=base/('install-'+str(number)+'.log')
+                process=subprocess.run([str(installer),'/CURRENTUSER','/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-',
+                    '/DIR='+str(root),'/SYNTHSCANPROFILE='+str(profile),'/COMPONENTS=core,'+','.join(selected),'/TASKS=','/LOG='+str(log)],
+                    env=env,timeout=360,creationflags=0x08000000)
+                if process.returncode:raise RuntimeError('Installer failed: '+str(process.returncode)+'\n'+log.read_text(encoding='utf-8',errors='replace')[-5000:])
+                token=(root/'active_version.txt').read_text().strip();active=root/'versions'/token
+                release=json.loads((active/'release.json').read_text())
+                assert set(release['modules'])==set(selected),release
+                assert (profile/'inventory.json').read_bytes()==marker
+                probe="import sys;sys.path.insert(0,sys.argv[1]);from module_setup import verify_runtime;verify_runtime(sys.argv[1])"
+                subprocess.run([str(active/'runtime/python.exe'),'-I','-B','-c',probe,str(active)],env=env,check=True,timeout=90,creationflags=0x08000000)
+                if 'mining_recognition' not in selected:
+                    for path in root.rglob('release.json'):
+                        value=json.loads(path.read_text())
+                        assert value.get('edition')!='full',str(path)
+                    assert not any(root.rglob('*.onnx'))
+                    assert not any(root.rglob('onnxruntime'))
+                result.append(dict(case=number,modules=selected,installer_passed=True,records_preserved=True))
+            log=base/'uninstall.log'
+            try:
+                subprocess.run([str(root/'unins000.exe'),'/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SYNTHSCANPROFILE='+str(profile),'/LOG='+str(log)],env=env,check=True,timeout=120,creationflags=0x08000000)
+            except (subprocess.TimeoutExpired,subprocess.CalledProcessError) as error:
+                tail=log.read_text(encoding='utf-8',errors='replace')[-6000:] if log.exists() else 'No uninstall log'
+                raise RuntimeError('Uninstaller did not complete: '+str(error)+'\n'+tail) from error
+            # Inno may finish cleanup in its temporary process after the original
+            # executable returns; observe removal before cleaning the fixture.
+            deadline=time.monotonic()+30
+            while (root/'versions').exists() and time.monotonic()<deadline:time.sleep(.2)
+            assert (profile/'inventory.json').read_bytes()==marker
+            assert not (root/'versions').exists()
+            assert (profile/'uninstall_result.json').is_file()
+            result.append(dict(uninstall_passed=True,records_preserved=True))
+        finally:
+            # A failed upgrade must not leave an orphan test registration after
+            # TemporaryDirectory removes its files. Only this fixture is touched.
+            uninstaller=root/'unins000.exe'
+            if uninstaller.is_file():
+                subprocess.run([str(uninstaller),'/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',
+                                '/SYNTHSCANPROFILE='+str(profile)],env=env,timeout=120,creationflags=0x08000000)
     report=dict(validation_identity=validation,production_installer=not validation,cases=result)
     if output:Path(output).write_text(json.dumps(report,indent=2),encoding='utf-8')
     return report

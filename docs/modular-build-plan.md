@@ -18,7 +18,6 @@ Agreed direction, 2026-11-09. One app, independently selected feature packs, and
 | Hangars | Community schedule estimates and compboard inventory | No |
 | Day/Night Forecast | Destination selection and daylight predictions | No |
 | Automatic Acceptance | Notification acceptance helper | No; discloses automated input |
-| Personal Notes | Local notes | No |
 
 Account access, internet access, game-text modification and automated input are separate capability notices. The screen-reading notice belongs to Live Mining Recognition. Refinery OCR is part of that add-on, not a hidden dependency of the manual Mining Tools pack. Unknown source values remain unknown; removing OCR does not create another population/FPS source.
 

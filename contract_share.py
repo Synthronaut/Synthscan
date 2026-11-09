@@ -99,8 +99,8 @@ def notification_kind(title):
 
 class ContractQueue:
     ACTIVE_SECONDS=30
-    RETRY_SECONDS=.75
-    MAX_ATTEMPTS=40
+    RETRY_SECONDS=2.0
+    MAX_ATTEMPTS=3  # First press plus at most two retries for one notification.
     def __init__(self,enabled=None):
         self.enabled=dict(contract=True,party=False,friend=False) if enabled is None else dict(enabled)
         self.reset()
@@ -110,7 +110,9 @@ class ContractQueue:
 
     @staticmethod
     def prompt_key(candidate):
-        return candidate['queue_id'],candidate['active_at'],candidate['mission']
+        # Reappearing in the notification queue must not replenish the budget.
+        # A genuinely new share has its own queue identity/queued timestamp.
+        return candidate['queue_id'],candidate['queued_at'],candidate['mission']
     def feed(self,record):
         stamp=STAMP.match(record)
         if not stamp:return
@@ -169,7 +171,7 @@ class ContractQueue:
         if self.candidate(now)!=candidate:return False
         key=self.prompt_key(candidate);count,_=self.inputs.get(key,(0,None));self.inputs[key]=(count+1,now)
         self.attempted.add(candidate['mission']);self.last_attempt=dict(candidate,attempt_at=now)
-        self.message='Accept key sent; awaiting confirmation, retrying while this request prompt stays active' if candidate['kind']=='contract' else 'Accept key sent; retrying while this request prompt stays active'
+        self.message=f'Accept key sent ({count+1}/{self.MAX_ATTEMPTS}); awaiting confirmation'
         return True
     def view(self,now):
         if self.active and now>=self.active['active_at']+self.ACTIVE_SECONDS and self.active['mission'] not in self.accepted:
@@ -177,10 +179,12 @@ class ContractQueue:
         elif self.last_attempt and self.last_attempt['mission'] not in self.accepted and not self.active:
             self.message='Request prompt closed without acceptance confirmation; waiting for a fresh request' if self.last_attempt['kind']=='contract' else 'Request prompt closed; waiting for a fresh request'
         elif self.active and self.active['mission'] not in self.accepted and self.prompt_key(self.active) in self.inputs:
-            self.message='Waiting for acceptance confirmation; retrying while this request prompt stays active' if self.active['kind']=='contract' else 'Accept key sent; retrying while this request prompt stays active'
+            attempts=self.inputs[self.prompt_key(self.active)][0]
+            self.message=(f'Automatic acceptance stopped after {self.MAX_ATTEMPTS} attempts without confirmation; accept manually if needed.'
+                          if attempts>=self.MAX_ATTEMPTS else f'Waiting for confirmation ({attempts}/{self.MAX_ATTEMPTS}); retrying only while this request prompt stays active')
         return dict(message=self.message,queued=len(self.pending),active=self.active,
                     attempts=sum(v[0] for v in self.inputs.values()),confirmed=len(self.accepted & self.attempted),
-                    retry_interval_seconds=self.RETRY_SECONDS,prompt_timeout_seconds=self.ACTIVE_SECONDS)
+                    retry_interval_seconds=self.RETRY_SECONDS,prompt_timeout_seconds=self.ACTIVE_SECONDS,max_attempts_per_prompt=self.MAX_ATTEMPTS)
 
 class LogRecords:
     """Tail from EOF; assemble multiline records and never replay on rotation."""

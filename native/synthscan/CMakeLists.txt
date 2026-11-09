@@ -199,7 +199,6 @@ set(CORE_SOURCES
     src/TradeBook.cpp
     src/BlueprintLibrary.cpp
     src/Reputation.cpp
-    src/NoteBook.cpp
     src/DataBackup.cpp
     src/AppPaths.cpp
     src/P4kReader.cpp
@@ -253,7 +252,6 @@ set(HEADERS
     include/Reputation.h
     include/GameState.h
     include/GamePlaces.h
-    include/NoteBook.h
     include/DataBackup.h
     include/Portability.h
     include/P4kReader.h

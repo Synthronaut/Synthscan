@@ -335,11 +335,9 @@ int runScreenshots(const std::string& dir) {
         HGDIOBJ old = SelectObject(mem, bmp);
         // The planner is painted straight into the bitmap: DWM never composes
         // a window parked at -32000 and PrintWindow then hands back white
-        if (direct && target == gui.notesHandle()) gui.paintNotesTo(mem);
-        else if (direct && target == gui.craftingHandle()) gui.paintCraftingTo(mem);
+        if (direct && target == gui.craftingHandle()) gui.paintCraftingTo(mem);
         else if (direct && target == gui.refineryHandle()) gui.paintRefineryTo(mem);
         else if (direct && target == gui.grindHandle()) gui.paintGrindTo(mem);
-        else if (direct && target == gui.shotHandle()) gui.paintShotTo(mem);
         else if (direct && target == gui.newsHandle()) gui.paintNewsTo(mem);
         else if (direct) gui.paintPlannerTo(mem);
         else {
@@ -1615,105 +1613,6 @@ int runScreenshots(const std::string& dir) {
     pump();
     gui.toggleCrafting();
     pump();
-    // ...and the notebook, with whatever notes\ holds
-    gui.toggleNotes();
-    gui.openNoteForShot();
-    pump();
-    if (gui.notesHandle()) shoot(gui.notesHandle(), "notes.png", true);
-    // ...and the media rail with something on it. A picture this run has
-    // already written is used, so the shot needs nothing from outside.
-    {
-        const std::string picture = dir + "/blueprints.png";
-        if (std::filesystem::exists(picture)) {
-            gui.addMediaForShot(std::filesystem::path(picture).wstring());
-            pump();
-            if (gui.notesHandle()) shoot(gui.notesHandle(), "notes_media.png", true);
-            gui.foldMediaForShot(false);
-            pump();
-            if (gui.notesHandle()) shoot(gui.notesHandle(), "notes_media_shut.png", true);
-            gui.foldMediaForShot(true);
-            pump();
-            // ...and the picture opened in Bedrock's own window
-            gui.openShotForShot();
-            pump();
-            if (gui.shotHandle()) shoot(gui.shotHandle(), "note_picture.png", true);
-        }
-    }
-    gui.suggestForShot();
-    pump();
-    if (gui.suggestHandle()) shoot(gui.suggestHandle(), "notes_suggest.png");
-    // ...and the same in the window it belongs to, as it happens: a line
-    // typed into the open note word by word, then a recipe's name letter by
-    // letter - the names on offer from the third letter, under the end of the
-    // text - and the first one taken, the way Enter takes it. Every step is a
-    // frame in frames_autocomplete\ for a GIF; the fullest list is also
-    // notes_autocomplete.png. The list is a window of its own, laid into the
-    // notes picture where it stands. Windows only: the typing goes through
-    // the rich edit control's own messages, which the Linux build's control
-    // shim does not all answer, and the run crashes there.
-#ifdef _WIN32
-    gui.openNoteForShot();
-    pump();
-    if (gui.notesHandle()) {
-        const std::string frames = dir + "/frames_autocomplete";
-        std::filesystem::create_directories(frames, ec);
-        int frame = 0;
-        auto still = [&]() -> cv::Mat {
-            bool okNotes = true;
-            cv::Mat notes = grab(gui.notesHandle(), true, okNotes);   // draws, and learns where the text ends
-            if (notes.empty() || !gui.suggestHandle() || !IsWindowVisible(gui.suggestHandle())) return notes;
-            gui.placeSuggestForShot();
-            bool okList = true;
-            const cv::Mat list = grab(gui.suggestHandle(), false, okList);
-            RECT at{};
-            GetWindowRect(gui.suggestHandle(), &at);
-            POINT origin{0, 0};
-            ClientToScreen(gui.notesHandle(), &origin);
-            const cv::Rect where(at.left - origin.x, at.top - origin.y, list.cols, list.rows);
-            const cv::Rect inside = where & cv::Rect(0, 0, notes.cols, notes.rows);
-            if (!list.empty() && inside.area() > 0) {
-                list(cv::Rect(inside.x - where.x, inside.y - where.y, inside.width, inside.height))
-                    .copyTo(notes(inside));
-            }
-            return notes;
-        };
-        auto keep = [&](const cv::Mat& picture) {
-            if (picture.empty()) return;
-            char name[32];
-            std::snprintf(name, sizeof(name), "/%02d.png", frame++);
-            cv::imwrite(frames + name, picture);
-        };
-        keep(still());
-        for (const wchar_t* typed : {L"\r\nNext ", L"on ", L"the ", L"list: ", L"a", L"n", L"t", L"i", L"u"}) {
-            gui.suggestInNoteForShot(typed);
-            pump();
-            const cv::Mat picture = still();
-            keep(picture);
-            if (std::wstring(typed) == L"u") save(picture, "notes_autocomplete.png", true);
-        }
-        gui.acceptSuggestForShot();
-        pump();
-        keep(still());
-        std::cout << "frames_autocomplete: " << frame << " frames" << std::endl;
-    }
-#endif
-    gui.dragNoteForShot(true);
-    pump();
-    if (gui.notesHandle()) shoot(gui.notesHandle(), "notes_drag.png", true);
-    gui.dragNoteForShot(false);
-    pump();
-    // ...an import refused, for real: the bundle in the data folder carries
-    // a [[Quantanium]] nobody spells that way. Before the trash, so the
-    // tree in the picture is still whole.
-    gui.importForShot((data / "import_bad.txt").wstring());
-    pump();
-    if (gui.notesHandle()) shoot(gui.notesHandle(), "notes_import.png", true);
-    gui.openTrashForShot();
-    pump();
-    if (gui.notesHandle()) shoot(gui.notesHandle(), "notes_trash.png", true);
-    gui.startNamingForShot();
-    pump();
-    if (gui.notesHandle()) shoot(gui.notesHandle(), "notes_naming.png", true);
     return 0;
 }
 

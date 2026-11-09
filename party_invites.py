@@ -1,12 +1,20 @@
 """User-controlled invitation pacing and local, session-scoped attempt history."""
 import math
+import random
 from pathlib import Path
 from threading import Condition,Event,RLock
 import time
 
 from telemetry_ipc import read_shared_json,publish_json
 
-INVITE_INTERVAL=4.0
+INVITE_INTERVAL_MIN=0.09
+INVITE_INTERVAL_MAX=0.99
+MAX_BATCH_REQUESTS=50
+
+
+def validate_batch_size(people):
+    if not people or len(people)>MAX_BATCH_REQUESTS:
+        raise ValueError(f'Select 1–{MAX_BATCH_REQUESTS} players per request batch. Nothing was sent; select fewer players and try again.')
 
 
 class InviteHistory:
@@ -36,9 +44,11 @@ class InviteHistory:
 
 
 class PartyInviteQueue:
-    def __init__(self,people,identifier='',*,cancel=None,history=None,session='',interval=INVITE_INTERVAL,clock=time.monotonic,operation='party'):
+    def __init__(self,people,identifier='',*,cancel=None,history=None,session='',interval=None,clock=time.monotonic,operation='party',sample_interval=random.uniform):
+        validate_batch_size(people)
         self.identifier=identifier;self.cancel_event=cancel if cancel is not None else Event()
-        self.history=history;self.session=session;self.interval=interval;self.clock=clock
+        self.history=history;self.session=session;self.interval=interval;self.clock=clock;self.sample_interval=sample_interval
+        self.last_interval=0.
         self.operation=operation
         self.condition=Condition();self.paused=False;self.finished=False;self.phase='Checking'
         self.inflight=False;self.current='';self.due=0.;self.error=''
@@ -76,7 +86,9 @@ class PartyInviteQueue:
             if row['id'] not in self.rows:raise ValueError('Unexpected invitation recipient')
             self.rows[row['id']]=dict(row)
             if self.inflight:
-                self.inflight=False;self.current='';self.due=self.clock()+self.interval
+                # Draw once per completed request; polling, pauses and skips do not redraw.
+                self.last_interval=self.interval if self.interval is not None else self.sample_interval(INVITE_INTERVAL_MIN,INVITE_INTERVAL_MAX)
+                self.inflight=False;self.current='';self.due=self.clock()+self.last_interval
             self.condition.notify_all()
 
     def finish(self,results=None,error=''):
@@ -98,5 +110,7 @@ class PartyInviteQueue:
             state=self.phase if self.finished else 'Cancelling' if self.cancel_event.is_set() else ('Pausing' if self.inflight else 'Paused') if self.paused else self.phase
             return dict(id=self.identifier,operation=self.operation,active=not self.finished,paused=self.paused,cancelling=self.cancel_event.is_set(),state=state,
                         total=len(rows),processed=processed,remaining=len(rows)-processed,sent=sum(p['outcome']=='Sent' for p in rows),
-                        skipped=sum(p['outcome']=='Skipped' for p in rows),current_handle=self.current,interval_seconds=self.interval,
+                        skipped=sum(p['outcome']=='Skipped' for p in rows),current_handle=self.current,interval_seconds=self.last_interval,
+                        interval_min_seconds=self.interval if self.interval is not None else INVITE_INTERVAL_MIN,
+                        interval_max_seconds=self.interval if self.interval is not None else INVITE_INTERVAL_MAX,
                         next_in_seconds=max(0,math.ceil(self.due-self.clock())) if not self.finished and not self.paused else 0,error=self.error,results=rows)

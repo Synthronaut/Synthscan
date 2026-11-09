@@ -8,7 +8,7 @@ import time
 import uuid
 
 from telemetry_ipc import read_shared_json,publish_json
-from party_invites import InviteHistory,PartyInviteQueue
+from party_invites import InviteHistory,PartyInviteQueue,validate_batch_size,MAX_BATCH_REQUESTS
 
 MARKET_INTERVAL=1800
 ROSTER_INTERVAL=30
@@ -117,6 +117,9 @@ class CompanionService:
         self.pool=pool or ThreadPoolExecutor(max_workers=2,thread_name_prefix='companion')
         self.context={};self.session=None;self.roster=[];self.search=[];self.roster_at=0;self.roster_due=0
         self.roster_error='';self.action_status='Select a player to tag, add as a friend, or invite.'
+        if len(self.store.data['actions'])>MAX_BATCH_REQUESTS and not self.store.read_only:
+            self.store.data['actions']=self.store.data['actions'][:MAX_BATCH_REQUESTS];self.store.save()
+            self.action_status=f'Action list limited to the first {MAX_BATCH_REQUESTS} saved players. Review the list before sending.'
         self.search_query='';self.search_limited=False;self.gate=PresenceChanges();self.jobs={};self.next_publish=0
         self.relationships={};self.relationships_due=0
         self.batch_results=[];self.invited=set()
@@ -128,6 +131,9 @@ class CompanionService:
     def changed(self):self.revision+=1;self.next_publish=0
     def start_party_queue(self,targets,command,operation='party'):
         if command.get('confirmed') is not True:raise ValueError('Confirm the selected recipients first.')
+        # Reject the entire batch before recording or submitting any work.
+        # A larger Action list is still useful for tags and selecting a subset.
+        validate_batch_size(targets)
         if 'action' in self.jobs:raise ValueError('A social action is already running.')
         history=self.friend_history if operation=='friend' else self.invite_history
         if history.error:raise ValueError(history.error)
@@ -141,7 +147,7 @@ class CompanionService:
         previous=[] if command.get('resend') is True else list(remembered)
         self.jobs['action']=(self.pool.submit(self.social,'friend_many' if operation=='friend' else 'party_many',dict(self.context),people=[dict(p) for p in targets],confirmed=True,previous=previous,
                             cancel=self.cancel_batch,control=self.invite_queue,require_shard=True,allow_friends=operation=='party' and command.get('from_actions') is True),dict(self.context))
-        self.action_status=f'Queued {len(targets)} player(s). Requests have a four-second gap; Pause / Cancel is available.'
+        self.action_status=f'Queued {len(targets)} player(s). Random 0.09–0.99s gaps; Pause / Cancel is available.'
     def friend_ids(self,now):
         stamp=self.relationships.get('friends_at',0)
         return set(self.relationships.get('friends',[])) if stamp and 0<=now-stamp<120 else set()
@@ -151,11 +157,14 @@ class CompanionService:
     def stage(self,targets,friends=()):
         if self.invite_queue and self.invite_queue.snapshot()['active']:raise ValueError('Cancel the running queue before changing the Action list.')
         current={p['id']:p for p in self.store.data['actions']}
-        before=len(current)
+        before=len(current);omitted=set()
         for p in targets:
-            if not p.get('is_self'):current[p['id']]=dict(id=p['id'],handle=p['handle'],friend_scope=p['id'] in friends)
-        if len(current)>4096:raise ValueError('Action list limit reached.')
-        self.store.data['actions']=list(current.values());self.store.data['actions_session']=self.session;self.action_status=f"Added {len(current)-before} player(s). Action list: {len(current)}. Review before choosing a bulk action."
+            if p.get('is_self'):continue
+            if p['id'] not in current and len(current)>=MAX_BATCH_REQUESTS:omitted.add(p['id']);continue
+            current[p['id']]=dict(id=p['id'],handle=p['handle'],friend_scope=p['id'] in friends)
+        self.store.data['actions']=list(current.values());self.store.data['actions_session']=self.session
+        self.action_status=f'Added {len(current)-before} player(s). Action list: {len(current)}/{MAX_BATCH_REQUESTS}.'
+        if omitted:self.action_status+=f' {len(omitted)} not added because the list is full; remove players to make room.'
     def command(self,command,now):
         if command.get('owner_pid')!=self.owner or not isinstance(command.get('at'),(int,float)) or not 0<=now-command['at']<30:return
         identifier=command.get('id','')
@@ -380,7 +389,7 @@ class CompanionService:
         tagged={key:dict(tag,is_friend=key in friends,in_party=key in party,on_shard=key in active,relationship='Party + Friend' if key in party and key in friends else 'Party' if key in party else 'Friend' if key in friends else '—' if friends_known and party_known else 'Unknown') for key,tag in tags.items()}
         notices=self.store.data['notifications']
         watches=[{key:value for key,value in watch.items() if key not in ('seen','identity')} for watch in self.store.data['watches']]
-        view=dict(owner_pid=self.owner,written_at=now,revision=self.revision,session_token=self.session,rows=rows,search=search,
+        view=dict(owner_pid=self.owner,written_at=now,revision=self.revision,session_token=self.session,rows=rows,search=search,action_limit=MAX_BATCH_REQUESTS,
             search_query=self.search_query,search_limited=self.search_limited,roster_at=self.roster_at,roster_error=self.roster_error,
             roster_loading='roster' in self.jobs,status=self.action_status,read_only=self.store.read_only,
             watches=watches,tags=tagged,notifications=list(reversed(notices[-40:])),market_interval=MARKET_INTERVAL,

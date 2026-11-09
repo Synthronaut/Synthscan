@@ -17,7 +17,7 @@ import zipfile
 
 from app_updates import (MAX_ARCHIVE, MAX_UNPACKED, HEX, allowed_url, digest,
                          load, request, safe_member, version_key, write)
-from feature_modules import FEATURES, installed, resolve
+from feature_modules import FEATURES, installed, resolve, RETIRED
 from update_signing import canonical, strict_json, verify
 
 SCHEMA = 1
@@ -183,7 +183,11 @@ def activation_payload(current, directory, pending, trust=None, now=None):
     value = catalog(raw, trust, now); check_sequence(folder, value, raw)
     selected = resolve(pending.get('modules'))
     token = selection_token(catalog_hash, selected)
-    if token != pending.get('sha256'): raise ValueError('Module selection changed after staging')
+    if token != pending.get('sha256'):
+        retired=set(pending['modules'])&RETIRED
+        legacy=hashlib.sha256(canonical(dict(schema=1,catalog=catalog_hash,modules=sorted(set(selected)|retired)))).hexdigest()
+        if not retired or legacy!=pending.get('sha256'):raise ValueError('Module selection changed after staging')
+        token=legacy
     if version_key(value['version']) < version_key(load(Path(current) / 'release.json').get('version', '0.0.0')): raise ValueError('Staged modules would downgrade the app')
     items = [value['packages'][name] for name in ['core', *selected]]
     total = sum(i['unpacked_size'] for i in items)

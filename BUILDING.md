@@ -61,7 +61,7 @@ The native --ui-test entry point refuses to run when the game window is present.
 
 Use **Unified modular release** for alpha 11 and newer. Both native engines are
 intermediate inputs to one installer. The workflow splits signed components,
-checks six selections with bundled Python and real native startup, tests the
+checks 29 selections with bundled Python and real native startup, tests the
 production installer and reader removal on a fresh Windows runner, then builds
 legacy migration ZIPs. New users download only the unified installer.
 
@@ -72,6 +72,12 @@ For local builds, run `tools/package_modules.py --standard STANDARD --full FULL
 Use a fresh test Windows account for `tools/verify_modular_installer.py`, or add
 `--validation` to both installer build and test to isolate its registration.
 Close the game and other SynthScan instances before these tests.
+
+Run `tools/verify_runtime_modules.py --standard STANDARD/dist/native --full
+FULL/dist/native --output out/runtime-modules` for real HUD, Home and Settings
+controls across the same matrix, including removed-feature routes and saved HUD
+fallback. This is a release gate in the unified workflow. Its fixtures use
+synthetic records. The existing installer feature-card checks remain separate.
 
 The protected release key signs catalogs and migration manifests. CI scopes
 `SYNTHSCAN_SIGNING_PRIVATE_B64` to signing steps. Update signing does not provide

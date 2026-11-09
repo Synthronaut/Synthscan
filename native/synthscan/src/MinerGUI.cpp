@@ -61,7 +61,7 @@ bool installedFeature(const char* name){
     static const auto release=SynthScan::read(AppPaths::program().parent_path().parent_path()/L"release.json");
     return SynthScan::HudModules::installed(release,name,SynthEdition::screenReading);
 }
-// The common file dialog, defined down with the notes (askForDataFile) and
+// The common file dialog, defined with the shared data tools (askForDataFile) and
 // wanted up here by the foot of the main window as well
 std::wstring askForDataFile(HWND owner, bool saving, const std::wstring& suggested,
                             const wchar_t* filter, const wchar_t* title,
@@ -83,7 +83,6 @@ constexpr int HOTKEY_SNAPSHOT = 2;
 #define ID_BTN_OVERLAY     1011
 #define ID_BTN_PLAN        1013
 #define ID_BTN_CRAFT       1015
-#define ID_BTN_NOTES       1016
 #define ID_BTN_KEYS        1017
 #define ID_BTN_REFINERY    1019
 #define ID_BTN_ABOUT       1020
@@ -146,7 +145,6 @@ const COLORREF CR_EDIT_BG = RGB(34, 37, 43);
 // The note is written on the darkest surface there is: it is the one
 // place on the window where the eye should settle, and a page lighter
 // than its own frame reads as a hole punched in the window.
-const COLORREF CR_NOTE_BG = RGB(17, 18, 21);
 const COLORREF CR_EDIT_TEXT = RGB(238, 239, 241);
 
 std::wstring toW(const std::string& s) {
@@ -857,14 +855,14 @@ MinerGUI::~MinerGUI() {
         DestroyWindow(hwnd_);
     }
     if (editBrush_) DeleteObject(editBrush_);
-    if (notesFont_) DeleteObject(notesFont_);
+
     if (controlFont_) DeleteObject(controlFont_);
     // The note pictures are GDI+ bitmaps held by members, and members die
     // after this body - after the GdiplusShutdown below - so their destructors
     // would call into a GDI+ that is gone (an access violation in gdiplus.dll).
     // Released here, while GDI+ still stands.
-    media_.clear();
-    shotImage_.reset();
+
+
     newsShot_.reset();   // the news picture - the same
     uexBadge_.reset();   // ...and UEX's badge in the Ore Finder
     for (FrostCache* cache : {&frostMain_, &frostCraft_, &frostGrind_, &frostRef_}) cache->clear();
@@ -916,39 +914,6 @@ bool MinerGUI::initialize(HINSTANCE hInstance) {
     pc.hbrBackground = CreateSolidBrush(CR_BG);
     if (!RegisterClassExW(&pc)) {
         std::cerr << "[GUI] RegisterClassEx (planner) failed! Error: " << GetLastError() << std::endl;
-        return false;
-    }
-
-    // ...the notebook's...
-    UnregisterClassW(L"SCMinerNotes", hInstance_);
-    WNDCLASSEXW nc = wc;
-    nc.lpfnWndProc = NotesProc;
-    nc.lpszClassName = L"SCMinerNotes";
-    nc.hbrBackground = CreateSolidBrush(CR_BG);
-    if (!RegisterClassExW(&nc)) {
-        std::cerr << "[GUI] RegisterClassEx (notes) failed! Error: " << GetLastError() << std::endl;
-        return false;
-    }
-
-    // ...the little suggestion list that drops under the caret...
-    UnregisterClassW(L"SynthScanSuggest", hInstance_);
-    WNDCLASSEXW sc = wc;
-    sc.lpfnWndProc = SuggestProc;
-    sc.lpszClassName = L"SynthScanSuggest";
-    sc.hbrBackground = CreateSolidBrush(CR_BG);
-    if (!RegisterClassExW(&sc)) {
-        std::cerr << "[GUI] RegisterClassEx (suggest) failed! Error: " << GetLastError() << std::endl;
-        return false;
-    }
-
-    // ...the picture window's...
-    UnregisterClassW(L"SynthScanShot", hInstance_);
-    WNDCLASSEXW sh = wc;
-    sh.lpfnWndProc = ShotProc;
-    sh.lpszClassName = L"SynthScanShot";
-    sh.hbrBackground = CreateSolidBrush(RGB(11, 12, 14));
-    if (!RegisterClassExW(&sh)) {
-        std::cerr << "[GUI] RegisterClassEx (picture) failed! Error: " << GetLastError() << std::endl;
         return false;
     }
 
@@ -1173,8 +1138,7 @@ void MinerGUI::createControls() {
     btnPlan_ = CreateWindowW(L"BUTTON", L"Ore Finder", btnStyle,
         0, 0, 10, 10, hwnd_, (HMENU)ID_BTN_PLAN, hInstance_, nullptr);
 
-    btnNotes_ = CreateWindowW(L"BUTTON", L"Notes", btnStyle,
-        0, 0, 10, 10, hwnd_, (HMENU)ID_BTN_NOTES, hInstance_, nullptr);
+
 
     // The overlay's own: a rock's ores one to a row or all on one line
     // (placeOreRowsButton)
@@ -1196,7 +1160,7 @@ void MinerGUI::layoutControls() {
     const int gap = scale(8);
 
     // Controls that only exist in the full window
-    HWND fullOnly[] = {btnPlan_, btnCraft_, btnNotes_, btnKeys_, btnRefinery_, btnAbout_};
+    HWND fullOnly[] = {btnPlan_, btnCraft_, btnKeys_, btnRefinery_, btnAbout_};
 
     if (overlayMode_) {
         for (HWND h : fullOnly) ShowWindow(h, SW_HIDE);
@@ -1228,18 +1192,24 @@ void MinerGUI::layoutControls() {
     ShowWindow(GetDlgItem(hwnd_,31810),SW_HIDE);ShowWindow(GetDlgItem(hwnd_,31811),SW_HIDE);ShowWindow(GetDlgItem(hwnd_,31813),SW_HIDE);ShowWindow(GetDlgItem(hwnd_,31818),SW_HIDE);ShowWindow(GetDlgItem(hwnd_,31819),SW_HIDE);ShowWindow(btnLiveMode_,SW_SHOW);
     SetWindowTextW(btnKeys_,L"More");
     for (HWND h : fullOnly) ShowWindow(h, SW_SHOW);
+    // Blueprints are reached through the sidebar; absent tools have no shortcut.
+    ShowWindow(btnCraft_,SW_HIDE);
+    const bool actionsVisible=!(lookingOpen_||loadoutOpen_||shipPickerOpen_||placePickerOpen_||uexWelcome_.step);
+    ShowWindow(btnRefinery_,actionsVisible&&installedFeature("mining_tools")?SW_SHOW:SW_HIDE);
+    ShowWindow(btnPlan_,actionsVisible&&installedFeature("mining_tools")?SW_SHOW:SW_HIDE);
+
     placeOreRowsButton();
     // ...except those a panel is lying over. These are real child windows, so
     // they draw themselves on top of anything the parent paints - a card over
     // them is a card with four buttons punched through it.
     if (lookingOpen_ || loadoutOpen_ || shipPickerOpen_ || placePickerOpen_) {
-        for (HWND b : {btnRefinery_, btnPlan_, btnCraft_, btnNotes_}) {
+        for (HWND b : {btnRefinery_, btnPlan_, btnCraft_}) {
             if (b) ShowWindow(b, SW_HIDE);
         }
     }
     // ...and the first start's UEX offer lies over all of them, the header's too
     if (uexWelcome_.step) {
-        for (HWND b : {btnLiveMode_, btnPlan_, btnCraft_, btnNotes_, btnKeys_, btnOverlay_, btnRefinery_, btnAbout_}) {
+        for (HWND b : {btnLiveMode_, btnPlan_, btnCraft_, btnKeys_, btnOverlay_, btnRefinery_, btnAbout_}) {
             if (b) ShowWindow(b, SW_HIDE);
         }
     }
@@ -1261,10 +1231,11 @@ void MinerGUI::layoutControls() {
     // evenly spaced and route embedded pages through the same navigation.
     const int rowY = scale(LY_CONTROLS) + extraTop();
     const int rowH = scale(28);
-    const int actW = (cw - 2 * M - 2 * gap) / 3;
-    MoveWindow(btnRefinery_, M, rowY, actW, rowH, TRUE);
-    MoveWindow(btnPlan_, M + actW + gap, rowY, actW, rowH, TRUE);
-    MoveWindow(btnNotes_, M + 2 * (actW + gap), rowY, cw - M - (M + 2 * (actW + gap)), rowH, TRUE);
+    std::vector<HWND> actions;
+    if(installedFeature("mining_tools")){actions.push_back(btnRefinery_);actions.push_back(btnPlan_);}
+
+    const int actW=(cw-2*M-std::max(0,int(actions.size())-1)*gap)/std::max(1,int(actions.size()));
+    for(size_t at=0;at<actions.size();++at)MoveWindow(actions[at],M+int(at)*(actW+gap),rowY,actW,rowH,TRUE);
 
 }
 
@@ -2251,78 +2222,6 @@ bool MinerGUI::processMessages() {
             ((msg.wParam == VK_ESCAPE && !(loadoutOpen_ && craftedEditing_)) ||
              (msg.wParam == VK_F4 && msg.message == WM_SYSKEYDOWN))) continue;
 
-        // Ctrl+V inside the notebook, when what is on the clipboard is a
-        // PICTURE. Text paste is left alone - that is the rich edit control's
-        // own business - but a bitmap has nowhere to go in a plain text note
-        // and would otherwise be dropped silently. A clipboard holding both is
-        // text: text is what was copied.
-        if (msg.message == WM_KEYDOWN && msg.wParam == 'V' && notes_ &&
-            (GetKeyState(VK_CONTROL) & 0x8000) &&
-            (msg.hwnd == notes_ || msg.hwnd == notesEdit_) && noteIndex_ >= 0 &&
-            !IsClipboardFormatAvailable(CF_UNICODETEXT) &&
-            (IsClipboardFormatAvailable(CF_DIB) || IsClipboardFormatAvailable(CF_HDROP))) {
-            pasteIntoOpenNote();
-            continue;
-        }
-
-        // The notebook's boxes: Enter and Esc mean "done" and "drop it" to the
-        // window, and a plain edit control would swallow both
-        if (msg.message == WM_KEYDOWN && notesName_ && msg.hwnd == notesName_) {
-            if (msg.wParam == VK_RETURN) {
-                commitNaming();
-                continue;
-            }
-            if (msg.wParam == VK_ESCAPE) {
-                nameMode_ = 0;
-                ShowWindow(notesName_, SW_HIDE);
-                SetFocus(notes_);
-                InvalidateRect(notes_, nullptr, TRUE);
-                continue;
-            }
-        }
-        // The suggestion list answers to the keyboard while it is up
-        // The wheel goes to whatever holds the focus, which is the note, not
-        // the list - so the list gets its turn here, while it is under the
-        // pointer. Without this there is no reaching entry 23 with a mouse.
-        if (msg.message == WM_MOUSEWHEEL && suggesting() && notesSuggest_) {
-            RECT listRc = {};
-            GetWindowRect(notesSuggest_, &listRc);
-            if (PtInRect(&listRc, msg.pt)) {
-                moveSuggestion(GET_WHEEL_DELTA_WPARAM(msg.wParam) > 0 ? -3 : 3, false);
-                continue;
-            }
-        }
-        if (msg.message == WM_KEYDOWN && notesEdit_ && msg.hwnd == notesEdit_ && suggesting()) {
-            if (msg.wParam == VK_RETURN) {
-                acceptSuggestion();
-                continue;
-            }
-            if (msg.wParam == VK_ESCAPE) {
-                hideSuggestions();
-                continue;
-            }
-            if (msg.wParam == VK_DOWN || msg.wParam == VK_UP) {
-                moveSuggestion(msg.wParam == VK_DOWN ? 1 : -1, true);
-                continue;
-            }
-            if (msg.wParam == VK_NEXT || msg.wParam == VK_PRIOR) {
-                moveSuggestion(msg.wParam == VK_NEXT ? SUGGEST_ROWS : -SUGGEST_ROWS, false);
-                continue;
-            }
-        }
-        if (msg.message == WM_KEYDOWN && notesEdit_ && msg.hwnd == notesEdit_) {
-            // Ctrl+A is not built into a plain edit control
-            if (msg.wParam == 'A' && (GetKeyState(VK_CONTROL) & 0x8000)) {
-                SendMessageW(notesEdit_, EM_SETSEL, 0, -1);
-                continue;
-            }
-            if (msg.wParam == VK_ESCAPE) {
-                saveNote();
-                SetFocus(notes_);
-                continue;
-            }
-        }
-
         // The window has two fields that are painted rather than built out of
         // an edit control: the ore search, and the crafted-% box in the
         // loadout card. While either has the cursor, every key belongs to it.
@@ -2546,6 +2445,9 @@ LRESULT MinerGUI::handleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
             EndPaint(hwnd, &ps);
             return 0;
         }
+        case WM_PRINTCLIENT:
+            onPaint(reinterpret_cast<HDC>(wParam));
+            return 0;
         case WM_MOUSEMOVE:
             if (gripDragging_) {
                 dragOverlayGrip();
@@ -2621,9 +2523,6 @@ LRESULT MinerGUI::handleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                 if (liveModeCallback_) {
                     liveModeCallback_(liveModeActive_);
                 }
-            }
-            else if (wmId == ID_BTN_NOTES) {
-                if(SynthPages::contains(hwnd_))SynthHome::navigate("notes");else toggleNotes();
             }
             else if (wmId == ID_BTN_REFINERY) {
                 if(SynthPages::contains(hwnd_))SynthHome::navigate("refinery");else toggleRefinery();
@@ -6675,11 +6574,7 @@ int MinerGUI::drawLocationCard(Gdiplus::Graphics& g, int cw, int yPos, int ch) {
 // this build asks for, with the number of recipes behind it; the right one
 // is those recipes, with every slot spelled out. Typing filters by name.
 
-// ---- the notebook ---------------------------------------------------------
-// Folders on the left, the note itself on the right in a real edit control -
-// so selection, the clipboard, undo and the mouse wheel all behave the way
-// they do everywhere else, instead of being reinvented badly. What is drawn
-// here is the tree and the frame around it.
+// ---- shared data tools ----------------------------------------------------
 
 namespace {
 // The edit control hands back CRLF; the files keep it, and a file written
@@ -6706,97 +6601,37 @@ std::string MinerGUI::fromW(const std::wstring& s) {
     return out;
 }
 
-LRESULT CALLBACK MinerGUI::NotesProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
-    if (g_guiInstance) return g_guiInstance->handleNotesMessage(hwnd, uMsg, wParam, lParam);
-    return DefWindowProcW(hwnd, uMsg, wParam, lParam);
-}
-
-bool MinerGUI::createNotes() {
-    if (notes_) return true;
-    RECT desired = {0, 0, scale(NOTES_WIDTH), scale(NOTES_HEIGHT)};
-    const DWORD style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_SIZEBOX | WS_CLIPCHILDREN;
-    AdjustWindowRectExForDpi(&desired, style, FALSE, 0, dpi_);
-    notes_ = CreateWindowExW(0, L"SCMinerNotes", L"SynthScan · Notes",
-                             style, CW_USEDEFAULT, CW_USEDEFAULT,
-                             desired.right - desired.left, desired.bottom - desired.top,
-                             hwnd_, nullptr, hInstance_, nullptr);
-    if (!notes_) {
-        std::cerr << "[GUI] notes window failed: " << GetLastError() << std::endl;
-        return false;
+namespace {
+std::wstring askForDataFile(HWND owner, bool saving, const std::wstring& suggested,
+                            const wchar_t* filter, const wchar_t* title,
+                            const wchar_t* ending) {
+    wchar_t path[MAX_PATH] = {};
+    if (!suggested.empty()) {
+        wcsncpy_s(path, suggested.c_str(), _TRUNCATE);
     }
-    BOOL darkMode = TRUE;
-    DwmSetWindowAttribute(notes_, 20 /*DWMWA_USE_IMMERSIVE_DARK_MODE*/, &darkMode, sizeof(darkMode));
-
-    // Monospaced, because half of what anyone writes down here is coordinates
-    // and quantities that only line up in a fixed pitch
-    if (!notesFont_) {
-        notesFont_ = CreateFontW(-scale(14), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-                                 DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-                                 CLEARTYPE_QUALITY, FIXED_PITCH | FF_MODERN, L"Consolas");
-    }
-    // Rich edit, for one reason only: it can hide characters and mark a run
-    // as a link, which is what lets a note read "Daymar" and still be a plain
-    // file that says [[Daymar]].
-    // Every message to this control goes through SendMessageW, not
-    // SendMessage: this build does not define UNICODE, so SendMessage is
-    // the ANSI entry point, and a wide string handed to a Unicode window
-    // through it arrives as its first character and a terminator.
-    static HMODULE richEditDll = LoadLibraryW(L"Msftedit.dll");
-    (void)richEditDll;
-    notesEdit_ = CreateWindowExW(0, L"RICHEDIT50W", L"",
-                                 WS_CHILD | WS_VISIBLE | WS_VSCROLL | ES_MULTILINE |
-                                     ES_AUTOVSCROLL | ES_WANTRETURN | ES_NOHIDESEL,
-                                 0, 0, 10, 10, notes_, (HMENU)ID_EDIT_NOTE, hInstance_, nullptr);
-    notesName_ = CreateWindowExW(0, L"EDIT", L"",
-                                 WS_CHILD | ES_AUTOHSCROLL,
-                                 0, 0, 10, 10, notes_, (HMENU)ID_EDIT_NOTE_NAME, hInstance_, nullptr);
-    if (notesFont_) SendMessage(notesName_, WM_SETFONT, (WPARAM)controlFont_, TRUE);
-    SendMessageW(notesEdit_, EM_EXLIMITTEXT, 0, 0x400000);   // no 32k cap
-    SendMessageW(notesEdit_, EM_SETBKGNDCOLOR, 0, (LPARAM)CR_NOTE_BG);
-    SendMessageW(notesEdit_, EM_AUTOURLDETECT, FALSE, 0);
-    // EN_LINK is how a click on a link reaches us; EN_CHANGE the typing
-    SendMessageW(notesEdit_, EM_SETEVENTMASK, 0, ENM_CHANGE | ENM_LINK);
+    std::wstring documents;
     {
-        // The face and colour of ordinary text. A rich edit control ignores
-        // WM_CTLCOLOREDIT, so this is where it is said.
-        CHARFORMAT2W cf = {};
-        cf.cbSize = sizeof(cf);
-        cf.dwMask = CFM_FACE | CFM_SIZE | CFM_COLOR | CFM_BOLD | CFM_ITALIC | CFM_UNDERLINE;
-        cf.yHeight = 10 * 20;                 // ten points, in twips
-        cf.crTextColor = CR_EDIT_TEXT;
-        wcscpy_s(cf.szFaceName, L"Consolas");
-        SendMessageW(notesEdit_, EM_SETCHARFORMAT, SCF_ALL, (LPARAM)&cf);
+        PWSTR folder = nullptr;
+        if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Documents, 0, nullptr, &folder)) && folder) {
+            documents = folder;
+        }
+        if (folder) CoTaskMemFree(folder);
     }
-    // Rich edit has no margins message; a smaller text rectangle is the way
-    {
-        RECT inset = {0, 0, 0, 0};
-        SendMessageW(notesEdit_, EM_SETRECT, 0, (LPARAM)&inset);
-    }
-    SendMessage(notesName_, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELPARAM(8, 8));
-    book_.load();
-    placeNotes();
-    layoutNotes();
-    return true;
+    OPENFILENAMEW ofn = {};
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = owner;
+    ofn.lpstrFilter = filter;
+    ofn.lpstrFile = path;
+    ofn.nMaxFile = MAX_PATH;
+    ofn.lpstrDefExt = ending;
+    ofn.lpstrInitialDir = documents.empty() ? nullptr : documents.c_str();
+    ofn.lpstrTitle = title;
+    ofn.Flags = OFN_EXPLORER | OFN_NOCHANGEDIR |
+                (saving ? (OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST)
+                        : (OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST));
+    const BOOL ok = saving ? GetSaveFileNameW(&ofn) : GetOpenFileNameW(&ofn);
+    return ok ? std::wstring(path) : std::wstring();
 }
-
-void MinerGUI::placeNotes() {
-    if (headless_) {
-        SetWindowPos(notes_, HWND_BOTTOM, -32000, -31000, 0, 0,
-                     SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
-        return;
-    }
-    RECT main, mine;
-    GetWindowRect(hwnd_, &main);
-    GetWindowRect(notes_, &mine);
-    const int w = mine.right - mine.left, h = mine.bottom - mine.top;
-    MONITORINFO mi = {};
-    mi.cbSize = sizeof(mi);
-    GetMonitorInfoW(MonitorFromWindow(hwnd_, MONITOR_DEFAULTTONEAREST), &mi);
-    int x = main.right + scale(12);
-    if (x + w > mi.rcWork.right) x = (std::max)((long)mi.rcWork.left, main.left - w - scale(12));
-    int y = main.top;
-    if (y + h > mi.rcWork.bottom) y = (std::max)((long)mi.rcWork.top, mi.rcWork.bottom - h);
-    SetWindowPos(notes_, nullptr, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
 void MinerGUI::setUiScale(int percent) {
@@ -6853,780 +6688,9 @@ void MinerGUI::resizeForScale() {
            overlayMode_ ? overlayZoomed(overlayHeight()) : WINDOW_HEIGHT);
     resize(planner_, PLANNER_WIDTH, PLANNER_HEIGHT);
     resize(crafting_, CRAFTING_WIDTH, CRAFTING_HEIGHT);
-    resize(notes_, NOTES_WIDTH, NOTES_HEIGHT);
+
     layoutControls();
-    layoutNotes();
-}
 
-void MinerGUI::toggleNotes() {
-    if(!installedFeature("notes"))return;
-    if (!notes_ && !createNotes()) return;
-    notesVisible_ = !notesVisible_;
-    if (notesVisible_) {
-        book_.load();
-        // Reopening lands where it was left, when that note is still there
-        if (noteFolder_ >= (int)book_.folders().size()) noteFolder_ = -1;
-        if (noteFolder_ >= 0 && noteIndex_ >= (int)book_.folders()[noteFolder_].notes.size()) {
-            noteIndex_ = -1;
-        }
-        placeNotes();
-        ShowWindow(notes_, SW_SHOW);
-        SetForegroundWindow(notes_);
-        // With no note open the window itself listens, so that the first
-        // letter can start one; with a note open the caret belongs in it.
-        if (noteIndex_ < 0) SetFocus(notes_);
-        else if (notesEdit_ && !headless_) SetFocus(notesEdit_);
-        layoutNotes();
-        InvalidateRect(notes_, nullptr, TRUE);
-    } else {
-        saveNote();
-        hideSuggestions();
-        ShowWindow(notes_, SW_HIDE);
-    }
-}
-
-// ---- pictures kept with a note -------------------------------------------
-//
-// A note is a text file and stays one. A picture belongs BESIDE it, in a
-// folder named after the note (NoteBook::mediaDir), and the rail down the
-// right of the open note is where it is seen.
-//
-// Bedrock does not take the picture: with the notebook open the game has
-// already been left, so Windows' own keys have done that. There are two
-// ways in: the clipboard, where PrintScreen and the Snipping Tool leave a
-// picture rather than a file, and a file that is already on the disk.
-
-// The JPEG encoder, asked for once: GDI+ wants a CLSID rather than a name.
-static bool jpegEncoder(CLSID* out) {
-    static CLSID clsid{};
-    static const bool found = [] {
-        UINT count = 0, bytes = 0;
-        if (Gdiplus::GetImageEncodersSize(&count, &bytes) != Gdiplus::Ok || !bytes) return false;
-        std::vector<char> buffer(bytes);
-        auto* codecs = reinterpret_cast<Gdiplus::ImageCodecInfo*>(buffer.data());
-        if (Gdiplus::GetImageEncoders(count, bytes, codecs) != Gdiplus::Ok) return false;
-        for (UINT i = 0; i < count; i++) {
-            if (wcscmp(codecs[i].MimeType, L"image/jpeg") == 0) {
-                clsid = codecs[i].Clsid;
-                return true;
-            }
-        }
-        return false;
-    }();
-    if (found) *out = clsid;
-    return found;
-}
-
-// 92: a screenshot of a HUD keeps its digits readable, and a 4K frame comes
-// to under a megabyte instead of the ten a lossless one costs. The notes
-// folder is backed up whole, so what is kept here is kept for good.
-static bool writeJpeg(Gdiplus::Bitmap& picture, const std::filesystem::path& file) {
-    CLSID clsid;
-    if (!jpegEncoder(&clsid)) return false;
-    ULONG quality = 92;
-    Gdiplus::EncoderParameters params;
-    params.Count = 1;
-    params.Parameter[0].Guid = Gdiplus::EncoderQuality;
-    params.Parameter[0].Type = Gdiplus::EncoderParameterValueTypeLong;
-    params.Parameter[0].NumberOfValues = 1;
-    params.Parameter[0].Value = &quality;
-    return picture.Save(file.wstring().c_str(), &clsid, &params) == Gdiplus::Ok;
-}
-
-static std::string mediaStamp(const char* form) {
-    const std::time_t now = std::time(nullptr);
-    std::tm parts{};
-    localtime_s(&parts, &now);
-    char buffer[64] = {};
-    std::strftime(buffer, sizeof(buffer), form, &parts);
-    return buffer;
-}
-
-float MinerGUI::mediaRailWidth() const {
-    if (noteFolder_ < 0 || noteIndex_ < 0) return 0.0f;
-    return scaleF(notesMediaOpen_ ? NOTES_MEDIA_WIDTH : NOTES_MEDIA_SHUT);
-}
-
-// What the open note holds, with a thumbnail each. Built when the note
-// changes and after anything is added or thrown away - never per paint: a
-// 4K JPEG costs milliseconds to decode, and the window repaints often.
-void MinerGUI::refreshMedia(bool force) {
-    if (!force && mediaFolder_ == noteFolder_ && mediaNote_ == noteIndex_) return;
-    mediaFolder_ = noteFolder_;
-    mediaNote_ = noteIndex_;
-    mediaConfirm_ = -1;      // a question asked about another note's picture
-    media_.clear();
-    if (noteFolder_ < 0 || noteIndex_ < 0) return;
-    const int wide = (std::max)(1, (int)(scaleF(NOTES_MEDIA_WIDTH) - scaleF(24)));
-    for (const auto& shot : book_.media(noteFolder_, noteIndex_)) {
-        MediaItem item;
-        item.path = shot.path;
-        item.when = toW(shot.when);
-        Gdiplus::Bitmap source(shot.path.wstring().c_str());
-        if (source.GetLastStatus() == Gdiplus::Ok && source.GetWidth() > 0) {
-            const int high =
-                (std::max)(1, (int)(source.GetHeight() * (double)wide / source.GetWidth()));
-            auto thumb = std::make_shared<Gdiplus::Bitmap>(wide, high, PixelFormat32bppPARGB);
-            Gdiplus::Graphics into(thumb.get());
-            resample(into, &source, (int)source.GetWidth(), (int)source.GetHeight(),
-                     Gdiplus::RectF(0, 0, (Gdiplus::REAL)wide, (Gdiplus::REAL)high),
-                     Gdiplus::InterpolationModeHighQualityBicubic);
-            item.thumb = std::move(thumb);
-        }
-        media_.push_back(std::move(item));
-    }
-}
-
-// Where the next picture goes. Nothing is added with no note open - the rail
-// only exists when one is - so this only ever has to find the folder.
-std::filesystem::path MinerGUI::nextMediaPath(const char* extension) {
-    if (noteFolder_ < 0 || noteIndex_ < 0) return {};
-    const std::filesystem::path dir = book_.mediaDir(noteFolder_, noteIndex_, true);
-    if (dir.empty()) return {};
-    const std::string stamp = mediaStamp("%Y%m%d_%H%M%S");
-    std::filesystem::path file = dir / (stamp + extension);
-    for (int n = 2; std::filesystem::exists(file) && n < 1000; n++) {
-        file = dir / (stamp + "_" + std::to_string(n) + extension);
-    }
-    return file;
-}
-
-void MinerGUI::mediaSays(const std::wstring& text, bool reread) {
-    mediaNotice_ = text;
-    if (reread) refreshMedia(true);
-    if (notes_) InvalidateRect(notes_, nullptr, TRUE);
-}
-
-// Whatever Windows left on the clipboard. The Snipping Tool and PrintScreen
-// leave a picture there and no file anywhere, which is exactly the case a
-// file dialog cannot help with. A file copied in Explorer arrives on the
-// same clipboard as a list of paths, so that is taken too.
-bool MinerGUI::pasteIntoOpenNote() {
-    if (noteFolder_ < 0 || noteIndex_ < 0) return false;
-    if (!OpenClipboard(notes_)) {
-        mediaSays(L"the clipboard would not open", false);
-        return false;
-    }
-    std::vector<std::filesystem::path> files;
-    std::shared_ptr<Gdiplus::Bitmap> picture;
-    if (HANDLE drop = GetClipboardData(CF_HDROP)) {
-        const UINT count = DragQueryFileW((HDROP)drop, 0xFFFFFFFF, nullptr, 0);
-        for (UINT i = 0; i < count; i++) {
-            wchar_t buffer[MAX_PATH * 2] = {};
-            if (DragQueryFileW((HDROP)drop, i, buffer, (UINT)(sizeof(buffer) / sizeof(buffer[0])))) {
-                files.emplace_back(buffer);
-            }
-        }
-    } else if (HANDLE dib = GetClipboardData(CF_DIB)) {
-        if (const void* bits = GlobalLock(dib)) {
-            const auto* header = reinterpret_cast<const BITMAPINFOHEADER*>(bits);
-            // The pixels follow the header and whatever colour table it
-            // declares; a 32-bit shot has none, an 8-bit one has 256 entries.
-            const auto* pixels = reinterpret_cast<const BYTE*>(bits) + header->biSize +
-                                 header->biClrUsed * sizeof(RGBQUAD);
-            auto made = std::make_shared<Gdiplus::Bitmap>(
-                reinterpret_cast<const BITMAPINFO*>(header), (void*)pixels);
-            if (made->GetLastStatus() == Gdiplus::Ok && made->GetWidth() > 0) picture = made;
-            GlobalUnlock(dib);
-        }
-    }
-    CloseClipboard();
-
-    if (picture) {
-        saveNote();
-        const std::filesystem::path file = nextMediaPath(".jpg");
-        if (file.empty()) {
-            mediaSays(L"nowhere to put it", false);
-            return false;
-        }
-        const bool ok = writeJpeg(*picture, file);
-        mediaSays(ok ? L"pasted from the clipboard" : L"that picture could not be written", ok);
-        return ok;
-    }
-    if (!files.empty()) return addFilesToOpenNote(files);
-    mediaSays(L"no picture on the clipboard", false);
-    return false;
-}
-
-// A file already on the disk. Copied in, never moved: what somebody picked
-// is still theirs and still where they left it.
-bool MinerGUI::addFilesToOpenNote(const std::vector<std::filesystem::path>& files) {
-    if (noteFolder_ < 0 || noteIndex_ < 0) return false;
-    saveNote();
-    int added = 0, refused = 0;
-    for (const auto& from : files) {
-        std::string ext = from.extension().string();
-        for (char& c : ext) c = (char)std::tolower((unsigned char)c);
-        if (ext != ".jpg" && ext != ".jpeg" && ext != ".png") {
-            refused++;
-            continue;
-        }
-        const std::filesystem::path to = nextMediaPath(ext.c_str());
-        if (to.empty()) break;
-        std::error_code ec;
-        std::filesystem::copy_file(from, to, ec);
-        if (!ec) added++;
-    }
-    if (!added) {
-        mediaSays(refused ? L"only pictures can go in here" : L"that file could not be copied",
-                  false);
-        return false;
-    }
-    mediaSays(added == 1 ? std::wstring(L"picture added")
-                         : std::to_wstring(added) + L" pictures added",
-              true);
-    return true;
-}
-
-bool MinerGUI::pickFilesForOpenNote() {
-    if (headless_ || noteFolder_ < 0 || noteIndex_ < 0) return false;
-    const std::wstring path =
-        askForDataFile(notes_, false, L"",
-                       L"Pictures (*.png;*.jpg;*.jpeg)\0*.png;*.jpg;*.jpeg\0All files\0*.*\0",
-                       L"Add a picture to this note", nullptr);
-    if (path.empty()) return false;   // thought better of it
-    return addFilesToOpenNote({std::filesystem::path(path)});
-}
-
-// A picture with rounded corners, in a GDI+ that cannot clip to a curve:
-// the picture is drawn square, then the four corners outside the curve are
-// painted over in the colour it lies on. The rounded outline goes first so
-// the path starts with it - a figure added after the rectangle would be
-// joined on to it by a stray edge in some renderers.
-static void notesRoundCorners(Gdiplus::Graphics& g, const Gdiplus::RectF& r, float radius,
-                              const Gdiplus::Color& under) {
-    Gdiplus::GraphicsPath corners;   // alternate fill: the square less the rounded
-    addRoundRect(corners, r, radius);
-    corners.AddRectangle(Gdiplus::RectF(r.X - 1, r.Y - 1, r.Width + 2, r.Height + 2));
-    Gdiplus::SolidBrush brush(under);
-    g.FillPath(&brush, &corners);
-}
-
-// The rail: a heading that folds it away, the two ways in, and what the note
-// holds. Newest at the top, the way the note list itself is ordered.
-void MinerGUI::drawMediaRail(Gdiplus::Graphics& g, float x, float top, float bottom) {
-    Gdiplus::Font headFont(&textFamily(), scaleF(10), Gdiplus::FontStyleBold, Gdiplus::UnitPixel);
-    Gdiplus::Font subFont(&textFamily(), scaleF(9), Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
-    Gdiplus::Font buttonFont(&markFamily(), scaleF(12), Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
-    Gdiplus::Font smallButtonFont(&markFamily(), scaleF(11), Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
-    Gdiplus::SolidBrush dimBrush(COL_TEXT_DIM);
-    Gdiplus::SolidBrush faintBrush(COL_TEXT_FAINT);
-    Gdiplus::SolidBrush accentBrush(COL_ACCENT);
-    Gdiplus::StringFormat centred;
-    centred.SetAlignment(Gdiplus::StringAlignmentCenter);
-    centred.SetLineAlignment(Gdiplus::StringAlignmentCenter);
-
-    const Gdiplus::RectF rail(x, top, mediaRailWidth(), bottom - top);
-    fillRoundRect(g, rail, scaleF(R_CARD), COL_CARD);
-    cardLight(g, rail, scaleF(R_CARD), scaleF(44));
-    strokeRoundRect(g, rail, scaleF(R_CARD), COL_BORDER);
-
-    // The fold, as a chevron pointing the way the rail will go: out to the
-    // left while it is folded, back to the right while it is open
-    auto fold = [&](float cx, float cy, bool pointsLeft) {
-        Gdiplus::Pen pen(COL_TEXT_DIM, scaleF(1.6f));
-        pen.SetStartCap(Gdiplus::LineCapRound);
-        pen.SetEndCap(Gdiplus::LineCapRound);
-        pen.SetLineJoin(Gdiplus::LineJoinRound);
-        const float half = scaleF(4), dx = (pointsLeft ? -0.55f : 0.55f) * half;
-        const Gdiplus::PointF pts[3] = {Gdiplus::PointF(cx - dx, cy - half), Gdiplus::PointF(cx + dx, cy),
-                                        Gdiplus::PointF(cx - dx, cy + half)};
-        g.DrawLines(&pen, pts, 3);
-    };
-
-    // Folded: a strip with the word running down it, and how many there are
-    // on a quiet badge under it - the one thing a folded rail has to say.
-    // Not amber: a count of pictures is not a choice, and a loud disc would
-    // read as something unread waiting.
-    if (!notesMediaOpen_) {
-        const Gdiplus::GraphicsState saved = g.Save();
-        g.TranslateTransform(rail.X + rail.Width / 2, rail.Y + scaleF(34));
-        g.RotateTransform(90.0f);
-        g.DrawString(L"MEDIA", -1, &headFont, Gdiplus::PointF(0, -scaleF(6)),
-                     media_.empty() ? &faintBrush : &dimBrush);
-        g.Restore(saved);
-        fold(rail.X + rail.Width / 2, rail.Y + scaleF(16), true);
-        if (!media_.empty()) {
-            Gdiplus::RectF word;
-            g.MeasureString(L"MEDIA", -1, &headFont, Gdiplus::PointF(0, 0), &word);
-            const std::wstring count = std::to_wstring(media_.size());
-            const float d = scaleF(16);
-            const Gdiplus::RectF badge(rail.X + (rail.Width - d) / 2, rail.Y + scaleF(34) + word.Width + scaleF(6),
-                                       d, d);
-            fillRoundRect(g, badge, d / 2, COL_CARD_HI);
-            g.DrawString(count.c_str(), -1, &headFont, badge, &centred, &dimBrush);
-        }
-        noteHits_.push_back({rail, 20, 0});
-        return;
-    }
-
-    const float left = rail.X + scaleF(12);
-    const float right = rail.GetRight() - scaleF(12);
-    float y = rail.Y + scaleF(10);
-    {
-        const std::wstring text =
-            media_.empty() ? std::wstring(L"MEDIA") : L"MEDIA  ·  " + std::to_wstring(media_.size());
-        g.DrawString(text.c_str(), -1, &headFont, Gdiplus::PointF(left, y + scaleF(4)), &faintBrush);
-        fold(right - scaleF(4), y + scaleF(10), false);
-        noteHits_.push_back({Gdiplus::RectF(rail.X, rail.Y, rail.Width, scaleF(26)), 20, 0});
-    }
-    y += scaleF(28);
-
-    {
-        const float gap = scaleF(6);
-        const float wide = (right - left - gap) / 2.0f;
-        auto button = [&](const wchar_t* label, int kind, int index) {
-            const Gdiplus::RectF box(left + index * (wide + gap), y, wide, scaleF(24));
-            drawButton(g, box, label, buttonFont, ButtonKind::Secondary, false, scaleF(R_CONTROL));
-            noteHits_.push_back({box, kind, 0});
-        };
-        button(L"Paste", 21, 0);
-        button(L"Add file", 22, 1);
-    }
-    y += scaleF(30);
-    if (!mediaNotice_.empty()) {
-        g.DrawString(mediaNotice_.c_str(), -1, &subFont,
-                     Gdiplus::RectF(left, y, right - left, scaleF(14)), nullptr, &accentBrush);
-    } else {
-        g.DrawString(L"Ctrl+V pastes from the Snipping Tool", -1, &subFont,
-                     Gdiplus::RectF(left, y, right - left, scaleF(14)), nullptr, &faintBrush);
-    }
-    y += scaleF(30);
-
-    if (media_.empty()) {
-        g.DrawString(L"Nothing yet. What is kept here stays with the note: renamed, "
-                     L"moved and thrown away with it.",
-                     -1, &subFont, Gdiplus::RectF(left, y, right - left, scaleF(60)), nullptr,
-                     &faintBrush);
-        return;
-    }
-
-    for (size_t i = 0; i < media_.size(); i++) {
-        const auto& item = media_[i];
-        const float wide = right - left;
-        const float high = item.thumb ? wide * (float)item.thumb->GetHeight() /
-                                            (float)item.thumb->GetWidth()
-                                      : scaleF(40);
-        if (y + high + scaleF(20) > rail.GetBottom() - scaleF(6)) {
-            const std::wstring more = L"+" + std::to_wstring((int)(media_.size() - i)) +
-                                      L" more in the note's own folder";
-            g.DrawString(more.c_str(), -1, &subFont,
-                         Gdiplus::RectF(left, y, wide, scaleF(28)), nullptr, &faintBrush);
-            break;
-        }
-        const Gdiplus::RectF frame(left, y, wide, high);
-        if (item.thumb) {
-            g.DrawImage(item.thumb.get(), frame);
-            notesRoundCorners(g, frame, scaleF(R_CONTROL), COL_CARD);
-            strokeRoundRect(g, frame, scaleF(R_CONTROL), COL_GLASS_RIM);
-        } else {
-            fillRoundRect(g, frame, scaleF(R_CONTROL), COL_CARD_HI);
-            g.DrawString(L"cannot be shown", -1, &subFont, frame, &centred, &faintBrush);
-        }
-        noteHits_.push_back({frame, 23, (int)i});
-        g.DrawString(item.when.c_str(), -1, &subFont,
-                     Gdiplus::PointF(left + scaleF(2), y + high + scaleF(5)), &faintBrush);
-        // The cross, and while it is armed the word for what it will do
-        const bool armed = (mediaConfirm_ == (int)i);
-        const float crossW = armed ? scaleF(66) : scaleF(18);
-        const Gdiplus::RectF cross(right - crossW, y + high + scaleF(3), crossW, scaleF(18));
-        if (armed) {
-            drawButton(g, cross, L"Remove?", smallButtonFont, ButtonKind::Danger, false, scaleF(R_CONTROL));
-        } else {
-            // drawn, like the chevrons, so it sits true in its box
-            Gdiplus::Pen pen(COL_TEXT_FAINT, scaleF(1.3f));
-            pen.SetStartCap(Gdiplus::LineCapRound);
-            pen.SetEndCap(Gdiplus::LineCapRound);
-            const float cx = cross.X + cross.Width / 2, cy = cross.Y + cross.Height / 2, h = scaleF(3.0f);
-            g.DrawLine(&pen, cx - h, cy - h, cx + h, cy + h);
-            g.DrawLine(&pen, cx - h, cy + h, cx + h, cy - h);
-        }
-        noteHits_.push_back({cross, 24, (int)i});
-        y += high + scaleF(24);
-    }
-}
-
-// ---- looking at a picture, without leaving Bedrock -----------------------
-//
-// A thumbnail opens in a window of its own, not in whatever Windows opens
-// pictures with, so looking at one does not throw a different program in
-// front of the notes. The picture is fitted to it, the arrows walk the
-// note's other pictures, Esc closes it. It is resizable because making it
-// bigger is the only zoom a screenshot of a HUD needs.
-
-bool MinerGUI::createShot() {
-    if (shot_) return true;
-    RECT desired = {0, 0, scale(SHOT_WIDTH), scale(SHOT_HEIGHT)};
-    const DWORD style = WS_OVERLAPPEDWINDOW;
-    AdjustWindowRectExForDpi(&desired, style, FALSE, 0, dpi_);
-    shot_ = CreateWindowExW(0, L"SynthScanShot", L"SynthScan · Picture", style,
-                            CW_USEDEFAULT, CW_USEDEFAULT,
-                            desired.right - desired.left, desired.bottom - desired.top,
-                            notes_ ? notes_ : hwnd_, nullptr, hInstance_, nullptr);
-    if (!shot_) {
-        std::cerr << "[GUI] picture window failed: " << GetLastError() << std::endl;
-        return false;
-    }
-    BOOL darkMode = TRUE;
-    DwmSetWindowAttribute(shot_, 20 /*DWMWA_USE_IMMERSIVE_DARK_MODE*/, &darkMode, sizeof(darkMode));
-    return true;
-}
-
-// The one picture being looked at, at its own size. Only one is ever held:
-// the thumbnails on the rail are what the list is drawn from, and a 4K frame
-// is thirty megabytes decoded.
-void MinerGUI::loadShot() {
-    shotImage_.reset();
-    if (shotIndex_ < 0 || shotIndex_ >= (int)media_.size()) return;
-    auto picture = std::make_shared<Gdiplus::Bitmap>(media_[shotIndex_].path.wstring().c_str());
-    if (picture->GetLastStatus() == Gdiplus::Ok && picture->GetWidth() > 0) {
-        shotImage_ = std::move(picture);
-    }
-}
-
-void MinerGUI::showShot(int index) {
-    if (index < 0 || index >= (int)media_.size()) return;
-    if (!shot_ && !createShot()) return;
-    shotIndex_ = index;
-    loadShot();
-    shotVisible_ = true;
-    {
-        std::wstring title = L"SynthScan · ";
-        if (noteFolder_ >= 0 && noteIndex_ >= 0 &&
-            noteFolder_ < (int)book_.folders().size() &&
-            noteIndex_ < (int)book_.folders()[noteFolder_].notes.size()) {
-            title += toW(book_.folders()[noteFolder_].notes[noteIndex_].name);
-        } else {
-            title += L"Picture";
-        }
-        SetWindowTextW(shot_, title.c_str());
-    }
-    if (headless_) {
-        SetWindowPos(shot_, HWND_BOTTOM, -32000, -30000, 0, 0,
-                     SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
-    }
-    ShowWindow(shot_, headless_ ? SW_SHOWNOACTIVATE : SW_SHOW);
-    if (!headless_) SetForegroundWindow(shot_);
-    InvalidateRect(shot_, nullptr, TRUE);
-}
-
-void MinerGUI::stepShot(int by) {
-    if (media_.empty()) return;
-    const int next = (shotIndex_ + by + (int)media_.size()) % (int)media_.size();
-    if (next == shotIndex_) return;
-    shotIndex_ = next;
-    loadShot();
-    if (shot_) InvalidateRect(shot_, nullptr, TRUE);
-}
-
-void MinerGUI::paintShot(HDC hdc) {
-    RECT rc;
-    GetClientRect(shot_, &rc);
-    const int cw = rc.right, ch = rc.bottom;
-    HDC memDC = CreateCompatibleDC(hdc);
-    HBITMAP memBitmap = CreateCompatibleBitmap(hdc, cw, ch);
-    HBITMAP oldBitmap = (HBITMAP)SelectObject(memDC, memBitmap);
-    {
-        Gdiplus::Graphics g(memDC);
-        prepareGraphics(g);
-        Gdiplus::SolidBrush bg(COL_BG);
-        g.FillRectangle(&bg, 0, 0, cw, ch);
-
-        Gdiplus::Font subFont(&textFamily(), scaleF(10), Gdiplus::FontStyleRegular,
-                              Gdiplus::UnitPixel);
-        Gdiplus::Font keyFont(&markFamily(), scaleF(10), Gdiplus::FontStyleRegular,
-                              Gdiplus::UnitPixel);
-        Gdiplus::SolidBrush faintBrush(COL_TEXT_FAINT);
-        Gdiplus::SolidBrush dimBrush(COL_TEXT_DIM);
-        Gdiplus::StringFormat centred;
-        centred.SetAlignment(Gdiplus::StringAlignmentCenter);
-        centred.SetLineAlignment(Gdiplus::StringAlignmentCenter);
-        centred.SetFormatFlags(Gdiplus::StringFormatFlagsNoWrap);
-        Gdiplus::StringFormat middle;
-        middle.SetLineAlignment(Gdiplus::StringAlignmentCenter);
-        middle.SetFormatFlags(Gdiplus::StringFormatFlagsNoWrap);
-
-        const float foot = scaleF(30);
-        if (shotImage_) {
-            // Fitted, never enlarged past its own size: a picture blown up
-            // past 1:1 says less than it did, not more.
-            const float iw = (float)shotImage_->GetWidth();
-            const float ih = (float)shotImage_->GetHeight();
-            const float room = (float)ch - foot - scaleF(12);
-            const float fit = (std::min)((std::min)(((float)cw - scaleF(12)) / iw, room / ih), 1.0f);
-            const float w = iw * fit, h = ih * fit;
-            const Gdiplus::RectF at((cw - w) / 2.0f, (room - h) / 2.0f + scaleF(6), w, h);
-            // Lying on the window rather than printed on it: a shadow, the
-            // corners rounded like everything else in Bedrock, and a rim of
-            // light, so a dark screenshot still has an edge on a dark window
-            dropShadow(g, at, scaleF(R_CONTROL), scaleF(10));
-            g.SetInterpolationMode(fit < 1.0f ? Gdiplus::InterpolationModeHighQualityBicubic
-                                              : Gdiplus::InterpolationModeNearestNeighbor);
-            g.DrawImage(shotImage_.get(), at);
-            g.SetInterpolationMode(Gdiplus::InterpolationModeDefault);
-            notesRoundCorners(g, at, scaleF(R_CONTROL), COL_BG);
-            strokeRoundRect(g, at, scaleF(R_CONTROL), COL_GLASS_RIM);
-        } else {
-            g.DrawString(L"That picture could not be read.", -1, &subFont,
-                         Gdiplus::RectF(0, 0, (float)cw, (float)ch - foot), &centred, &faintBrush);
-        }
-
-        // ---- the foot ----
-        // When it was taken and how big on the left. On the right, where in
-        // the note's pictures this one is, and the keys that walk and close
-        // - each on a cap of its own, which reads quicker than spelling it.
-        // The caps are outlines only: nothing down here takes a click, so
-        // nothing may wear a button's face.
-        const float M = scaleF(12);
-        const float mid = (float)ch - foot / 2.0f;
-        const float lineH = scaleF(18);
-        float lx = M;
-        auto leftWords = [&](const std::wstring& text, Gdiplus::SolidBrush* brush) {
-            if (text.empty()) return;
-            Gdiplus::RectF w;
-            g.MeasureString(text.c_str(), -1, &subFont, Gdiplus::PointF(0, 0), &w);
-            g.DrawString(text.c_str(), -1, &subFont, Gdiplus::RectF(lx, mid - lineH / 2, w.Width + 2, lineH),
-                         &middle, brush);
-            lx += w.Width + scaleF(8);
-        };
-        if (shotIndex_ >= 0 && shotIndex_ < (int)media_.size()) {
-            leftWords(media_[shotIndex_].when, &dimBrush);
-            if (shotImage_) {
-                leftWords(std::to_wstring((int)shotImage_->GetWidth()) + L" × " +
-                              std::to_wstring((int)shotImage_->GetHeight()),
-                          &faintBrush);
-            }
-        }
-        float rx = (float)cw - M;
-        auto words = [&](const std::wstring& text, Gdiplus::SolidBrush* brush) {
-            Gdiplus::RectF w;
-            g.MeasureString(text.c_str(), -1, &subFont, Gdiplus::PointF(0, 0), &w);
-            g.DrawString(text.c_str(), -1, &subFont,
-                         Gdiplus::RectF(rx - w.Width, mid - lineH / 2, w.Width + 2, lineH), &middle, brush);
-            rx -= w.Width + scaleF(4);
-        };
-        auto key = [&](const wchar_t* cap) {
-            Gdiplus::RectF w;
-            g.MeasureString(cap, -1, &keyFont, Gdiplus::PointF(0, 0), &w);
-            const float wide = (std::max)(lineH, w.Width + scaleF(8));
-            const Gdiplus::RectF box(rx - wide, mid - lineH / 2, wide, lineH);
-            strokeRoundRect(g, box, scaleF(4), COL_BORDER);
-            g.DrawString(cap, -1, &keyFont, box, &centred, &dimBrush);
-            rx = box.X - scaleF(4);
-        };
-        words(L"close", &faintBrush);
-        key(L"Esc");
-        if (media_.size() > 1) {
-            rx -= scaleF(12);
-            words(L"step", &faintBrush);
-            key(L"→");
-            key(L"←");
-            rx -= scaleF(12);
-            words(std::to_wstring(shotIndex_ + 1) + L" of " + std::to_wstring((int)media_.size()),
-                  &dimBrush);
-        }
-    }
-    BitBlt(hdc, 0, 0, cw, ch, memDC, 0, 0, SRCCOPY);
-    SelectObject(memDC, oldBitmap);
-    DeleteObject(memBitmap);
-    DeleteDC(memDC);
-}
-
-LRESULT CALLBACK MinerGUI::ShotProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
-    if (g_guiInstance) return g_guiInstance->handleShotMessage(hwnd, uMsg, wParam, lParam);
-    return DefWindowProcW(hwnd, uMsg, wParam, lParam);
-}
-
-LRESULT MinerGUI::handleShotMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
-    switch (uMsg) {
-        case WM_PAINT: {
-            PAINTSTRUCT ps;
-            HDC hdc = BeginPaint(hwnd, &ps);
-            paintShot(hdc);
-            EndPaint(hwnd, &ps);
-            return 0;
-        }
-        case WM_ERASEBKGND:
-            return 1;
-        case WM_SIZE:
-            InvalidateRect(hwnd, nullptr, TRUE);
-            return 0;
-        case WM_MOUSEWHEEL:
-            stepShot(GET_WHEEL_DELTA_WPARAM(wParam) > 0 ? -1 : 1);
-            return 0;
-        case WM_KEYDOWN:
-            switch (wParam) {
-                case VK_ESCAPE:
-                    shotVisible_ = false;
-                    shotImage_.reset();      // thirty megabytes, put down
-                    ShowWindow(hwnd, SW_HIDE);
-                    return 0;
-                case VK_LEFT:
-                case VK_UP:
-                    stepShot(-1);
-                    return 0;
-                case VK_RIGHT:
-                case VK_DOWN:
-                    stepShot(1);
-                    return 0;
-                case VK_HOME:
-                    shotIndex_ = 0;
-                    loadShot();
-                    InvalidateRect(hwnd, nullptr, TRUE);
-                    return 0;
-                case VK_END:
-                    shotIndex_ = (int)media_.size() - 1;
-                    loadShot();
-                    InvalidateRect(hwnd, nullptr, TRUE);
-                    return 0;
-                default:
-                    break;
-            }
-            break;
-        case WM_CLOSE:
-            shotVisible_ = false;
-            shotImage_.reset();
-            ShowWindow(hwnd, SW_HIDE);
-            return 0;
-    }
-    return DefWindowProcW(hwnd, uMsg, wParam, lParam);
-}
-
-void MinerGUI::paintShotTo(HDC hdc) {
-    if (shot_) paintShot(hdc);
-}
-
-void MinerGUI::openShotForShot() { showShot(0); }
-
-void MinerGUI::addMediaForShot(const std::wstring& file) {
-    addFilesToOpenNote({std::filesystem::path(file)});
-}
-
-void MinerGUI::foldMediaForShot(bool open) {
-    notesMediaOpen_ = open;
-    mediaNotice_.clear();
-    layoutNotes();
-    if (notes_) InvalidateRect(notes_, nullptr, TRUE);
-}
-
-void MinerGUI::layoutNotes() {
-    if (!notes_) return;
-    RECT rc;
-    GetClientRect(notes_, &rc);
-    const int M = scale(MARGIN);
-    const int leftW = scale(NOTES_TREE_WIDTH);
-    const int editX = M + leftW + scale(14);
-    const int top = scale(100);
-    if (notesEdit_) {
-        const bool show = (noteIndex_ >= 0) && !headless_;
-        // Hiding the control that holds the focus leaves the focus nowhere, and a
-        // key pressed after that reaches no window at all - typing to start a note
-        // would then do nothing.
-        if (!show && notesVisible_ && GetFocus() == notesEdit_) SetFocus(notes_);
-        ShowWindow(notesEdit_, show ? SW_SHOW : SW_HIDE);
-        const int rail = (int)mediaRailWidth() + (mediaRailWidth() > 0 ? scale(10) : 0);
-        MoveWindow(notesEdit_, editX + scale(8), top + scale(8),
-                   (std::max)(scale(40), (int)rc.right - M - editX - scale(16) - rail),
-                   (std::max)(scale(40), (int)rc.bottom - top - scale(46)), TRUE);
-    }
-}
-
-void MinerGUI::openNote(int folder, int note) {
-    saveNote();
-    hideSuggestions();
-    noteFolder_ = folder;
-    noteIndex_ = note;
-    noteDirty_ = false;
-    if (notesEdit_) {
-        loadingNote_ = true;
-        if (note >= 0) {
-            SetWindowTextW(notesEdit_, toCrLf(toW(book_.body(folder, note))).c_str());
-        } else {
-            SetWindowTextW(notesEdit_, L"");
-        }
-        loadingNote_ = false;
-    }
-    styleNoteLinks();
-    layoutNotes();
-    // Whoever opened it wants to write in it: the caret goes where the
-    // typing is expected to land, rather than leaving it on the window.
-    if (note >= 0 && notesVisible_ && !headless_ && notesEdit_) SetFocus(notesEdit_);
-    if (notes_) InvalidateRect(notes_, nullptr, TRUE);
-}
-
-void MinerGUI::saveNote() {
-    if (!noteDirty_ || !notesEdit_ || noteIndex_ < 0) return;
-    book_.writeBody(noteFolder_, noteIndex_, fromW(toFileText(noteText())));
-    noteDirty_ = false;
-    if (notes_) InvalidateRect(notes_, nullptr, TRUE);
-}
-
-bool MinerGUI::startTypedNote() {
-    // Somewhere to put it: the folder that is picked, else the first one,
-    // else one made for the purpose.
-    int folder = noteFolder_;
-    if (folder < 0 || folder >= (int)book_.folders().size()) {
-        folder = book_.folders().empty() ? book_.addFolder("Notes") : 0;
-    }
-    if (folder < 0) return false;
-
-    const std::time_t now = std::time(nullptr);
-    std::tm local = {};
-    localtime_s(&local, &now);
-    char today[16] = {};
-    std::strftime(today, sizeof(today), "%Y-%m-%d", &local);
-
-    const int made = book_.addNote(folder, std::string("New Note ") + today);
-    if (made < 0) return false;
-    noteFolder_ = folder;
-    openNote(folder, made);
-    if (notesEdit_) SetFocus(notesEdit_);
-    return true;
-}
-
-void MinerGUI::startNaming(int mode, const std::wstring& initial) {
-    if (!notesName_) return;
-    nameMode_ = mode;
-    const int M = scale(MARGIN);
-    // Inset into the card drawn behind it: a single-line edit control puts
-    // its text at the top of its own rectangle, so the padding has to come
-    // from making the control smaller than the box the eye sees.
-    MoveWindow(notesName_, M + scale(7), scale(66), scale(NOTES_TREE_WIDTH) - scale(14),
-               scale(22), TRUE);
-    SetWindowTextW(notesName_, initial.c_str());
-    ShowWindow(notesName_, SW_SHOW);
-    SetFocus(notesName_);
-    SendMessage(notesName_, EM_SETSEL, 0, -1);
-    InvalidateRect(notes_, nullptr, TRUE);
-}
-
-void MinerGUI::commitNaming() {
-    if (!nameMode_ || !notesName_) return;
-    wchar_t buffer[256] = {};
-    GetWindowTextW(notesName_, buffer, 255);
-    const std::string name = fromW(buffer);
-    const int mode = nameMode_;
-    nameMode_ = 0;
-    ShowWindow(notesName_, SW_HIDE);
-    if (!name.empty()) {
-        if (mode == 1) {
-            const int made = book_.addFolder(name);
-            if (made >= 0) {
-                noteFolder_ = made;
-                noteIndex_ = -1;
-            }
-        } else if (mode == 2 && noteFolder_ >= 0) {
-            const int made = book_.addNote(noteFolder_, name);
-            if (made >= 0) openNote(noteFolder_, made);
-        } else if (mode == 3 && noteFolder_ >= 0) {
-            book_.renameFolder(noteFolder_, name);
-        } else if (mode == 4 && noteFolder_ >= 0 && noteIndex_ >= 0) {
-            book_.renameNote(noteFolder_, noteIndex_, name);
-        }
-    }
-    SetFocus(notes_);
-    layoutNotes();
-    InvalidateRect(notes_, nullptr, TRUE);
 }
 
 void MinerGUI::setLookingOpenForShot(bool open) { setLookingOpen(open); }
@@ -7637,11 +6701,6 @@ void MinerGUI::setPulseForShot(bool on) {
     else if (liveModeActive_) SetTimer(hwnd_, 1, 600, nullptr);
     pulseOn_ = on;
     InvalidateRect(hwnd_, nullptr, TRUE);
-}
-
-void MinerGUI::importForShot(const std::wstring& file) {
-    importNotesFrom(std::filesystem::path(file));
-    if (notes_) InvalidateRect(notes_, nullptr, TRUE);
 }
 
 void MinerGUI::openMethodForShot() {
@@ -7670,93 +6729,8 @@ void MinerGUI::openOreForShot(const char* ore) {
     showOreFinderFor(ore);
 }
 
-void MinerGUI::suggestForShot() {
-    suggestions_ = suggestionsAt(L"heading out to daym", 19);
-    suggestChoice_ = 0;
-    if (suggestions_.empty()) return;
-    if (!notesSuggest_) {
-        notesSuggest_ = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, L"SynthScanSuggest", L"",
-                                        WS_POPUP, 0, 0, 10, 10, notes_, nullptr, hInstance_, nullptr);
-        if (notesSuggest_) roundPopupCorners(notesSuggest_);
-    }
-    if (!notesSuggest_) return;
-    SetWindowPos(notesSuggest_, HWND_TOPMOST, headless_ ? -31000 : 200, headless_ ? -31000 : 200,
-                 scale(230),
-                 scale(8) + (std::min)((int)suggestions_.size(), SUGGEST_ROWS) * scale(SUGGEST_ROW) + scale(16),
-                 SWP_NOACTIVATE | SWP_SHOWWINDOW);
-    InvalidateRect(notesSuggest_, nullptr, TRUE);
-}
-
 void MinerGUI::openPlaceForShot() {
     showPlaceFinderFor("Daymar");
-}
-
-// A name being typed into the open note, and what the notebook offers for
-// it, so the screenshot for the website shows the autocomplete. The letters
-// go in the way a paste would, the caret ends behind them, and the list is
-// worked out and placed by the very code that does it while typing.
-void MinerGUI::suggestInNoteForShot(const std::wstring& typed) {
-    if (!notesEdit_ || noteIndex_ < 0) return;
-    const int end = GetWindowTextLengthW(notesEdit_);
-    SendMessageW(notesEdit_, EM_SETSEL, (WPARAM)end, (LPARAM)end);
-    SendMessageW(notesEdit_, EM_REPLACESEL, FALSE, (LPARAM)typed.c_str());
-    const int caret = GetWindowTextLengthW(notesEdit_);
-    SendMessageW(notesEdit_, EM_SETSEL, (WPARAM)caret, (LPARAM)caret);
-    // Filed at once, so the hidden run's drawing of the note has the letters
-    typingForShot_ = true;
-    saveNote();
-    updateSuggestions(true);
-    typingForShot_ = false;
-}
-
-void MinerGUI::placeSuggestForShot() {
-    if (!notesSuggest_ || !notes_ || suggestions_.empty()) return;
-    POINT at = {(LONG)noteEndShown_.X, (LONG)noteEndShown_.Y};
-    ClientToScreen(notes_, &at);
-    RECT r{};
-    GetWindowRect(notesSuggest_, &r);
-    SetWindowPos(notesSuggest_, HWND_TOPMOST, at.x, at.y + scale(18), r.right - r.left, r.bottom - r.top,
-                 SWP_NOACTIVATE | SWP_SHOWWINDOW);
-}
-
-void MinerGUI::acceptSuggestForShot() {
-    typingForShot_ = true;
-    acceptSuggestion();
-    saveNote();
-    typingForShot_ = false;
-    hideSuggestions();
-}
-
-void MinerGUI::openNoteForShot() {
-    // The longest note there is: a picture of the window is worth more with
-    // something in it than with the alphabetically first thing in it
-    const auto& folders = book_.folders();
-    int bestF = -1, bestN = -1;
-    size_t most = 0;
-    for (int f = 0; f < (int)folders.size(); f++) {
-        for (int n = 0; n < (int)folders[f].notes.size(); n++) {
-            const size_t size = book_.body(f, n).size();
-            if (bestF < 0 || size > most) {
-                most = size;
-                bestF = f;
-                bestN = n;
-            }
-        }
-    }
-    if (bestF >= 0) openNote(bestF, bestN);
-}
-
-void MinerGUI::openTrashForShot() {
-    // throw the second note of the first folder that has two away, then look
-    const auto& folders = book_.folders();
-    for (int f = 0; f < (int)folders.size(); f++) {
-        if (folders[f].notes.size() >= 2) {
-            book_.trashNote(f, 1);
-            break;
-        }
-    }
-    trashOpen_ = true;
-    if (notes_) InvalidateRect(notes_, nullptr, TRUE);
 }
 
 void MinerGUI::widestFilterForShot() {
@@ -7785,10 +6759,6 @@ void MinerGUI::widestFilterForShot() {
     if (crafting_) InvalidateRect(crafting_, nullptr, TRUE);
 }
 
-// The list cut down to where a recipe can be earned and who hands it over.
-// Pyro, and whichever outfit reaches the most recipes there - picked from
-// the data rather than named, so the picture keeps telling the truth when
-// the game files change.
 void MinerGUI::narrowByContractForShot() {
     craftType_ = -1;
     craftGroup_ = -1;
@@ -7851,858 +6821,6 @@ void MinerGUI::cartOnlyForShot(const char* blueprint) {
     if (hwnd_) InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
-void MinerGUI::dragNoteForShot(bool on) {
-    if (!on) {
-        dragging_ = false;
-        dragFolder_ = dragNote_ = dropFolder_ = -1;
-        if (notes_) InvalidateRect(notes_, nullptr, TRUE);
-        return;
-    }
-    // the first note of the first folder that has one, on its way to the
-    // next folder along
-    const auto& folders = book_.folders();
-    int from = -1, to = -1;
-    for (int f = 0; f < (int)folders.size(); f++) {
-        if (from < 0 && !folders[f].notes.empty()) from = f;
-        else if (from >= 0 && to < 0) to = f;
-    }
-    if (from < 0) return;
-    noteFolder_ = from;
-    noteIndex_ = 0;
-    dragFolder_ = from;
-    dragNote_ = 0;
-    dragging_ = true;
-    dropFolder_ = -1;
-    dragAt_ = {scale(120), scale(150)};
-    // the rows are where the last paint left them, so the pointer can be put
-    // on the folder it is supposed to be over
-    for (const auto& hit : noteHits_) {
-        if (hit.kind == 0 && hit.value == to) {
-            dropFolder_ = to;
-            dragAt_ = {(LONG)(hit.rect.X + hit.rect.Width * 0.4f),
-                       (LONG)(hit.rect.Y + hit.rect.Height * 0.5f)};
-        }
-    }
-    if (notes_) InvalidateRect(notes_, nullptr, TRUE);
-}
-
-void MinerGUI::startNamingForShot() {
-    startNaming(1, L"New folder");
-}
-
-void MinerGUI::paintNotesTo(HDC hdc) {
-    paintNotes(hdc);
-}
-
-void MinerGUI::paintNotes(HDC hdc) {
-    RECT rc;
-    GetClientRect(notes_, &rc);
-    const int cw = rc.right, ch = rc.bottom;
-
-    HDC memDC = CreateCompatibleDC(hdc);
-    HBITMAP memBitmap = CreateCompatibleBitmap(hdc, cw, ch);
-    HBITMAP oldBitmap = (HBITMAP)SelectObject(memDC, memBitmap);
-    {
-        Gdiplus::Graphics g(memDC);
-        prepareGraphics(g);
-        Gdiplus::SolidBrush bgBrush(COL_BG);
-        g.FillRectangle(&bgBrush, 0, 0, cw, ch);
-        noteHits_.clear();
-        drawNotes(g, cw, ch);
-    }
-    BitBlt(hdc, 0, 0, cw, ch, memDC, 0, 0, SRCCOPY);
-    SelectObject(memDC, oldBitmap);
-    DeleteObject(memBitmap);
-    DeleteDC(memDC);
-}
-
-void MinerGUI::drawNotes(Gdiplus::Graphics& g, int cw, int ch) {
-    Gdiplus::Font markFont(&markFamily(), scaleF(20), Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
-    Gdiplus::Font folderFont(&markFamily(), scaleF(13), Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
-    Gdiplus::Font nameFont(&textFamily(), scaleF(13), Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
-    Gdiplus::Font rowFont(&textFamily(), scaleF(12), Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
-    Gdiplus::Font buttonFont(&markFamily(), scaleF(12), Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
-    Gdiplus::Font smallButtonFont(&markFamily(), scaleF(11), Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
-    Gdiplus::Font subFont(&textFamily(), scaleF(10), Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
-    Gdiplus::SolidBrush textBrush(COL_TEXT);
-    Gdiplus::SolidBrush dimBrush(COL_TEXT_DIM);
-    Gdiplus::SolidBrush faintBrush(COL_TEXT_FAINT);
-    Gdiplus::SolidBrush accentBrush(COL_ACCENT);
-    Gdiplus::StringFormat rightAlign;
-    rightAlign.SetAlignment(Gdiplus::StringAlignmentFar);
-    // A row's words, standing in the middle of its height
-    Gdiplus::StringFormat middle;
-    middle.SetLineAlignment(Gdiplus::StringAlignmentCenter);
-    middle.SetFormatFlags(Gdiplus::StringFormatFlagsNoWrap);
-    middle.SetTrimming(Gdiplus::StringTrimmingEllipsisCharacter);
-    Gdiplus::StringFormat middleRight;
-    middleRight.SetAlignment(Gdiplus::StringAlignmentFar);
-    middleRight.SetLineAlignment(Gdiplus::StringAlignmentCenter);
-
-    const float M = (float)scale(MARGIN);
-    const float leftW = (float)scale(NOTES_TREE_WIDTH);
-    const float editX = M + leftW + scaleF(14);
-
-    // A button measured to its words and set against a right-hand edge;
-    // hands back its left edge, so the next one can line up against it.
-    // The notebook does not follow the pointer, so nothing here is hot.
-    auto buttonAt = [&](const wchar_t* label, float rightEdge, float top, float high,
-                        const Gdiplus::Font& font, ButtonKind kind, int hit, int value) {
-        Gdiplus::RectF w;
-        g.MeasureString(label, -1, &font, Gdiplus::PointF(0, 0), &w);
-        const float pad = high > scaleF(22) ? scaleF(24) : scaleF(18);
-        const Gdiplus::RectF b(rightEdge - w.Width - pad, top, w.Width + pad, high);
-        drawButton(g, b, label, font, kind, false, scaleF(R_CONTROL));
-        noteHits_.push_back({b, hit, value});
-        return b.X;
-    };
-    // The tree's disclosure mark, drawn rather than typed: pointing down
-    // while the folder is open, to the right while it is shut
-    auto disclosure = [&](float cx, float cy, bool open, const Gdiplus::Color& colour) {
-        const float half = scaleF(3.5f);
-        if (open) {
-            chevron(g, cx, cy, half, scaleF(1.4f), colour, false);
-            return;
-        }
-        Gdiplus::Pen pen(colour, scaleF(1.4f));
-        pen.SetStartCap(Gdiplus::LineCapRound);
-        pen.SetEndCap(Gdiplus::LineCapRound);
-        pen.SetLineJoin(Gdiplus::LineJoinRound);
-        const float dx = 0.55f * half;
-        const Gdiplus::PointF pts[3] = {Gdiplus::PointF(cx - dx, cy - half), Gdiplus::PointF(cx + dx, cy),
-                                        Gdiplus::PointF(cx - dx, cy + half)};
-        g.DrawLines(&pen, pts, 3);
-    };
-
-    // ---- the head ----
-    g.FillRectangle(&accentBrush, M, (float)scale(18), scaleF(8), scaleF(8));
-    g.DrawString(L"Notes", -1, &markFont, Gdiplus::PointF(M + scaleF(14), (float)scale(8)), &textBrush);
-    {
-        const int nf = (int)book_.folders().size(), nn = book_.noteCount();
-        std::wstring sub = std::to_wstring(nf) + (nf == 1 ? L" folder  ·  " : L" folders  ·  ") +
-                           std::to_wstring(nn) + (nn == 1 ? L" note" : L" notes") +
-                           L"  ·  kept as text files in notes\\";
-        g.DrawString(sub.c_str(), -1, &subFont, Gdiplus::PointF(M + scaleF(15), (float)scale(36)), &dimBrush);
-    }
-
-    // ---- the book as a whole: out to a file, and back in ----
-    // At the top and on the right, because these two are about all of it
-    // rather than the note in hand. Nobody should have to know where
-    // %LOCALAPPDATA% is to send somebody a route.
-    {
-        const float ix = buttonAt(L"Import", (float)cw - M, (float)scale(14), scaleF(24), buttonFont,
-                                  ButtonKind::Secondary, 13, 0);
-        buttonAt(L"Export all", ix - scaleF(8), (float)scale(14), scaleF(24), buttonFont,
-                 ButtonKind::Secondary, 12, 0);
-    }
-
-    // ---- what can be done ----
-    {
-        const float by = (float)scale(62);
-        auto button = [&](const wchar_t* label, float x, float w, int kind, ButtonKind look) {
-            Gdiplus::RectF b(x, by, w, scaleF(26));
-            drawButton(g, b, label, buttonFont, look, false, scaleF(R_CONTROL));
-            noteHits_.push_back({b, kind, 0});
-        };
-        if (!nameMode_) {
-            // A new note is what this window is for, and it can only be
-            // made in a folder: amber once there is one to put it in
-            button(L"New folder", M, leftW / 2 - scaleF(3), 2, ButtonKind::Secondary);
-            button(L"New note", M + leftW / 2 + scaleF(3), leftW / 2 - scaleF(3), 3,
-                   noteFolder_ >= 0 ? ButtonKind::Primary : ButtonKind::Secondary);
-        } else {
-            // the card the naming box sits in - see startNaming(). Its
-            // surface is the edit control's own, so the two read as one
-            // field; a soft ring of amber round it says it has the keys.
-            Gdiplus::RectF box(M, by - scaleF(2), leftW, scaleF(30));
-            Gdiplus::RectF halo(box.X - scaleF(2), box.Y - scaleF(2), box.Width + scaleF(4),
-                                box.Height + scaleF(4));
-            fillRoundRect(g, halo, scaleF(R_CONTROL + 2), tint(COL_ACCENT, 34));
-            fillRoundRect(g, box, scaleF(R_CONTROL), COL_CARD_HI);
-            strokeRoundRect(g, box, scaleF(R_CONTROL), tint(COL_ACCENT, 200));
-            // the naming box sits here; say what it is for
-            const wchar_t* what = (nameMode_ == 1)   ? L"name for the new folder — Enter to make it, Esc to drop it"
-                                  : (nameMode_ == 2) ? L"name for the new note — Enter to make it, Esc to drop it"
-                                  : (nameMode_ == 3) ? L"new name for the folder — Enter to rename, Esc to drop it"
-                                                     : L"new name for the note — Enter to rename, Esc to drop it";
-            g.DrawString(what, -1, &subFont, Gdiplus::PointF(M, by + scaleF(34)), &faintBrush);
-        }
-    }
-
-    // ---- the tree ----
-    float y = (float)scale(nameMode_ ? 120 : 100);
-    const float treeBottom = (float)ch - scaleF(30);
-    const auto& folders = book_.folders();
-    if (folders.empty()) {
-        g.DrawString(L"No folders yet — New folder starts one.", -1, &rowFont,
-                     Gdiplus::PointF(M, y), &dimBrush);
-    }
-    for (int f = 0; f < (int)folders.size() && y < treeBottom; f++) {
-        const auto& folder = folders[f];
-        const bool picked = (noteFolder_ == f);
-        // One thing is picked at a time: the open note when it can be seen,
-        // and the folder itself when no note is open in it (or it is shut)
-        const bool holdsOpen = picked && noteIndex_ >= 0 && folder.open;
-        Gdiplus::RectF row(M, y, leftW, scaleF(24));
-        if ((dragging_ && dropFolder_ == f) || (picked && !holdsOpen && !dragging_)) {
-            // the folder picked - or, mid-drag, where the note would land
-            selectionFrame(g, Gdiplus::RectF(row.X, row.Y + scaleF(1), row.Width, row.Height - scaleF(2)),
-                           scaleF(R_CONTROL));
-        }
-        // the disclosure mark, and the folder
-        disclosure(M + scaleF(13), y + scaleF(12), folder.open, picked ? COL_TEXT_DIM : COL_TEXT_FAINT);
-        g.DrawString(toW(folder.name).c_str(), -1, &folderFont,
-                     Gdiplus::RectF(M + scaleF(26), y, leftW - scaleF(60), scaleF(24)), &middle,
-                     picked ? &textBrush : &dimBrush);
-        Gdiplus::RectF count(M, y, leftW - scaleF(10), scaleF(24));
-        g.DrawString(std::to_wstring((int)folder.notes.size()).c_str(), -1, &subFont,
-                     count, &middleRight, &faintBrush);
-        noteHits_.push_back({row, 0, f});
-        noteHits_.push_back({Gdiplus::RectF(M, y, scaleF(24), scaleF(24)), 6, f});
-        y += scaleF(24);
-
-        if (!folder.open) continue;
-        for (int n = 0; n < (int)folder.notes.size() && y < treeBottom; n++) {
-            const auto& note = folder.notes[n];
-            const bool open = (noteFolder_ == f && noteIndex_ == n);
-            // the one being carried: an empty outline, so the eye can see
-            // both where it came from and that it is no longer sitting there
-            const bool lifted = dragging_ && f == dragFolder_ && n == dragNote_;
-            Gdiplus::RectF nrow(M + scaleF(16), y, leftW - scaleF(16), scaleF(34));
-            // a pixel in from the rows either side, so a frame never
-            // touches the note above or below it
-            const Gdiplus::RectF face(nrow.X, nrow.Y + scaleF(1), nrow.Width, nrow.Height - scaleF(2));
-            if (lifted) {
-                strokeRoundRect(g, face, scaleF(R_CONTROL), COL_BORDER);
-            } else if (open) {
-                selectionFrame(g, face, scaleF(R_CONTROL));
-            }
-            g.DrawString(toW(note.name).c_str(), -1, &rowFont,
-                         Gdiplus::PointF(nrow.X + scaleF(10), y + scaleF(3)),
-                         lifted ? &faintBrush : (open ? &textBrush : &dimBrush));
-            std::wstring under = toW(note.modified);
-            if (!note.preview.empty()) under += L"  ·  " + toW(note.preview);
-            Gdiplus::RectF line(nrow.X + scaleF(10), y + scaleF(18), nrow.Width - scaleF(18), scaleF(14));
-            Gdiplus::StringFormat clip;
-            clip.SetTrimming(Gdiplus::StringTrimmingEllipsisCharacter);
-            clip.SetFormatFlags(Gdiplus::StringFormatFlagsNoWrap);
-            g.DrawString(under.c_str(), -1, &subFont, line, &clip, &faintBrush);
-            noteHits_.push_back({nrow, 1, f * 1000 + n});
-            y += scaleF(34);
-        }
-        y += scaleF(4);
-    }
-
-    // ---- the trash, at the foot of the tree ----
-    // A row that says how much is in it; open, it lists everything thrown
-    // away with a way back. Kept below the folders, where a bin belongs.
-    {
-        trashList_ = book_.trashed();
-        const float rowH = scaleF(24);
-        const int shown = trashOpen_ ? (int)trashList_.size() : 0;
-        const float need = rowH + shown * scaleF(34) + scaleF(6);
-        float ty = (std::max)(y + scaleF(12), treeBottom - need);
-        if (ty + rowH > treeBottom) ty = treeBottom - rowH;
-        hairline(g, M, ty - scaleF(6), M + leftW);
-        Gdiplus::RectF row(M, ty, leftW, rowH);
-        disclosure(M + scaleF(13), ty + scaleF(12), trashOpen_, trashOpen_ ? COL_TEXT_DIM : COL_TEXT_FAINT);
-        g.DrawString(L"Trash", -1, &folderFont, Gdiplus::RectF(M + scaleF(26), ty, leftW - scaleF(60), rowH),
-                     &middle, trashOpen_ ? &textBrush : &dimBrush);
-        // how much is in it where a folder says how many notes it holds
-        Gdiplus::RectF count(M, ty, leftW - scaleF(10), rowH);
-        const std::wstring held =
-            trashList_.empty() ? std::wstring(L"empty") : std::to_wstring((int)trashList_.size());
-        g.DrawString(held.c_str(), -1, &subFont, count, &middleRight, &faintBrush);
-        noteHits_.push_back({row, 10, 0});
-        ty += rowH;
-        for (int i = 0; trashOpen_ && i < (int)trashList_.size() && ty + scaleF(34) <= treeBottom; i++) {
-            const auto& t = trashList_[i];
-            Gdiplus::RectF trow(M + scaleF(16), ty, leftW - scaleF(16), scaleF(34));
-            std::wstring name = toW(t.name);
-            if (t.isFolder) name += L"  ·  folder, " + std::to_wstring(t.notes) + (t.notes == 1 ? L" note" : L" notes");
-            g.DrawString(name.c_str(), -1, &rowFont, Gdiplus::PointF(trow.X + scaleF(10), ty + scaleF(3)), &dimBrush);
-            std::wstring under = toW(t.when);
-            if (!t.folder.empty()) under += L"  ·  from " + toW(t.folder);
-            g.DrawString(under.c_str(), -1, &subFont, Gdiplus::PointF(trow.X + scaleF(10), ty + scaleF(18)), &faintBrush);
-            // the way back
-            buttonAt(L"Restore", trow.GetRight(), ty + scaleF(7), scaleF(20), smallButtonFont,
-                     ButtonKind::Secondary, 11, i);
-            ty += scaleF(34);
-        }
-    }
-
-    // ---- the note itself ----
-    // (No line down between the tree and the page: the page's own edge
-    // says where the one ends and the other begins.)
-    const float top = (float)scale(100);
-    // The rail takes its width off the note's right-hand edge, so the two
-    // never overlap and the text simply has less room while it is open
-    refreshMedia();
-    const float railW = mediaRailWidth();
-    const float railGap = railW > 0 ? scaleF(10) : 0.0f;
-    Gdiplus::RectF pane(editX, top, (float)cw - M - editX - railW - railGap,
-                        (float)ch - top - scaleF(30));
-    // The page is the note control's own colour, so the control sits in it
-    // without a second frame showing round its edge
-    const Gdiplus::Color page(GetRValue(CR_NOTE_BG), GetGValue(CR_NOTE_BG), GetBValue(CR_NOTE_BG));
-    fillRoundRect(g, pane, scaleF(R_CARD), page);
-    strokeRoundRect(g, pane, scaleF(R_CARD), COL_BORDER);
-    if (railW > 0) drawMediaRail(g, pane.GetRight() + railGap, pane.Y, pane.GetBottom());
-
-    if (noteFolder_ >= 0 && noteIndex_ >= 0 &&
-        noteFolder_ < (int)folders.size() && noteIndex_ < (int)folders[noteFolder_].notes.size()) {
-        const auto& note = folders[noteFolder_].notes[noteIndex_];
-
-        // The buttons are measured and drawn FIRST, so the name knows where to
-        // stop: a long note name is not an odd case, it is what a useful name
-        // looks like.
-        auto action = [&](const wchar_t* label, float rightEdge, int kind) {
-            const bool armed = (kind == 5 && confirmDelete_ == 1) || (kind == 8 && confirmDelete_ == 2);
-            return buttonAt(label, rightEdge, (float)scale(62), scaleF(26), buttonFont,
-                            armed ? ButtonKind::Danger : ButtonKind::Secondary, kind, 0);
-        };
-        // against the window's right edge, over the media rail as well as
-        // the page, so the name has the whole width left of them
-        const float x1 = action(confirmDelete_ == 1 ? L"Sure? Delete" : L"Delete",
-                                pane.GetRight() + railGap + railW, 5);
-        const float x2 = action(L"Rename", x1 - scaleF(8), 4);
-        const float x3 = action(L"Export", x2 - scaleF(8), 14);
-
-        // ...and now the name, in whatever room the buttons left it
-        {
-            Gdiplus::StringFormat oneLine;
-            oneLine.SetFormatFlags(Gdiplus::StringFormatFlagsNoWrap);
-            oneLine.SetTrimming(Gdiplus::StringTrimmingEllipsisCharacter);
-            const float room = (std::max)(scaleF(80), x3 - scaleF(10) - editX);
-            g.DrawString(toW(note.name).c_str(), -1, &markFont,
-                         Gdiplus::RectF(editX, (float)scale(56), room, scaleF(26)), &oneLine,
-                         &textBrush);
-        }
-        std::wstring where = toW(folders[noteFolder_].name) + L"  ·  " + toW(note.modified);
-        if (noteDirty_) where += L"  ·  unsaved";
-        g.DrawString(where.c_str(), -1, &subFont,
-                     Gdiplus::PointF(editX + scaleF(2), (float)scale(82)),
-                     noteDirty_ ? &accentBrush : &faintBrush);
-
-        // Headless has no edit control on screen, so the text is drawn - that
-        // is what makes a screenshot of this window worth anything
-        if (headless_) {
-            // The rich edit control is not on screen here, so the note is
-            // drawn the way that control shows it: brackets hidden, the name
-            // inside them underlined in its own colour.
-            Gdiplus::Font bodyFont(&numeralFamily(), scaleF(12), Gdiplus::FontStyleRegular,
-                                   Gdiplus::UnitPixel);
-            Gdiplus::Font linkFont(&numeralFamily(), scaleF(12), Gdiplus::FontStyleUnderline,
-                                   Gdiplus::UnitPixel);
-            const std::wstring text = toW(book_.body(noteFolder_, noteIndex_));
-            const auto links = bracketLinksIn(text);
-            Gdiplus::StringFormat flat;
-            flat.SetFormatFlags(Gdiplus::StringFormatFlagsNoWrap |
-                                Gdiplus::StringFormatFlagsMeasureTrailingSpaces);
-            float ty = pane.Y + scaleF(10);
-            size_t lineStart = 0;
-            while (lineStart <= text.size() && ty < pane.GetBottom() - scaleF(16)) {
-                size_t lineEnd = text.find(L'\n', lineStart);
-                if (lineEnd == std::wstring::npos) lineEnd = text.size();
-                float tx = pane.X + scaleF(10);
-                size_t at = lineStart;
-                auto piece = [&](size_t from, size_t to, bool isLink, const NoteLink* link) {
-                    if (to <= from) return;
-                    std::wstring run = text.substr(from, to - from);
-                    while (!run.empty() && run.back() == L'\r') run.pop_back();
-                    if (run.empty()) return;
-                    Gdiplus::SolidBrush brush(isLink ? linkColour(*link) : COL_TEXT);
-                    g.DrawString(run.c_str(), -1, isLink ? &linkFont : &bodyFont,
-                                 Gdiplus::PointF(tx, ty), &flat, &brush);
-                    Gdiplus::RectF w;
-                    g.MeasureString(run.c_str(), -1, isLink ? &linkFont : &bodyFont,
-                                    Gdiplus::PointF(0, 0), &flat, &w);
-                    tx += w.Width;
-                };
-                for (const auto& link : links) {
-                    if (link.at < at || link.at >= lineEnd) continue;
-                    piece(at, link.at, false, nullptr);
-                    piece(link.at + 2, link.at + link.len - 2, true, &link);
-                    at = link.at + link.len;
-                }
-                piece(at, lineEnd, false, nullptr);
-                if (lineEnd >= text.size()) noteEndShown_ = Gdiplus::PointF(tx, ty);   // for the shot's list
-                ty += scaleF(15);
-                lineStart = lineEnd + 1;
-            }
-        }
-    } else if (noteFolder_ >= 0 && noteFolder_ < (int)folders.size()) {
-        // A folder with nothing open: name it, or throw the whole thing away
-        const auto& folder = folders[noteFolder_];
-        g.DrawString(toW(folder.name).c_str(), -1, &markFont,
-                     Gdiplus::PointF(editX, (float)scale(56)), &textBrush);
-        std::wstring what = std::to_wstring((int)folder.notes.size());
-        what += (folder.notes.size() == 1) ? L" note in it" : L" notes in it";
-        g.DrawString(what.c_str(), -1, &subFont,
-                     Gdiplus::PointF(editX + scaleF(2), (float)scale(82)), &faintBrush);
-        auto action = [&](const wchar_t* label, float rightEdge, int kind) {
-            const bool armed = (kind == 8 && confirmDelete_ == 2);
-            return buttonAt(label, rightEdge, (float)scale(62), scaleF(26), buttonFont,
-                            armed ? ButtonKind::Danger : ButtonKind::Secondary, kind, 0);
-        };
-        const float x1 = action(confirmDelete_ == 2 ? L"Sure? Delete the folder and its notes" : L"Delete folder",
-                                (float)cw - M, 8);
-        action(L"Rename folder", x1 - scaleF(8), 7);
-        g.DrawString(L"Pick a note on the left, or make one with New note.", -1, &rowFont,
-                     Gdiplus::PointF(pane.X + scaleF(12), pane.Y + scaleF(12)), &faintBrush);
-    } else {
-        g.DrawString(L"Pick a folder on the left, or make one with New folder.", -1, &rowFont,
-                     Gdiplus::PointF(editX, (float)scale(60)), &faintBrush);
-    }
-
-    // ---- what the hand is carrying ----
-    // Drawn last, so it sits over the tree the way a picked-up thing does.
-    // Without it a drag looks exactly like a click that did nothing.
-    if (dragging_ && dragFolder_ >= 0 && dragFolder_ < (int)folders.size() &&
-        dragNote_ >= 0 && dragNote_ < (int)folders[dragFolder_].notes.size()) {
-        const std::wstring name = toW(folders[dragFolder_].notes[dragNote_].name);
-        std::wstring into;
-        if (dropFolder_ >= 0 && dropFolder_ < (int)folders.size()) {
-            into = L"into " + toW(folders[dropFolder_].name);
-        }
-        Gdiplus::RectF nw, iw;
-        g.MeasureString(name.c_str(), -1, &nameFont, Gdiplus::PointF(0, 0), &nw);
-        if (!into.empty()) g.MeasureString(into.c_str(), -1, &subFont, Gdiplus::PointF(0, 0), &iw);
-        const float wide = (std::max)(nw.Width, iw.Width) + scaleF(22);
-        const float high = into.empty() ? scaleF(26) : scaleF(42);
-        float cx = (float)dragAt_.x + scaleF(14);
-        float cy = (float)dragAt_.y + scaleF(10);
-        if (cx + wide > (float)cw - scaleF(4)) cx = (float)cw - scaleF(4) - wide;
-        if (cy + high > (float)ch - scaleF(4)) cy = (float)ch - scaleF(4) - high;
-        // lifted off the page: a shadow under it and a rim of light, amber
-        // once it is over a folder that will take it
-        Gdiplus::RectF chip(cx, cy, wide, high);
-        dropShadow(g, chip, scaleF(R_CONTROL), scaleF(10));
-        fillRoundRect(g, chip, scaleF(R_CONTROL), COL_CARD_HI);
-        strokeRoundRect(g, chip, scaleF(R_CONTROL), dropFolder_ >= 0 ? tint(COL_ACCENT, 200) : COL_GLASS_RIM);
-        g.DrawString(name.c_str(), -1, &nameFont,
-                     Gdiplus::PointF(chip.X + scaleF(11), chip.Y + scaleF(4)), &textBrush);
-        if (!into.empty()) {
-            g.DrawString(into.c_str(), -1, &subFont,
-                         Gdiplus::PointF(chip.X + scaleF(11), chip.Y + scaleF(23)), &accentBrush);
-        }
-    }
-
-    // ---- the foot ----
-    // ...which is where an export or an import says how it went. The line
-    // stands until the next click, so a refusal can actually be read.
-    const float fy = (float)ch - scaleF(22);
-    hairline(g, M, fy - scaleF(8), (float)cw - M);
-    if (!noteNotice_.empty()) {
-        Gdiplus::SolidBrush redBrush(COL_RED);
-        g.DrawString(noteNotice_.c_str(), -1, &subFont, Gdiplus::PointF(M, fy),
-                     noteNoticeBad_ ? &redBrush : &accentBrush);
-    } else {
-        g.DrawString(L"Just start typing to begin a note  ·  drag one onto another folder to move it  "
-                     L"·  type an ore, a place or a recipe and press Enter to link it",
-                     -1, &subFont, Gdiplus::PointF(M, fy), &faintBrush);
-        Gdiplus::RectF fr(M, fy, (float)cw - 2 * M, scaleF(16));
-        g.DrawString(L"one .txt file per note", -1, &subFont, fr, &rightAlign, &faintBrush);
-    }
-}
-
-// ---- links in a note ------------------------------------------------------
-// Nobody types markup. Write "Laranite at Daymar for the Palatino Arms" and
-// all three are links, because the app already knows every ore, every mining
-// place and every recipe name in the build. The text stays a plain text file
-// with nothing in it but what was typed.
-//
-// How: the note is cut into words, and every run of up to six words is looked
-// up in a table built once from the game data. Longest run wins, so
-// "Palatino Arms" is one link and not two, and a hit has to stand on word
-// boundaries, so "Ita" inside "capital" is not a place.
-
-namespace {
-
-// Only letters and digits count as part of a name: that folds the quotes in
-// Arclight "Stormfall" Pistol away on both sides of the comparison.
-std::wstring normaliseName(const std::wstring& s) {
-    std::wstring out;
-    bool space = true;
-    for (wchar_t c : s) {
-        if (iswalnum(c)) {
-            out += (wchar_t)towlower(c);
-            space = false;
-        } else if (!space) {
-            out += L' ';
-            space = true;
-        }
-    }
-    while (!out.empty() && out.back() == L' ') out.pop_back();
-    return out;
-}
-
-}  // namespace
-
-const std::map<std::wstring, MinerGUI::NoteLink>& MinerGUI::linkTable() {
-    static const std::map<std::wstring, NoteLink> table = [] {
-        std::map<std::wstring, NoteLink> t;
-        // Systems first, then places, then recipes, then ores: an ore name
-        // wins where two kinds share a name, because that is what a mining
-        // note means by it, and a system loses to everything.
-        // A system is not a place in this table, it is the column beside one,
-        // so systems are added from that column on their own.
-        for (const auto& row : ORE_LOCATIONS) {
-            NoteLink link;
-            link.name = row.system;
-            link.kind = 3;
-            t[normaliseName(toW(row.system))] = link;
-        }
-        for (const auto& row : ORE_LOCATIONS) {
-            NoteLink link;
-            link.name = row.location;
-            link.kind = 2;
-            t[normaliseName(toW(row.location))] = link;
-        }
-        for (int b = 0; b < CRAFT_BLUEPRINT_COUNT; b++) {
-            NoteLink link;
-            link.name = CRAFT_BLUEPRINTS[b].name;
-            link.kind = 1;
-            link.index = b;
-            t[normaliseName(toW(CRAFT_BLUEPRINTS[b].name))] = link;
-        }
-        for (int m = 0; m < CRAFT_MATERIAL_COUNT; m++) {
-            NoteLink link;
-            link.name = CRAFT_MATERIALS[m].name;
-            link.kind = 0;
-            link.index = m;
-            t[normaliseName(toW(CRAFT_MATERIALS[m].name))] = link;
-        }
-        // A name of one or two letters would light up half a sentence
-        for (auto it = t.begin(); it != t.end();) {
-            it = (it->first.size() < 3) ? t.erase(it) : std::next(it);
-        }
-        return t;
-    }();
-    return table;
-}
-
-// ---- suggesting a link ----------------------------------------------------
-// Recognising names in a note by itself would light up words nobody meant -
-// there is an item called STOP, and "the better stop" is not it. So the app
-// suggests and the writer decides: type a name, a small list drops under the
-// caret, Enter or a click turns it into a link, carrying on typing does not.
-//
-// A confirmed link is written into the text as [[Name]]. Nobody types those
-// brackets - the suggestion puts them there - but they are what makes the
-// link survive the file being opened in Notepad, mailed, or edited outside.
-
-// As many as are worth scrolling through: "palatino" alone is 23 recipes,
-// and a list cut at five would put most of them out of reach.
-static constexpr size_t SUGGEST_MAX = 24;
-
-std::vector<MinerGUI::NoteLink> MinerGUI::suggestionsAt(const std::wstring& text, int caret) {
-    std::vector<NoteLink> out;
-    if (caret <= 0 || caret > (int)text.size()) return out;
-    // Inside brackets already? Then it is a link and needs no suggesting.
-    const size_t open = text.rfind(L"[[", (size_t)caret);
-    if (open != std::wstring::npos) {
-        const size_t close = text.find(L"]]", open);
-        if (close == std::wstring::npos || close >= (size_t)caret) return out;
-    }
-    // The words that end at the caret, longest run first
-    struct Word { size_t at, end; };
-    std::vector<Word> words;
-    size_t i = (size_t)caret;
-    while (words.size() < 6 && i > 0) {
-        size_t end = i;
-        while (end > 0 && !iswalnum(text[end - 1])) {
-            if (end == (size_t)caret) break;    // the caret must sit on a word
-            end--;
-        }
-        if (end == 0 || !iswalnum(text[end - 1])) break;
-        size_t start = end;
-        while (start > 0 && iswalnum(text[start - 1])) start--;
-        words.insert(words.begin(), {start, end});
-        i = start;
-        // only a single space may separate the words of a name
-        if (i > 0 && text[i - 1] != L' ') break;
-    }
-
-    const auto& table = linkTable();
-    auto add = [&](NoteLink link, size_t from) {
-        for (const auto& had : out) {
-            if (had.kind == link.kind && had.name == link.name) return;
-        }
-        link.at = from;
-        link.len = (size_t)caret - from;
-        out.push_back(link);
-    };
-
-    // A whole name that has been typed out wins, longest run of words first
-    for (int n = (int)words.size(); n >= 1 && out.size() < SUGGEST_MAX; n--) {
-        const size_t from = words[words.size() - n].at;
-        const auto it = table.find(normaliseName(text.substr(from, (size_t)caret - from)));
-        if (it != table.end()) add(it->second, from);
-    }
-    // ...and then what is still being typed, the way a phone offers a word
-    // before it is finished. Three letters, or half the alphabet turns up.
-    for (int n = (int)words.size(); n >= 1 && out.size() < SUGGEST_MAX; n--) {
-        const size_t from = words[words.size() - n].at;
-        const std::wstring prefix = normaliseName(text.substr(from, (size_t)caret - from));
-        if (prefix.size() < 3) continue;
-        for (auto it = table.lower_bound(prefix); it != table.end(); ++it) {
-            if (it->first.compare(0, prefix.size(), prefix) != 0) break;
-            add(it->second, from);
-            if (out.size() >= SUGGEST_MAX) break;
-        }
-    }
-    // Last, a word from the MIDDLE or the end of a name. Nothing is called
-    // "Daystar", but four recipes end in it, and knowing that they begin with
-    // "Palatino Arms" is exactly what a suggestion is meant to spare you.
-    // These come after the ones that start with what was typed, which is the
-    // better guess, and the table is short enough to walk on a keystroke.
-    for (int n = (int)words.size(); n >= 1 && out.size() < SUGGEST_MAX; n--) {
-        const size_t from = words[words.size() - n].at;
-        const std::wstring word = normaliseName(text.substr(from, (size_t)caret - from));
-        if (word.size() < 3) continue;
-        for (const auto& entry : table) {
-            for (size_t p = entry.first.find(word); p != std::wstring::npos;
-                 p = entry.first.find(word, p + 1)) {
-                if (p == 0 || entry.first[p - 1] == L' ') {   // a word, not a fragment
-                    add(entry.second, from);
-                    break;
-                }
-            }
-            if (out.size() >= SUGGEST_MAX) break;
-        }
-    }
-    return out;
-}
-
-std::vector<MinerGUI::NoteLink> MinerGUI::bracketLinksIn(const std::wstring& text) {
-    std::vector<NoteLink> out;
-    size_t i = 0;
-    while (true) {
-        const size_t open = text.find(L"[[", i);
-        if (open == std::wstring::npos) break;
-        const size_t close = text.find(L"]]", open + 2);
-        if (close == std::wstring::npos) break;
-        const std::wstring name = text.substr(open + 2, close - open - 2);
-        if (name.find_first_of(L"\r\n") == std::wstring::npos) {
-            const auto& table = linkTable();
-            const auto it = table.find(normaliseName(name));
-            if (it != table.end()) {
-                NoteLink link = it->second;
-                link.at = open;
-                link.len = close + 2 - open;
-                out.push_back(link);
-            }
-        }
-        i = close + 2;
-    }
-    return out;
-}
-
-// ---- notes out to a file, and back in -------------------------------------
-// The notes live under %LOCALAPPDATA%, which is the right place to keep them
-// and the wrong place to ask anybody to go. So: out to a file wherever you
-// like, and in from a file somebody handed you.
-
-namespace {
-
-// The common dialog, with Documents under it. Returns "" when it was closed
-// without a choice. `ending` goes on a name typed without one.
-std::wstring askForDataFile(HWND owner, bool saving, const std::wstring& suggested,
-                            const wchar_t* filter, const wchar_t* title,
-                            const wchar_t* ending) {
-    wchar_t path[MAX_PATH] = {};
-    if (!suggested.empty()) {
-        wcsncpy_s(path, suggested.c_str(), _TRUNCATE);
-    }
-    std::wstring documents;
-    {
-        PWSTR folder = nullptr;
-        if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Documents, 0, nullptr, &folder)) && folder) {
-            documents = folder;
-        }
-        if (folder) CoTaskMemFree(folder);
-    }
-    OPENFILENAMEW ofn = {};
-    ofn.lStructSize = sizeof(ofn);
-    ofn.hwndOwner = owner;
-    ofn.lpstrFilter = filter;
-    ofn.lpstrFile = path;
-    ofn.nMaxFile = MAX_PATH;
-    ofn.lpstrDefExt = ending;
-    ofn.lpstrInitialDir = documents.empty() ? nullptr : documents.c_str();
-    ofn.lpstrTitle = title;
-    ofn.Flags = OFN_EXPLORER | OFN_NOCHANGEDIR |
-                (saving ? (OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST)
-                        : (OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST));
-    const BOOL ok = saving ? GetSaveFileNameW(&ofn) : GetOpenFileNameW(&ofn);
-    return ok ? std::wstring(path) : std::wstring();
-}
-
-// "2 notes" / "1 note", which reads better than the bare number
-std::wstring noteCountText(size_t n) {
-    return std::to_wstring((int)n) + (n == 1 ? L" note" : L" notes");
-}
-
-}  // namespace
-
-std::wstring MinerGUI::brokenLink(const std::wstring& text) {
-    auto lineAt = [&](size_t pos) {
-        int n = 1;
-        for (size_t k = 0; k < pos && k < text.size(); k++) {
-            if (text[k] == L'\n') n++;
-        }
-        return n;
-    };
-    size_t i = 0;
-    while (true) {
-        const size_t open = text.find(L"[[", i);
-        if (open == std::wstring::npos) break;
-        const size_t close = text.find(L"]]", open + 2);
-        const size_t eol = text.find_first_of(L"\r\n", open);
-        if (close == std::wstring::npos || (eol != std::wstring::npos && close > eol)) {
-            return L"line " + std::to_wstring(lineAt(open)) + L", a [[ that never closes";
-        }
-        const std::wstring name = text.substr(open + 2, close - open - 2);
-        const auto& table = linkTable();
-        if (table.find(normaliseName(name)) == table.end()) {
-            return L"line " + std::to_wstring(lineAt(open)) + L", [[" + name +
-                   L"]] is no ore, place or recipe this build knows";
-        }
-        i = close + 2;
-    }
-    return L"";
-}
-
-void MinerGUI::exportNotes(int folder, int note) {
-    noteNotice_.clear();
-    noteNoticeBad_ = false;
-    if (headless_) return;
-    saveNote();   // what is being written this minute belongs in the file too
-    const auto notes = book_.collect(folder, note);
-    if (notes.empty()) {
-        noteNotice_ = L"there is nothing to export yet";
-        noteNoticeBad_ = true;
-        return;
-    }
-    std::wstring suggested = (notes.size() == 1) ? toW(notes.front().name) : L"SynthScan notes";
-    // the dialog puts the extension on the end; a dot inside a note's name
-    // would otherwise be taken for one
-    for (auto& c : suggested) {
-        if (c == L'.') c = L' ';
-    }
-    suggested += L".txt";
-    const std::wstring path = askForDataFile(notes_, true, suggested,
-                                             L"SynthScan notes (*.txt)\0*.txt\0All files\0*.*\0",
-                                             L"Export notes", L"txt");
-    if (path.empty()) return;   // thought better of it
-    const std::string text = NoteBook::writeBundle(notes);
-    const std::filesystem::path file(path);
-    std::ofstream out(file, std::ios::binary | std::ios::trunc);
-    if (!out.is_open()) {
-        noteNotice_ = L"cannot write to " + file.filename().wstring();
-        noteNoticeBad_ = true;
-        return;
-    }
-    out.write(text.data(), (std::streamsize)text.size());
-    out.close();
-    noteNotice_ = L"exported " + noteCountText(notes.size()) + L" to " + file.filename().wstring();
-    // The bundle is one readable text file, which is what makes it worth
-    // sending; a picture cannot be in it. Said out loud rather than left to
-    // be discovered at the other end, where the note arrives without them.
-    // The data backup takes the whole notes folder, pictures and all.
-    {
-        int withPictures = 0;
-        for (int f = 0; f < (int)book_.folders().size(); f++) {
-            for (int n = 0; n < (int)book_.folders()[f].notes.size(); n++) {
-                if (folder >= 0 && f != folder) continue;
-                if (note >= 0 && n != note) continue;
-                if (!book_.media(f, n).empty()) withPictures++;
-            }
-        }
-        if (withPictures) {
-            noteNotice_ += L"  ·  pictures stay behind (" +
-                           std::to_wstring(withPictures) +
-                           (withPictures == 1 ? L" note has some)" : L" notes have some)");
-        }
-    }
-    // A [[link]] typed by hand that names nothing would be refused on the way
-    // back in. Better said here, beside the file, than at the far end on
-    // somebody else's machine.
-    for (const auto& n : notes) {
-        const std::wstring problem = brokenLink(toW(n.body));
-        if (problem.empty()) continue;
-        noteNotice_ += L"  \u00B7  but \"" + toW(n.name) + L"\" has " + problem +
-                       L", and an import would refuse the lot";
-        noteNoticeBad_ = true;
-        break;
-    }
-}
-
-void MinerGUI::importNotes() {
-    noteNotice_.clear();
-    noteNoticeBad_ = false;
-    if (headless_) return;
-    saveNote();
-    const std::wstring path = askForDataFile(notes_, false, L"",
-                                             L"SynthScan notes (*.txt)\0*.txt\0All files\0*.*\0",
-                                             L"Import notes", L"txt");
-    if (path.empty()) return;   // thought better of it
-    importNotesFrom(std::filesystem::path(path));
-}
-
-bool MinerGUI::importNotesFrom(const std::filesystem::path& file) {
-    noteNotice_.clear();
-    noteNoticeBad_ = true;   // most ways out of here are a refusal
-    const std::wstring shown = file.filename().wstring();
-    std::ifstream in(file, std::ios::binary);
-    if (!in.is_open()) {
-        noteNotice_ = L"cannot read " + shown;
-        return false;
-    }
-    const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    in.close();
-
-    std::vector<NoteBook::BundleNote> notes;
-    std::string error;
-    if (!NoteBook::readBundle(text, notes, error)) {
-        noteNotice_ = toW(error) + L" - nothing was imported";
-        return false;
-    }
-    // Every [[link]] has to name something this build knows. One that does
-    // not is no longer a link, it is a pair of brackets in the middle of a
-    // sentence - so the file is refused whole rather than half-read, and
-    // what lands is either right or nothing at all.
-    for (const auto& n : notes) {
-        const std::wstring problem = brokenLink(toW(n.body));
-        if (problem.empty()) continue;
-        noteNotice_ = L"\"" + toW(n.name) + L"\", " + problem + L" - nothing was imported";
-        return false;
-    }
-    const int landed = book_.importNotes(notes);
-    book_.load();          // the tree sorts itself; read it back as it now is
-    noteFolder_ = -1;
-    noteIndex_ = -1;
-    openNote(-1, -1);
-    if (landed == 0) {
-        noteNotice_ = L"nothing could be written - " + toW(book_.lastError());
-        return false;
-    }
-    noteNoticeBad_ = false;
-    noteNotice_ = L"imported " + noteCountText((size_t)landed) + L" from " + shown;
-    if (landed < (int)notes.size()) {
-        noteNotice_ += L"  \u00B7  " + std::to_wstring((int)notes.size() - landed) +
-                       L" could not be written";
-    }
-    noteNotice_ += L"  \u00B7  nothing was overwritten";
-    return true;
-}
-
-// ---- the player's own things, out to a file and back ----------------------
-// The notebook can already travel on its own, but the shopping list, the
-// ores being watched for and the blueprint library cannot, and those are
-// the things nobody can make again. See DataBackup for the format.
-
 void MinerGUI::drawBackupCard(Gdiplus::Graphics& g, int cw, int ch) {
     Gdiplus::Font markFont(&markFamily(), scaleF(19), Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
     Gdiplus::Font textFont(&textFamily(), scaleF(12), Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
@@ -8745,7 +6863,7 @@ void MinerGUI::drawBackupCard(Gdiplus::Graphics& g, int cw, int ch) {
     y += scaleF(32);
 
     Gdiplus::RectF blurb(left, y, width, scaleF(34));
-    g.DrawString(L"Your notes, your ships, the shopping list, the ores you are looking for "
+    g.DrawString(L"Your ships, the shopping list, the ores you are looking for "
                  L"and the blueprint library \u2014 all of it in one file, wherever you want it.",
                  -1, &textFont, blurb, nullptr, &dimBrush);
     y += scaleF(48);
@@ -8812,7 +6930,7 @@ void MinerGUI::backUpData() {
     backupNotice_.clear();
     backupNoticeBad_ = false;
     if (headless_) return;
-    saveNote();   // whatever is being written this minute belongs in it
+
 
     const auto entries = SCMiner::DataBackup::collect(AppPaths::data());
     if (entries.empty()) {
@@ -8857,7 +6975,7 @@ void MinerGUI::restoreData() {
     backupNotice_.clear();
     backupNoticeBad_ = true;   // most ways out of here are a refusal
     if (headless_) return;
-    saveNote();
+
 
     // Backups are .bedrock; an older .txt backup reads just the same
     const std::wstring path =
@@ -8895,9 +7013,9 @@ void MinerGUI::restoreData() {
     // place they are all applied.
     loadCart();
     loadLookingFor();
-    book_.load();
-    noteFolder_ = -1;
-    noteIndex_ = -1;
+
+
+
     // The ships as the backup has them - and a backup with none leaves none,
     // the way a new install starts
     fits_.clear();
@@ -8919,7 +7037,7 @@ void MinerGUI::restoreData() {
         setShip(seated, shipInSeat_, hull);
     }
     if (dataRestoredCallback_) dataRestoredCallback_();
-    if (notes_) InvalidateRect(notes_, nullptr, TRUE);
+
     if (crafting_) InvalidateRect(crafting_, nullptr, TRUE);
 
     const int restored = (int)std::count_if(entries.begin(), entries.end(),
@@ -8932,392 +7050,6 @@ void MinerGUI::restoreData() {
                     L"  \u00B7  what was here is in " + toW(std::string(SCMiner::DataBackup::ASIDE)) +
                     L"\\" + toW(asideName) +
                     L"  \u00B7  settings apply from the next start";
-}
-
-LRESULT CALLBACK MinerGUI::SuggestProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
-    if (g_guiInstance) return g_guiInstance->handleSuggestMessage(hwnd, uMsg, wParam, lParam);
-    return DefWindowProcW(hwnd, uMsg, wParam, lParam);
-}
-
-LRESULT MinerGUI::handleSuggestMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
-    switch (uMsg) {
-        case WM_PAINT: {
-            PAINTSTRUCT ps;
-            HDC hdc = BeginPaint(hwnd, &ps);
-            RECT rc;
-            GetClientRect(hwnd, &rc);
-            Gdiplus::Graphics g(hdc);
-            g.SetTextRenderingHint(Gdiplus::TextRenderingHintClearTypeGridFit);
-            // A raised surface over the note, lit along its top edge and
-            // with a rim of light round it - the glass of the sheets, as far
-            // as a square little window of its own can carry it. The rim is
-            // drawn before the smoothing is on, so it lands on whole pixels.
-            Gdiplus::SolidBrush back(COL_CARD_HI);
-            g.FillRectangle(&back, 0, 0, rc.right, rc.bottom);
-            {
-                const Gdiplus::RectF sheen(0, 0, (float)rc.right, scaleF(28));
-                Gdiplus::LinearGradientBrush light(sheen, tint(COL_GLASS_RIM, 16), tint(COL_GLASS_RIM, 0),
-                                                   Gdiplus::LinearGradientModeVertical);
-                g.FillRectangle(&light, sheen);
-            }
-            Gdiplus::Pen edge(COL_GLASS_RIM, 1.0f);
-            g.DrawRectangle(&edge, 0, 0, rc.right - 1, rc.bottom - 1);
-            g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
-            g.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHalf);
-
-            Gdiplus::Font nameFont(&textFamily(), scaleF(12), Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
-            Gdiplus::Font kindFont(&textFamily(), scaleF(10), Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
-            Gdiplus::SolidBrush textBrush(COL_TEXT);
-            Gdiplus::SolidBrush dimBrush(COL_TEXT_DIM);
-            Gdiplus::SolidBrush faintBrush(COL_TEXT_FAINT);
-            Gdiplus::StringFormat rightAlign;
-            rightAlign.SetAlignment(Gdiplus::StringAlignmentFar);
-
-            const float rowH = scaleF(SUGGEST_ROW);
-            const int found = (int)suggestions_.size();
-            const int shown = (std::min)(found, SUGGEST_ROWS);
-            for (int vis = 0; vis < shown; vis++) {
-                const int i = suggestTop_ + vis;
-                if (i >= found) break;
-                const float y = scaleF(4) + vis * rowH;
-                if (i == suggestChoice_) {
-                    // the one Enter will take, marked the way the picked
-                    // note is marked in the tree
-                    selectionFrame(g, Gdiplus::RectF(scaleF(4), y, (float)rc.right - scaleF(8), rowH),
-                                   scaleF(R_CONTROL));
-                }
-                const NoteLink& link = suggestions_[i];
-                Gdiplus::SolidBrush dotBrush(linkColour(link));
-                g.FillEllipse(&dotBrush, scaleF(10), y + rowH / 2 - scaleF(3), scaleF(6), scaleF(6));
-                g.DrawString(toW(link.name).c_str(), -1, &nameFont,
-                             Gdiplus::PointF(scaleF(24), y + scaleF(3)),
-                             i == suggestChoice_ ? &textBrush : &dimBrush);
-                const wchar_t* what = (link.kind == 0)   ? L"ore"
-                                     : (link.kind == 1) ? L"recipe"
-                                     : (link.kind == 3) ? L"system"
-                                                        : L"place";
-                Gdiplus::RectF r(0, y + scaleF(5), (float)rc.right - scaleF(10), rowH);
-                g.DrawString(what, -1, &kindFont, r, &rightAlign,
-                             i == suggestChoice_ ? &dimBrush : &faintBrush);
-            }
-            {
-                Gdiplus::Font hintFont(&textFamily(), scaleF(9), Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
-                Gdiplus::RectF r(scaleF(8), (float)rc.bottom - scaleF(15), (float)rc.right - scaleF(16), scaleF(13));
-                // With more found than fit, say where in the list you are -
-                // otherwise the eight on screen look like all there is
-                std::wstring hint = L"Enter to link  ·  keep typing to ignore";
-                if (found > shown) {
-                    hint = L"Enter to link  ·  " + std::to_wstring(suggestChoice_ + 1) +
-                           L" of " + std::to_wstring(found) + L"  ·  scroll for more";
-                }
-                g.DrawString(hint.c_str(), -1, &hintFont, r, nullptr, &faintBrush);
-            }
-            EndPaint(hwnd, &ps);
-            return 0;
-        }
-        case WM_ERASEBKGND:
-            return 1;
-        case WM_MOUSEMOVE: {
-            const int row = (int)(((float)(short)HIWORD(lParam) - scaleF(4)) / scaleF(SUGGEST_ROW));
-            const int i = suggestTop_ + row;
-            if (row >= 0 && row < SUGGEST_ROWS && i < (int)suggestions_.size() && i != suggestChoice_) {
-                suggestChoice_ = i;
-                InvalidateRect(hwnd, nullptr, TRUE);
-            }
-            return 0;
-        }
-        case WM_LBUTTONDOWN: {
-            const int row = (int)(((float)(short)HIWORD(lParam) - scaleF(4)) / scaleF(SUGGEST_ROW));
-            const int i = suggestTop_ + row;
-            if (row >= 0 && row < SUGGEST_ROWS && i < (int)suggestions_.size()) {
-                suggestChoice_ = i;
-                acceptSuggestion();
-            }
-            return 0;
-        }
-        case WM_MOUSEWHEEL:
-            // Only arrives here if the list ever holds the focus; the note
-            // holds it in practice, so the wheel is caught in the message loop
-            moveSuggestion(GET_WHEEL_DELTA_WPARAM(wParam) > 0 ? -3 : 3, false);
-            return 0;
-        case WM_MOUSEACTIVATE:
-            // Clicking the list must not take the caret out of the note
-            return MA_NOACTIVATE;
-    }
-    return DefWindowProcW(hwnd, uMsg, wParam, lParam);
-}
-
-void MinerGUI::styleNoteLinks() {
-    if (!notesEdit_ || headless_) return;
-    const std::wstring text = noteText();
-    const auto links = bracketLinksIn(text);
-
-    CHARRANGE keep = {0, 0};
-    SendMessageW(notesEdit_, EM_EXGETSEL, 0, (LPARAM)&keep);
-    styling_ = true;
-    SendMessageW(notesEdit_, WM_SETREDRAW, FALSE, 0);
-
-    auto format = [&](long from, long to, DWORD effects, COLORREF colour) {
-        CHARRANGE r = {from, to};
-        SendMessageW(notesEdit_, EM_EXSETSEL, 0, (LPARAM)&r);
-        CHARFORMAT2W cf = {};
-        cf.cbSize = sizeof(cf);
-        cf.dwMask = CFM_COLOR | CFM_LINK | CFM_HIDDEN | CFM_UNDERLINE;
-        cf.dwEffects = effects;
-        cf.crTextColor = colour;
-        SendMessageW(notesEdit_, EM_SETCHARFORMAT, SCF_SELECTION, (LPARAM)&cf);
-    };
-
-    // everything plain first, so a link that was edited away stops being one
-    format(0, -1, 0, CR_EDIT_TEXT);
-    for (const auto& link : links) {
-        const long at = (long)link.at, end = (long)(link.at + link.len);
-        if (hideBrackets_) {
-            format(at, at + 2, CFE_HIDDEN, CR_EDIT_TEXT);
-            format(end - 2, end, CFE_HIDDEN, CR_EDIT_TEXT);
-        }
-        const Gdiplus::Color tint = linkColour(link);
-        format(at + 2, end - 2, CFE_LINK | CFE_UNDERLINE,
-               RGB(tint.GetR(), tint.GetG(), tint.GetB()));
-    }
-
-    SendMessageW(notesEdit_, EM_EXSETSEL, 0, (LPARAM)&keep);
-    SendMessageW(notesEdit_, WM_SETREDRAW, TRUE, 0);
-    styling_ = false;
-    InvalidateRect(notesEdit_, nullptr, TRUE);
-
-    // The one thing that would be unforgivable: hidden text not coming back
-    // out of the control, so that saving quietly drops every link. Checked
-    // once, on the first note that has one, and hiding is given up if so.
-    if (hideBrackets_ && !links.empty()) {
-        if (bracketLinksIn(noteText()).size() != links.size()) {
-            hideBrackets_ = false;
-            styleNoteLinks();
-        }
-    }
-}
-
-Gdiplus::Color MinerGUI::linkColour(const NoteLink& link) {
-    if (link.kind == 0) return getMineralColor(link.name);
-    if (link.kind == 1) return COL_ACCENT;
-    if (link.kind == 3) return COL_GREEN;    // a whole system, not one rock
-    return COL_TEXT;
-}
-
-void MinerGUI::openLinkRange(long from, long to) {
-    if (!notesEdit_ || to <= from) return;
-    std::wstring buffer((size_t)(to - from) + 1, L' ');
-    TEXTRANGEW range = {};
-    range.chrg.cpMin = from;
-    range.chrg.cpMax = to;
-    range.lpstrText = buffer.data();
-    const LRESULT got = SendMessageW(notesEdit_, EM_GETTEXTRANGE, 0, (LPARAM)&range);
-    if (got <= 0) return;
-    buffer.resize((size_t)got);
-    const auto& table = linkTable();
-    const auto it = table.find(normaliseName(buffer));
-    if (it != table.end()) openLink(it->second);
-}
-
-void MinerGUI::moveSuggestion(int delta, bool wrap) {
-    const int n = (int)suggestions_.size();
-    if (n <= 0) return;
-    int next = suggestChoice_ + delta;
-    if (wrap) next = ((next % n) + n) % n;
-    else next = std::clamp(next, 0, n - 1);
-    suggestChoice_ = next;
-    // Drag the drawn window along so the choice stays on screen
-    const int shown = (std::min)(n, SUGGEST_ROWS);
-    if (suggestChoice_ < suggestTop_) suggestTop_ = suggestChoice_;
-    if (suggestChoice_ >= suggestTop_ + shown) suggestTop_ = suggestChoice_ - shown + 1;
-    suggestTop_ = std::clamp(suggestTop_, 0, n - shown);
-    if (notesSuggest_) InvalidateRect(notesSuggest_, nullptr, TRUE);
-}
-
-void MinerGUI::hideSuggestions() {
-    suggestions_.clear();
-    suggestChoice_ = 0;
-    suggestTop_ = 0;
-    if (notesSuggest_) ShowWindow(notesSuggest_, SW_HIDE);
-}
-
-void MinerGUI::updateSuggestions(bool forShot) {
-    // Hidden windows offer nothing - except to the screenshot run, which
-    // asks for the list on purpose (suggestInNoteForShot)
-    if (!notesEdit_ || (headless_ && !forShot) || noteIndex_ < 0) return;
-    DWORD from = 0, to = 0;
-    SendMessageW(notesEdit_, EM_GETSEL, (WPARAM)&from, (LPARAM)&to);
-    if (from != to) {                       // a selection is not a caret
-        hideSuggestions();
-        return;
-    }
-    suggestions_ = suggestionsAt(noteText(), (int)from);
-    if (suggestions_.empty()) {
-        hideSuggestions();
-        return;
-    }
-    suggestChoice_ = 0;
-    suggestTop_ = 0;
-    if (!notesSuggest_) {
-        notesSuggest_ = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, L"SynthScanSuggest", L"",
-                                        WS_POPUP, 0, 0, 10, 10, notes_, nullptr, hInstance_, nullptr);
-        if (!notesSuggest_) return;
-        roundPopupCorners(notesSuggest_);
-    }
-    // Under the caret, in screen coordinates
-    POINTL caret = {};
-    SendMessageW(notesEdit_, EM_POSFROMCHAR, (WPARAM)&caret, (LPARAM)from);
-    POINT at = {caret.x, caret.y};
-    ClientToScreen(notesEdit_, &at);
-
-    int width = scale(190);
-    {
-        HDC dc = GetDC(notesSuggest_);
-        Gdiplus::Graphics g(dc);
-        Gdiplus::Font nameFont(&textFamily(), scaleF(12), Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
-        for (const auto& link : suggestions_) {
-            Gdiplus::RectF w;
-            g.MeasureString(toW(link.name).c_str(), -1, &nameFont, Gdiplus::PointF(0, 0), &w);
-            width = (std::max)(width, scale(90) + (int)w.Width);
-        }
-        ReleaseDC(notesSuggest_, dc);
-    }
-    const int shownRows = (std::min)((int)suggestions_.size(), SUGGEST_ROWS);
-    const int height = scale(8) + shownRows * scale(SUGGEST_ROW) + scale(16);
-    SetWindowPos(notesSuggest_, HWND_TOPMOST, at.x, at.y + scale(18), width, height,
-                 SWP_NOACTIVATE | SWP_SHOWWINDOW);
-    InvalidateRect(notesSuggest_, nullptr, TRUE);
-}
-
-void MinerGUI::acceptSuggestion() {
-    if (suggestions_.empty() || !notesEdit_) return;
-    NoteLink link = suggestions_[std::clamp(suggestChoice_, 0, (int)suggestions_.size() - 1)];
-
-    // The list was worked out when the last letter arrived. A click or an
-    // arrow key since then moves the caret and changes nothing else, so
-    // nothing recomputes it - and the piece of text about to be cut out
-    // would be the wrong one. It is worked out again here against what the
-    // control holds at this moment, and if the name is not on offer there
-    // any more, nothing is written: a note left alone beats a note cut in
-    // the wrong place.
-    DWORD caret = 0, other = 0;
-    SendMessageW(notesEdit_, EM_GETSEL, (WPARAM)&caret, (LPARAM)&other);
-    bool current = false;
-    if (caret == other) {
-        for (const auto& fresh : suggestionsAt(noteText(), (int)caret)) {
-            if (fresh.kind == link.kind && fresh.name == link.name) {
-                link = fresh;
-                current = true;
-                break;
-            }
-        }
-    }
-    hideSuggestions();
-    if (!current) return;
-
-    // Replace what was typed with the name as the table spells it, in
-    // brackets. EM_REPLACESEL keeps this on the edit control's undo stack,
-    // so ctrl+Z takes it back like any other typing.
-    const std::wstring replacement = L"[[" + toW(link.name) + L"]]";
-    SendMessageW(notesEdit_, EM_SETSEL, (WPARAM)link.at, (LPARAM)(link.at + link.len));
-    SendMessageW(notesEdit_, EM_REPLACESEL, TRUE, (LPARAM)replacement.c_str());
-
-    // Read back what actually went in. A link that opens and never closes is
-    // worse than no link at all, because everything typed afterwards lands
-    // inside it. If less went in than was handed over, the rest goes in
-    // behind it.
-    {
-        std::wstring got(replacement.size() + 1, L'\0');
-        TEXTRANGEW range = {};
-        range.chrg.cpMin = (LONG)link.at;
-        range.chrg.cpMax = (LONG)(link.at + replacement.size());
-        range.lpstrText = got.data();
-        const LRESULT read = SendMessageW(notesEdit_, EM_GETTEXTRANGE, 0, (LPARAM)&range);
-        got.resize(read > 0 ? (size_t)read : 0);
-        if (got != replacement && got.size() < replacement.size() &&
-            replacement.compare(0, got.size(), got) == 0) {
-            const long end = (long)(link.at + got.size());
-            const std::wstring rest = replacement.substr(got.size());
-            SendMessageW(notesEdit_, EM_SETSEL, (WPARAM)end, (LPARAM)end);
-            SendMessageW(notesEdit_, EM_REPLACESEL, TRUE, (LPARAM)rest.c_str());
-        }
-    }
-    SetFocus(notesEdit_);
-    noteDirty_ = true;
-    styleNoteLinks();
-    if (notes_) InvalidateRect(notes_, nullptr, TRUE);
-}
-
-std::wstring MinerGUI::noteText() const {
-    // Hidden windows read the note as filed - except while the screenshot
-    // run types into one (suggestInNoteForShot): the letters are in the
-    // editor, not yet in the file
-    if (notesEdit_ && (!headless_ || typingForShot_)) {
-        // Read in the control's own character space, where a paragraph break
-        // is ONE character. WM_GETTEXT hands back CR+LF pairs, and every
-        // position computed on that string is off by one per line above it,
-        // so an accepted suggestion would replace the wrong letters.
-        GETTEXTLENGTHEX lengthOf = {GTL_DEFAULT | GTL_NUMCHARS, 1200};
-        const int length = (int)SendMessageW(notesEdit_, EM_GETTEXTLENGTHEX, (WPARAM)&lengthOf, 0);
-        if (length <= 0) return {};
-        std::wstring wide;
-        wide.resize((size_t)length + 1);
-        GETTEXTEX get = {};
-        get.cb = (DWORD)((length + 1) * sizeof(wchar_t));
-        get.flags = GT_DEFAULT;
-        get.codepage = 1200;
-        const int got = (int)SendMessageW(notesEdit_, EM_GETTEXTEX, (WPARAM)&get, (LPARAM)wide.data());
-        wide.resize((size_t)(std::max)(0, got));
-        return wide;
-    }
-    if (noteFolder_ < 0 || noteIndex_ < 0) return {};
-    return toW(book_.body(noteFolder_, noteIndex_));
-}
-
-// What goes into the file: every kind of line break as CR+LF, the way every
-// other Windows text file has it
-std::wstring MinerGUI::toFileText(const std::wstring& s) {
-    std::wstring out;
-    out.reserve(s.size() + 16);
-    for (size_t i = 0; i < s.size(); i++) {
-        const wchar_t c = s[i];
-        if (c == L'\r') {
-            out += L"\r\n";
-            if (i + 1 < s.size() && s[i + 1] == L'\n') i++;
-        } else if (c == L'\n') {
-            out += L"\r\n";
-        } else {
-            out += c;
-        }
-    }
-    return out;
-}
-
-void MinerGUI::openLink(const NoteLink& link) {
-    if (link.kind == 0) {
-        showOreFinderFor(CRAFT_MATERIALS[link.index].locationName);
-    } else if (link.kind == 1) {
-        if (!craftingVisible_) toggleCrafting();
-        openBlueprint(link.index);
-        if (crafting_) {
-            SetForegroundWindow(crafting_);
-            InvalidateRect(crafting_, nullptr, TRUE);
-        }
-    } else if (link.kind == 2) {
-        showPlaceFinderFor(link.name);
-    } else if (link.kind == 3) {
-        showSystemFinderFor(link.name);
-    }
-}
-
-void MinerGUI::openLinkAt(int character) {
-    if (character < 0) return;
-    for (const auto& link : bracketLinksIn(noteText())) {
-        if ((size_t)character >= link.at && (size_t)character <= link.at + link.len) {
-            openLink(link);
-            return;
-        }
-    }
 }
 
 void MinerGUI::showSystemFinderFor(const std::string& system) {
@@ -9342,322 +7074,6 @@ void MinerGUI::showPlaceFinderFor(const std::string& place) {
         InvalidateRect(planner_, nullptr, TRUE);
         SetForegroundWindow(planner_);
     }
-}
-
-LRESULT MinerGUI::handleNotesMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
-    switch (uMsg) {
-        case WM_PAINT: {
-            PAINTSTRUCT ps;
-            HDC hdc = BeginPaint(hwnd, &ps);
-            paintNotes(hdc);
-            EndPaint(hwnd, &ps);
-            return 0;
-        }
-        case WM_ERASEBKGND:
-            return 1;
-        case WM_CAPTURECHANGED:
-            // Capture can be taken away - Alt+Tab, another window, a menu -
-            // and the button-up that would have ended the drag then never
-            // arrives. Left standing, dragging_ keeps the drag cursor on for
-            // good and the note is carried by a hand that let go long ago.
-            if (dragging_) {
-                dragging_ = false;
-                dragFolder_ = dragNote_ = dropFolder_ = -1;
-                InvalidateRect(hwnd, nullptr, TRUE);
-            }
-            return 0;
-        case WM_SETCURSOR:
-            // Carrying something looks like carrying something, and a folder
-            // that will not take it says so before the button is let go.
-            // Only over the client area though - the border has a cursor of
-            // its own to offer, and taking that away is taking the resize
-            // away as far as anyone can see.
-            if (dragging_ && LOWORD(lParam) == HTCLIENT) {
-                // IDC_* are ANSI resource names in a build without UNICODE, so this
-                // is the A entry point on purpose
-                SetCursor(LoadCursorA(nullptr, dropFolder_ >= 0 ? IDC_SIZEALL : IDC_NO));
-                return TRUE;
-            }
-            break;
-        case WM_SIZE:
-            layoutNotes();
-            InvalidateRect(hwnd, nullptr, TRUE);
-            return 0;
-        case WM_CTLCOLOREDIT: {
-            HDC hdcEdit = (HDC)wParam;
-            SetTextColor(hdcEdit, CR_EDIT_TEXT);
-            SetBkColor(hdcEdit, CR_EDIT_BG);
-            return (LRESULT)editBrush_;
-        }
-        case WM_NOTIFY: {
-            // One click on the name in the text - that is the whole point of
-            // the rich edit control
-            const NMHDR* head = (const NMHDR*)lParam;
-            if (head && head->code == EN_LINK) {
-                const ENLINK* link = (const ENLINK*)lParam;
-                if (link->msg == WM_LBUTTONDOWN) {
-                    openLinkRange(link->chrg.cpMin, link->chrg.cpMax);
-                    return 1;
-                }
-            }
-            return 0;
-        }
-        case WM_COMMAND: {
-            if (HIWORD(wParam) == EN_CHANGE && LOWORD(wParam) == ID_EDIT_NOTE) {
-                if (loadingNote_ || styling_) return 0;   // that was us, not the writer
-                if (!noteDirty_) {
-                    noteDirty_ = true;
-                    InvalidateRect(hwnd, nullptr, TRUE);
-                }
-                updateSuggestions();
-                // Written to disk a moment after the typing stops, so a crash
-                // or a closed lid costs a sentence, not an evening
-                SetTimer(hwnd, TIMER_NOTE_SAVE, 1500, nullptr);
-            }
-            return 0;
-        }
-        case WM_TIMER:
-            if (wParam == TIMER_CONFIRM) {
-                // nobody answered: the question goes away by itself
-                KillTimer(hwnd, TIMER_CONFIRM);
-                confirmDelete_ = 0;
-                mediaConfirm_ = -1;
-                InvalidateRect(hwnd, nullptr, TRUE);
-                return 0;
-            }
-            if (wParam == TIMER_NOTE_SAVE) {
-                KillTimer(hwnd, TIMER_NOTE_SAVE);
-                saveNote();
-                // Restyling moves the selection about, which would pull the
-                // suggestion list shut mid-thought; it waits until the list
-                // is gone
-                if (suggesting()) SetTimer(hwnd, TIMER_NOTE_SAVE, 1500, nullptr);
-                else styleNoteLinks();
-            }
-            return 0;
-        case WM_LBUTTONDOWN: {
-            const float px = (float)(short)LOWORD(lParam);
-            const float py = (float)(short)HIWORD(lParam);
-            // A click anywhere but on the armed button takes the question back
-            const int armedKind = (confirmDelete_ == 1) ? 5 : (confirmDelete_ == 2) ? 8 : -1;
-            if (armedKind >= 0) {
-                bool onArmed = false;
-                for (const auto& hit : noteHits_) {
-                    if (hit.kind == armedKind && hit.rect.Contains(px, py)) onArmed = true;
-                }
-                if (!onArmed) {
-                    confirmDelete_ = 0;
-                    KillTimer(hwnd, TIMER_CONFIRM);
-                }
-            }
-            // ...and the same for a picture's cross: anywhere but the cross
-            // that asked, and the question is withdrawn
-            if (mediaConfirm_ >= 0) {
-                bool onArmed = false;
-                for (const auto& hit : noteHits_) {
-                    if (hit.kind == 24 && hit.value == mediaConfirm_ && hit.rect.Contains(px, py)) {
-                        onArmed = true;
-                    }
-                }
-                if (!onArmed) {
-                    mediaConfirm_ = -1;
-                    KillTimer(hwnd, TIMER_CONFIRM);
-                }
-            }
-            // Whatever was said about the last export or import has been
-            // read by now
-            noteNotice_.clear();
-            for (const auto& hit : noteHits_) {
-                if (!hit.rect.Contains(px, py)) continue;
-                if (hit.kind == 0) {
-                    // the folder: picking it, and picking it again folds it
-                    if (noteFolder_ == hit.value) {
-                        book_.toggleOpen(hit.value);
-                    } else {
-                        noteFolder_ = hit.value;
-                        noteIndex_ = -1;
-                        openNote(hit.value, -1);
-                    }
-                } else if (hit.kind == 6) {
-                    book_.toggleOpen(hit.value);
-                } else if (hit.kind == 1) {
-                    dragFolder_ = hit.value / 1000;
-                    dragNote_ = hit.value % 1000;
-                    dragFrom_ = {(LONG)px, (LONG)py};
-                    dragAt_ = dragFrom_;
-                    openNote(dragFolder_, dragNote_);
-                } else if (hit.kind == 2) {
-                    startNaming(1, L"New folder");
-                } else if (hit.kind == 3) {
-                    if (noteFolder_ >= 0) startNaming(2, L"New note");
-                } else if (hit.kind == 4) {
-                    if (noteIndex_ >= 0) {
-                        startNaming(4, toW(book_.folders()[noteFolder_].notes[noteIndex_].name));
-                    }
-                } else if (hit.kind == 5) {
-                    // asked once; the second click within the timer does it
-                    if (noteIndex_ >= 0 && confirmDelete_ != 1) {
-                        confirmDelete_ = 1;
-                        SetTimer(hwnd, TIMER_CONFIRM, 4000, nullptr);
-                    } else if (noteIndex_ >= 0) {
-                        confirmDelete_ = 0;
-                        KillTimer(hwnd, TIMER_CONFIRM);
-                        saveNote();
-                        book_.trashNote(noteFolder_, noteIndex_);
-                        noteIndex_ = -1;
-                        openNote(noteFolder_, -1);
-                    }
-                } else if (hit.kind == 20) {
-                    notesMediaOpen_ = !notesMediaOpen_;
-                    mediaNotice_.clear();
-                    layoutNotes();       // the text gets the room back
-                } else if (hit.kind == 21) {
-                    pasteIntoOpenNote();
-                } else if (hit.kind == 22) {
-                    pickFilesForOpenNote();
-                } else if (hit.kind == 23) {
-                    // In Bedrock's own window. Handing the file to another
-                    // program works and is the wrong answer: you are three
-                    // clicks into your own notes.
-                    showShot(hit.value);
-                } else if (hit.kind == 24) {
-                    // Asked once - the same bargain DELETE on a note makes -
-                    // and the second click inside the timer does it. Into the
-                    // trash, never erased.
-                    if (hit.value >= 0 && hit.value < (int)media_.size()) {
-                        if (mediaConfirm_ != hit.value) {
-                            mediaConfirm_ = hit.value;
-                            mediaNotice_.clear();
-                            SetTimer(hwnd, TIMER_CONFIRM, 4000, nullptr);
-                        } else {
-                            mediaConfirm_ = -1;
-                            KillTimer(hwnd, TIMER_CONFIRM);
-                            const bool gone = book_.trashShot(media_[hit.value].path);
-                            mediaSays(gone ? L"moved to the trash"
-                                           : L"that one would not move", gone);
-                        }
-                    }
-                } else if (hit.kind == 12) {
-                    exportNotes(-1, -1);
-                } else if (hit.kind == 13) {
-                    importNotes();
-                } else if (hit.kind == 14) {
-                    if (noteIndex_ >= 0) exportNotes(noteFolder_, noteIndex_);
-                } else if (hit.kind == 10) {
-                    trashOpen_ = !trashOpen_;
-                } else if (hit.kind == 11) {
-                    if (hit.value >= 0 && hit.value < (int)trashList_.size()) {
-                        saveNote();
-                        book_.restore(trashList_[hit.value]);
-                        // the tree was rebuilt under us; land somewhere sensible
-                        noteFolder_ = (std::min)(noteFolder_, (int)book_.folders().size() - 1);
-                        noteIndex_ = -1;
-                        openNote(noteFolder_, -1);
-                    }
-                } else if (hit.kind == 7) {
-                    if (noteFolder_ >= 0) {
-                        startNaming(3, toW(book_.folders()[noteFolder_].name));
-                    }
-                } else if (hit.kind == 8) {
-                    // the whole folder, notes and all - into notes\.trash, not gone,
-                    // and only on the second click
-                    if (noteFolder_ >= 0 && confirmDelete_ != 2) {
-                        confirmDelete_ = 2;
-                        SetTimer(hwnd, TIMER_CONFIRM, 4000, nullptr);
-                    } else if (noteFolder_ >= 0) {
-                        confirmDelete_ = 0;
-                        KillTimer(hwnd, TIMER_CONFIRM);
-                        saveNote();
-                        book_.trashFolder(noteFolder_);
-                        noteFolder_ = -1;
-                        noteIndex_ = -1;
-                        openNote(-1, -1);
-                    }
-                }
-                InvalidateRect(hwnd, nullptr, TRUE);
-                break;
-            }
-            return 0;
-        }
-        case WM_CHAR:
-            // Just start writing. With no note open a letter makes one and
-            // goes into it; with a note open but the keyboard on the window
-            // rather than in the text - which is where Esc leaves it, since
-            // Esc steps out of the writing without closing the note - the
-            // letter belongs in that note.
-            if (!nameMode_ && wParam >= 0x20 && wParam != 0x7F) {
-                if (noteIndex_ < 0) {
-                    if (startTypedNote() && notesEdit_) {
-                        SendMessageW(notesEdit_, WM_CHAR, wParam, lParam);
-                    }
-                } else if (notesEdit_ && !headless_) {
-                    SetFocus(notesEdit_);
-                    SendMessageW(notesEdit_, WM_CHAR, wParam, lParam);
-                }
-            }
-            return 0;
-        case WM_MOUSEMOVE: {
-            if (dragFolder_ < 0 || !(wParam & MK_LBUTTON)) return 0;
-            const float px = (float)(short)LOWORD(lParam);
-            const float py = (float)(short)HIWORD(lParam);
-            if (!dragging_) {
-                // a hand is never quite still on a click; a few pixels tell the
-                // difference between meaning to open and meaning to move
-                if (std::abs(px - dragFrom_.x) < scaleF(5) &&
-                    std::abs(py - dragFrom_.y) < scaleF(5)) {
-                    return 0;
-                }
-                dragging_ = true;
-                SetCapture(hwnd);
-            }
-            dragAt_ = {(LONG)px, (LONG)py};
-            dropFolder_ = -1;
-            for (const auto& hit : noteHits_) {
-                if (hit.kind == 0 && hit.rect.Contains(px, py) && hit.value != dragFolder_) {
-                    dropFolder_ = hit.value;
-                }
-            }
-            // Every move, not only when the target changes: the name has to
-            // keep up with the pointer. The window paints into a bitmap
-            // first, so this costs nothing to look at.
-            InvalidateRect(hwnd, nullptr, FALSE);
-            return 0;
-        }
-        case WM_LBUTTONUP: {
-            const bool moved = dragging_ && dropFolder_ >= 0 && dragFolder_ >= 0;
-            if (dragging_) ReleaseCapture();
-            if (moved) {
-                saveNote();
-                const int landed = book_.moveNote(dragFolder_, dragNote_, dropFolder_);
-                if (landed >= 0) {
-                    noteFolder_ = dropFolder_;
-                    openNote(dropFolder_, landed);
-                }
-            }
-            dragging_ = false;
-            dragFolder_ = dragNote_ = dropFolder_ = -1;
-            InvalidateRect(hwnd, nullptr, TRUE);
-            return 0;
-        }
-        case WM_KEYDOWN:
-            if (wParam == VK_ESCAPE) {
-                if (nameMode_) {
-                    nameMode_ = 0;
-                    ShowWindow(notesName_, SW_HIDE);
-                    InvalidateRect(hwnd, nullptr, TRUE);
-                } else {
-                    toggleNotes();
-                }
-                return 0;
-            }
-            break;
-        case WM_CLOSE:
-            saveNote();
-            notesVisible_ = false;
-            ShowWindow(hwnd, SW_HIDE);
-            return 0;
-    }
-    return DefWindowProcW(hwnd, uMsg, wParam, lParam);
 }
 
 LRESULT CALLBACK MinerGUI::CraftingProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
@@ -10204,7 +7620,7 @@ void MinerGUI::setLookingOpen(bool open) {
     // row steps aside while the panel is down - the same trade the keys
     // card makes. The header's own buttons stay: they sit above the panel.
     const int show = (open || overlayMode_) ? SW_HIDE : SW_SHOW;
-    for (HWND b : {btnRefinery_, btnPlan_, btnCraft_, btnNotes_}) {
+    for (HWND b : {btnRefinery_, btnPlan_, btnCraft_}) {
         if (b) ShowWindow(b, show);
     }
     if (open) SetFocus(hwnd_);   // ...so that typing narrows the list
@@ -13624,7 +11040,7 @@ void MinerGUI::showAbout(bool on) {
     if (on && keysOpen_) showKeys(false);   // one card at a time
     // Same as the keys card: a card drawn by the parent cannot cover a child
     // window, so the buttons take turns with it.
-    HWND buttons[] = {btnLiveMode_, btnPlan_, btnCraft_, btnNotes_, btnKeys_,
+    HWND buttons[] = {btnLiveMode_, btnPlan_, btnCraft_, btnKeys_,
                       btnOverlay_, btnRefinery_, btnAbout_};
     for (HWND b : buttons) {
         if (b) ShowWindow(b, on ? SW_HIDE : SW_SHOW);
@@ -13756,7 +11172,7 @@ void MinerGUI::showWhatsNew(bool on) {
     }
     // Same trade as the ? card: a card drawn by the parent cannot cover a
     // child window, so the buttons take turns with it.
-    HWND buttons[] = {btnLiveMode_, btnPlan_, btnCraft_, btnNotes_, btnKeys_,
+    HWND buttons[] = {btnLiveMode_, btnPlan_, btnCraft_, btnKeys_,
                       btnOverlay_, btnRefinery_, btnAbout_};
     for (HWND b : buttons) {
         if (b) ShowWindow(b, on ? SW_HIDE : SW_SHOW);
@@ -13952,7 +11368,7 @@ void MinerGUI::showBackup(bool on) {
     // The same trade the keys card and the ore pick make: a card drawn
     // by the parent cannot cover a child window, so the action row steps
     // aside while it is up.
-    HWND buttons[] = {btnLiveMode_, btnPlan_, btnCraft_, btnNotes_, btnKeys_,
+    HWND buttons[] = {btnLiveMode_, btnPlan_, btnCraft_, btnKeys_,
                       btnOverlay_, btnRefinery_, btnAbout_};
     for (HWND b : buttons) {
         if (b) ShowWindow(b, on ? SW_HIDE : SW_SHOW);
@@ -13967,7 +11383,7 @@ void MinerGUI::showKeys(bool on) {
     // Every button on the main window, out of the way and back again. A card
     // drawn by the parent cannot cover a child window, so the card and the
     // buttons take turns.
-    HWND buttons[] = {btnLiveMode_, btnPlan_, btnCraft_, btnNotes_, btnKeys_,
+    HWND buttons[] = {btnLiveMode_, btnPlan_, btnCraft_, btnKeys_,
                       btnOverlay_, btnRefinery_, btnAbout_};
     for (HWND b : buttons) {
         if (b) ShowWindow(b, on ? SW_HIDE : SW_SHOW);
@@ -15083,9 +12499,6 @@ LRESULT MinerGUI::handlePlannerMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPAR
                 case 'R':
                     toggleRefinery();
                     return 0;
-                case 'N':
-                    toggleNotes();
-                    return 0;
                 case VK_F1:
                     showKeys(!keysOpen_);
                     if (hwnd_) SetForegroundWindow(hwnd_);
@@ -15229,7 +12642,7 @@ void MinerGUI::showUexWelcome(int step) {
     if (step) uexWelcome_.keyChangesAtPaste = -1;
     // a card drawn by the parent cannot cover a child window: the buttons
     // take turns with it, as with the other cards
-    HWND buttons[] = {btnLiveMode_, btnPlan_, btnCraft_, btnNotes_, btnKeys_,
+    HWND buttons[] = {btnLiveMode_, btnPlan_, btnCraft_, btnKeys_,
                       btnOverlay_, btnRefinery_, btnAbout_};
     for (HWND b : buttons) {
         if (b) ShowWindow(b, step ? SW_HIDE : SW_SHOW);
@@ -18577,9 +15990,6 @@ LRESULT MinerGUI::handleGrindMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
                 case 'R':
                     toggleRefinery();
                     return 0;
-                case 'N':
-                    toggleNotes();
-                    return 0;
                 case 'F':
                     togglePlanner();
                     return 0;
@@ -18986,9 +16396,6 @@ LRESULT MinerGUI::handleRefineryMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
                     return 0;
                 case 'B':
                     toggleCrafting();
-                    return 0;
-                case 'N':
-                    toggleNotes();
                     return 0;
                 case VK_F1:
                     showKeys(!keysOpen_);

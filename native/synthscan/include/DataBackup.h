@@ -8,16 +8,14 @@ namespace SCMiner {
 
 // Everything the player has made, in one file they choose the place for.
 //
-// The notebook can already travel on its own (NoteBook::writeBundle), but
-// the shopping list, the ores being watched for, the blueprint library and
-// the few hundred log lines it was read from are just as hard to make again
-// - and they all live under %LOCALAPPDATA%\Bedrock, which is the right
-// place to keep them and the wrong place to ask anybody to go.
+// Lists, loadouts, blueprint ownership and their source log records are
+// saved together under the local profile. Export writes a file chosen by
+// the player; import validates paths before restoring records.
 //
-// The format, for the same reasons the note bundle has its own:
+// The length-delimited format preserves file contents exactly:
 //
 //   BEDROCK BACKUP 1
-//   FILE<tab>notes/Routes/Monox run.txt<tab>412
+//   FILE<tab>records/Routes/Monox run.txt<tab>412
 //   ...412 bytes, exactly as they lie on disk...
 //   FILE<tab>craft_list.txt<tab>193
 //   ...

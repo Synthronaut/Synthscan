@@ -23,7 +23,6 @@
 #include "UexPrices.h"
 #include "RockValuation.h"
 #include "UexMarket.h"
-#include "NoteBook.h"
 #include "Reputation.h"
 
 #pragma comment(lib, "gdiplus.lib")
@@ -535,7 +534,6 @@ public:
     void openBlueprintLibrary(){if(!craftingVisible_)toggleCrafting();if(crafting_)SetForegroundWindow(crafting_);}
     void openRefineryOrders(){if(!refineryVisible_)toggleRefinery();if(refinery_)SetForegroundWindow(refinery_);}
     void openMiningPlanner(){if(!plannerVisible_)togglePlanner();if(planner_)SetForegroundWindow(planner_);}
-    void openPersonalNotes(){if(!notesVisible_)toggleNotes();if(notes_)SetForegroundWindow(notes_);}
     void setCaptureFailed(bool failed);
     // The overlay out of screen captures while live mode is on, in them otherwise
     void keepOutOfCaptures();
@@ -578,26 +576,6 @@ public:
     // the Blueprints window.
     void toggleGrind();
 
-    // The notebook: folders and notes of your own, in their own window (N)
-    // What a note points at. Nothing is marked up: the names of ores, mining
-    // places and recipes are recognised in the text as it stands.
-    struct NoteLink {
-        std::string name;   // as the table spells it
-        int kind = 4;       // 0 ore, 1 blueprint, 2 place, 3 system
-        int index = -1;     // into CRAFT_MATERIALS or CRAFT_BLUEPRINTS
-        size_t at = 0;      // where it sits in the note, in characters
-        size_t len = 0;
-    };
-    // Pure, and the reason both of these are testable:
-    // what the writer might mean by what they have just typed...
-    static std::vector<NoteLink> suggestionsAt(const std::wstring& text, int caret);
-
-    // "" when every [[link]] in the text still names something this build
-    // knows; otherwise a sentence saying which one does not. An import is
-    // refused on that, because a link that names nothing is not a link any
-    // more - it is a pair of brackets in the middle of a sentence.
-    static std::wstring brokenLink(const std::wstring& text);
-
     // A row can name more than one thing: "Hephaestanite + FPS Minable x6"
     // is one find with two deposits in it. Picking Hephaestanite has to
     // light that up as surely as a row that says nothing else, so the name
@@ -605,13 +583,6 @@ public:
     // the ground family's surface wording taken back off.
     static bool anyPart(const std::string& name,
                         const std::function<bool(const std::string&)>& wanted);
-    // ...and the links they went on to confirm, which the note carries as
-    // [[Name]] - written by the suggestion, never typed by hand
-    static std::vector<NoteLink> bracketLinksIn(const std::wstring& text);
-    // The note as the file wants it: every line break as CR+LF. The edit
-    // control hands over lone CRs, a file from elsewhere may hold lone LFs.
-    static std::wstring toFileText(const std::wstring& s);
-
     // A window may never ask for more room than the screen has. Pure.
     // scale(640) at 175 % is 1120 px, which a 1080p screen cannot show: the
     // bottom edge, borders and all, would end up under the taskbar.
@@ -634,46 +605,17 @@ public:
     using UiScaleCallback = std::function<void(int)>;
     void setUiScaleCallback(UiScaleCallback callback) { uiScaleCallback_ = callback; }
 
-    void toggleNotes();
-    void paintNotesTo(HDC hdc);
-    // --screenshot only: opens the first note there is, so the picture
-    // shows the thing rather than an empty pane
-    void openOreForShot(const char* ore = "Laranite");     // --screenshot only: an ore worth looking at
-    void openPlaceForShot();     // ...and the same list turned round
-    void suggestForShot();       // ...and the suggestion list, which only
-    HWND suggestHandle() const { return notesSuggest_; }   // lives while typing
-    // --screenshot only: `typed` added at the end of the open note, and the
-    // list its last letters bring up, under the caret as while typing
-    void suggestInNoteForShot(const std::wstring& typed);
-    bool typingForShot_ = false;   // ...while it does: noteText() reads the editor
-    // ...the list moved under the end of the note as the hidden run draws
-    // it (its editor is not on screen, the text is drawn instead), and the
-    // highlighted name taken, the way Enter takes it
-    void placeSuggestForShot();
-    void acceptSuggestForShot();
-    Gdiplus::PointF noteEndShown_{0.0f, 0.0f};   // where the drawn note's last line ends
-    void openNoteForShot();
-    // --screenshot only: a picture put on the open note's media rail,
-    // so the one part of the notebook that needs content to be worth
-    // looking at has some
-    void addMediaForShot(const std::wstring& file);
-    void foldMediaForShot(bool open);   // ...and the rail folded away
-    void startNamingForShot();
-    void dragNoteForShot(bool on);   // ...and a note frozen in mid-drag
+    void openOreForShot(const char* ore = "Laranite");
+    void openPlaceForShot();
     void cartForShot();              // ...and a shopping list with things on it
     void cartOnlyForShot(const char* blueprint);   // ...or with one recipe, and no window opened
     void widestFilterForShot();      // ...and the filter bar at its most crowded,
                                      // outfits unfolded and all
     void narrowByContractForShot();  // ...and the list cut to one system and one outfit   // --screenshot only: the naming box open
-    void openTrashForShot();     // ...and the trash unfolded, with a note in it
-    HWND notesHandle() const { return notes_; }
     void paintCraftingTo(HDC hdc);
     void paintGrindTo(HDC hdc);
     HWND craftingHandle() const { return crafting_; }
     HWND grindHandle() const { return grind_; }
-    HWND shotHandle() const { return shot_; }
-    void paintShotTo(HDC hdc);
-    void openShotForShot();      // --screenshot only: the first picture, opened
     // --screenshot only: opens a recipe so the slot view can be photographed
     void openBlueprintForShot();
     void showComponentsForShot();
@@ -724,7 +666,6 @@ public:
     void lookForShot(const char* ore, bool on) {
         if (lookingForOre(ore) != on) toggleLookingFor(ore);
     }
-    void importForShot(const std::wstring& file);   // ...an import, refused or not, for real
     void openMethodForShot();                // ...the refining method dropped down
     void openCartPickForShot(int kind);      // ...the station (30) or method (31) picker over the list
     // Shot only: opens one amount for typing and feeds it digits the way
@@ -1115,7 +1056,6 @@ private:
     HWND btnOreRows_ = nullptr;   // the overlay's Rows/Line switch, lower right
     HWND btnPlan_ = nullptr;
     HWND btnCraft_ = nullptr;
-    HWND btnNotes_ = nullptr;
     HWND btnKeys_ = nullptr;
     HWND btnRefinery_ = nullptr;
     HWND btnAbout_ = nullptr;
@@ -1627,41 +1567,6 @@ private:
     void placeCrafting();
     void paintCrafting(HDC hdc);
     std::vector<int> craftRows() const;   // the blueprints the filters leave
-    // ---- the notebook ----
-    // Notes are plain .txt files under notes\ - the model is in NoteBook,
-    // what lives here is the window around it.
-    HWND notes_ = nullptr;
-    // ---- pictures kept with a note ------------------------------------
-    // A rail down the right of the open note, which folds away. Bedrock takes
-    // no picture itself: by the time the player opens the notebook the game is
-    // behind them, and the Snipping Tool has already done it.
-    bool notesMediaOpen_ = true;
-    struct MediaItem {
-        std::filesystem::path path;
-        std::wstring when;
-        std::shared_ptr<Gdiplus::Bitmap> thumb;   // made once, not per paint
-    };
-    std::vector<MediaItem> media_;
-    int mediaFolder_ = -2;           // the note media_ was built for; -2 = none yet
-    int mediaNote_ = -2;
-    std::wstring mediaNotice_;       // what the last one did, said on the rail
-    // Throwing a picture away asks first, the way DELETE on a note does: the
-    // cross is small and sits under the pointer while reading, so one stray
-    // click must not be enough. -1 = nothing asked, otherwise the index waiting
-    // for a second click.
-    int mediaConfirm_ = -1;
-    void refreshMedia(bool force = false);
-    float mediaRailWidth() const;    // 0 when no note is open
-    void drawMediaRail(Gdiplus::Graphics& g, float x, float top, float bottom);
-    std::filesystem::path nextMediaPath(const char* extension);
-    void mediaSays(const std::wstring& text, bool reread);
-    bool pasteIntoOpenNote();
-    bool addFilesToOpenNote(const std::vector<std::filesystem::path>& files);
-    bool pickFilesForOpenNote();
-    // A picture, in a window of Bedrock's own rather than handed to whatever
-    // Windows opens pictures with.
-    HWND shot_ = nullptr;
-    bool shotVisible_ = false;
     // The news window: 2.5 first, 2.0 a page on, a tab for each
     HWND news_ = nullptr;
     bool newsVisible_ = false;
@@ -1681,38 +1586,6 @@ private:
     LRESULT handleNewsMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
     static constexpr int NEWS_WIDTH = 1080;   // wide enough for the 2.5 page's picture
     static constexpr int NEWS_HEIGHT = 720;
-    int shotIndex_ = -1;                          // into media_
-    std::shared_ptr<Gdiplus::Bitmap> shotImage_;  // the one being looked at, full size
-    bool createShot();
-    void loadShot();
-    void showShot(int index);
-    void stepShot(int by);
-    void paintShot(HDC hdc);
-    static LRESULT CALLBACK ShotProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
-    LRESULT handleShotMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
-    static constexpr int SHOT_WIDTH = 1100;
-    static constexpr int SHOT_HEIGHT = 760;
-
-    static constexpr int NOTES_MEDIA_WIDTH = 206;   // open
-    static constexpr int NOTES_MEDIA_SHUT = 26;     // ...and folded away
-
-    HWND notesEdit_ = nullptr;       // the note being written
-    HWND notesName_ = nullptr;       // the box that names and renames
-    HFONT notesFont_ = nullptr;      // fixed pitch: notes are full of numbers
-    bool notesVisible_ = false;
-    NoteBook book_;
-    int noteFolder_ = -1;            // folder shown, -1 = none picked
-    int noteIndex_ = -1;             // note open in it, -1 = none
-    bool noteDirty_ = false;         // typed since the last write
-    // A rich edit control reports the text being LOADED as a change, and
-    // a note that counts as edited the moment it is opened gets rewritten
-    // and jumps to the top of the list for having been read.
-    bool loadingNote_ = false;
-    // Likewise while the links are being styled: the control reports a
-    // format change as a change, which would mark every saved note unsaved
-    // again and keep it saving and restyling every second and a half
-    bool styling_ = false;
-    int nameMode_ = 0;               // 0 none, 1 new folder, 2 new note, 3/4 rename
     // Where the mouse last was, per window, in that window's own client
     // coordinates. -1 means it is not over the window at all.
     POINT hoverMain_ = {-1, -1};
@@ -1733,23 +1606,6 @@ private:
     bool trackHover(HWND hwnd, POINT& slot, LPARAM lParam);
     void clearHover(HWND hwnd, POINT& slot);
 
-    std::vector<CraftHit> noteHits_;
-    // DELETE asks once: the first click arms it, the second within a few
-    // seconds does it, anything else disarms it. 1 = a note, 2 = a folder.
-    int confirmDelete_ = 0;
-    // Dragging a note from one folder into another. The press remembers
-    // what was under it; only a few pixels of travel turn that into a
-    // drag, so an ordinary click still just opens the note.
-    int dragFolder_ = -1, dragNote_ = -1;
-    bool dragging_ = false;
-    POINT dragFrom_ = {0, 0};
-    POINT dragAt_ = {0, 0};          // where the pointer is, so the name can follow it
-    int dropFolder_ = -1;            // the folder under the cursor, -1 = none
-    bool trashOpen_ = false;             // the list of thrown-away things is unfolded
-    std::vector<NoteBook::Trashed> trashList_;   // what it showed, for the RESTORE clicks
-    // The autocorrect-style list under the caret
-    HWND notesSuggest_ = nullptr;
-    std::vector<NoteLink> suggestions_;
     // The update strip along the foot: drawn only when it has something
     // to say, and it is the only thing in the app that a click can make
     // reach the network.
@@ -1767,61 +1623,6 @@ private:
         return updateState_ == 3 || updateState_ == 4 || updateState_ == 5 ||
                (updateState_ == 6 && updateAsked_);
     }
-    int suggestChoice_ = 0;
-    int suggestTop_ = 0;                     // first row drawn, when not all fit
-    static constexpr int SUGGEST_ROW = 22;
-    static constexpr int SUGGEST_ROWS = 8;   // shown at once; 24 may be found
-    void updateSuggestions(bool forShot = false);
-    void hideSuggestions();
-    // Moves the choice and drags the drawn window along with it
-    void moveSuggestion(int delta, bool wrap);
-    // One colour per kind, so a link in the text and its chip below can
-    // never drift apart: an ore in its own mineral colour, a recipe in
-    // the accent, a place plain
-    Gdiplus::Color linkColour(const NoteLink& link);
-    // Hides the brackets and marks the name inside them as a link
-    void styleNoteLinks();
-    // False once we find that hidden text does not come back out of the
-    // control - then the brackets stay visible rather than being lost
-    bool hideBrackets_ = true;
-    void openLinkRange(long from, long to);
-    void acceptSuggestion();
-    bool suggesting() const { return !suggestions_.empty(); }
-    static LRESULT CALLBACK SuggestProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
-    LRESULT handleSuggestMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
-    void openLink(const NoteLink& link);
-    void openLinkAt(int character);     // ...the one around this character
-    std::wstring noteText() const;      // what is in the editor, in its own character space
-    static const std::map<std::wstring, NoteLink>& linkTable();
-
-    static constexpr int NOTES_WIDTH = 980;
-    static constexpr int NOTES_HEIGHT = 720;
-    static constexpr int NOTES_TREE_WIDTH = 300;
-    bool createNotes();
-    void placeNotes();
-    void layoutNotes();
-    void paintNotes(HDC hdc);
-    void drawNotes(Gdiplus::Graphics& g, int cw, int ch);
-    void openNote(int folder, int note);
-    void saveNote();
-    // Notes out to a file of your choosing and back in again, so nobody has
-    // to go digging in %LOCALAPPDATA% to send a route to a friend. -1, -1
-    // is the whole book; a folder and a note is that one note.
-    void exportNotes(int folder, int note);
-    void importNotes();
-    // The import itself, once the file is known: what the button does after
-    // the dialog, and what the screenshot run does without one. True when
-    // something landed.
-    bool importNotesFrom(const std::filesystem::path& file);
-    std::wstring noteNotice_;        // the line at the foot of the notes window
-    bool noteNoticeBad_ = false;     // ...red rather than green
-    // Typing on an open notebook with nothing open starts a note rather
-    // than going nowhere. Returns false when there was nowhere to put it.
-    bool startTypedNote();
-    void startNaming(int mode, const std::wstring& initial);
-    void commitNaming();
-    static LRESULT CALLBACK NotesProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
-    LRESULT handleNotesMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
     static std::string fromW(const std::wstring& s);
 
     static constexpr int CRAFTING_WIDTH = 880;

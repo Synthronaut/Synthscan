@@ -72,7 +72,7 @@ def main():
     ttk.Checkbutton(frame,text='Hide global chat after joining (F12)',variable=hide_chat,command=arm_changed).pack(anchor='w',pady=5)
     ttk.Label(frame,text='Presses F12 once after loading finishes, only while the game is focused.\nApplies to future joins. Keep the game chat toggle bound to F12.',justify='left').pack(anchor='w',pady=5)
     ttk.Label(frame,textvariable=label,wraplength=495,justify='left').pack(anchor='w',pady=12)
-    ttk.Label(frame,text='Closing keeps this running. Uncheck to disable. Blocked accepts\nretry while the same request prompt stays active; menus may block the game key.',foreground='#777777').pack(anchor='w')
+    ttk.Label(frame,text='Closing keeps this running. Uncheck to disable. Each request gets\nat most 3 key presses, at least 2 seconds apart; menus may block the game key.',foreground='#777777').pack(anchor='w')
     def hide():
         logging.info('Window hidden: enabled=%s',armed.get());root.withdraw()
     root.protocol('WM_DELETE_WINDOW',hide)

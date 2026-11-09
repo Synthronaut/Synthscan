@@ -188,8 +188,9 @@ class PlayerClient:
         if operation not in ('friend','party'):raise ValueError('Unknown social operation')
         if not require_shard:raise ValueError('Social actions are limited to the current shard.')
         if confirmed is not True:raise ValueError('Confirm the selected recipients first.')
-        if not people or len(people)>4096 or len({p['id'] for p in people})!=len(people):raise ValueError('Invalid party recipients.')
-        from party_invites import PartyInviteQueue
+        from party_invites import PartyInviteQueue,validate_batch_size
+        validate_batch_size(people)
+        if len({p['id'] for p in people})!=len(people):raise ValueError('Invalid party recipients.')
         control=control or PartyInviteQueue(people,cancel=cancel,operation=operation)
         revision=control.membership_revision()
         # Recheck shard and party immediately before the first outgoing invitation.

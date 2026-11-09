@@ -1,12 +1,16 @@
 #pragma once
 #include <cstdint>
+#include <random>
 
 namespace SynthScan {
 // No OS calls: the production adapter supplies observations; tests never move input.
 class AfkNudge {
 public:
-    static constexpr std::uint64_t interval = 4 * 60 * 1000;
-    static constexpr std::uint64_t firstDelay = 10 * 1000;
+    static constexpr std::uint64_t minInterval = 5 * 60 * 1000;
+    static constexpr std::uint64_t maxInterval = 12 * 60 * 1000;
+    using DelaySource = std::uint64_t (*)();
+    explicit AfkNudge(DelaySource source = randomInterval) : delaySource_(source) {}
+    std::uint64_t intervalMilliseconds() const { return wait_; }
     bool armed = false;
     unsigned nudges = 0;
     int nextInSeconds = -1;
@@ -14,6 +18,7 @@ public:
     const char* status = "off";
     void toggle(std::uint64_t now) {
         armed = !armed; since_ = now; focused_ = false; first_ = true; nextInSeconds = -1;
+        if (armed) chooseInterval();
         status = armed ? "waiting for game" : "off";
     }
     bool due(std::uint64_t now, bool game, bool foreground, bool connected,
@@ -32,7 +37,7 @@ public:
             return false;
         }
         status = "waiting for inactivity";
-        const auto wait = first_ ? firstDelay : interval;
+        const auto wait = wait_;
         const auto focusWait = now - since_ < wait ? wait - (now - since_) : 0;
         const auto idleWait = idle < wait ? wait - idle : 0;
         const auto remaining = focusWait > idleWait ? focusWait : idleWait;
@@ -42,13 +47,24 @@ public:
     void sent(std::uint64_t now, bool success) {
         since_ = now;
         nextInSeconds = -1;
-        if (success) { ++nudges; first_ = false; status = "pulse sent"; }
+        if (success) { ++nudges; first_ = false; chooseInterval(); status = "pulse sent"; }
         else { armed = false; status = "error (input not sent)"; }
     }
     void interrupted(std::uint64_t now) {
         since_ = now; focused_ = false; nextInSeconds = -1; status = "pulse cancelled (input or focus changed)";
     }
 private:
+    static std::uint64_t randomInterval() {
+        static thread_local std::mt19937_64 engine(std::random_device{}());
+        return std::uniform_int_distribution<std::uint64_t>(minInterval, maxInterval)(engine);
+    }
+    void chooseInterval() {
+        // One stable delay per wait, including the first; timer polling never redraws it.
+        const auto value = delaySource_();
+        wait_ = value < minInterval ? minInterval : value > maxInterval ? maxInterval : value;
+    }
+    DelaySource delaySource_;
+    std::uint64_t wait_ = minInterval;
     std::uint64_t since_ = 0;
     bool focused_ = false;
     bool first_ = true;

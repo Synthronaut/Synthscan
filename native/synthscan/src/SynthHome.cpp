@@ -117,8 +117,8 @@ void paintButton(const DRAWITEMSTRUCT& item){
     // Commit only the complete button, respecting the supplied owner's DC clip.
     Gdiplus::Graphics screen(item.hDC);screen.DrawImage(&frame,int(item.rcItem.left),int(item.rcItem.top));
 }
-void paint(){
-    PAINTSTRUCT ps{};HDC dc=BeginPaint(window,&ps);RECT r{};GetClientRect(window,&r);
+void paint(HDC target=nullptr){
+    PAINTSTRUCT ps{};HDC dc=target?target:BeginPaint(window,&ps);RECT r{};GetClientRect(window,&r);
     if(r.right>0&&r.bottom>0){
         Gdiplus::Bitmap bitmap(r.right,r.bottom,PixelFormat32bppPARGB);Gdiplus::Graphics g(&bitmap);g.Clear(BG);SynthGlass::ambient(g,{0,0,float(r.right),float(r.bottom)});
         g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);g.SetTextRenderingHint(Gdiplus::TextRenderingHintClearTypeGridFit);
@@ -188,10 +188,11 @@ void paint(){
         }
         }
         Gdiplus::Graphics screen(dc);screen.DrawImage(&bitmap,0,0);
-    }EndPaint(window,&ps);
+    }if(!target)EndPaint(window,&ps);
 }
 LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM w,LPARAM l){
     if(message==WM_PAINT){paint();return 0;}
+    if(message==WM_PRINTCLIENT){paint(reinterpret_cast<HDC>(w));return 0;}
     if(message==WM_SIZE){layout();return 0;}
     if(message==WM_ERASEBKGND){RECT r{};GetClientRect(hwnd,&r);static HBRUSH surface=CreateSolidBrush(RGB(15,16,19));FillRect(reinterpret_cast<HDC>(w),&r,surface);return 1;}
     if(message==WM_DRAWITEM){paintButton(*reinterpret_cast<DRAWITEMSTRUCT*>(l));return TRUE;}
@@ -215,7 +216,7 @@ LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM w,LPARAM l){
         auto found=std::find_if(buttons.begin(),buttons.end(),[&](const auto& b){return b.id==id;});
         if(found!=buttons.end()){
             lastAction=found->action;
-            if(found->navigation&&lastAction!="modules")navigate(lastAction);
+            if(found->navigation&&lastAction!="modules"&&lastAction!="exit")navigate(lastAction);
             else if(action)action(lastAction);
             publish();
         }return 0;
@@ -236,15 +237,16 @@ void create(){
         info.rcWork.left+(info.rcWork.right-info.rcWork.left-width)/2,info.rcWork.top+(info.rcWork.bottom-info.rcWork.top-height)/2,width,height,nullptr,nullptr,cls.hInstance,nullptr);
     BOOL dark=TRUE;DwmSetWindowAttribute(window,20,&dark,sizeof(dark));
     SynthPages::initialize(window);
-    const wchar_t* names[]={L"Home",L"Item & Ship Finder",L"People",L"Mission & Wallet Log",L"Server History",L"Blueprint Library",L"Mining Planner",L"Mining Diary",L"Refinery",L"Executive Hangar",L"Piracy",L"Day/Night Forecast",L"Automatic Acceptance",L"Personal Notes",L"Settings",L"Privacy & capture"};
-    const char* actions[]={"home","directory","people","mission_log","servers","blueprints","planner","diary","refinery","executive_hangar","hud_piracy","daylight","acceptance","notes","settings","privacy"};
-    for(int i=0;i<int(sizeof(names)/sizeof(names[0]));i++)add(100+i,names[i],actions[i],true);
+    const wchar_t* names[]={L"Home",L"Item & Ship Finder",L"People",L"Mission & Wallet Log",L"Server History",L"Blueprint Library",L"Mining Planner",L"Mining Diary",L"Refinery",L"Executive Hangar",L"Piracy",L"Day/Night Forecast",L"Automatic Acceptance",L"Settings"};
+    const char* actions[]={"home","directory","people","mission_log","servers","blueprints","planner","diary","refinery","executive_hangar","hud_piracy","daylight","acceptance","settings"};
+    for(int i=0;i<int(sizeof(names)/sizeof(names[0]));i++)add(i==13?114:100+i,names[i],actions[i],true);
     add(200,L"Mining HUD\nAutomatic scan reading","hud_mining",false);add(201,L"Finder HUD\nShops & player market","hud_finder",false);
     add(202,L"Missions HUD\nContracts & reputation","hud_missions",false);add(203,L"Hangars HUD\nContested-zone timing","hud_hangars",false);
     add(210,L"This session","this",false);add(211,L"Previous session","previous",false);add(212,L"Dismiss notices","dismiss_refinery",false);
     add(213,L"Patch details","strings_details",false);
     add(214,L"Text settings","strings_settings",false);
     add(116,L"Feature modules","modules",true);
+    add(117,L"Exit SynthScan","exit",true);
     layout();
 }
 }
@@ -301,7 +303,8 @@ int paintCheck(const std::filesystem::path& output){
     INITCOMMONCONTROLSEX controls{sizeof(controls),ICC_STANDARD_CLASSES};InitCommonControlsEx(&controls);
     Gdiplus::GdiplusStartupInput input;ULONG_PTR token=0;Gdiplus::GdiplusStartup(&token,&input,nullptr);
     HWND fixture=CreateWindowExW(WS_EX_NOACTIVATE,L"STATIC",L"Hidden paint check",WS_POPUP,-32000,-32000,10,10,nullptr,nullptr,GetModuleHandleW(nullptr),nullptr);
-    initialize(fixture,output,[](const std::string&){});create();
+    bool exitRouted=false;
+    initialize(fixture,output,[&](const std::string& command){exitRouted=command=="exit";});create();
     SetWindowPos(window,nullptr,-32000,-32000,1240,840,SWP_NOZORDER|SWP_NOACTIVATE);
     BITMAPINFO info{};info.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);info.bmiHeader.biWidth=2048;info.bmiHeader.biHeight=-1024;info.bmiHeader.biPlanes=1;info.bmiHeader.biBitCount=32;info.bmiHeader.biCompression=BI_RGB;
     HDC dc=CreateCompatibleDC(nullptr);void* pixels=nullptr;HBITMAP bitmap=CreateDIBSection(dc,&info,DIB_RGB_COLORS,&pixels,nullptr,0);HGDIOBJ old=SelectObject(dc,bitmap);
@@ -329,10 +332,11 @@ int paintCheck(const std::filesystem::path& output){
     for(const auto& b:buttons)SetWindowSubclass(b.hwnd,count,99,reinterpret_cast<DWORD_PTR>(&notifications));
     for(int i=0;i<20;i++)layout();
     for(const auto& b:buttons)RemoveWindowSubclass(b.hwnd,count,99);
+    SendMessageW(window,WM_COMMAND,MAKEWPARAM(117,BN_CLICKED),0);
     bool composited=(GetWindowLongPtrW(window,GWL_EXSTYLE)&WS_EX_COMPOSITED)!=0;
     QueryPerformanceCounter(&finish);bool focus=foreground==GetForegroundWindow();
     write(output/L"paint_validation.json",obj({{"erase_stays_dark",SynthScan::boolean(eraseDark)},{"owner_draw_stays_in_bounds",SynthScan::boolean(bounded)},{"buttons_painted",SynthScan::boolean(painted)},{"descendants_composited",SynthScan::boolean(composited)},{"unchanged_layout_notifications",num(notifications)},{"foreground_unchanged",SynthScan::boolean(focus)},{"button_paint_cases",num(cases)},{"elapsed_ms",num((finish.QuadPart-start.QuadPart)*1000./frequency.QuadPart)}}));
     SelectObject(dc,old);DeleteObject(bitmap);DeleteObject(sentinel);DeleteDC(dc);close();DestroyWindow(fixture);Gdiplus::GdiplusShutdown(token);
-    return eraseDark&&bounded&&painted&&!composited&&focus&&notifications==0?0:3;
+    return eraseDark&&bounded&&painted&&!composited&&focus&&notifications==0&&exitRouted?0:3;
 }
 }
