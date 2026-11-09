@@ -45,8 +45,11 @@ tags or their row is selected. Long sets expand the tag column and remain
 available using the table's horizontal scrollbar.
 
 The left pane is the live player roster. Names and tag columns have bounded
-widths so the second pane can hold a separate **Action list**. Double-click a
-player to add them, or use Ctrl-click / Shift-click and **Add to actions →**.
+widths so the second pane can hold a separate **Action list**. Click a player's
+row to highlight it; click it again to deselect. Other highlighted rows stay
+selected without holding Ctrl or Shift. Press **Add to actions →** to move the
+chosen names into the Action list. Clicking or double-clicking a name never adds
+it directly.
 Adding the same player again does not create a duplicate. Roster filters,
 searches and refreshes do not clear the Action list. Its contents survive an app
 restart within the same joined game session.
@@ -72,8 +75,8 @@ changing recipients. The roster remains available for browsing.
 scrollable confirmation before sending anything. Shard membership is rechecked
 immediately before either kind of write; departed players are skipped. Current
 party members/already accepted friends, and players previously attempted in this
-game session are skipped. Requests are sent serially, with a fixed
-**four-second gap after each completed request**. The page shows sent, skipped
+game session are skipped. Requests are sent serially, with a freshly sampled
+**random 0.09–0.99-second gap after each completed request**. The page shows sent, skipped
 and remaining counts, plus a countdown. **Pause / Resume** and **Cancel** control
 the remaining queue; a request already in flight can finish. **View queue**
 updates live and also provides queue controls. Pausing and resuming rechecks
@@ -157,7 +160,13 @@ Friend reflects the latest friends-list read and cannot be assigned as a custom 
 **Invite to party** and **Send friend requests** submit the reviewed Action list
 directly. There is no extra confirmation dialog. A fresh deliberate click can
 retry a previous session attempt; duplicate command IDs and overlapping queues
-remain blocked. The four-second pacing carries across consecutive queues.
+remain blocked. The outstanding random delay carries across consecutive queues.
+Each friend-request or party-invitation batch is limited to **50 recipients**.
+Larger selections are rejected in full before sending; they are never silently
+truncated or split into several batches. The **Action list itself holds at most
+50 people**, shown as a count out of 50. Add by tag and Add friends fill only the
+remaining spaces, keep existing entries, and report how many did not fit.
+Duplicates do not consume another space. Remove names to make room for others.
 Invitations to other shards are permitted only for verified friends, and the
 worker rechecks that relationship before sending. No automatic retry is added.
 

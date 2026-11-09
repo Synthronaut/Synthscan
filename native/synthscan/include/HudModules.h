@@ -3,6 +3,7 @@
 #include <vector>
 namespace SynthScan::HudModules {
 inline bool installed(const Json& release,const std::string& name,bool screenReading){
+    if(name=="notes")return false;
     if(name.empty())return true;
     if(name=="mining_recognition"&&!screenReading)return false;
     const auto* modules=release.find("modules");
@@ -22,12 +23,12 @@ inline const char* featureForAction(const std::string& action){
     if(action=="hud_piracy")return "piracy";
     if(action=="daylight")return "daylight";
     if(action=="acceptance")return "acceptance";
-    if(action=="notes")return "notes";
     if(action=="hud_mining"||action=="mining")return "mining_recognition";
     if(action=="strings_settings"||action=="strings_details")return "synthstrings";
     return "";
 }
 inline bool actionAvailable(const Json& release,const std::string& action,bool screenReading){
+    if(action=="notes")return false;
     return installed(release,featureForAction(action),screenReading)&&
         (std::string(featureForAction(action))!="mining_recognition"||installed(release,"mining_tools",screenReading));
 }

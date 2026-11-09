@@ -35,7 +35,7 @@
 
 using namespace bedrock_shim;
 
-// The known folders the notebook asks for. The values are Windows' own, so
+// The known folders the shared data dialogs ask for. The values are Windows' own, so
 // a comparison against them says which folder was meant.
 const GUID FOLDERID_Documents = {0xFDD39AD0, 0x238F, 0x46AF, {0xAD, 0xB4, 0x6C, 0x85, 0x48, 0x03, 0x69, 0xC7}};
 const GUID FOLDERID_Pictures = {0x33E28130, 0x4E1E, 0x4676, {0x83, 0x5A, 0x98, 0x39, 0x5C, 0x3B, 0xC3, 0xBB}};
@@ -555,7 +555,7 @@ int registerFonts() {
     QFont::insertSubstitution(QStringLiteral("Segoe UI Light"), QStringLiteral("Selawik Light"));
     QFont::insertSubstitution(QStringLiteral("Segoe UI Variable"), QStringLiteral("Selawik"));
     QFont::insertSubstitution(QStringLiteral("Bahnschrift"), QStringLiteral("D-DIN"));
-    // ...and the notebook's fixed pitch: whichever of the usual monospaced
+    // ...and fixed-pitch labels: whichever of the usual monospaced
     // faces the machine has
     const QStringList families = QFontDatabase::families();
     for (const char* mono : {"Cascadia Mono", "DejaVu Sans Mono", "Liberation Mono", "Noto Sans Mono", "Monospace"}) {

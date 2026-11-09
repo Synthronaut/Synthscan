@@ -157,9 +157,17 @@ LRESULT CALLBACK glassControlProc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp,UIN
 int hoveredPerson=-1,hoveredAction=-1;
 LRESULT CALLBACK peopleListProc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp,UINT_PTR,DWORD_PTR){
     int& hoveredPerson=GetDlgCtrlID(hwnd)==528?hoveredAction:SynthCompanion::hoveredPerson;
-    if((message==WM_LBUTTONDOWN||message==WM_LBUTTONDBLCLK)&&!(wp&(MK_CONTROL|MK_SHIFT))){
+    if(message==WM_LBUTTONDOWN||message==WM_LBUTTONDBLCLK){
         LVHITTESTINFO hit{};hit.pt={(short)LOWORD(lp),(short)HIWORD(lp)};int row=ListView_SubItemHitTest(hwnd,&hit);RECT box{};
-        if(row>=0&&ListView_GetItemRect(hwnd,row,&box,LVIR_BOUNDS)&&hit.pt.x>=box.left+5&&hit.pt.x<box.left+35){SetFocus(hwnd);auto state=ListView_GetItemState(hwnd,row,LVIS_SELECTED);ListView_SetItemState(hwnd,row,state?0:LVIS_SELECTED,LVIS_SELECTED);ListView_SetSelectionMark(hwnd,row);SetPropW(hwnd,L"SynthGlass.CheckClick",HANDLE(1));return 0;}
+        // Every row is a toggle. Native ListView handling would clear the other
+        // selections on an ordinary name click unless Ctrl were held.
+        if(row>=0&&ListView_GetItemRect(hwnd,row,&box,LVIR_BOUNDS)&&PtInRect(&box,hit.pt)){
+            if(IsWindowVisible(hwnd))SetFocus(hwnd);
+            auto state=ListView_GetItemState(hwnd,row,LVIS_SELECTED);
+            ListView_SetItemState(hwnd,-1,0,LVIS_FOCUSED);
+            ListView_SetItemState(hwnd,row,LVIS_FOCUSED|(state?0:LVIS_SELECTED),LVIS_FOCUSED|LVIS_SELECTED);
+            ListView_SetSelectionMark(hwnd,row);SetPropW(hwnd,L"SynthGlass.CheckClick",HANDLE(1));return 0;
+        }
     }
     if(message==WM_LBUTTONUP&&GetPropW(hwnd,L"SynthGlass.CheckClick")){RemovePropW(hwnd,L"SynthGlass.CheckClick");return 0;}
 
@@ -323,9 +331,9 @@ void selection(){
     const bool enabled=fresh()&&!model.textOr("session_token").empty()&&!rows.empty()&&!flag(model,"social_busy");
     EnableWindow(child(512),enabled);EnableWindow(child(515),enabled);EnableWindow(child(511),enabled&&rows.size()==1);EnableWindow(child(510),enabled);EnableWindow(child(516),enabled);EnableWindow(child(517),enabled);
     EnableWindow(child(513),enabled);EnableWindow(child(514),enabled);
-    bool edit=fresh()&&!model.textOr("session_token").empty()&&!flag(model,"social_busy");EnableWindow(child(527),edit&&!stageTargets().empty());EnableWindow(child(529),edit&&!actionSelection().items.empty());EnableWindow(child(550),edit&&!actionRows.empty());EnableWindow(child(554),edit);EnableWindow(child(520),edit);EnableWindow(child(556),edit&&flag(model,"friends_known"));EnableWindow(child(553),edit);EnableWindow(child(522),!field(model,"batch_results").items.empty());
+    bool edit=fresh()&&!model.textOr("session_token").empty()&&!flag(model,"social_busy");bool room=actionRows.size()<size_t(model.numberOr("action_limit",50));EnableWindow(child(527),edit&&room&&!stageTargets().empty());EnableWindow(child(529),edit&&!actionSelection().items.empty());EnableWindow(child(550),edit&&!actionRows.empty());EnableWindow(child(554),edit&&room);EnableWindow(child(520),edit&&room);EnableWindow(child(556),edit&&room&&flag(model,"friends_known"));EnableWindow(child(553),edit);EnableWindow(child(522),!field(model,"batch_results").items.empty());
     const auto& q=field(model,"invite_queue");bool active=fresh()&&flag(q,"active")&&!flag(q,"cancelling");label(524,queueSummary(q));label(525,flag(q,"paused")?"Resume":"Pause");EnableWindow(child(525),active);EnableWindow(child(526),active);
-    label(512,"Apply tags");label(513,"Send friend requests");label(514,"Invite to party");label(552,"Action list · "+std::to_string(actionRows.size())+(flag(model,"social_busy")?" · queue running":""));std::string summary=std::to_string(selectedIds.size())+" selected · "+std::to_string(stageTargets().size())+" eligible";label(518,summary);
+    label(512,"Apply tags");label(513,"Send friend requests");label(514,"Invite to party");label(552,"Action list · "+std::to_string(actionRows.size())+" / "+std::to_string(int(model.numberOr("action_limit",50)))+(flag(model,"social_busy")?" · queue running":""));std::string summary=std::to_string(selectedIds.size())+" selected · "+std::to_string(stageTargets().size())+" eligible";label(518,summary);
     if(changed)InvalidateRect(child(508),nullptr,FALSE);
 }
 void renderActions(){
@@ -442,7 +450,7 @@ void createControls(){
         control(L"STATIC",519,L"You: Purple · Friend: Green · Party: Blue");
         for(int id:{508,528}){if(id==528)control(WC_LISTVIEWW,528,L"",WS_TABSTOP|LVS_REPORT|LVS_SHOWSELALWAYS);column(id,0,L"PLAYER",220);column(id,1,L"TAGS",140);column(id,2,L"RELATIONSHIP",120);}
         control(L"BUTTON",527,L"Add to actions →",WS_TABSTOP);control(L"BUTTON",529,L"Remove selected",WS_TABSTOP);control(L"BUTTON",550,L"Clear actions",WS_TABSTOP);
-        control(L"STATIC",551,L"Players · double-click to add");control(L"STATIC",552,L"Action list · 0");control(L"COMBOBOX",553,L"",WS_TABSTOP|CBS_DROPDOWNLIST|WS_VSCROLL);control(L"BUTTON",554,L"Add by tag",WS_TABSTOP);control(L"STATIC",555,L"Tags: shard members · Friend: your friends list");control(L"BUTTON",556,L"Add friends →",WS_TABSTOP);
+        control(L"STATIC",551,L"Players · click to select / deselect");control(L"STATIC",552,L"Action list · 0 / 50");control(L"COMBOBOX",553,L"",WS_TABSTOP|CBS_DROPDOWNLIST|WS_VSCROLL);control(L"BUTTON",554,L"Add by tag",WS_TABSTOP);control(L"STATIC",555,L"Tags: shard members · Friend: your friends list");control(L"BUTTON",556,L"Add friends →",WS_TABSTOP);
         control(L"STATIC",509,L"Custom tags (optional, comma separated)");control(L"EDIT",510,L"",WS_TABSTOP|ES_AUTOHSCROLL);SendMessageW(child(510),EM_SETLIMITTEXT,240,0);
         control(L"COMBOBOX",516,L"",WS_TABSTOP|CBS_DROPDOWNLIST|WS_VSCROLL);
         control(L"BUTTON",517,L"Add tag",WS_TABSTOP);control(L"STATIC",518,L"Or type custom tags, separated by commas");
@@ -491,7 +499,6 @@ LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM wp,LPARAM lp){
     }
     if(message==WM_NOTIFY&&!filling){auto header=reinterpret_cast<NMHDR*>(lp);
         if(header->code==LVN_ITEMCHANGED){if(header->idFrom==508||header->idFrom==528)selection();if(header->idFrom==538){int at=ListView_GetNextItem(child(538),-1,LVNI_SELECTED);const auto& watches=field(model,"watches").items;selectedWatch=at>=0&&size_t(at)<watches.size()?watches[at].textOr("id"):"";}}
-        if(header->idFrom==508&&header->code==NM_DBLCLK){auto item=reinterpret_cast<NMITEMACTIVATE*>(lp);if(item->iItem>=0&&size_t(item->iItem)<people.size()&&flag(people[size_t(item->iItem)],"on_shard"))queue(obj({{"action",str("stage_people")},{"player_ids",playerIds({people[size_t(item->iItem)]})}}));}
     }
     if(message==WM_COMMAND&&!filling){int id=LOWORD(wp),event=HIWORD(wp);
         if(id==501&&event==EN_CHANGE){if(mode=="people"){if(text(501).empty()&&SendMessageW(child(504),CB_GETCURSEL,0,0)==1)SendMessageW(child(504),CB_SETCURSEL,0,0);renderPeople();}else catalog();return 0;}
@@ -571,7 +578,7 @@ int preview(const std::filesystem::path& directory){
     auto before=GetForegroundWindow();HWND parent=CreateWindowExW(WS_EX_NOACTIVATE,L"STATIC",L"SynthScan preview",WS_POPUP,0,0,900,700,nullptr,nullptr,GetModuleHandleW(nullptr),nullptr);
     SynthPages::initialize(parent);SynthPages::place(0,0,900,700,true);
     const CLSID png={0x557cf406,0x1a04,0x11d3,{0x9a,0x73,0x00,0x00,0xf8,0x1e,0xf3,0x2e}};
-    bool saved=true;
+    bool saved=true,plainClickToggles=true;
     bool tagRoute=false,watchRoute=false,heartbeatScroll=false,relationshipScroll=false,membershipScroll=false,removedAnchor=false,filterReset=false,draftPreserved=false;
     bool directInviteRoute=false,noInviteModal=false;bool multiPreserved=false,orgTagRoute=false,bulkTagRoute=false,orgRecipients=false,confirmationCancelled=false,pauseRoute=false,resumeRoute=false,cancelRoute=false,queueControls=false,actionFilterStable=false,stageRoute=false,removeRoute=false,tagStageRoute=false,customTagRoute=false,controlsFit=true;
     const bool relationshipColors=personColor(rows.items[0])==RGB(121,225,158)&&personColor(rows.items[1])==RGB(116,183,255)&&personColor(rows.items[2])==RGB(193,157,255)&&personColor(obj())==RGB(234,240,247);
@@ -579,6 +586,16 @@ int preview(const std::filesystem::path& directory){
     for(const auto* name:{"people","buyer_alerts"}){
         show(SynthPages::host(),directory,name);MoveWindow(page,0,0,900,700,TRUE);layout();refresh(true);
         if(mode=="people"){
+            // Click the name area (outside the old checkbox hit target) with
+            // no modifier keys. Both panes keep other selected names intact.
+            for(int id:{508,528}){
+                HWND list=child(id);ListView_SetItemState(list,-1,0,LVIS_SELECTED|LVIS_FOCUSED);
+                auto click=[&](int row){RECT r{};ListView_GetItemRect(list,row,&r,LVIR_BOUNDS);auto at=MAKELPARAM(r.left+100,(r.top+r.bottom)/2);SendMessageW(list,WM_LBUTTONDOWN,MK_LBUTTON,at);SendMessageW(list,WM_LBUTTONUP,0,at);};
+                click(0);click(1);
+                plainClickToggles&=ListView_GetSelectedCount(list)==2;
+                click(0);plainClickToggles&=ListView_GetSelectedCount(list)==1&&!(ListView_GetItemState(list,0,LVIS_SELECTED)&LVIS_SELECTED)&&(ListView_GetItemState(list,1,LVIS_SELECTED)&LVIS_SELECTED);
+                click(1);plainClickToggles&=ListView_GetSelectedCount(list)==0;
+            }
             // Exercise actual ListView scrolling and selection under heartbeat and
             // roster changes. These are isolated fixture records, never live users.
             Json savedModel=model,many=arr();
@@ -667,7 +684,7 @@ int preview(const std::filesystem::path& directory){
         customTagRoute=customTagRoute||(command.textOr("action")=="stage_tag"&&command.textOr("label")=="Trader"&&command.textOr("scope")=="shard");
         watchRoute=watchRoute||(command.textOr("action")=="add_watch"&&command.numberOr("quality")==1000&&command.numberOr("item_id")==5011);
     }
-    write(directory/L"ui_validation.json",obj({{"tag_command",SynthScan::boolean(tagRoute)},{"buyer_watch_command",SynthScan::boolean(watchRoute)},
+    write(directory/L"ui_validation.json",obj({{"plain_click_toggles_in_both_lists",SynthScan::boolean(plainClickToggles)},{"tag_command",SynthScan::boolean(tagRoute)},{"buyer_watch_command",SynthScan::boolean(watchRoute)},
         {"people_heartbeat_keeps_scroll",SynthScan::boolean(heartbeatScroll)},{"people_membership_keeps_anchor_and_selection",SynthScan::boolean(membershipScroll)},
         {"people_relationship_refresh_keeps_scroll",SynthScan::boolean(relationshipScroll)},
         {"people_removed_anchor_keeps_neighbour",SynthScan::boolean(removedAnchor)},{"people_filter_resets_intentionally",SynthScan::boolean(filterReset)},
@@ -678,6 +695,6 @@ int preview(const std::filesystem::path& directory){
         {"action_list_independent_of_roster_filter",SynthScan::boolean(actionFilterStable)},{"stage_remove_and_add_org_routes",SynthScan::boolean(stageRoute&&removeRoute&&tagStageRoute&&customTagRoute)},{"action_panes_fit_compact_normal_large",SynthScan::boolean(controlsFit)},{"outgoing_requests_sent",num(0)}}));
     write(directory/L"scroll_diagnostics.json",obj({{"details",str(scrollDiagnostics)}}));
     close();SynthPages::close();DestroyWindow(parent);Gdiplus::GdiplusShutdown(token);
-    return saved&&directInviteRoute&&noInviteModal&&tagRoute&&watchRoute&&heartbeatScroll&&relationshipScroll&&membershipScroll&&removedAnchor&&filterReset&&draftPreserved&&relationshipColors&&multiPreserved&&orgTagRoute&&bulkTagRoute&&orgRecipients&&confirmationCancelled&&queueControls&&pauseRoute&&resumeRoute&&cancelRoute&&actionFilterStable&&stageRoute&&removeRoute&&tagStageRoute&&customTagRoute&&controlsFit&&GetForegroundWindow()==before?0:3;
+    return saved&&plainClickToggles&&directInviteRoute&&noInviteModal&&tagRoute&&watchRoute&&heartbeatScroll&&relationshipScroll&&membershipScroll&&removedAnchor&&filterReset&&draftPreserved&&relationshipColors&&multiPreserved&&orgTagRoute&&bulkTagRoute&&orgRecipients&&confirmationCancelled&&queueControls&&pauseRoute&&resumeRoute&&cancelRoute&&actionFilterStable&&stageRoute&&removeRoute&&tagStageRoute&&customTagRoute&&controlsFit&&GetForegroundWindow()==before?0:3;
 }
 }
