@@ -85,13 +85,14 @@ void ensureTagWidth(int id,const std::vector<Json>& rows){
     if(width>ListView_GetColumnWidth(child(id),1))ListView_SetColumnWidth(child(id),1,width);
 }
 void drawPersonRow(Gdiplus::Graphics& g,Gdiplus::RectF r,const std::vector<std::wstring>& fields,const std::vector<float>& widths,bool selected,bool hot,Gdiplus::Color relationship,bool focused=false,int relationshipColumn=3,const Json* requests=nullptr){
+    const auto fullRow=r;bool hasStatus=requests&&requests->kind==Json::Kind::Object&&!requests->members.empty();float dataHeight=hasStatus?24:r.Height;
     g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);g.SetTextRenderingHint(Gdiplus::TextRenderingHintAntiAliasGridFit);
     Gdiplus::SolidBrush base(SynthGlass::Base);g.FillRectangle(&base,r);
     if(selected||hot)SynthGlass::panel(g,{r.X+4,r.Y+3,r.Width-8,r.Height-6},selected,hot,8);
-    SynthGlass::checkbox(g,{r.X+13,r.Y+(r.Height-16)/2,16,16},selected,hot);
-    SynthGlass::rounded(g,{r.X+40,r.Y+(r.Height-24)/2,24,24},Gdiplus::Color(255,30,37,49),8);
-    SynthGlass::icon(g,"people",{r.X+44,r.Y+(r.Height-16)/2,16,16},relationship);
-    const auto fullRow=r;bool hasStatus=requests&&requests->kind==Json::Kind::Object&&!requests->members.empty();if(hasStatus)r.Height=24;
+    SynthGlass::checkbox(g,{r.X+13,r.Y+(dataHeight-16)/2,16,16},selected,hot);
+    SynthGlass::rounded(g,{r.X+40,r.Y+(dataHeight-24)/2,24,24},Gdiplus::Color(255,30,37,49),8);
+    SynthGlass::icon(g,"people",{r.X+44,r.Y+(dataHeight-16)/2,16,16},relationship);
+    r.Height=dataHeight;
     float x=r.X;
     for(size_t i=0;i<fields.size()&&i<widths.size();++i){
         float left=x+(i==0?74:12),width=widths[i]-(i==0?80:22);
@@ -107,10 +108,10 @@ void drawPersonRow(Gdiplus::Graphics& g,Gdiplus::RectF r,const std::vector<std::
             else if(detail=="Already a friend"||detail=="Already in party"){label+=L": already "+std::wstring(entry.first=="friend"?L"friends":L"in party");}
             else if(outcome=="Queued"||outcome=="Sending"){label=L"… "+label+L" "+wide(outcome);}
             else{label=L"⚠ "+label+L": "+wide(detail.empty()?outcome:detail);color=Gdiplus::Color(255,255,176,90);}
-            float width=(fullRow.GetRight()-left-10)/float(count-index);SynthGlass::text(g,label,{left,fullRow.Y+24,width-8,16},10,color);left+=width;index++;
+            float width=(fullRow.GetRight()-left-10)/float(count-index);SynthGlass::text(g,label,{left,fullRow.Y+24,width-8,16},11,color);left+=width;index++;
         }
     }
-    if(focused){Gdiplus::Pen pen(Gdiplus::Color(90,167,208,209),1);Gdiplus::GraphicsPath path;SynthGlass::shape(path,{r.X+4,r.Y+3,r.Width-8,r.Height-6},8);g.DrawPath(&pen,&path);}
+    if(focused){Gdiplus::Pen pen(Gdiplus::Color(90,167,208,209),1);Gdiplus::GraphicsPath path;SynthGlass::shape(path,{fullRow.X+4,fullRow.Y+3,fullRow.Width-8,fullRow.Height-6},8);g.DrawPath(&pen,&path);}
 }
 void drawHeader(const DRAWITEMSTRUCT& item){
     Gdiplus::Graphics g(item.hDC);auto r=item.rcItem;Gdiplus::LinearGradientBrush bg(Gdiplus::Point(r.left,r.top),Gdiplus::Point(r.left,r.bottom+1),Gdiplus::Color(255,27,34,45),Gdiplus::Color(255,22,28,38));g.FillRectangle(&bg,Gdiplus::RectF(float(r.left),float(r.top),float(r.right-r.left),float(r.bottom-r.top)));
