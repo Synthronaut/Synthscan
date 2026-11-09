@@ -1,6 +1,6 @@
 # SynthScan
 
-[Download the Windows installer](https://github.com/Synthronaut/Synthscan/releases/latest/download/SynthScan-Setup-Windows-x64.exe) · [Release notes](https://github.com/Synthronaut/Synthscan/releases)
+[Download Standard — no screen reading](https://github.com/Synthronaut/Synthscan/releases/latest/download/SynthScan-Standard-Setup-Windows-x64.exe) · [Download Full](https://github.com/Synthronaut/Synthscan/releases/latest/download/SynthScan-Full-Setup-Windows-x64.exe) · [Release notes](https://github.com/Synthronaut/Synthscan/releases)
 
 A Windows companion for Star Citizen: mining assistance, blueprints, SynthStrings,
 reputation labels, a server HUD, and Mining / Piracy / Missions / Hangars / Finder activity tabs.
