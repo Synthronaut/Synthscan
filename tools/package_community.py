@@ -105,6 +105,7 @@ def stage_source(destination,edition="full"):
     shutil.copy2(ROOT/'docs/mission-wallet-log.md',destination/'docs/mission-wallet-log.md')
     shutil.copy2(ROOT/'docs/hud-screen-sharing.md',destination/'docs/hud-screen-sharing.md')
     shutil.copy2(ROOT/'docs/modules.md',destination/'docs/modules.md')
+    shutil.copy2(ROOT/'docs/deployment-readiness-2026-11-09.md',destination/'docs/deployment-readiness-2026-11-09.md')
     shutil.copy2(ROOT/'assets/snare_watch.wav',destination/'assets/snare_watch.wav')
     copy_tree(ROOT/'assets/branding',destination/'assets/branding')
     if (ROOT/'.github').exists():copy_tree(ROOT/'.github',destination/'.github')

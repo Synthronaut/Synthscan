@@ -5141,6 +5141,7 @@ int runSelfTest() {
         auto manifest=obj({{"modules",arr()}});
         auto& modules=manifest.members[0].second;
         modules.items={str("piracy"),str("missions")};
+        allPassed &= check(HudModules::actionAvailable(manifest,"hud_missions",true)&&!HudModules::actionAvailable(manifest,"blueprints",true)&&!HudModules::actionAvailable(manifest,"notes",true),"Desktop routes do not open uninstalled feature pages");
         auto modes=HudModules::modes(manifest,true);
         allPassed &= check(modes==std::vector<int>({1,2})&&HudModules::next(modes,2)==1,"HUD tabs and cycling use only installed modules");
         modules.items={str("mining_recognition")};

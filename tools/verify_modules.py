@@ -8,11 +8,40 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from app_updates import config,write
 from feature_modules import FEATURES,installed
 from module_distribution import catalog,check_sequence,selection_token,activation_payload
 from module_setup import verify_runtime
+
+
+def startup(target,profile):
+    """Run the real native host and bridge with a synthetic game, never user data."""
+    from app_lifecycle import game_process_ids
+    if game_process_ids():raise ValueError('Close Star Citizen before native startup verification')
+    target=Path(target).resolve();profile=Path(profile).resolve();game=profile/'fixture-game';(game/'Bin64').mkdir(parents=True,exist_ok=True)
+    (game/'Data.p4k').write_bytes(b'not-a-game-archive')
+    (game/'Bin64/StarCitizen.exe').write_bytes(b'fixture')
+    (game/'Game.log').write_text('',encoding='utf-8')
+    write(game/'build_manifest.id',dict(Data=dict(BuildId='00000000-0000-4000-8000-000000000001',Branch='fixture',RequestedP4ChangeNum=1)))
+    write(profile/'installation.json',dict(game_dir=str(game)))
+    write(profile/'capture_privacy.json',dict(schema=1,paused=True,pause_unfocused=True,account_access=False))
+    (profile/'region_config.txt').write_text('gamelog='+str(game/'Game.log')+'\ngametexts=0\nlive=0\n',encoding='utf-8')
+    env=dict(os.environ,SYNTHSCAN_DATA_DIR=str(profile),SYNTHSCAN_GAME_DIR=str(game))
+    write(target/'dist/native/native_runtime.json',dict(workspace=str(target),pythonw=str(target/'runtime/pythonw.exe')))
+    from update_agent import ready,stop_native
+    process=subprocess.Popen([str(target/'dist/native/SynthScan.exe'),'--autostart'],env=env,cwd=target/'dist/native',creationflags=0x08000000)
+    try:
+        if not ready(target,profile,timeout=75):
+            log=profile/'bridge.log'
+            detail=log.read_text(encoding='utf-8',errors='replace')[-5000:] if log.exists() else 'No bridge log. Native exit: '+str(process.poll())
+            raise ValueError('Native host/bridge did not become ready for '+str(target)+'\n'+detail)
+        state=json.loads((profile/'session_state.json').read_text(encoding='utf-8'))
+        assert state['owner_pid']==process.pid
+        assert state['game_pids']==[]
+    finally:
+        stop_native(target/'dist/native/SynthScan.exe');process.wait(timeout=30)
 
 
 def verify(payload,output=None):
@@ -50,7 +79,8 @@ for name in ('windows_capture','mss','onnxruntime','rapidocr_onnxruntime','PIL',
  assert importlib.util.find_spec(name) is None,name
 """
             subprocess.run([str(target/'runtime/python.exe'),'-I','-B','-c',probe,str(target)],env=env,cwd=target,check=True,timeout=90,creationflags=0x08000000)
-            report.append(dict(modules=selected,edition='full' if 'mining_recognition' in selected else 'standard',runtime_verified=True))
+            startup(target,profile)
+            report.append(dict(modules=selected,edition='full' if 'mining_recognition' in selected else 'standard',runtime_verified=True,native_bridge_ready=True))
     if output:Path(output).write_text(json.dumps(dict(version=value['version'],selections=report),indent=2),encoding='utf-8')
     return report
 

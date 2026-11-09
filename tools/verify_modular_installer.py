@@ -10,6 +10,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 import winreg
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from feature_modules import FEATURES
@@ -22,7 +23,7 @@ def verify(installer,validation=False,output=None):
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER,key):raise ValueError('A matching app identity is already installed. Use a fresh runner or a separate validation build.')
     except FileNotFoundError:pass
     result=[]
-    with tempfile.TemporaryDirectory(prefix='SynthScan-installer-validation-') as temporary:
+    with tempfile.TemporaryDirectory(prefix='SynthScan-installer-validation-',ignore_cleanup_errors=True) as temporary:
         base=Path(temporary);root=base/'app';profile=base/'profile';profile.mkdir()
         marker=b'{"fixture":"ownership and player records must survive"}'
         (profile/'inventory.json').write_bytes(marker)
@@ -31,7 +32,7 @@ def verify(installer,validation=False,output=None):
         for number,selected in enumerate(sequences):
             log=base/('install-'+str(number)+'.log')
             process=subprocess.run([str(installer),'/CURRENTUSER','/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-',
-                '/DIR='+str(root),'/COMPONENTS=core,'+','.join(selected),'/TASKS=','/LOG='+str(log)],
+                '/DIR='+str(root),'/SYNTHSCANPROFILE='+str(profile),'/COMPONENTS=core,'+','.join(selected),'/TASKS=','/LOG='+str(log)],
                 env=env,timeout=360,creationflags=0x08000000)
             if process.returncode:raise RuntimeError('Installer failed: '+str(process.returncode)+'\n'+log.read_text(encoding='utf-8',errors='replace')[-5000:])
             token=(root/'active_version.txt').read_text().strip();active=root/'versions'/token
@@ -47,9 +48,19 @@ def verify(installer,validation=False,output=None):
                 assert not any(root.rglob('*.onnx'))
                 assert not any(root.rglob('onnxruntime'))
             result.append(dict(case=number,modules=selected,installer_passed=True,records_preserved=True))
-        subprocess.run([str(root/'unins000.exe'),'/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/LOG='+str(base/'uninstall.log')],env=env,check=True,timeout=120,creationflags=0x08000000)
+        log=base/'uninstall.log'
+        try:
+            subprocess.run([str(root/'unins000.exe'),'/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SYNTHSCANPROFILE='+str(profile),'/LOG='+str(log)],env=env,check=True,timeout=120,creationflags=0x08000000)
+        except (subprocess.TimeoutExpired,subprocess.CalledProcessError) as error:
+            tail=log.read_text(encoding='utf-8',errors='replace')[-6000:] if log.exists() else 'No uninstall log'
+            raise RuntimeError('Uninstaller did not complete: '+str(error)+'\n'+tail) from error
+        # Inno may finish cleanup in its temporary process after the original
+        # executable returns; observe removal before cleaning the fixture.
+        deadline=time.monotonic()+30
+        while (root/'versions').exists() and time.monotonic()<deadline:time.sleep(.2)
         assert (profile/'inventory.json').read_bytes()==marker
         assert not (root/'versions').exists()
+        assert (profile/'uninstall_result.json').is_file()
         result.append(dict(uninstall_passed=True,records_preserved=True))
     report=dict(validation_identity=validation,production_installer=not validation,cases=result)
     if output:Path(output).write_text(json.dumps(report,indent=2),encoding='utf-8')

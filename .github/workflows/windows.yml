@@ -1,9 +1,9 @@
-name: Windows community build
+name: Legacy engine build (not for publication)
 on:
   workflow_dispatch:
     inputs:
       publish:
-        description: Publish the signed version and update channel
+        description: Retired - use Unified modular release for publication
         type: boolean
         default: false
 permissions:
@@ -18,6 +18,9 @@ jobs:
     env:
       SYNTHSCAN_EDITION: ${{ matrix.edition }}
     steps:
+      - name: Reject retired publication path
+        if: inputs.publish
+        run: throw 'Use the Unified modular release workflow. Separate edition installers are retired.'
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
@@ -72,7 +75,7 @@ jobs:
             out/synthscan-update-${{ matrix.edition }}.json
             out/ui-validation/
   publish:
-    if: inputs.publish
+    if: false
     needs: build
     runs-on: windows-2022
     environment: community-release

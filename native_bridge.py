@@ -17,6 +17,12 @@ from interdiction_watch import InterdictionJournal
 
 ROOT=Path(__file__).resolve().parent
 
+def optional_state(path):
+    try:
+        value=read_shared_json(path)
+        return value if isinstance(value,dict) else {}
+    except (OSError,ValueError):return {}
+
 def ribbon_snapshot(state):
     """Publish the small server ribbon before optional catalog/reputation work."""
     keys=('schema','written_at','owner_pid','game_pids','session_token','full_shard_id','joined_at',
@@ -263,8 +269,9 @@ def run(data_dir,owner,native=None):
     finder_services=FinderServices(item_directory,finder_market,extras=extras)
     finder_services.current_patch=updates.local.get('patch','')
     finder_services.start()
-    top_hud=subprocess.Popen([str(Path(sys.executable).with_name('pythonw.exe')),'-B',str(ROOT/'native_session_hud.py'),'--owner',str(owner)],
-                             cwd=ROOT,creationflags=subprocess.CREATE_NO_WINDOW,stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL) if enabled('server_hud') else None
+    top_script='native_session_hud.py' if enabled('server_hud') else 'native_alert_host.py'
+    top_hud=subprocess.Popen([str(Path(sys.executable).with_name('pythonw.exe')),'-B',str(ROOT/top_script),'--owner',str(owner)],
+                             cwd=ROOT,creationflags=subprocess.CREATE_NO_WINDOW,stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL) if any(enabled(name) for name in ('server_hud','people','piracy')) else None
     contract_helper=subprocess.Popen([str(Path(sys.executable).with_name('pythonw.exe')),'-B',str(ROOT/'contract_share_helper.py'),'--owner',str(owner),'--watch'],
                                     cwd=ROOT,creationflags=subprocess.CREATE_NO_WINDOW,stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL) if enabled('acceptance') else None
     mission_logger=subprocess.Popen([str(Path(sys.executable).with_name('pythonw.exe')),'-B',str(ROOT/'mission_log_service.py'),
@@ -299,8 +306,8 @@ def run(data_dir,owner,native=None):
                 finder_services.current_patch=updates.local.get('patch','')
                 inbox=directory/'fabricator_scan_inbox.json'
                 state['review_revision']=inbox.stat().st_mtime if inbox.exists() else 0
-                quest_settings=read_shared_json(directory/'native_settings.json') or {}
-                desktop=read_shared_json(directory/'home_status.json') or {}
+                quest_settings=optional_state(directory/'native_settings.json')
+                desktop=optional_state(directory/'home_status.json')
                 pirate_mode=quest_settings.get('hud_mode')=='piracy' or (desktop.get('owner_pid')==owner and desktop.get('visible') and desktop.get('active_page')=='hud_piracy')
                 state['piracy_watch']=piracy.tick(pirate_mode,state.get('session_token')) if piracy else {}
                 pirate_command=directory/'piracy_command.json'
@@ -320,6 +327,7 @@ def run(data_dir,owner,native=None):
                 if not instance_running('watcher'):launcher_activity.update(launcher_process_ids(),games)
                 strings_guard.tick()
                 state['home']=service.overview.view(quests.balance_names,quests.scopes);service.overview.save()
+                if not enabled('mining_tools'):state['home']['refinery_notice']=''
                 state['home']['synthstrings']=strings_view(directory,games)
                 blueprint_texts.tick()
                 rep_view=reputation_view(directory,time.time(),state)

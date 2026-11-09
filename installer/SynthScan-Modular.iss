@@ -101,7 +101,7 @@ Name: "{userstartup}\SynthScan Game Watcher"; Filename: "{app}\SynthScan.exe"; P
 Filename: "{app}\SynthScan.exe"; Description: "Open SynthScan and prepare my game"; Check: InstallationReady; Flags: postinstall nowait skipifsilent
 
 [UninstallRun]
-Filename: "{app}\SynthScan.exe"; Parameters: "--uninstall"; Flags: runhidden waituntilterminated; RunOnceId: "SynthScanCleanup"
+Filename: "{app}\SynthScan.exe"; Parameters: "--uninstall --profile-dir ""{code:SelectedProfile}"""; Flags: runhidden waituntilterminated; RunOnceId: "SynthScanCleanup"
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\versions"
@@ -126,6 +126,13 @@ var
 function InstallationReady: Boolean;
 begin
   Result := Ready;
+end;
+
+function SelectedProfile(Param: String): String;
+begin
+  Result := ExpandConstant('{param:SYNTHSCANPROFILE|}');
+  if Result = '' then Result := GetEnv('SYNTHSCAN_DATA_DIR');
+  if Result = '' then Result := ExpandConstant('{localappdata}\SynthScan\native');
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
@@ -169,7 +176,7 @@ var
   Args: String;
 begin
   if CurStep = ssPostInstall then begin
-    Args := '-I -B "' + ExpandConstant('{app}\module_setup.py') + '" --root "' + ExpandConstant('{app}') + '" --offline "' + ExpandConstant('{tmp}\SynthScanComponents') + '" --selected "' + WizardSelectedComponents(False) + '"';
+    Args := '-I -B "' + ExpandConstant('{app}\module_setup.py') + '" --root "' + ExpandConstant('{app}') + '" --profile "' + SelectedProfile('') + '" --offline "' + ExpandConstant('{tmp}\SynthScanComponents') + '" --selected "' + WizardSelectedComponents(False) + '"';
     if FileExists(PreviousInventory) then Args := Args + ' --previous-inventory "' + PreviousInventory + '"';
     Ready := Exec(ExpandConstant('{app}\runtime\pythonw.exe'), Args, ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, Code) and (Code = 0);
     if not Ready then

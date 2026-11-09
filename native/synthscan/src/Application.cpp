@@ -623,12 +623,13 @@ bool Application::initialize() {
     // Ask once, in the background, whether there is a newer version.
     // Nothing is downloaded by asking and nothing is installed without
     // being asked; update=0 in region_config.txt stops it entirely.
-    updater_.configure(updateUrl_.empty() ? BEDROCK_UPDATE_URL : updateUrl_, updateCheck_);
-    updater_.checkInBackground();
+    // SynthScan's signed modular updater owns distribution. Do not activate
+    // the inherited upstream application's separate update protocol.
+    updater_.configure("", false);
     lastUpdateCheck_ = std::chrono::steady_clock::now();
 
     std::cout << "=========================================" << std::endl;
-    std::cout << "  BEDROCK" << std::endl;
+    std::cout << "  SYNTHSCAN" << std::endl;
     std::cout << "  Mining Companion for Star Citizen" << std::endl;
     std::cout << "=========================================\n" << std::endl;
 
@@ -964,7 +965,8 @@ void Application::runWithGUI(HINSTANCE hInstance) {
     // available from its navigation instead of being the landing screen.
 
     // ...and, once, what changed since the version they had
-    maybeShowWhatsNew();
+    // First-run setup and release notes belong to SynthScan's shell/installer.
+    // The inherited news window could appear over the game during autostart.
     // UEX, offered once: at the first start, when nobody has a key in yet.
     // It waits for the window to be free. A build without Bedrock's app token
     // can do nothing with an account.

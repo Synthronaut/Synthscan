@@ -33,7 +33,7 @@ the complete release ZIP is an alternative.
    directories. It bundles a clean Python runtime, hash-pinned wheels, native app,
    OCR resources, app source, licenses, launcher and integrity manifest.
 
-The `Windows community build` workflow performs these steps on demand and uploads
+The legacy `Windows community build` workflow performs these steps on demand and uploads
 the resulting ZIP/checksum and guided installer as workflow artifacts. Build the
 installer locally with `python tools/build_installer.py --payload out/SynthScan-Windows-x64 --output out/installer`.
 The Inno Setup compiler is downloaded from its pinned official release and hash-checked.
@@ -56,3 +56,25 @@ the recipient's own installation during setup.
 
 Interactive HUD/window fixtures must only run while Star Citizen is closed.
 The native --ui-test entry point refuses to run when the game window is present.
+
+## Unified modular release
+
+Use **Unified modular release** for alpha 11 and newer. Both native engines are
+intermediate inputs to one installer. The workflow splits signed components,
+checks six selections with bundled Python and real native startup, tests the
+production installer and reader removal on a fresh Windows runner, then builds
+legacy migration ZIPs. New users download only the unified installer.
+
+For local builds, run `tools/package_modules.py --standard STANDARD --full FULL
+--output out/modules --url-base RELEASE_ASSET_URL`, then `tools/verify_modules.py
+--payload out/modules --output out/module-validation.json` and
+`tools/build_modular_installer.py --payload out/modules --output out/installer`.
+Use a fresh test Windows account for `tools/verify_modular_installer.py`, or add
+`--validation` to both installer build and test to isolate its registration.
+Close the game and other SynthScan instances before these tests.
+
+The protected release key signs catalogs and migration manifests. CI scopes
+`SYNTHSCAN_SIGNING_PRIVATE_B64` to signing steps. Update signing does not provide
+a trusted Windows publisher identity. The workflow's `publish` input defaults
+off; selecting it publishes only after every release gate passes. Never
+overwrite an earlier immutable release or upload development/player folders.

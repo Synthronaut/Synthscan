@@ -364,3 +364,19 @@ verified-account snapshot loaded after a full game restart, not live game text.
 The installer upgrades the app while preserving the local player profile. No
 player profiles, credentials, game logs, extracted local reference caches or
 private screenshots are distributed. Open-source notices and licenses remain.
+## 0.1.0-alpha.11 — 2026-11-09
+
+- Replace separate new-user editions with one navy/cyan installer. All feature
+  checkboxes start selected; Live Mining Recognition alone is tagged SCREEN
+  READING. Unchecked reader components are never installed.
+- Add signed selectable feature packages and an in-app module manager. Retain
+  choices across updates, filter unavailable desktop/HUD controls and services,
+  remove old reader assemblies on opt-out, and keep a screen-free recovery Core.
+- Consolidate the current mission/wallet ledger, HUD, People improvements and
+  SynthStrings patch protection. Preserve player records and ownership journals
+  across installation, feature removal and uninstall.
+- Fix first-run startup with missing preferences, relocated Startup shortcuts,
+  independent social alerts, profile-aware uninstall and uninstalled tool routes.
+  Remove inherited startup news and the redundant upstream update protocol.
+- Keep GitHub download counts only. No usage analytics or consent prompts added.
+

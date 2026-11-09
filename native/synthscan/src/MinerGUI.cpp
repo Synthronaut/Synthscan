@@ -9,6 +9,8 @@
 #include "SynthScanShell.h"
 #include "SynthHome.h"
 #include "SynthPages.h"
+#include "HudModules.h"
+#include "SynthEdition.h"
 #include "CraftedPower.h"
 #include "HandMiningReference.h"
 #include "OverlayInput.h"
@@ -55,6 +57,10 @@
 namespace SCMiner {
 
 namespace {
+bool installedFeature(const char* name){
+    static const auto release=SynthScan::read(AppPaths::program().parent_path().parent_path()/L"release.json");
+    return SynthScan::HudModules::installed(release,name,SynthEdition::screenReading);
+}
 // The common file dialog, defined down with the notes (askForDataFile) and
 // wanted up here by the foot of the main window as well
 std::wstring askForDataFile(HWND owner, bool saving, const std::wstring& suggested,
@@ -6853,6 +6859,7 @@ void MinerGUI::resizeForScale() {
 }
 
 void MinerGUI::toggleNotes() {
+    if(!installedFeature("notes"))return;
     if (!notes_ && !createNotes()) return;
     notesVisible_ = !notesVisible_;
     if (notesVisible_) {
@@ -9699,6 +9706,7 @@ void MinerGUI::placeCrafting() {
 }
 
 void MinerGUI::toggleCrafting() {
+    if(!installedFeature("blueprints"))return;
     if (!crafting_ && !createCrafting()) return;
     craftingVisible_ = !craftingVisible_;
     if (craftingVisible_) {
@@ -14943,6 +14951,7 @@ void MinerGUI::paintPlannerTo(HDC hdc) {
 }
 
 void MinerGUI::togglePlanner() {
+    if(!installedFeature("mining_tools"))return;
     if (!planner_ && !createPlanner()) return;
     plannerVisible_ = !plannerVisible_;
     if (plannerVisible_) {
@@ -18768,6 +18777,7 @@ void MinerGUI::paintRefineryTo(HDC hdc) {
 }
 
 void MinerGUI::toggleRefinery() {
+    if(!installedFeature("mining_tools"))return;
     if (!refinery_ && !createRefinery()) return;
     refineryVisible_ = !refineryVisible_;
     if (refineryVisible_) {

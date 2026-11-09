@@ -5,6 +5,10 @@ from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parent))
 import json
 import os
+if '--profile-dir' in sys.argv:
+    profile_index=sys.argv.index('--profile-dir')
+    if profile_index+1>=len(sys.argv):raise ValueError('Missing local profile directory')
+    os.environ['SYNTHSCAN_DATA_DIR']=str(Path(sys.argv[profile_index+1]).resolve())
 import queue
 import subprocess
 import threading
