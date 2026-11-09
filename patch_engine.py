@@ -104,14 +104,6 @@ def apply_all_rules_and_adapt(ini_path=DEFAULT_INI_PATH, sc_dir=DEFAULT_SC_DIR, 
     old_build = state.get("build_num", "None")
     new_build = current_ver.get("build_num", "Unknown")
 
-    # Safe backup
-    bak_path = ini_path + ".synthscan_bak"
-    if not os.path.exists(bak_path):
-        try:
-            shutil.copy2(ini_path, bak_path)
-        except Exception:
-            pass
-
     try:
         with open(ini_path, "r", encoding="utf-8-sig", errors="ignore") as f:
             content = f.read()
@@ -233,8 +225,8 @@ def apply_all_rules_and_adapt(ini_path=DEFAULT_INI_PATH, sc_dir=DEFAULT_SC_DIR, 
     # 3. Write back safely with UTF-8 BOM and LF endings
     try:
         final_text = "".join(final_lines).replace("\r\n", "\n")
-        with open(ini_path, "w", encoding="utf-8-sig", newline="\n") as f:
-            f.write(final_text)
+        from game_text_lifecycle import write_localization
+        write_localization(ini_path, final_text.encode("utf-8-sig"))
     except Exception as e:
         return False, f"Failed to write adapted global.ini: {e}", {}
 

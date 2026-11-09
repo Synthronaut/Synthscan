@@ -1,5 +1,6 @@
 #pragma once
 #include "AppPaths.h"
+#include "SynthEdition.h"
 #include "SynthJson.h"
 #include <mutex>
 #include <chrono>
@@ -13,6 +14,7 @@ inline std::mutex activityMutex;
 inline ULONGLONG lastFrame=0;inline double captureMs=0;inline std::string captureNote;
 inline void observed(bool frame,double ms,const std::string& note){std::lock_guard<std::mutex> lock(activityMutex);if(frame){lastFrame=GetTickCount64();captureMs=ms;}captureNote=note;}
 inline Policy policy(){
+    if(!SynthEdition::screenReading)return {true,true};
     std::lock_guard<std::mutex> lock(policyMutex);auto now=GetTickCount64();
     if(!checked||now-checked>=200){
         auto file=SCMiner::AppPaths::data()/L"capture_privacy.json";
@@ -39,6 +41,7 @@ inline bool focused(HWND game){
     DWORD pid=0;GetWindowThreadProcessId(foreground,&pid);return pid==GetCurrentProcessId();
 }
 inline SynthScan::Json snapshot(){
+    if(!SynthEdition::screenReading)return SynthScan::obj({{"edition",SynthScan::str("standard")},{"installed",SynthScan::boolean(false)},{"paused",SynthScan::boolean(true)},{"source",SynthScan::str("not_installed")},{"frame_age_ms",SynthScan::num(-1)},{"automatic_images",SynthScan::boolean(false)}});
     auto p=policy();auto helper=SynthScan::read(SCMiner::AppPaths::data()/L"capture_activity.json",1024);
     double now=std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count();double helperAge=(now-helper.numberOr("at"))*1000;
     if(helper.textOr("source")!="verified_game_window_wgc"||helperAge<0||helperAge>2000)helperAge=-1;

@@ -11,7 +11,7 @@ _fallback = threading.RLock()
 
 
 @contextmanager
-def localization_lock(path):
+def localization_lock(path,timeout_ms=5000):
     if os.name != 'nt':
         with _fallback:
             yield
@@ -29,7 +29,7 @@ def localization_lock(path):
         raise ctypes.WinError(ctypes.get_last_error())
     acquired = False
     try:
-        result = api.WaitForSingleObject(handle, 5000)
+        result = api.WaitForSingleObject(handle, timeout_ms)
         acquired = result in (0, 0x80)  # Includes a writer that exited unexpectedly.
         if not acquired:
             raise TimeoutError('Another SynthStrings update is still in progress')

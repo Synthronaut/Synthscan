@@ -84,7 +84,10 @@ class Questing:
         from installation import reference_paths
         if now<self.label_retry_at:return
         try:
-            ini=reference_paths()['game']/'Data/Localization/english/global.ini'
+            channel=reference_paths()['game']
+            from game_text_lifecycle import enabled
+            if not enabled(channel,self.directory):return
+            ini=channel/'Data/Localization/english/global.ini'
             snapshot=self.directory/'reputation_snapshot.json'
             stamp=(ini.stat().st_mtime_ns,snapshot.stat().st_mtime_ns)
             if stamp==self.label_stamp:return

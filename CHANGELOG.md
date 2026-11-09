@@ -1,4 +1,4 @@
-## Unreleased
+## 0.1.0-alpha.9 — 2026-11-09
 
 - Replace Windows desktop/region capture fallback with a verified game-window
   surface. Keep off-game crop areas zeroed, expire stale frames, preserve local

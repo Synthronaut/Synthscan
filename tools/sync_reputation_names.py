@@ -51,22 +51,11 @@ def _sync(apply=False):
                  after_sha256=hashlib.sha256(after).hexdigest(),phase='prepared',requires_game_text_reload=True)
     (DATA/'reputation_names_preview.json').write_text(json.dumps(state,indent=2,ensure_ascii=False),encoding='utf-8')
     if apply and after!=before:
-        if previous and previous.get('after_sha256')==state['before_sha256'] and Path(previous.get('backup','')).is_file():
-            state['backup']=previous['backup']
-        else:
-            backup=DATA/'localization_backups'/('reputation_names_'+time.strftime('%Y%m%d_%H%M%S'))
-            backup.mkdir(parents=True,exist_ok=False)
-            shutil.copy2(ini,backup/'global.ini')
-            if previous:(backup/'previous_state.json').write_text(json.dumps(previous,indent=2),encoding='utf-8')
-            state['backup']=str(backup/'global.ini')
+        from game_text_lifecycle import Manager,INI
+        manager=Manager(game,DATA)
+        if not manager.read().get('enabled',True):return dict(applied=False,changed=False,names=0,enabled=False)
         if not publish_json(state_path,state):raise OSError('Could not save restoration journal; game file unchanged')
-        temporary=ini.with_name('global.ini.synthscan-reputation.tmp')
-        try:
-            temporary.write_bytes(after)
-            if ini.read_bytes()!=before:raise ValueError('Localization changed concurrently; refusing replacement')
-            temporary.replace(ini)
-        finally:
-            if temporary.exists():temporary.unlink()
+        manager.write(INI,after)
         state['phase']='applied';publish_json(state_path,state)
     return dict(applied=bool(apply),changed=after!=before,names=len(state['entries']),
                           skipped=state['skipped'],requires_game_text_reload=True,

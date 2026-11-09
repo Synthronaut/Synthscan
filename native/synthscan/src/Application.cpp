@@ -2941,6 +2941,10 @@ CaptureRegion Application::trackingSearchArea() const {
 }
 
 void Application::applyLiveMode(bool active) {
+#ifdef SYNTHSCAN_NO_SCREEN_READING
+    active=false;
+    if(gui_)gui_->setLiveModeActive(false);
+#endif
     liveModeActive_ = active;
     if(!active)screenCapture_.releaseWindowCapture();
     std::cout << "Live mode: " << (active ? "ON" : "OFF") << std::endl;
@@ -4481,6 +4485,7 @@ void Application::pollLibrary() {
 // the choice is gametexts= in region_config.txt, written at once.
 void Application::setGameTextsWanted(bool wanted) {
     gameTextsWanted_ = wanted;
+    if(!library_.gameLog().empty())GameTexts::setEnabled(library_.gameLog().parent_path(),wanted);
     saveRegionConfig();
     if (gameTextsJob_.valid()) {
         // a write in flight finishes first - it must not land after a removal

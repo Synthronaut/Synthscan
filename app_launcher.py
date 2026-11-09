@@ -10,7 +10,7 @@ import subprocess
 import threading
 import traceback
 import tkinter as tk
-from tkinter import filedialog,ttk
+from tkinter import filedialog,messagebox,ttk
 from installation import ROOT,PROFILE,game_directory,valid_game
 from setup_status import ready,reputation_view,error_message,read
 
@@ -26,7 +26,7 @@ class SetupWindow:
     def __init__(self,window,status_only=False):
         window_icon(window)
         self.window=window;self.busy=False;self.messages=queue.Queue();self.status_only=status_only;self.initial=not ready()
-        window.title('SynthScan — Setup & reputation');window.geometry('760x500');window.minsize(720,480)
+        window.title('SynthScan — Setup & reputation');window.geometry('800x620');window.minsize(760,600)
         style=ttk.Style(window);style.theme_use('clam')
         window.configure(bg='#101820')
         style.configure('.',background='#101820',foreground='#e5edf3',font=('Segoe UI',10))
@@ -40,6 +40,13 @@ class SetupWindow:
         self.detail=ttk.Label(outer,text='',wraplength=630,justify='left');self.detail.pack(anchor='w',pady=(8,12))
         self.bar=ttk.Progressbar(outer,mode='indeterminate');self.bar.pack(fill='x',pady=(0,12))
         self.game=ttk.Label(outer,text='',style='Sub.TLabel',wraplength=630);self.game.pack(anchor='w')
+        from game_text_lifecycle import enabled
+        try:strings=enabled(game_directory(True),PROFILE)
+        except (OSError,ValueError):strings=True
+        self.strings=tk.BooleanVar(value=strings)
+        self.strings_choice=ttk.Checkbutton(outer,text='Enable SynthStrings — reputation and blueprint labels in game',variable=self.strings)
+        self.strings_choice.pack(anchor='w',pady=(12,4))
+        ttk.Label(outer,text='Optional: updates only Data/Localization/english/global.ini and the language setting in user.cfg. Recovery copies stay in AppData. Uncheck for HUD and library only.',style='Sub.TLabel',wraplength=680).pack(anchor='w')
         controls=ttk.Frame(outer);controls.pack(fill='x',pady=(15,12))
         self.retry=ttk.Button(controls,text='Retry setup',command=self.start);self.retry.pack(side='left',padx=(0,8))
         self.browse=ttk.Button(controls,text='Choose game folder',command=self.choose);self.browse.pack(side='left',padx=(0,8))
@@ -48,6 +55,8 @@ class SetupWindow:
         self.open=ttk.Button(bottom,text='Open SynthScan',command=self.open_app);self.open.pack(side='left',padx=(0,8))
         self.repair=ttk.Button(bottom,text='Repair setup',command=lambda:self.start(force=True));self.repair.pack(side='left')
         ttk.Button(bottom,text='Data updates',command=self.open_updates).pack(side='left',padx=(8,0))
+        ttk.Button(outer,text='Remove SynthStrings…',command=self.remove_strings).pack(anchor='w',pady=(8,0))
+        self.restore_access=ttk.Button(outer,text='Restore text permissions…',command=self.restore_permissions)
         ttk.Button(bottom,text='Close',command=self.close).pack(side='right')
         ttk.Label(outer,text='Your player records stay on this Windows account. Setup never asks for your password.',style='Sub.TLabel',wraplength=630).pack(anchor='w',pady=(18,0))
         self.allow.pack_forget();self.retry.pack_forget()
@@ -57,7 +66,38 @@ class SetupWindow:
         self.stop=Signal('setup-stop')
         window.after(100,self.poll)
         if status_only and ready():self.finished()
-        else:window.after(150,self.start)
+        else:
+            self.title.config(text='Choose your setup')
+            self.detail.config(text='Keep SynthStrings checked for in-game labels, or uncheck it for a HUD-only installation. Then choose Set up SynthScan.')
+            self.retry.config(text='Set up SynthScan');self.retry.pack(side='left',before=self.browse,padx=(0,8))
+
+    def remove_strings(self):
+        if self.busy:return
+        from game_text_lifecycle import Manager,INI,MARKERS,archive_legacy_artifacts
+        try:
+            manager=Manager(game_directory(True),PROFILE);state=manager.read();path=manager.target(INI)
+            legacy=any(entry.get('legacy') for entry in state.get('files',{}).values()) or (not state.get('files') and path.exists() and any(mark in path.read_bytes() for mark in MARKERS))
+            explanation='Disable SynthStrings and restore its recorded changes? Your HUD, library and player records stay available. Restart the game afterward.'
+            if legacy:explanation+='\n\nThis older installation has no clean original baseline. Its marked localization file will be archived in AppData and removed from the game. Any custom edits inside that file remain in the archive; unrelated files and settings are preserved.'
+            if not messagebox.askyesno('Remove SynthStrings',explanation,parent=self.window):return
+            result=manager.restore(archive_legacy=legacy)
+            if legacy:archive_legacy_artifacts(manager.game,PROFILE)
+            self.strings.set(False)
+            config=PROFILE/'region_config.txt';lines=config.read_text(encoding='utf-8').splitlines() if config.exists() else []
+            config.write_text('\n'.join([v for v in lines if not v.startswith('gametexts=')]+['gametexts=0'])+'\n',encoding='utf-8')
+            setup=read(PROFILE/'setup_result.json');setup.update(strings_enabled=False,strings_installed=False,cleanup=result)
+            (PROFILE/'setup_result.json').write_text(json.dumps(setup),encoding='utf-8')
+            if result['permissions_pending']:self.restore_access.pack(anchor='w',pady=(8,0))
+            self.detail.config(text='SynthStrings disabled. Restart the game. '+('Some externally edited files or permissions need review; recovery details are in AppData.' if result['conflicts'] or result['permissions_pending'] else 'Recorded changes were restored; player data was kept.'))
+        except (OSError,ValueError) as error:self.detail.config(text='Removal needs attention: '+str(error))
+
+    def restore_permissions(self):
+        if self.busy:return
+        try:
+            from game_text_access import request
+            request(restore=True)
+            self.detail.config(text='Approve Windows permission restoration. Any permissions edited outside SynthScan will be preserved.')
+        except (OSError,ValueError):self.detail.config(text='Windows did not allow restoration. Recovery details remain in AppData.')
 
     def open_updates(self):
         if self.busy:return
@@ -93,12 +133,13 @@ class SetupWindow:
             self.retry.pack(side='left',before=self.browse,padx=(0,8));return
         os.environ['SYNTHSCAN_GAME_DIR']=str(game);self.game.config(text='Game: '+str(game))
         self.busy=True;self.retry.pack_forget();self.allow.pack_forget();self.bar.configure(mode='indeterminate',value=0);self.bar.start(12)
+        strings=self.strings.get();self.strings_choice.state(['disabled'])
         self.title.config(text='Preparing SynthScan for this PC')
         self.detail.config(text='First setup reads your game files. This can take several minutes; you only need to do this after installation or a game patch.')
         def work():
             try:
                 from community_setup import prepare
-                note=prepare(lambda text:self.messages.put(('progress',text)),force=force)
+                note=prepare(lambda text:self.messages.put(('progress',text)),force=force,strings=strings)
                 self.messages.put(('done',note))
             except Exception as error:
                 (PROFILE/'setup_error.log').write_text(traceback.format_exc(),encoding='utf-8')
@@ -121,6 +162,7 @@ class SetupWindow:
         self.window.withdraw()
 
     def finished(self):
+        self.strings_choice.state(['!disabled'])
         self.busy=False;self.bar.stop();self.bar.configure(mode='determinate',value=100);self.title.config(text='Your HUD and library are ready')
         self.detail.config(text='Enter Star Citizen normally. Your own reputation syncs automatically; this window will tell you when the numbers are ready.')
         if self.initial:
@@ -138,6 +180,7 @@ class SetupWindow:
                 kind,value=self.messages.get_nowait()
                 if kind=='progress':self.detail.config(text=value)
                 elif kind=='error':
+                    self.strings_choice.state(['!disabled'])
                     self.busy=False;self.bar.stop();self.title.config(text='One step needs attention');self.detail.config(text=value[0])
                     self.retry.pack(side='left',before=self.browse,padx=(0,8))
                     if value[1]:self.allow.pack(side='left')

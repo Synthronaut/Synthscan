@@ -1872,7 +1872,7 @@ int runSelfTest() {
         const std::vector<bool> none(SCMiner::CRAFT_BLUEPRINT_COUNT);
         const std::vector<std::string> steps = {"data", "Localization", "english", "global.ini"};
         const std::filesystem::path packPlace = channel / "Data" / "localization" / "english" / "global.ini";
-        const GameTexts::Outcome wrote = GameTexts::write(channel, none);
+        const GameTexts::Outcome wrote = GameTexts::writeFixture(channel, none);
         std::vector<std::filesystem::path> found = GameTexts::spellings(channel, steps);
         const std::string written = found.size() == 1 ? slurp(found[0]) : std::string();
         allPassed &= check(wrote.written && found.size() == 1 && found[0] == packPlace && GameTexts::isOurs(written) &&
@@ -1887,8 +1887,8 @@ int runSelfTest() {
             std::ofstream f(packPlace, std::ios::binary | std::ios::trunc);
             f << pack;
         }
-        const GameTexts::Outcome leftAlone = GameTexts::write(channel, none);
-        const GameTexts::Outcome keptPack = GameTexts::remove(channel);
+        const GameTexts::Outcome leftAlone = GameTexts::writeFixture(channel, none);
+        const GameTexts::Outcome keptPack = GameTexts::removeFixture(channel);
         allPassed &= check(!leftAlone.written && leftAlone.note.find("someone else's") != std::string::npos &&
                                keptPack.note.find("someone else's") != std::string::npos && slurp(packPlace) == pack &&
                                GameTexts::spellings(channel, steps).size() == 1,
@@ -1902,7 +1902,7 @@ int runSelfTest() {
             f << written;
         }
         const bool both = GameTexts::spellings(channel, steps).size() == 2;
-        GameTexts::write(channel, none);
+        GameTexts::writeFixture(channel, none);
         found = GameTexts::spellings(channel, steps);
         allPassed &= check(both && found.size() == 1 && found[0] == packPlace && slurp(packPlace) == pack,
                            "SynthScan's file beside a pack in another spelling is taken away, the pack kept");
@@ -1913,7 +1913,7 @@ int runSelfTest() {
             std::ofstream f(packPlace, std::ios::binary | std::ios::trunc);
             f << written;
         }
-        const GameTexts::Outcome taken = GameTexts::remove(channel);
+        const GameTexts::Outcome taken = GameTexts::removeFixture(channel);
         allPassed &= check(GameTexts::spellings(channel, steps).empty() && taken.note.rfind("taken away", 0) == 0,
                            "SynthScan's file is taken away in the spelling it has (" + taken.note + ")");
 
@@ -1921,7 +1921,7 @@ int runSelfTest() {
             std::ofstream f(channel / "USER.cfg", std::ios::binary | std::ios::trunc);
             f << "g_language = german_(germany)\r\n";
         }
-        const GameTexts::Outcome german = GameTexts::write(channel, none);
+        const GameTexts::Outcome german = GameTexts::writeFixture(channel, none);
         allPassed &= check(!german.written && german.note.find("german_(germany)") != std::string::npos &&
                                GameTexts::spellings(channel, steps).empty() && cfgFiles() == 1,
                            "a USER.cfg set to another language is read in its spelling, and nothing is written");

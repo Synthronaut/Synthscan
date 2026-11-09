@@ -5,17 +5,33 @@
   #define Output "output"
 #endif
 #ifndef AppVersion
-  #define AppVersion "0.1.0-alpha.9"
+  #define AppVersion "0.1.0-alpha.10"
+#endif
+#ifndef Edition
+  #define Edition "full"
+#endif
+#if Edition == "standard"
+  #define EditionName "Standard"
+  #define EditionSuffix "-Standard"
+  #define EditionGuid "6278A3F4-6738-4AE9-84CF-12B477780C21"
+#else
+  #define EditionName "Full"
+  #define EditionSuffix ""
+  #define EditionGuid "6278A3F4-6738-4AE9-84CF-12B477780C20"
 #endif
 [Setup]
+#if Edition == "standard"
+AppId={{6278A3F4-6738-4AE9-84CF-12B477780C21}
+#else
 AppId={{6278A3F4-6738-4AE9-84CF-12B477780C20}
-AppName=SynthScan
+#endif
+AppName=SynthScan {#EditionName}
 AppVersion={#AppVersion}
 AppPublisher=Synthronaut
 AppPublisherURL=https://github.com/Synthronaut/Synthscan
 AppSupportURL=https://github.com/Synthronaut/Synthscan/issues
-DefaultDirName={localappdata}\Programs\SynthScan
-DefaultGroupName=SynthScan
+DefaultDirName={localappdata}\Programs\SynthScan{#EditionSuffix}
+DefaultGroupName=SynthScan {#EditionName}
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
@@ -26,7 +42,7 @@ WizardStyle=modern
 SetupIconFile=..\native\synthscan\resources\synthscan.ico
 UninstallDisplayIcon={app}\SynthScan.exe
 OutputDir={#Output}
-OutputBaseFilename=SynthScan-Setup-Windows-x64
+OutputBaseFilename=SynthScan-{#EditionName}-Setup-Windows-x64
 Compression=lzma2/fast
 SolidCompression=yes
 CloseApplications=yes
@@ -45,9 +61,9 @@ Type: files; Name: "{app}\active_version.txt"
 Type: files; Name: "{app}\activation_pending.txt"
 
 [Icons]
-Name: "{group}\SynthScan"; Filename: "{app}\SynthScan.exe"
+Name: "{group}\SynthScan {#EditionName}"; Filename: "{app}\SynthScan.exe"
 Name: "{group}\Setup and reputation status"; Filename: "{app}\SynthScan.exe"; Parameters: "--status"
-Name: "{autodesktop}\SynthScan"; Filename: "{app}\SynthScan.exe"; Tasks: desktop
+Name: "{autodesktop}\SynthScan {#EditionName}"; Filename: "{app}\SynthScan.exe"; Tasks: desktop
 Name: "{userstartup}\SynthScan Game Watcher"; Filename: "{app}\SynthScan.exe"; Parameters: "--watch"; Tasks: startup
 
 [Run]
@@ -63,3 +79,10 @@ Type: files; Name: "{app}\activation_pending.txt"
 Type: files; Name: "{app}\dist\native\native_runtime.json"
 Type: files; Name: "{app}\dist\native\workspace_library.json"
 Type: files; Name: "{app}\launch_target.json"
+
+[Messages]
+#if Edition == "standard"
+WelcomeLabel2=Standard installs SynthScan without screen reading. Mining recognition, DisplayInfo readings and screen imports are not installed. Finder, People, reputation, log-based server information and manual planning remain available. Updates preserve Standard; adding screen reading requires explicitly installing Full.
+#else
+WelcomeLabel2=Full includes local game-window screen reading for mining recognition, DisplayInfo readings and screen imports. Capture can be paused in Privacy & capture. Choose the separate Standard installer if you do not want screen-reading components installed.
+#endif

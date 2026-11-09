@@ -59,19 +59,27 @@ class BlueprintStringsTests(unittest.TestCase):
 
     def test_atomic_replace_failure_keeps_original_and_can_retry(self):
         with tempfile.TemporaryDirectory() as d:
-            ini = Path(d)/'global.ini'
+            ini = Path(d)/'LIVE/Data/Localization/english/global.ini'
+            ini.parent.mkdir(parents=True)
+            profile=Path(d)/'profile'
             original = b'\xef\xbb\xbfm_desc_1=<EM4>Potential Blueprints</EM4>\\n- LH86 Pistol\r\n'
             ini.write_bytes(original)
-            with patch.object(Path, 'replace', side_effect=PermissionError('locked')):
+            import os
+            replace=os.replace
+            def fail(source,destination):
+                if Path(destination)==ini:raise PermissionError('locked')
+                return replace(source,destination)
+            with patch('game_text_lifecycle.os.replace', side_effect=fail):
                 with self.assertRaises(PermissionError):
-                    sync_blueprint_text(ini, {'LH86 Pistol'})
+                    sync_blueprint_text(ini, {'LH86 Pistol'}, profile)
             self.assertEqual(ini.read_bytes(), original)
             self.assertEqual(list(Path(d).glob('*.tmp')), [])
-            self.assertTrue(sync_blueprint_text(ini, {'LH86 Pistol'})['changed'])
+            self.assertTrue(sync_blueprint_text(ini, {'LH86 Pistol'}, profile)['changed'])
             stamp = ini.stat().st_mtime_ns
-            self.assertFalse(sync_blueprint_text(ini, {'LH86 Pistol'})['changed'])
+            self.assertFalse(sync_blueprint_text(ini, {'LH86 Pistol'}, profile)['changed'])
             self.assertEqual(ini.stat().st_mtime_ns, stamp)
-            self.assertEqual((Path(d)/'global.ini.synthscan-blueprints.bak').read_bytes(), original)
+            self.assertEqual(next(profile.rglob('*-original.bin')).read_bytes(), original)
+            self.assertFalse(list(ini.parent.glob('*.bak')))
 
     def test_native_library_manual_denials_and_truncated_save(self):
         with tempfile.TemporaryDirectory() as d:
@@ -97,13 +105,13 @@ class BlueprintStringsTests(unittest.TestCase):
             self.assertIn('[OWNED] LH86 Pistol',ini.read_text())
             self.assertIn('Faction=Org (100 / 800)',ini.read_text())
             self.assertTrue(json.loads((profile/'blueprint_strings_status.json').read_text())['ok'])
-            # Simulate another localization writer restoring the base file.
+            # An unexpected external edit must be preserved and surfaced.
             ini.write_text(original)
             service.tick(108)
-            self.assertIn('[OWNED] LH86 Pistol',ini.read_text())
-            # An app restart independently verifies/prepares the file again.
+            self.assertEqual(ini.read_text(),original)
+            self.assertFalse(json.loads((profile/'blueprint_strings_status.json').read_text())['ok'])
             BlueprintTextSync(profile,game/'Game.log').tick(112)
-            self.assertIn('[OWNED] LH86 Pistol',ini.read_text())
+            self.assertEqual(ini.read_text(),original)
 
     def test_channel_ownership_is_not_mixed(self):
         with tempfile.TemporaryDirectory() as d:

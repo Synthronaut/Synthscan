@@ -1,4 +1,5 @@
 #include "GameTexts.h"
+#include "ManagedGameTexts.h"
 
 #include "AppPaths.h"
 #include "CraftingData.h"
@@ -315,6 +316,19 @@ bool GameTexts::build(const std::filesystem::path& channel, const std::vector<bo
 }
 
 GameTexts::Outcome GameTexts::write(const std::filesystem::path& channel, const std::vector<bool>& owned) {
+#ifdef _WIN32
+    auto result=managedGameText(L"apply-native",channel,owned);return {result.written,result.note};
+#else
+    return writeFixture(channel,owned);
+#endif
+}
+void GameTexts::setEnabled(const std::filesystem::path& channel,bool enabled){
+#ifdef _WIN32
+    managedGameText(enabled?L"enable":L"disable",channel);
+#endif
+}
+GameTexts::Outcome GameTexts::writeFixture(const std::filesystem::path& channel, const std::vector<bool>& owned) {
+    if(std::filesystem::exists(channel/"Bin64/StarCitizen.exe"))return {false,"Fixture writer refuses a real game installation"};
     Outcome o;
     // The file in every spelling there is. Someone else's in any of them keeps
     // Bedrock out - and Bedrock's own goes, should it stand beside a pack in
@@ -384,6 +398,14 @@ GameTexts::Outcome GameTexts::write(const std::filesystem::path& channel, const 
 }
 
 GameTexts::Outcome GameTexts::remove(const std::filesystem::path& channel) {
+#ifdef _WIN32
+    auto result=managedGameText(L"remove",channel);return {result.written,result.note};
+#else
+    return removeFixture(channel);
+#endif
+}
+GameTexts::Outcome GameTexts::removeFixture(const std::filesystem::path& channel) {
+    if(std::filesystem::exists(channel/"Bin64/StarCitizen.exe"))return {false,"Fixture removal refuses a real game installation"};
     Outcome o;
     // Bedrock's in every spelling there is, and nobody else's
     bool any = false, foreign = false;

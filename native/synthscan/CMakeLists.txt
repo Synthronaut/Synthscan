@@ -228,6 +228,16 @@ set(SOURCES
     ${CORE_SOURCES}
 )
 
+option(SYNTHSCAN_NO_SCREEN_READING "Build Standard without screen-capture providers" OFF)
+if(SYNTHSCAN_NO_SCREEN_READING)
+    if(NOT WIN32)
+        message(FATAL_ERROR "Standard edition is currently Windows only")
+    endif()
+    add_compile_definitions(SYNTHSCAN_NO_SCREEN_READING=1)
+    list(REMOVE_ITEM SOURCES src/DxgiCapture.cpp src/SynthGameCapture.cpp)
+    list(APPEND SOURCES src/StandardCapture.cpp)
+endif()
+
 set(HEADERS
     include/ScreenCapture.h
     include/DxgiCapture.h

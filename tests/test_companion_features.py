@@ -9,7 +9,8 @@ from unittest.mock import Mock,patch
 
 from companion_features import CompanionService,CompanionStore,PresenceChanges,tag_labels,is_org,MARKET_INTERVAL
 from companion_toasts import NoticeGate
-from player_services import PlayerClient,PLAYER_PREFIX
+from player_services import PlayerClient,PLAYER_PREFIX,PlayerLeftShard
+from party_invites import PartyInviteQueue
 
 ITEM=dict(id=5011,name='Carinite (Pure)',identity='fixture')
 CONTEXT=dict(session_token='join',full_shard_id='pub_use1b_100_020',joined_at=100)
@@ -222,22 +223,20 @@ class BulkInvitationTests(unittest.TestCase):
     def client(self):
         client=object.__new__(PlayerClient);client.account=SimpleNamespace(subject=PLAYER_PREFIX+'1')
         client.roster=Mock(return_value=dict(rows=[dict(id=PLAYER_PREFIX+str(i)) for i in range(1,7)]))
+        client.server_member_ids=Mock(return_value={PLAYER_PREFIX+str(i) for i in range(1,7)})
         client.relationships=Mock(return_value=dict(party_at=1000,party=[PLAYER_PREFIX+'1',PLAYER_PREFIX+'2']))
         client.send=Mock(return_value='Invitation receipt returned.')
         return client
     def people(self,*ids):return [dict(id=PLAYER_PREFIX+str(i),handle='Pilot'+str(i)) for i in ids]
-    @patch('player_services.time.sleep')
-    def test_only_eligible_recipients_sent_once_in_order(self,sleep):
+    def test_only_eligible_recipients_sent_once_in_order(self):
         client=self.client();people=self.people(1,2,3,4,5,99)
-        result=client.invite_many(people,CONTEXT,True,[PLAYER_PREFIX+'5'])
+        result=client.invite_many(people,CONTEXT,True,[PLAYER_PREFIX+'5'],control=PartyInviteQueue(people,interval=0))
         self.assertEqual([r['outcome'] for r in result['results']],['Skipped','Skipped','Sent','Sent','Skipped','Skipped'])
         self.assertEqual([c.args[1]['id'] for c in client.send.call_args_list],[PLAYER_PREFIX+'3',PLAYER_PREFIX+'4'])
-        sleep.assert_called_once_with(.75)
-        client.roster.assert_called_once_with(CONTEXT);client.relationships.assert_called_once_with(CONTEXT)
-    @patch('player_services.time.sleep')
-    def test_failure_stops_remaining_recipients_and_keeps_partial_receipts(self,sleep):
+        client.server_member_ids.assert_called_once_with(CONTEXT);client.relationships.assert_called_once_with(CONTEXT)
+    def test_failure_stops_remaining_recipients_and_keeps_partial_receipts(self):
         client=self.client();client.send.side_effect=['Receipt',OSError('timeout')]
-        result=client.invite_many(self.people(3,4,5),CONTEXT,True)
+        people=self.people(3,4,5);result=client.invite_many(people,CONTEXT,True,control=PartyInviteQueue(people,interval=0))
         self.assertEqual([r['outcome'] for r in result['results']],['Sent','Check in game','Not sent'])
         self.assertEqual(client.send.call_count,2);self.assertIn('1 sent',result['status'])
     def test_unconfirmed_unknown_party_or_duplicate_batch_never_sends(self):
@@ -265,6 +264,7 @@ class OutgoingActionTests(unittest.TestCase):
         self.assertTrue(rows[0]['is_self']);self.assertFalse(rows[1]['is_self'])
     def client(self):
         client=object.__new__(PlayerClient);client.scope=Mock();client.account=SimpleNamespace(subject=PLAYER_PREFIX+'1')
+        client.server_member_ids=Mock(return_value={PERSON['id']})
         client.search=Mock(return_value=dict(rows=[dict(PERSON,account_id=20,player_id='2')]))
         client.message=Mock(return_value=lambda:SimpleNamespace())
         client.call=Mock(return_value=SimpleNamespace(request_id='receipt',invitation=SimpleNamespace(id='invite')))
@@ -284,6 +284,11 @@ class OutgoingActionTests(unittest.TestCase):
     def test_mutating_rpc_cannot_be_called_as_read(self):
         client=object.__new__(PlayerClient)
         with self.assertRaises(ValueError):client.call('contacts','ContactsService','SendFriendRequest',None)
+    def test_shard_membership_is_rechecked_before_either_write(self):
+        for action in ('friend','party'):
+            client=self.client();client.server_member_ids.return_value=set()
+            with self.assertRaises(PlayerLeftShard):client.send(action,PERSON,CONTEXT,True)
+            client.call.assert_not_called()
 
 
 class RelationshipTests(unittest.TestCase):

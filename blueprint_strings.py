@@ -138,7 +138,7 @@ def annotate_blueprint_text(text, owned_names):
         owned_blueprints_checked=len(owned_names))
 
 
-def sync_blueprint_text(ini, owned_names):
+def sync_blueprint_text(ini, owned_names, profile=None):
     """Backup once, preserve bytes outside edited lines, replace atomically."""
     ini = Path(ini)
     with localization_lock(ini):
@@ -148,21 +148,15 @@ def sync_blueprint_text(ini, owned_names):
         stats['changed'] = after != before
         if after == before:
             return stats
-        backup = ini.with_name(ini.name + '.synthscan-blueprints.bak')
-        if not backup.exists():
-            shutil.copy2(ini, backup)
-        descriptor, name = tempfile.mkstemp(prefix=ini.name + '.synthscan-bp-', suffix='.tmp', dir=ini.parent)
-        temporary = Path(name)
-        try:
-            with os.fdopen(descriptor, 'wb') as stream:
-                stream.write(after)
-                stream.flush()
-                os.fsync(stream.fileno())
-            if ini.read_bytes() != before:
-                raise ValueError('Localization changed concurrently; update will be retried')
-            temporary.replace(ini)
-        finally:
-            temporary.unlink(missing_ok=True)
+        from game_text_lifecycle import write_text,INI
+        if ini.as_posix().lower().endswith('/data/localization/english/global.ini'):
+            game=ini.parents[3]
+            if profile is None:
+                from installation import PROFILE
+                profile=PROFILE
+            write_text(game,INI,after,profile)
+        else:
+            raise ValueError('Expected the game localization path; recovery copies belong in AppData')
         return stats
 
 
@@ -202,6 +196,9 @@ class BlueprintTextSync:
         name = channel.name.upper()
         filename = 'owned_blueprints.txt' if name in ('LIVE', 'HOTFIX') else f'owned_blueprints_{name}.txt'
         library = self.directory / filename
+        from game_text_lifecycle import enabled
+        if not enabled(channel,self.directory):
+            publish_json(self.directory/'blueprint_strings_status.json',dict(at=now,ok=True,enabled=False,changed=False));return
         ini = channel / 'Data/Localization/english/global.ini'
         def stamp():
             return (library.stat().st_mtime_ns, library.stat().st_size, ini.stat().st_mtime_ns, ini.stat().st_size)
@@ -210,7 +207,7 @@ class BlueprintTextSync:
             if before == self.stamp:
                 return
             owned = native_owned_names(library)
-            stats = sync_blueprint_text(ini, owned)
+            stats = sync_blueprint_text(ini, owned, self.directory)
             after = stamp()
             if after[:2] != before[:2]:
                 raise ValueError('Blueprint library changed during sync; retrying')

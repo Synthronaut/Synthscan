@@ -5,7 +5,7 @@ design. Optional compact mode reduces spacing and fits the window to its text.
 Data and health remain owned by the current controller; this
 module neither acquires metrics nor substitutes estimates for missing readings.
 """
-from displayinfo_reader import translate_region
+from telemetry_labels import translate_region
 from hud_layout import shard_display_name
 
 

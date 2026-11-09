@@ -8,9 +8,6 @@ import os
 import json
 import re
 import datetime
-import cv2
-import numpy as np
-from rapidocr_onnxruntime import RapidOCR
 
 INVENTORY_FILE = os.path.join(os.path.dirname(__file__), "inventory.json")
 
@@ -235,6 +232,11 @@ def compute_total_value(totals):
 _ocr_engine = None
 
 def get_ocr():
+    from app_edition import require_screen_reading
+    require_screen_reading()
+    global cv2,np,RapidOCR
+    import cv2,numpy as np
+    from rapidocr_onnxruntime import RapidOCR
     global _ocr_engine
     if _ocr_engine is None:
         _ocr_engine = RapidOCR()
@@ -247,6 +249,10 @@ def parse_refinery_image(img_input):
     identifying individual materials, refined yield (SCU/cSCU), and material quality ratings.
     Returns RefineryParseResult({ "Tungsten": 12.5, ... }) with .qualities and .details.
     """
+    from app_edition import require_screen_reading
+    require_screen_reading()
+    global cv2,np
+    import cv2,numpy as np
     if isinstance(img_input, str):
         if not os.path.exists(img_input):
             return RefineryParseResult()

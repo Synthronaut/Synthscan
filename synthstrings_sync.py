@@ -93,14 +93,6 @@ def sync_blueprints_to_global_ini(ini_path=DEFAULT_INI_PATH, owned_blueprints=No
     else:
         owned_names = set(owned_blueprints)
 
-    # 1. Create a safe backup before first or subsequent modifications
-    backup_path = ini_path + ".synthscan_bak"
-    if not os.path.exists(backup_path):
-        try:
-            shutil.copy2(ini_path, backup_path)
-        except Exception as e:
-            print("Backup creation warning:", e)
-
     # 2. Read existing global.ini
     try:
         with open(ini_path, "r", encoding="utf-8-sig", errors="ignore") as f:
@@ -173,8 +165,8 @@ def sync_blueprints_to_global_ini(ini_path=DEFAULT_INI_PATH, owned_blueprints=No
         content = "".join(final_lines)
         # Ensure LF line endings
         content = content.replace("\r\n", "\n")
-        with open(ini_path, "w", encoding="utf-8-sig", newline="\n") as f:
-            f.write(content)
+        from game_text_lifecycle import write_localization
+        write_localization(ini_path, content.encode("utf-8-sig"))
     except Exception as e:
         return False, f"Failed to write updated global.ini: {e}", {}
 
@@ -195,14 +187,13 @@ def sync_blueprints_to_global_ini(ini_path=DEFAULT_INI_PATH, owned_blueprints=No
     return True, msg, stats
 
 def restore_synthstrings_backup(ini_path=DEFAULT_INI_PATH):
-    backup_path = ini_path + ".synthscan_bak"
-    if not os.path.exists(backup_path):
-        return False, "No backup file found (.synthscan_bak)"
     try:
-        shutil.copy2(backup_path, ini_path)
-        return True, "Successfully restored original global.ini from backup!"
-    except Exception as e:
-        return False, f"Failed to restore: {e}"
+        from pathlib import Path
+        from game_text_lifecycle import Manager
+        result=Manager(Path(ini_path).resolve().parents[3]).restore()
+        return not result['conflicts'], 'Managed recovery completed; older or externally edited files may need review in Setup.'
+    except (OSError,ValueError) as error:
+        return False, str(error)
 
 # Backward compatibility alias
 restore_starstrings_backup = restore_synthstrings_backup

@@ -16,6 +16,7 @@ void label(int id,const wchar_t* text,int x,int y,int width,int height,DWORD sty
 void button(int id,const wchar_t* text,int x,int y,int width,DWORD style=BS_OWNERDRAW){auto h=CreateWindowExW(0,L"BUTTON",text,WS_CHILD|WS_VISIBLE|WS_TABSTOP|style,int(x*scale),int(y*scale),int(width*scale),int(34*scale),window,(HMENU)INT_PTR(id),nullptr,nullptr);SendMessageW(h,WM_SETFONT,(WPARAM)font,TRUE);}
 bool accountAllowed(){auto p=read(data/L"capture_privacy.json",4096);return flag(p,"account_access",false);}
 void status(){
+    if(!SynthEdition::screenReading){SetDlgItemTextW(window,10,L"STANDARD · SCREEN READING NOT INSTALLED");SetDlgItemTextW(window,11,message.c_str());return;}
     auto policy=CapturePrivacy::policy();SetDlgItemTextW(window,1,policy.paused?L"Resume capture":L"Pause capture");
     std::wstring state=policy.paused?L"CAPTURE PAUSED":!SCMiner::ScreenCapture::gameWindow()?L"WAITING FOR STAR CITIZEN":L"GAME WINDOW ONLY · LOCAL OCR";
     SetDlgItemTextW(window,10,state.c_str());SetDlgItemTextW(window,11,message.c_str());
@@ -31,6 +32,12 @@ void layout(){
     label(0,L"Account features use the game's existing session credential directly with CIG.\r\nThis permission is separate from screen reading. No password is requested.",24,306,width-48,52);
     label(11,L"",24,365,width-48,44);button(4,L"Save this preview as PNG…",24,414,260);EnableWindow(GetDlgItem(window,4),!preview.empty());
     label(0,L"Preview is kept in memory only and cleared when you leave this page.\r\nOnly Save writes an image. No automatic screenshot upload is provided.",24,462,width-48,50);
+    if(!SynthEdition::screenReading){
+        for(int id:{1,2,3,4,5})ShowWindow(GetDlgItem(window,id),SW_HIDE);
+        // Replace capture explanation while preserving the account permission.
+        auto h=GetWindow(window,GW_CHILD);while(h){int id=GetDlgCtrlID(h);RECT rr{};GetWindowRect(h,&rr);MapWindowPoints(nullptr,window,reinterpret_cast<POINT*>(&rr),2);if(id==0&&(rr.top==int(104*scale)||rr.top==int(462*scale)))ShowWindow(h,SW_HIDE);h=GetWindow(h,GW_HWNDNEXT);}
+        label(20,L"This edition has no screen capture provider, capture packages or OCR models.\r\nScreen reading cannot be enabled in Settings. Install Full explicitly to add it.",24,104,width-48,72);
+    }
     status();InvalidateRect(window,nullptr,FALSE);
 }
 LRESULT CALLBACK proc(HWND hwnd,UINT msg,WPARAM w,LPARAM l){

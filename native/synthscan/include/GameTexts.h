@@ -61,6 +61,9 @@ public:
     // flag per CRAFT_BLUEPRINTS row. Slow the first time per game build (the
     // game's text comes out of the 160 GB archive), quick after.
     static Outcome write(const std::filesystem::path& channel, const std::vector<bool>& owned);
+    static Outcome writeFixture(const std::filesystem::path& channel, const std::vector<bool>& owned);
+    static Outcome removeFixture(const std::filesystem::path& channel);
+    static void setEnabled(const std::filesystem::path& channel,bool enabled);
     // What write() would put there, without putting it anywhere - for
     // --gametexts, which compares it with gen_game_texts.py's reference.
     // False with the reason in note.

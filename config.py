@@ -4,7 +4,6 @@ SynthScan - Persistent Configuration & Multi-Monitor Manager
 
 import json
 import os
-import mss
 
 from installation import RELEASE,PROFILE
 CONFIG_FILE = str(PROFILE/'config.json') if RELEASE else os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')
@@ -43,27 +42,24 @@ DEFAULT_CONFIG = {
 
 
 def get_monitors():
-    """
-    Returns list of physical monitor dicts (1-indexed in mss, returned as 0-indexed list with 'id': 1, 2, ...).
-    Each entry: {'id': idx, 'left': ..., 'top': ..., 'width': ..., 'height': ..., 'is_primary': ...}
-    """
+    """Monitor geometry only. No graphics capture or pixel access."""
     try:
-        with mss.MSS() as sct:
-            mons = []
-            for idx, m in enumerate(sct.monitors[1:], start=1):
-                mons.append({
-                    "id": idx,
-                    "left": int(m.get("left", 0)),
-                    "top": int(m.get("top", 0)),
-                    "width": int(m.get("width", 2560)),
-                    "height": int(m.get("height", 1440)),
-                    "is_primary": bool(m.get("is_primary", idx == 1))
-                })
-            if mons:
-                return mons
-    except Exception:
-        pass
-    return [{"id": 1, "left": 0, "top": 0, "width": 2560, "height": 1440, "is_primary": True}]
+        import ctypes
+        from ctypes import wintypes as w
+        user=ctypes.WinDLL('user32',use_last_error=True)
+        callback_type=ctypes.WINFUNCTYPE(w.BOOL,w.HMONITOR,w.HDC,ctypes.POINTER(w.RECT),w.LPARAM)
+        monitors=[]
+        @callback_type
+        def visit(monitor,dc,rect,param):
+            r=rect.contents
+            monitors.append(dict(left=r.left,top=r.top,width=r.right-r.left,height=r.bottom-r.top,is_primary=r.left==0 and r.top==0))
+            return True
+        user.EnumDisplayMonitors.argtypes=[w.HDC,ctypes.POINTER(w.RECT),callback_type,w.LPARAM]
+        if user.EnumDisplayMonitors(None,None,visit,0) and monitors:
+            monitors.sort(key=lambda m:not m['is_primary'])
+            return [dict(m,id=i) for i,m in enumerate(monitors,1)]
+    except (OSError,AttributeError):pass
+    return [{"id":1,"left":0,"top":0,"width":2560,"height":1440,"is_primary":True}]
 
 
 def get_monitor_by_id(mon_id):

@@ -119,7 +119,7 @@ class ServerLogManager:
             self._save()
             return existing
         # Import formatting only; this module does not instantiate a second reader.
-        from displayinfo_reader import translate_region
+        from telemetry_labels import translate_region
         entry = {"id": "sess_" + uuid.uuid5(uuid.NAMESPACE_URL, full + ":" + iso).hex,
                  "joined_at": iso, "joined_at_local": format_local_ts(iso), "join_source": "game_log",'joined_time_source':time_source,
                  "left_at": None, "left_at_local": None, "duration_sec": 0,

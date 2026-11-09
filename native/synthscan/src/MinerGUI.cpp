@@ -2424,6 +2424,9 @@ void MinerGUI::updateClickThrough() {
 }
 
 void MinerGUI::setLiveModeActive(bool active) {
+#ifdef SYNTHSCAN_NO_SCREEN_READING
+    active=false;
+#endif
     liveModeActive_ = active;
     keepOutOfCaptures();
     SetWindowTextW(btnLiveMode_, active ? L"Live on" : L"Live off");

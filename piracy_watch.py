@@ -72,7 +72,8 @@ class PiracyReader:
         self.context=(False,None);self.lock=threading.Lock();self.latest=None;self.error=''
         self.stop_event=threading.Event()
         self.thread=threading.Thread(target=self._run,name='piracy-displayinfo',daemon=True)
-        self.thread.start()
+        from app_edition import screen_reading
+        if screen_reading():self.thread.start()
 
     def _run(self):
         capture=None;reader=None;retry=0
@@ -121,9 +122,14 @@ class PiracyReader:
         with self.lock:latest,self.latest=self.latest,None;error=self.error
         if latest:self.watch.observe(*latest,now)
         view=self.watch.view(now,enabled)
+        from app_edition import screen_reading
+        if not screen_reading():
+            view.update(status='Screen readings are not installed · manual timer available',source='Manual timer',metrics={},fresh=False)
+            return view
         if error:view['status']=error
         if not token:view['status']='Join a shard to watch population'
         return view
 
     def close(self):
-        self.stop_event.set();self.thread.join(timeout=2)
+        self.stop_event.set()
+        if self.thread.ident is not None:self.thread.join(timeout=2)

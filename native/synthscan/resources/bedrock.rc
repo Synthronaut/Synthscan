@@ -2,6 +2,7 @@
 #include "../include/resource.h"
 
 IDI_APPICON ICON "synthscan.ico"
+#ifndef SYNTHSCAN_NO_SCREEN_READING
 GLYPHS RCDATA "glyphs.bin"
 GLYPHS_MFD RCDATA "glyphs_mfd.bin"
 // The second reader's recogniser and its alphabet (include/TextLineReader.h)
@@ -23,6 +24,7 @@ SELFTEST_LOADOUT RCDATA "../tests/scanpanel/loadout_prospector_1440.jpg"
 SELFTEST_MARKER_LAMP RCDATA "../tests/lamp_marker_3170.png"
 SELFTEST_MARKER_MFD RCDATA "../tests/mfd_marker_15420.png"
 SELFTEST_MARKER_CANOPY RCDATA "../tests/canopy_marker_60000.png"
+#endif
 // The 2.5 news page's picture: a contract in the mobiGlas, from the game
 NEWS_2_5 RCDATA "news_2_5.jpg"
 // UEX's "Powered by UEX" badge, in the Ore Finder beside the prices that are theirs

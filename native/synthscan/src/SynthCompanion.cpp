@@ -14,14 +14,16 @@
 #include <cstdlib>
 #include <cctype>
 #include <cstring>
+#include <map>
 
 namespace SynthCompanion {
 namespace {
 using namespace SynthScan;
 HWND page=nullptr;HFONT font=nullptr;std::filesystem::path folder;
 std::string mode,lastState,selected,selectedWatch;Json model;
-std::vector<Json> people,items,notices;bool filling=false;double lastLoad=0;
+std::vector<Json> people,actionRows,items,notices;bool filling=false;double lastLoad=0;
 std::vector<std::string> selectedIds;
+std::vector<std::string> actionEditorIds;std::string tagOptions;
 std::string peopleView;
 bool showMatches=false;
 HBRUSH background=CreateSolidBrush(RGB(14,18,25)),editBackground=CreateSolidBrush(RGB(25,29,36));
@@ -30,7 +32,7 @@ HWND child(int id){return GetDlgItem(page,id);}
 std::string text(int id){int size=GetWindowTextLengthW(child(id));std::wstring value(size+1,L'\0');GetWindowTextW(child(id),value.data(),size+1);value.resize(size);return utf8(value);}
 void label(int id,const std::string& value){SetWindowTextW(child(id),wide(value).c_str());}
 std::string buttonIcon(int id){switch(id){case 502:return "search";case 503:case 539:return "refresh";case 515:case 541:case 545:return "clear";case 513:return "friend";case 514:case 520:return "invite";case 512:return "check";case 517:case 521:return "tag";case 522:return "diary";default:return "";}}
-void drawPersonRow(Gdiplus::Graphics& g,Gdiplus::RectF r,const std::vector<std::wstring>& fields,const std::vector<float>& widths,bool selected,bool hot,Gdiplus::Color relationship,bool focused=false){
+void drawPersonRow(Gdiplus::Graphics& g,Gdiplus::RectF r,const std::vector<std::wstring>& fields,const std::vector<float>& widths,bool selected,bool hot,Gdiplus::Color relationship,bool focused=false,int relationshipColumn=3){
     g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);g.SetTextRenderingHint(Gdiplus::TextRenderingHintAntiAliasGridFit);
     Gdiplus::SolidBrush base(SynthGlass::Base);g.FillRectangle(&base,r);
     if(selected||hot)SynthGlass::panel(g,{r.X+4,r.Y+3,r.Width-8,r.Height-6},selected,hot,8);
@@ -46,7 +48,7 @@ void drawPersonRow(Gdiplus::Graphics& g,Gdiplus::RectF r,const std::vector<std::
             bool org=fields[i]==L"Org";
             float chip=std::min(width,measured.Width+24.f);SynthGlass::rounded(g,{left,r.Y+(r.Height-22)/2,chip,22},org?Gdiplus::Color(255,64,35,16):Gdiplus::Color(255,37,43,55),7,org?Gdiplus::Color(160,255,145,40):Gdiplus::Color(35,173,190,213));
             SynthGlass::text(g,fields[i],{left+9,r.Y,chip-18,r.Height},11.5f,org?Gdiplus::Color(255,255,145,40):Gdiplus::Color(255,184,196,215));
-        }else SynthGlass::text(g,fields[i],{left,r.Y,width,r.Height},i==0?13.f:11.5f,i==0?SynthGlass::Ink:(i==3?relationship:SynthGlass::Muted),i==0&&selected);
+        }else SynthGlass::text(g,fields[i],{left,r.Y,width,r.Height},i==0?13.f:11.5f,i==0?SynthGlass::Ink:(int(i)==relationshipColumn?relationship:SynthGlass::Muted),i==0&&selected);
         x+=widths[i];
     }
     if(focused){Gdiplus::Pen pen(Gdiplus::Color(90,167,208,209),1);Gdiplus::GraphicsPath path;SynthGlass::shape(path,{r.X+4,r.Y+3,r.Width-8,r.Height-6},8);g.DrawPath(&pen,&path);}
@@ -58,7 +60,7 @@ void drawHeader(const DRAWITEMSTRUCT& item){
     Gdiplus::Pen rule(Gdiplus::Color(35,173,190,213));g.DrawLine(&rule,float(r.left),float(r.bottom-1),float(r.right),float(r.bottom-1));
 }
 void backdrop(Gdiplus::Graphics& g,float w,float h){
-    g.Clear(SynthGlass::Base);SynthGlass::ambient(g,{0,0,w,h});if(mode=="people")SynthGlass::panel(g,{0,h-229,w,218},false,false,13);
+    g.Clear(SynthGlass::Base);SynthGlass::ambient(g,{0,0,w,h});if(mode=="people"){float left=(w-16)/2;SynthGlass::panel(g,{left+16,h-336,w-left-16,276},false,false,13);}
 }
 void controlBackdrop(Gdiplus::Graphics& g,HWND hwnd){
     RECT r{},parent{};GetWindowRect(hwnd,&r);MapWindowPoints(nullptr,page,reinterpret_cast<POINT*>(&r),2);GetClientRect(page,&parent);auto state=g.Save();g.TranslateTransform(-float(r.left),-float(r.top));backdrop(g,float(parent.right),float(parent.bottom));g.Restore(state);
@@ -75,7 +77,7 @@ LRESULT CALLBACK glassControlProc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp,UIN
         if(kind==1){SynthGlass::panel(g,{1,1,r.Width-2,r.Height-2},false,hot,9);SynthGlass::text(g,title,{13,0,r.Width-42,r.Height},13);
             Gdiplus::Pen pen(SynthGlass::Muted,1.5f);float x=r.Width-21,y=r.Height/2;g.DrawLine(&pen,x-4,y-2,x,y+2);g.DrawLine(&pen,x,y+2,x+4,y-2);
         }else if(kind==4){
-            if(GetDlgCtrlID(hwnd)==590){Gdiplus::Font f(L"Segoe UI",11,Gdiplus::FontStyleRegular,Gdiplus::UnitPixel);Gdiplus::SolidBrush ink(SynthGlass::Muted);g.DrawString(title,-1,&f,r,nullptr,&ink);}
+            if(GetDlgCtrlID(hwnd)==590||GetDlgCtrlID(hwnd)==524){Gdiplus::Font f(L"Segoe UI",11,Gdiplus::FontStyleRegular,Gdiplus::UnitPixel);Gdiplus::SolidBrush ink(SynthGlass::Muted);g.DrawString(title,-1,&f,r,nullptr,&ink);}
             else SynthGlass::text(g,title,r,GetDlgCtrlID(hwnd)==506||GetDlgCtrlID(hwnd)==518?11.f:12.f,SynthGlass::Muted);
         }else{bool checked=SendMessageW(hwnd,BM_GETCHECK,0,0)==BST_CHECKED;SynthGlass::checkbox(g,{2,(r.Height-18)/2,18,18},checked,hot);SynthGlass::text(g,title,{29,0,r.Width-29,r.Height},12,SynthGlass::Muted);}
         if(GetFocus()==hwnd){Gdiplus::Pen focus(Gdiplus::Color(120,148,198,202));Gdiplus::GraphicsPath outline;SynthGlass::shape(outline,{1,1,r.Width-2,r.Height-2},8);g.DrawPath(&focus,&outline);}
@@ -86,8 +88,9 @@ LRESULT CALLBACK glassControlProc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp,UIN
     if(message==WM_NCDESTROY){RemovePropW(hwnd,L"SynthGlass.Hot");RemoveWindowSubclass(hwnd,glassControlProc,2);}
     return DefSubclassProc(hwnd,message,wp,lp);
 }
-int hoveredPerson=-1;
+int hoveredPerson=-1,hoveredAction=-1;
 LRESULT CALLBACK peopleListProc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp,UINT_PTR,DWORD_PTR){
+    int& hoveredPerson=GetDlgCtrlID(hwnd)==528?hoveredAction:SynthCompanion::hoveredPerson;
     if((message==WM_LBUTTONDOWN||message==WM_LBUTTONDBLCLK)&&!(wp&(MK_CONTROL|MK_SHIFT))){
         LVHITTESTINFO hit{};hit.pt={(short)LOWORD(lp),(short)HIWORD(lp)};int row=ListView_SubItemHitTest(hwnd,&hit);RECT box{};
         if(row>=0&&ListView_GetItemRect(hwnd,row,&box,LVIR_BOUNDS)&&hit.pt.x>=box.left+5&&hit.pt.x<box.left+35){SetFocus(hwnd);auto state=ListView_GetItemState(hwnd,row,LVIS_SELECTED);ListView_SetItemState(hwnd,row,state?0:LVIS_SELECTED,LVIS_SELECTED);ListView_SetSelectionMark(hwnd,row);SetPropW(hwnd,L"SynthGlass.CheckClick",HANDLE(1));return 0;}
@@ -104,11 +107,11 @@ LRESULT CALLBACK peopleListProc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp,UINT_
     return DefSubclassProc(hwnd,message,wp,lp);
 }
 void control(const wchar_t* cls,int id,const wchar_t* title,DWORD style=0){
-    if(id==508)style|=LVS_OWNERDRAWFIXED;
+    if(id==508||id==528)style|=LVS_OWNERDRAWFIXED;
     if(cls==std::wstring(L"COMBOBOX"))style|=CBS_OWNERDRAWFIXED|CBS_HASSTRINGS;
     if(cls==std::wstring(L"BUTTON")&&(style&15)==BS_PUSHBUTTON)style|=BS_OWNERDRAW;
     HWND h=CreateWindowExW(0,cls,title,WS_CHILD|WS_VISIBLE|style,0,0,10,24,page,reinterpret_cast<HMENU>(INT_PTR(id)),GetModuleHandleW(nullptr),nullptr);
-    if(id==508){SetWindowSubclass(h,peopleListProc,1,0);HIMAGELIST rows=ImageList_Create(1,36,ILC_COLOR32,1,1);ListView_SetImageList(h,rows,LVSIL_SMALL);}
+    if(id==508||id==528){SetWindowSubclass(h,peopleListProc,1,0);HIMAGELIST rows=ImageList_Create(1,36,ILC_COLOR32,1,1);ListView_SetImageList(h,rows,LVSIL_SMALL);}
     if(cls==std::wstring(L"COMBOBOX"))SetWindowSubclass(h,glassControlProc,2,1);
     if(cls==std::wstring(L"STATIC"))SetWindowSubclass(h,glassControlProc,2,4);
     if(cls==std::wstring(L"BUTTON"))SetWindowSubclass(h,glassControlProc,2,(style&15)==BS_AUTOCHECKBOX?2:0);
@@ -117,7 +120,7 @@ void control(const wchar_t* cls,int id,const wchar_t* title,DWORD style=0){
     if(cls==std::wstring(L"COMBOBOX"))SendMessageW(h,CB_SETITEMHEIGHT,WPARAM(-1),26);
     if(cls==std::wstring(WC_LISTVIEWW)){ListView_SetExtendedListViewStyle(h,LVS_EX_FULLROWSELECT|LVS_EX_DOUBLEBUFFER);ListView_SetBkColor(h,RGB(14,18,25));ListView_SetTextBkColor(h,RGB(14,18,25));ListView_SetTextColor(h,RGB(234,240,247));}
 }
-void column(int id,int index,const wchar_t* title,int width){LVCOLUMNW c{};c.mask=LVCF_TEXT|LVCF_WIDTH;c.pszText=const_cast<wchar_t*>(title);c.cx=width;ListView_InsertColumn(child(id),index,&c);if(id==508){auto header=ListView_GetHeader(child(id));HDITEMW column{};column.mask=HDI_FORMAT;Header_GetItem(header,index,&column);column.fmt|=HDF_OWNERDRAW;Header_SetItem(header,index,&column);}}
+void column(int id,int index,const wchar_t* title,int width){LVCOLUMNW c{};c.mask=LVCF_TEXT|LVCF_WIDTH;c.pszText=const_cast<wchar_t*>(title);c.cx=width;ListView_InsertColumn(child(id),index,&c);if(id==508||id==528){auto header=ListView_GetHeader(child(id));HDITEMW column{};column.mask=HDI_FORMAT;Header_GetItem(header,index,&column);column.fmt|=HDF_OWNERDRAW;Header_SetItem(header,index,&column);}}
 void cell(int id,int row,int col,const std::string& value){auto wideValue=wide(value);if(col==0){LVITEMW item{};item.mask=LVIF_TEXT;item.iItem=row;item.pszText=wideValue.data();ListView_InsertItem(child(id),&item);}else ListView_SetItemText(child(id),row,col,wideValue.data());}
 std::string age(double stamp){if(stamp<=0)return "not checked";int seconds=int(std::max(0.,now()-stamp));return seconds<60?std::to_string(seconds)+"s ago":std::to_string(seconds/60)+"m ago";}
 COLORREF personColor(const Json& person){return flag(person,"is_self")?RGB(193,157,255):flag(person,"in_party")?RGB(116,183,255):flag(person,"is_friend")?RGB(121,225,158):RGB(234,240,247);}
@@ -131,20 +134,25 @@ void queue(Json command){
     else label(590,"Working…");
 }
 void layout(){
-    if(!page)return;RECT r{};GetClientRect(page,&r);int w=std::max(620,int(r.right)),h=std::max(580,int(r.bottom));
+    if(!page)return;RECT r{};GetClientRect(page,&r);int w=std::max(mode=="people"?860:620,int(r.right)),h=std::max(mode=="people"?700:580,int(r.bottom));
     auto place=[&](int id,int x,int y,int width,int height=34){
         HWND h=child(id);wchar_t cls[30]{};GetClassNameW(h,cls,30);if(std::wstring(cls)==L"Edit"){MoveWindow(h,x+2,y+8,width-4,height-14,TRUE);}else MoveWindow(h,x,y,width,height,TRUE);
     };
     place(501,0,8,w-(mode=="people"?364:292));if(mode=="people")place(523,w-352,8,64);place(502,w-280,8,130);place(503,w-140,8,130);
     if(mode=="people"){
-        place(504,0,50,210,150);place(505,222,50,150);place(519,384,50,w-384,34);place(506,0,84,w,22);
-        place(508,0,116,w,h-344);place(516,0,h-207,215,210);place(517,227,h-207,112);place(518,351,h-207,w-351,24);
-        place(509,0,h-164,32);place(510,40,h-164,w-348);
-        place(511,w-298,h-164,145);place(512,w-145,h-164,135);
-        place(513,0,h-116,120);place(514,128,h-116,130);place(520,266,h-116,108);place(521,382,h-116,100);place(515,490,h-116,120);
-        place(590,0,h-69,w-152,60);place(522,w-140,h-69,140);
-        int available=w-GetSystemMetrics(SM_CXVSCROLL);int first=std::max(200,(available-320)*55/100),tags=std::max(120,available-first-320);
-        ListView_SetColumnWidth(child(508),0,first);ListView_SetColumnWidth(child(508),1,tags);ListView_SetColumnWidth(child(508),2,72);ListView_SetColumnWidth(child(508),3,118);ListView_SetColumnWidth(child(508),4,130);
+        int left=(w-16)/2,right=left+16,rw=w-right;
+        place(501,0,8,left-216);place(523,left-204,8,64);place(502,left-130,8,130);place(503,right,8,128);place(529,right+140,8,144);place(550,right+296,8,rw-296);
+        place(504,0,50,210,150);place(505,222,50,left-222);ShowWindow(child(519),SW_HIDE);place(506,0,86,left,22);
+        place(553,right,50,rw-124,250);place(554,w-112,50,112);place(555,right,86,220,24);place(520,w-112,84,112);
+        place(551,0,116,left,22);place(552,right,116,rw,22);place(508,0,140,left,h-258);place(528,right,140,rw,h-482);
+        place(527,0,h-104,180);place(518,192,h-104,left-192,34);
+        place(516,right,h-322,rw-124,210);place(517,w-112,h-322,112);ShowWindow(child(509),SW_HIDE);
+        place(510,right,h-278,rw-124);place(512,w-112,h-278,112);
+        place(511,right,h-236,160);place(521,right+172,h-236,128);place(515,w-112,h-236,112);
+        int half=(rw-12)/2;place(513,right,h-194,half);place(514,right+half+12,h-194,half);
+        place(522,right,h-150,130);place(525,right+142,h-150,100);place(526,w-112,h-150,112);place(524,right,h-108,rw,44);
+        place(590,0,h-58,w,50);
+        for(int id:{508,528}){int available=(id==508?left:rw)-GetSystemMetrics(SM_CXVSCROLL);int first=std::clamp(available-260,180,260),tags=std::clamp((available-first)*45/100,100,180);ListView_SetColumnWidth(child(id),0,first);ListView_SetColumnWidth(child(id),1,tags);ListView_SetColumnWidth(child(id),2,available-first-tags);}
     }else{
         place(504,0,47,w,22);place(530,0,73,w-10,200);place(531,0,115,70);place(532,74,115,67);
         place(533,152,115,105);place(534,263,115,90);place(535,363,115,40);place(536,407,115,w-547);place(537,w-130,115,120);
@@ -159,32 +167,58 @@ std::vector<Json> chosen(){
     return result;
 }
 Json playerIds(const std::vector<Json>& rows){Json ids=arr();for(const auto& p:rows)ids.items.push_back(field(p,"id"));return ids;}
+std::vector<Json> actionTargets(){std::vector<Json> result;for(const auto& row:actionRows)if(!flag(row,"is_self"))result.push_back(row);return result;}
+Json actionSelection(){Json ids=arr();int at=-1;while((at=ListView_GetNextItem(child(528),at,LVNI_SELECTED))>=0)if(size_t(at)<actionRows.size())ids.items.push_back(field(actionRows[size_t(at)],"id"));return ids;}
+std::vector<Json> stageTargets(){std::vector<Json> result;for(const auto& p:chosen())if(flag(p,"on_shard"))result.push_back(p);return result;}
 std::vector<Json> inviteCandidates(bool org){
     std::vector<Json> result;
     for(const auto& p:org?field(model,"rows").items:chosen())if(!flag(p,"is_self")&&!flag(p,"in_party")&&(!org||flag(p,"is_org")))result.push_back(p);
     return result;
 }
+std::string queueSummary(const Json& q){
+    if(q.kind!=Json::Kind::Object||q.textOr("id").empty())return "Party invitations: idle · 4-second gap";
+    auto summary=std::string(q.textOr("operation")=="friend"?"Friends: ":"Party: ")+q.textOr("state")+" · "+std::to_string(int(q.numberOr("sent")))+" sent · "+std::to_string(int(q.numberOr("skipped")))+" skipped · "+std::to_string(int(q.numberOr("remaining")))+" remaining";
+    if(flag(q,"active")&&!flag(q,"paused")&&q.numberOr("next_in_seconds")>0)summary+=" · next in "+std::to_string(int(q.numberOr("next_in_seconds")))+"s";
+    if(!q.textOr("current_handle").empty())summary+=" · "+q.textOr("current_handle");return summary;
+}
+struct RecipientDialog {int result=0;bool report=false,resend=false;std::string queueId,last;std::vector<std::string> ids;};
+void syncRecipientReport(HWND hwnd,RecipientDialog& dialog){
+    auto current=read(folder/L"companion_state.json",8*1024*1024);const auto& q=field(current,"invite_queue");
+    bool valid=current.numberOr("owner_pid")==GetCurrentProcessId()&&now()-current.numberOr("written_at")>=0&&now()-current.numberOr("written_at")<15&&q.textOr("id")==dialog.queueId;
+    SetDlgItemTextW(hwnd,601,wide(valid?queueSummary(q):"Queue unavailable or session changed. Close this view to refresh.").c_str());
+    EnableWindow(GetDlgItem(hwnd,604),valid&&flag(q,"active")&&!flag(q,"cancelling"));EnableWindow(GetDlgItem(hwnd,605),valid&&flag(q,"active")&&!flag(q,"cancelling"));SetDlgItemTextW(hwnd,604,flag(q,"paused")?L"Resume":L"Pause");
+    auto key=encode(q);if(!valid||key==dialog.last)return;dialog.last=key;
+    std::map<std::string,const Json*> results;for(const auto& row:field(q,"results").items)results[row.textOr("id")]=&row;
+    HWND list=GetDlgItem(hwnd,602);wchar_t previous[1024]{};
+    for(size_t i=0;i<dialog.ids.size();i++){auto found=results.find(dialog.ids[i]);if(found==results.end())continue;
+        for(int col=1;col<=2;col++){auto value=wide(found->second->textOr(col==1?"outcome":"detail"));ListView_GetItemText(list,int(i),col,previous,1024);if(value!=previous)ListView_SetItemText(list,int(i),col,value.data());}}
+}
 LRESULT CALLBACK recipientsProcedure(HWND hwnd,UINT message,WPARAM wp,LPARAM lp){
     if(message==WM_NCCREATE)SetWindowLongPtrW(hwnd,GWLP_USERDATA,reinterpret_cast<LONG_PTR>(reinterpret_cast<CREATESTRUCTW*>(lp)->lpCreateParams));
-    auto result=reinterpret_cast<int*>(GetWindowLongPtrW(hwnd,GWLP_USERDATA));
+    auto dialog=reinterpret_cast<RecipientDialog*>(GetWindowLongPtrW(hwnd,GWLP_USERDATA));
     if(message==DM_GETDEFID)return MAKELRESULT(IDCANCEL,DC_HASDEFID);
-    if(message==WM_COMMAND&&(LOWORD(wp)==IDOK||LOWORD(wp)==IDCANCEL)){if(result)*result=LOWORD(wp);DestroyWindow(hwnd);return 0;}
-    if(message==WM_CLOSE){if(result)*result=IDCANCEL;DestroyWindow(hwnd);return 0;}
+    if(message==WM_TIMER&&dialog&&dialog->report){syncRecipientReport(hwnd,*dialog);return 0;}
+    if(message==WM_COMMAND&&dialog&&(LOWORD(wp)==604||LOWORD(wp)==605)){
+        const auto& q=field(model,"invite_queue");if(q.textOr("id")==dialog->queueId)queue(obj({{"action",str(LOWORD(wp)==605?"cancel_invites":flag(q,"paused")?"resume_invites":"pause_invites")},{"queue_id",str(dialog->queueId)}}));return 0;
+    }
+    if(message==WM_COMMAND&&(LOWORD(wp)==IDOK||LOWORD(wp)==IDCANCEL)){if(dialog){dialog->result=LOWORD(wp);dialog->resend=SendDlgItemMessageW(hwnd,603,BM_GETCHECK,0,0)==BST_CHECKED;}DestroyWindow(hwnd);return 0;}
+    if(message==WM_CLOSE){if(dialog)dialog->result=IDCANCEL;DestroyWindow(hwnd);return 0;}
     return DefWindowProcW(hwnd,message,wp,lp);
 }
-bool showRecipients(const std::vector<Json>& rows,bool report=false,const std::filesystem::path& previewPath={}){
+bool showRecipients(const std::vector<Json>& rows,bool report=false,const std::filesystem::path& previewPath={},bool* resend=nullptr,const std::string& operation="party"){
     WNDCLASSW cls{};cls.lpfnWndProc=recipientsProcedure;cls.hInstance=GetModuleHandleW(nullptr);cls.lpszClassName=L"SynthScanRecipientsPopup";cls.hCursor=LoadCursor(nullptr,IDC_ARROW);cls.hbrBackground=(HBRUSH)(COLOR_WINDOW+1);RegisterClassW(&cls);
-    HWND owner=GetAncestor(page,GA_ROOT);RECT bounds{};GetWindowRect(owner,&bounds);int result=0;
-    HWND dialog=CreateWindowExW(WS_EX_DLGMODALFRAME|WS_EX_CONTROLPARENT,cls.lpszClassName,report?L"Party invitation results":L"Confirm party invitations",WS_POPUP|WS_CAPTION|WS_SYSMENU,
-        bounds.left+std::max(0,int(bounds.right-bounds.left-650)/2),bounds.top+std::max(0,int(bounds.bottom-bounds.top-490)/2),650,490,owner,nullptr,cls.hInstance,&result);
+    HWND owner=GetAncestor(page,GA_ROOT);RECT bounds{};GetWindowRect(owner,&bounds);RecipientDialog state;state.report=report;state.queueId=field(model,"invite_queue").textOr("id");for(const auto& row:rows)state.ids.push_back(row.textOr("id"));
+    HWND dialog=CreateWindowExW(WS_EX_DLGMODALFRAME|WS_EX_CONTROLPARENT,cls.lpszClassName,report?L"Social action queue":operation=="friend"?L"Confirm friend requests":L"Confirm party invitations",WS_POPUP|WS_CAPTION|WS_SYSMENU,
+        bounds.left+std::max(0,int(bounds.right-bounds.left-650)/2),bounds.top+std::max(0,int(bounds.bottom-bounds.top-530)/2),650,530,owner,nullptr,cls.hInstance,&state);
     if(!dialog)return false;
     auto add=[&](const wchar_t* type,int id,const std::wstring& title,DWORD style,int x,int y,int w,int h){auto control=CreateWindowExW(0,type,title.c_str(),WS_CHILD|WS_VISIBLE|style,x,y,w,h,dialog,reinterpret_cast<HMENU>(INT_PTR(id)),cls.hInstance,nullptr);SendMessageW(control,WM_SETFONT,reinterpret_cast<WPARAM>(font),TRUE);return control;};
-    add(L"STATIC",601,report?L"Invitation receipts and skipped players. Sent means awaiting acceptance.":wide("Invite "+std::to_string(rows.size())+" player(s)? Shard and party membership will be rechecked."),0,12,12,610,36);
+    add(L"STATIC",601,report?L"Request queue. Sent means awaiting acceptance.":wide(std::string(operation=="friend"?"Send friend requests to ":"Invite ")+std::to_string(rows.size())+" player(s)? Four-second gap; current-shard membership is rechecked."),0,12,12,610,36);
     auto list=add(WC_LISTVIEWW,602,L"",WS_TABSTOP|LVS_REPORT,12,50,610,340);ListView_SetExtendedListViewStyle(list,LVS_EX_FULLROWSELECT|LVS_EX_DOUBLEBUFFER);
     int col=0;for(const auto* title:{L"Player",L"Result",L"Details"}){LVCOLUMNW c{};c.mask=LVCF_TEXT|LVCF_WIDTH;c.pszText=const_cast<wchar_t*>(title);c.cx=col==0?180:col==1?115:650;ListView_InsertColumn(list,col++,&c);}
-    int row=0;for(const auto& p:rows){auto handle=wide(p.textOr("handle")),outcome=wide(p.textOr("outcome","Invite")),detail=wide(p.textOr("detail"));LVITEMW item{};item.mask=LVIF_TEXT;item.iItem=row;item.pszText=handle.data();ListView_InsertItem(list,&item);ListView_SetItemText(list,row,1,outcome.data());ListView_SetItemText(list,row,2,detail.data());row++;}
-    auto cancel=add(L"BUTTON",IDCANCEL,report?L"Close":L"Cancel",WS_TABSTOP|BS_DEFPUSHBUTTON,502,405,120,30);
-    if(!report)add(L"BUTTON",IDOK,L"Send invitations",WS_TABSTOP,350,405,140,30);
+    int row=0;for(const auto& p:rows){bool previous=!report&&flag(p,operation=="friend"?"friend_requested_before":"invited_before");auto handle=wide(p.textOr("handle")),outcome=wide(previous?"Previous attempt":p.textOr("outcome",operation=="friend"?"Add friend":"Invite")),detail=wide(previous?"Skipped unless repeat requests are explicitly enabled below; the previous attempt may be unconfirmed.":p.textOr("detail"));LVITEMW item{};item.mask=LVIF_TEXT;item.iItem=row;item.pszText=handle.data();ListView_InsertItem(list,&item);ListView_SetItemText(list,row,1,outcome.data());ListView_SetItemText(list,row,2,detail.data());row++;}
+    auto cancel=add(L"BUTTON",IDCANCEL,report?L"Close":L"Cancel",WS_TABSTOP|BS_DEFPUSHBUTTON,502,445,120,30);
+    if(!report){add(L"BUTTON",603,L"Repeat previously attempted requests this session",WS_TABSTOP|BS_AUTOCHECKBOX,12,402,600,26);add(L"BUTTON",IDOK,L"Start queue",WS_TABSTOP,350,445,140,30);}
+    else{add(L"BUTTON",604,L"Pause",WS_TABSTOP,12,445,120,30);add(L"BUTTON",605,L"Cancel queue",WS_TABSTOP,144,445,140,30);SetTimer(dialog,1,500,nullptr);syncRecipientReport(dialog,state);}
     if(previewPath.empty()){EnableWindow(owner,FALSE);ShowWindow(dialog,SW_SHOW);SetFocus(cancel);}
     else {
         // Isolated fixture: render and cancel without showing or sending anything.
@@ -195,23 +229,34 @@ bool showRecipients(const std::vector<Json>& rows,bool report=false,const std::f
         wchar_t first[100]{};ListView_GetItemText(list,0,0,first,100);
         write(previewPath.parent_path()/L"confirmation_validation.json",obj({{"rendered",SynthScan::boolean(saved)},{"exact_recipient_count",SynthScan::boolean(ListView_GetItemCount(list)==int(rows.size()))},
             {"first_handle_matches",SynthScan::boolean(!rows.empty()&&utf8(first)==rows.front().textOr("handle"))},{"scrollable",SynthScan::boolean(ListView_GetCountPerPage(list)>0&&ListView_GetCountPerPage(list)<int(rows.size()))},
-            {"cancel_is_default",SynthScan::boolean(LOWORD(SendMessageW(dialog,DM_GETDEFID,0,0))==IDCANCEL)},{"stays_modal",SynthScan::boolean(!(GetWindowLongPtrW(dialog,GWL_STYLE)&WS_CHILD)&&GetParent(dialog)==owner)}}));
+            {"cancel_is_default",SynthScan::boolean(LOWORD(SendMessageW(dialog,DM_GETDEFID,0,0))==IDCANCEL)},{"resend_default_off",SynthScan::boolean(SendDlgItemMessageW(dialog,603,BM_GETCHECK,0,0)!=BST_CHECKED)},{"stays_modal",SynthScan::boolean(!(GetWindowLongPtrW(dialog,GWL_STYLE)&WS_CHILD)&&GetParent(dialog)==owner)}}));
         SelectObject(memory,old);DeleteObject(bitmap);DeleteDC(memory);ReleaseDC(dialog,dc);PostMessageW(dialog,WM_COMMAND,IDCANCEL,0);
     }
     MSG msg{};while(IsWindow(dialog)){int received=GetMessageW(&msg,nullptr,0,0);if(received<=0){DestroyWindow(dialog);if(received==0)PostQuitMessage(int(msg.wParam));break;}if(!IsDialogMessageW(dialog,&msg)){TranslateMessage(&msg);DispatchMessageW(&msg);}}
-    if(previewPath.empty()){EnableWindow(owner,TRUE);SetActiveWindow(owner);}return result==IDOK;
+    if(resend)*resend=state.resend;if(previewPath.empty()){EnableWindow(owner,TRUE);SetActiveWindow(owner);}return state.result==IDOK;
 }
 void selection(){
     std::vector<std::string> ids;int at=-1;while((at=ListView_GetNextItem(child(508),at,LVNI_SELECTED))>=0)if(size_t(at)<people.size())ids.push_back(people[size_t(at)].textOr("id"));
     const bool changed=ids!=selectedIds;
-    if(changed){selectedIds=ids;selected=ids.empty()?"":ids.front();
-        auto rows=chosen();label(510,ids.size()==1&&!rows.empty()?rows.front().textOr("tag"):"");SendMessageW(child(511),BM_SETCHECK,ids.size()==1&&!rows.empty()&&flag(rows.front(),"alert")?BST_CHECKED:BST_UNCHECKED,0);}
-    auto rows=chosen();const bool enabled=fresh()&&!model.textOr("session_token").empty()&&!rows.empty();
-    EnableWindow(child(512),enabled);EnableWindow(child(515),enabled);EnableWindow(child(521),enabled);EnableWindow(child(511),enabled&&selectedIds.size()==1);
-    EnableWindow(child(513),enabled&&rows.size()==1&&!flag(model,"social_busy"));EnableWindow(child(514),enabled&&!flag(model,"social_busy"));
-    EnableWindow(child(520),fresh()&&!model.textOr("session_token").empty()&&!inviteCandidates(true).empty()&&!flag(model,"social_busy"));EnableWindow(child(522),!field(model,"batch_results").items.empty());
-    label(512,rows.size()>1?"Add tags to all":"Save tag");label(514,rows.size()>1?"Invite selected…":"Invite to party…");std::string summary=std::to_string(selectedIds.size())+" selected";int shown=0;for(const auto& p:people)if(std::find(selectedIds.begin(),selectedIds.end(),p.textOr("id"))!=selectedIds.end()){summary+=shown++?", ":": ";summary+=p.textOr("handle");if(shown==3)break;}if(selectedIds.size()>3)summary+=" +"+std::to_string(selectedIds.size()-3);label(518,summary);
+    if(changed){selectedIds=ids;selected=ids.empty()?"":ids.front();}
+    auto rows=actionTargets();std::vector<std::string> editIds;for(const auto& row:rows)editIds.push_back(row.textOr("id"));
+    if(editIds!=actionEditorIds){actionEditorIds=editIds;label(510,rows.size()==1?rows.front().textOr("tag"):"");SendMessageW(child(511),BM_SETCHECK,rows.size()==1&&flag(rows.front(),"alert")?BST_CHECKED:BST_UNCHECKED,0);}
+    const bool enabled=fresh()&&!model.textOr("session_token").empty()&&!rows.empty()&&!flag(model,"social_busy");
+    EnableWindow(child(512),enabled);EnableWindow(child(515),enabled);EnableWindow(child(521),enabled);EnableWindow(child(511),enabled&&rows.size()==1);EnableWindow(child(510),enabled);EnableWindow(child(516),enabled);EnableWindow(child(517),enabled);
+    EnableWindow(child(513),enabled);EnableWindow(child(514),enabled);
+    bool edit=fresh()&&!model.textOr("session_token").empty()&&!flag(model,"social_busy");EnableWindow(child(527),edit&&!stageTargets().empty());EnableWindow(child(529),edit&&!actionSelection().items.empty());EnableWindow(child(550),edit&&!actionRows.empty());EnableWindow(child(554),edit);EnableWindow(child(520),edit);EnableWindow(child(553),edit);EnableWindow(child(522),!field(model,"batch_results").items.empty());
+    const auto& q=field(model,"invite_queue");bool active=fresh()&&flag(q,"active")&&!flag(q,"cancelling");label(524,queueSummary(q));label(525,flag(q,"paused")?"Resume":"Pause");EnableWindow(child(525),active);EnableWindow(child(526),active);
+    label(512,"Apply tags");label(513,"Add all friends…");label(514,"Invite all party…");label(552,"Action list · "+std::to_string(actionRows.size())+(flag(model,"social_busy")?" · queue running":""));std::string summary=std::to_string(selectedIds.size())+" selected · "+std::to_string(stageTargets().size())+" on shard";label(518,summary);
     if(changed)InvalidateRect(child(508),nullptr,FALSE);
+}
+void renderActions(){
+    const auto& next=field(model,"action_people").items;bool changed=next.size()!=actionRows.size();if(!changed)for(size_t i=0;i<next.size();i++)if(encode(next[i])!=encode(actionRows[i])){changed=true;break;}
+    if(changed){auto selected=actionSelection();int top=ListView_GetTopIndex(child(528));std::string anchor=top>=0&&size_t(top)<actionRows.size()?actionRows[size_t(top)].textOr("id"):"";filling=true;hoveredAction=-1;SendMessageW(child(528),WM_SETREDRAW,FALSE,0);ListView_DeleteAllItems(child(528));actionRows=next;int anchorRow=-1;
+        for(size_t i=0;i<actionRows.size();i++){const auto& p=actionRows[i];cell(528,int(i),0,p.textOr("handle"));cell(528,int(i),1,p.textOr("tag"));cell(528,int(i),2,p.textOr("relationship","Unknown"));for(const auto& id:selected.items)if(id.text==p.textOr("id")){ListView_SetItemState(child(528),int(i),LVIS_SELECTED,LVIS_SELECTED);}if(p.textOr("id")==anchor)anchorRow=int(i);}
+        if(anchorRow>=0){ListView_EnsureVisible(child(528),anchorRow,FALSE);RECT r{};if(ListView_GetItemRect(child(528),anchorRow,&r,LVIR_BOUNDS))ListView_Scroll(child(528),0,r.top-40);}
+        SendMessageW(child(528),WM_SETREDRAW,TRUE,0);InvalidateRect(child(528),nullptr,FALSE);filling=false;
+    }
+    auto options=encode(field(model,"tag_options"));if(options!=tagOptions){auto previous=text(553);tagOptions=options;SendMessageW(child(553),CB_RESETCONTENT,0,0);int choice=0,i=0;for(const auto& option:field(model,"tag_options").items){auto value=wide(option.text);SendMessageW(child(553),CB_ADDSTRING,0,reinterpret_cast<LPARAM>(value.c_str()));if(option.text==previous)choice=i;i++;}SendMessageW(child(553),CB_SETCURSEL,choice,0);}
 }
 std::string normalizedQuery(std::string query){
     auto first=query.find_first_not_of(" \t\r\n"),last=query.find_last_not_of(" \t\r\n");
@@ -252,7 +297,7 @@ void renderPeople(){
         people=std::move(nextPeople);peopleView=view;int focusedAt=-1,anchorAt=-1;
         for(size_t i=0;i<people.size();i++){
             const auto& p=people[i];const int row=int(i);
-            cell(508,row,0,p.textOr("handle"));cell(508,row,1,p.textOr("tag"));cell(508,row,2,flag(p,"alert")?"On":"Off");cell(508,row,3,p.textOr("relationship","Unknown"));cell(508,row,4,source==1?"Handle search":source==2?"Saved tag":"Shard group");
+            cell(508,row,0,p.textOr("handle"));cell(508,row,1,p.textOr("tag"));cell(508,row,2,p.textOr("relationship","Unknown"));
             if(std::find(previousSelection.begin(),previousSelection.end(),p.textOr("id"))!=previousSelection.end())ListView_SetItemState(list,row,LVIS_SELECTED,LVIS_SELECTED);
             if(p.textOr("id")==markId)ListView_SetSelectionMark(list,row);
             if(p.textOr("id")==focusedId)focusedAt=row;if(p.textOr("id")==anchor)anchorAt=row;
@@ -263,7 +308,7 @@ void renderPeople(){
         if(!resetView)ListView_Scroll(list,horizontal-GetScrollPos(list,SB_HORZ),0);
         InvalidateRect(list,nullptr,FALSE);filling=false;
     }
-    selection();
+    renderActions();selection();
     std::string status=!fresh()?"Services unavailable":model.textOr("session_token").empty()?"Join a shard to load people":std::to_string(field(model,"rows").items.size())+" reported shard members · "+age(model.numberOr("roster_at"));
     if(source==1){
         bool matching=!query.empty()&&query==normalizedQuery(model.textOr("search_query"));
@@ -303,8 +348,8 @@ void refresh(bool force=false){
 void createControls(){
     filling=true;
     for(HWND h=GetWindow(page,GW_CHILD);h;){HWND next=GetWindow(h,GW_HWNDNEXT);DestroyWindow(h);h=next;}
-    selected.clear();selectedIds.clear();selectedWatch.clear();
-    people.clear();peopleView.clear();
+    selected.clear();selectedIds.clear();actionEditorIds.clear();selectedWatch.clear();tagOptions.clear();
+    people.clear();actionRows.clear();peopleView.clear();
     control(L"EDIT",501,L"",WS_TABSTOP|ES_AUTOHSCROLL);SendMessageW(child(501),EM_SETCUEBANNER,TRUE,reinterpret_cast<LPARAM>(mode=="people"?L"Filter names/tags or enter an RSI handle":L"Search UEX materials or items"));
     if(mode=="people")control(L"BUTTON",523,L"Clear",WS_TABSTOP);
     control(L"BUTTON",502,mode=="people"?L"Find player":L"Find material",WS_TABSTOP);
@@ -313,13 +358,16 @@ void createControls(){
         control(L"COMBOBOX",504,L"",WS_TABSTOP|CBS_DROPDOWNLIST|WS_VSCROLL);for(const auto* s:{L"Shard members",L"Handle search results",L"Saved player tags"})SendMessageW(child(504),CB_ADDSTRING,0,reinterpret_cast<LPARAM>(s));SendMessageW(child(504),CB_SETCURSEL,0,0);
         control(L"BUTTON",505,L"Tagged only",WS_TABSTOP|BS_AUTOCHECKBOX);control(L"STATIC",506,L"Loading player list…");control(WC_LISTVIEWW,508,L"",WS_TABSTOP|LVS_REPORT|LVS_SHOWSELALWAYS);
         control(L"STATIC",519,L"You: Purple · Friend: Green · Party: Blue");
-        column(508,0,L"PLAYER",240);column(508,1,L"TAGS",180);column(508,2,L"ALERTS",80);column(508,3,L"RELATIONSHIP",125);column(508,4,L"SOURCE",120);
+        for(int id:{508,528}){if(id==528)control(WC_LISTVIEWW,528,L"",WS_TABSTOP|LVS_REPORT|LVS_SHOWSELALWAYS);column(id,0,L"PLAYER",220);column(id,1,L"TAGS",140);column(id,2,L"RELATIONSHIP",120);}
+        control(L"BUTTON",527,L"Add to actions →",WS_TABSTOP);control(L"BUTTON",529,L"Remove selected",WS_TABSTOP);control(L"BUTTON",550,L"Clear actions",WS_TABSTOP);
+        control(L"STATIC",551,L"Players · double-click to add");control(L"STATIC",552,L"Action list · 0");control(L"COMBOBOX",553,L"",WS_TABSTOP|CBS_DROPDOWNLIST|WS_VSCROLL);control(L"BUTTON",554,L"Add by tag",WS_TABSTOP);control(L"STATIC",555,L"Current shard members only");
         control(L"STATIC",509,L"Tags");control(L"EDIT",510,L"",WS_TABSTOP|ES_AUTOHSCROLL);SendMessageW(child(510),EM_SETLIMITTEXT,240,0);
         control(L"COMBOBOX",516,L"",WS_TABSTOP|CBS_DROPDOWNLIST|WS_VSCROLL);for(const auto* tag:{L"Aggressive",L"Trader",L"Friendly",L"Org",L"Org Affiliate",L"Crew",L"Buyer",L"Avoid"})SendMessageW(child(516),CB_ADDSTRING,0,reinterpret_cast<LPARAM>(tag));SendMessageW(child(516),CB_SETCURSEL,0,0);
         control(L"BUTTON",517,L"Add tag",WS_TABSTOP);control(L"STATIC",518,L"Or type custom tags, separated by commas");
-        control(L"BUTTON",511,L"Alert on appearance",WS_TABSTOP|BS_AUTOCHECKBOX);control(L"BUTTON",512,L"Save tag",WS_TABSTOP);
+        control(L"BUTTON",511,L"Join alerts",WS_TABSTOP|BS_AUTOCHECKBOX);control(L"BUTTON",512,L"Apply tags",WS_TABSTOP);SendMessageW(child(510),EM_SETCUEBANNER,TRUE,reinterpret_cast<LPARAM>(L"Custom tags, separated by commas"));
         control(L"BUTTON",513,L"Add friend…",WS_TABSTOP);control(L"BUTTON",514,L"Invite to party…",WS_TABSTOP);control(L"BUTTON",515,L"Remove tags",WS_TABSTOP);
-        control(L"BUTTON",520,L"Invite org…",WS_TABSTOP);control(L"BUTTON",521,L"Mark org",WS_TABSTOP);control(L"BUTTON",522,L"Invite results",WS_TABSTOP);
+        control(L"BUTTON",520,L"Add org →",WS_TABSTOP);control(L"BUTTON",521,L"Mark org",WS_TABSTOP);control(L"BUTTON",522,L"View queue",WS_TABSTOP);label(515,"Clear tags");
+        control(L"STATIC",524,L"Party invitations: idle · 4-second gap");control(L"BUTTON",525,L"Pause",WS_TABSTOP);control(L"BUTTON",526,L"Cancel",WS_TABSTOP);
     }else{
         control(L"STATIC",504,L"Checks every 30 minutes");control(L"COMBOBOX",530,L"",WS_TABSTOP|CBS_DROPDOWNLIST|WS_VSCROLL);
         control(L"STATIC",531,L"Quality");control(L"EDIT",532,L"1000",WS_TABSTOP|ES_NUMBER);control(L"STATIC",533,L"Minimum UEC");control(L"EDIT",534,L"",WS_TABSTOP|ES_AUTOHSCROLL);
@@ -341,13 +389,13 @@ LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM wp,LPARAM lp){
     }
     if(message==WM_CTLCOLORSTATIC||message==WM_CTLCOLOREDIT){SetTextColor((HDC)wp,RGB(234,240,247));SetBkColor((HDC)wp,message==WM_CTLCOLOREDIT?RGB(25,29,36):RGB(14,18,25));return reinterpret_cast<LRESULT>(message==WM_CTLCOLOREDIT?editBackground:background);}
     if(message==WM_CTLCOLORLISTBOX){SetTextColor((HDC)wp,RGB(234,240,247));SetBkColor((HDC)wp,RGB(25,29,36));return reinterpret_cast<LRESULT>(editBackground);}
-    if(message==WM_MEASUREITEM){auto item=reinterpret_cast<MEASUREITEMSTRUCT*>(lp);if(item->CtlType==ODT_LISTVIEW&&item->CtlID==508){item->itemHeight=40;return TRUE;}if(item->CtlType==ODT_COMBOBOX){item->itemHeight=34;return TRUE;}}
+    if(message==WM_MEASUREITEM){auto item=reinterpret_cast<MEASUREITEMSTRUCT*>(lp);if(item->CtlType==ODT_LISTVIEW&&(item->CtlID==508||item->CtlID==528)){item->itemHeight=40;return TRUE;}if(item->CtlType==ODT_COMBOBOX){item->itemHeight=34;return TRUE;}}
     if(message==WM_DRAWITEM){auto item=reinterpret_cast<DRAWITEMSTRUCT*>(lp);
-        if(item->CtlType==ODT_LISTVIEW&&item->CtlID==508&&item->itemID<people.size()){
-            const auto& p=people[item->itemID];std::vector<std::wstring> values;std::vector<float> widths;
-            for(int col=0;col<5;++col){wchar_t value[512]{};ListView_GetItemText(item->hwndItem,item->itemID,col,value,512);values.push_back(value);widths.push_back(float(ListView_GetColumnWidth(item->hwndItem,col)));}
+        if(item->CtlType==ODT_LISTVIEW&&(item->CtlID==508||item->CtlID==528)&&item->itemID<(item->CtlID==508?people:actionRows).size()){
+            const auto& p=(item->CtlID==508?people:actionRows)[item->itemID];std::vector<std::wstring> values;std::vector<float> widths;
+            for(int col=0;col<3;++col){wchar_t value[512]{};ListView_GetItemText(item->hwndItem,item->itemID,col,value,512);values.push_back(value);widths.push_back(float(ListView_GetColumnWidth(item->hwndItem,col)));}
             auto state=ListView_GetItemState(item->hwndItem,item->itemID,LVIS_SELECTED|LVIS_FOCUSED);Gdiplus::Graphics g(item->hDC);auto r=item->rcItem;RECT client{},first{};GetClientRect(item->hwndItem,&client);ListView_GetSubItemRect(item->hwndItem,item->itemID,0,LVIR_BOUNDS,&first);r.left=first.left;int total=0;for(float width:widths)total+=int(width);r.right=std::max(client.right,r.left+total);g.SetClip(Gdiplus::Rect(0,0,client.right,client.bottom),Gdiplus::CombineModeIntersect);
-            COLORREF color=personColor(p);drawPersonRow(g,{float(r.left),float(r.top),float(r.right-r.left),float(r.bottom-r.top)},values,widths,(state&LVIS_SELECTED)!=0,int(item->itemID)==hoveredPerson,Gdiplus::Color(255,GetRValue(color),GetGValue(color),GetBValue(color)),(state&LVIS_FOCUSED)&&GetFocus()==item->hwndItem);return TRUE;
+            COLORREF color=personColor(p);drawPersonRow(g,{float(r.left),float(r.top),float(r.right-r.left),float(r.bottom-r.top)},values,widths,(state&LVIS_SELECTED)!=0,int(item->itemID)==(item->CtlID==508?hoveredPerson:hoveredAction),Gdiplus::Color(255,GetRValue(color),GetGValue(color),GetBValue(color)),(state&LVIS_FOCUSED)&&GetFocus()==item->hwndItem,2);return TRUE;
         }
         if(item->CtlType==ODT_COMBOBOX){
             Gdiplus::Graphics g(item->hDC);g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);Gdiplus::SolidBrush base(SynthGlass::Base);auto r=item->rcItem;g.FillRectangle(&base,Gdiplus::RectF(float(r.left),float(r.top),float(r.right-r.left),float(r.bottom-r.top)));
@@ -360,7 +408,8 @@ LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM wp,LPARAM lp){
             SynthGlass::button(g,{float(r.left),float(r.top),float(r.right-r.left),float(r.bottom-r.top)},value,buttonIcon(item->CtlID),GetPropW(item->hwndItem,L"SynthGlass.Hot")!=nullptr,(item->itemState&ODS_SELECTED)!=0,(item->itemState&ODS_DISABLED)!=0);return TRUE;}
     }
     if(message==WM_NOTIFY&&!filling){auto header=reinterpret_cast<NMHDR*>(lp);
-        if(header->code==LVN_ITEMCHANGED){if(header->idFrom==508)selection();if(header->idFrom==538){int at=ListView_GetNextItem(child(538),-1,LVNI_SELECTED);const auto& watches=field(model,"watches").items;selectedWatch=at>=0&&size_t(at)<watches.size()?watches[at].textOr("id"):"";}}
+        if(header->code==LVN_ITEMCHANGED){if(header->idFrom==508||header->idFrom==528)selection();if(header->idFrom==538){int at=ListView_GetNextItem(child(538),-1,LVNI_SELECTED);const auto& watches=field(model,"watches").items;selectedWatch=at>=0&&size_t(at)<watches.size()?watches[at].textOr("id"):"";}}
+        if(header->idFrom==508&&header->code==NM_DBLCLK){auto item=reinterpret_cast<NMITEMACTIVATE*>(lp);if(item->iItem>=0&&size_t(item->iItem)<people.size()&&flag(people[size_t(item->iItem)],"on_shard"))queue(obj({{"action",str("stage_people")},{"player_ids",playerIds({people[size_t(item->iItem)]})}}));}
     }
     if(message==WM_COMMAND&&!filling){int id=LOWORD(wp),event=HIWORD(wp);
         if(id==501&&event==EN_CHANGE){if(mode=="people"){if(text(501).empty()&&SendMessageW(child(504),CB_GETCURSEL,0,0)==1)SendMessageW(child(504),CB_SETCURSEL,0,0);renderPeople();}else catalog();return 0;}
@@ -369,15 +418,16 @@ LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM wp,LPARAM lp){
         if(event!=BN_CLICKED)return 0;
         if(id==502){if(mode=="people"){SendMessageW(child(504),CB_SETCURSEL,1,0);queue(obj({{"action",str("search")},{"query",str(text(501))}}));renderPeople();}else catalog();}
         if(id==503||id==539)queue(obj({{"action",str(mode=="people"?"refresh_people":"refresh_market")}}));
-        if(id==512||id==515){auto rows=chosen();if(rows.size()>1)queue(obj({{"action",str("tag_many")},{"player_ids",playerIds(rows)},{"label",str(id==515?"":text(510))},{"clear_tags",SynthScan::boolean(id==515)}}));else if(!rows.empty())queue(obj({{"action",str("tag")},{"player_id",field(rows.front(),"id")},{"label",str(id==515?"":text(510))},{"alert",SynthScan::boolean(SendMessageW(child(511),BM_GETCHECK,0,0)==BST_CHECKED)}}));}
-        if(id==521)queue(obj({{"action",str("mark_org")},{"player_ids",playerIds(chosen())}}));
-        if(id==520||(id==514&&chosen().size()>1)){auto rows=inviteCandidates(id==520);auto session=model.textOr("session_token");if(rows.empty())label(590,"No eligible players to invite.");else if(showRecipients(rows)){if(session!=model.textOr("session_token"))label(590,"Session changed. Review the recipients again.");else queue(obj({{"action",str("party_many")},{"player_ids",playerIds(rows)},{"org_only",SynthScan::boolean(id==520)},{"confirmed",SynthScan::boolean(true)}}));}}
+        if(id==512||id==515){auto rows=actionTargets();if(rows.size()>1)queue(obj({{"action",str("tag_many")},{"player_ids",playerIds(rows)},{"label",str(id==515?"":text(510))},{"clear_tags",SynthScan::boolean(id==515)}}));else if(!rows.empty())queue(obj({{"action",str("tag")},{"player_id",field(rows.front(),"id")},{"label",str(id==515?"":text(510))},{"alert",SynthScan::boolean(SendMessageW(child(511),BM_GETCHECK,0,0)==BST_CHECKED)}}));}
+        if(id==521)queue(obj({{"action",str("mark_org")},{"player_ids",playerIds(actionTargets())}}));
+        if(id==527)queue(obj({{"action",str("stage_people")},{"player_ids",playerIds(stageTargets())}}));
+        if(id==529)queue(obj({{"action",str("unstage_people")},{"player_ids",actionSelection()}}));
+        if(id==550)queue(obj({{"action",str("clear_actions")}}));
+        if(id==520||id==554)queue(obj({{"action",str("stage_tag")},{"label",str(id==520?"Org":text(553))},{"scope",str("shard")},{"include_org_affiliate",SynthScan::boolean(id==520)}}));
+        if(id==513||id==514){auto rows=actionTargets();auto session=model.textOr("session_token");bool resend=false;std::string operation=id==513?"friend":"party";if(rows.empty())label(590,"Add current-shard players to the Action list first.");else if(showRecipients(rows,false,{},&resend,operation)){if(session!=model.textOr("session_token"))label(590,"Session changed. Review the recipients again.");else queue(obj({{"action",str(id==513?"friend_many":"party_many")},{"player_ids",playerIds(rows)},{"from_actions",SynthScan::boolean(true)},{"confirmed",SynthScan::boolean(true)},{"resend",SynthScan::boolean(resend)}}));}}
         if(id==522)showRecipients(field(model,"batch_results").items,true);
+        if(id==525||id==526){const auto& q=field(model,"invite_queue");queue(obj({{"action",str(id==526?"cancel_invites":flag(q,"paused")?"resume_invites":"pause_invites")},{"queue_id",field(q,"id")}}));}
         if(id==517){wchar_t value[80]{};int at=int(SendMessageW(child(516),CB_GETCURSEL,0,0));if(at>=0){SendMessageW(child(516),CB_GETLBTEXT,at,reinterpret_cast<LPARAM>(value));auto existing=text(510);if(!existing.empty())existing+=", ";label(510,existing+utf8(value));}}
-        if(id==513||(id==514&&chosen().size()==1)){auto recipients=chosen();auto p=recipients.begin();if(p!=recipients.end()){
-            auto prompt=wide(std::string(id==513?"Send a friend request to ":"Send a party invitation to ")+p->textOr("handle")+"?");
-            auto session=model.textOr("session_token");auto recipient=field(*p,"id");
-            if(MessageBoxW(page,prompt.c_str(),L"Confirm player",MB_YESNO|MB_ICONQUESTION|MB_DEFBUTTON2)==IDYES){if(session!=model.textOr("session_token"))label(590,"Session changed. Select the player again.");else queue(obj({{"action",str(id==513?"friend":"party")},{"player_id",recipient},{"confirmed",SynthScan::boolean(true)}}));}}}
         if(id==537){int at=int(SendMessageW(child(530),CB_GETCURSEL,0,0));auto q=text(532),p=text(534);char* end=nullptr;double price=p.empty()?0:std::strtod(p.c_str(),&end);
             if(at<0||size_t(at)>=items.size()||q.empty()||q.find_first_not_of("0123456789")!=std::string::npos||q.size()>4||(!p.empty()&&(!end||*end))){label(590,"Choose an item and enter a whole-number quality and valid minimum price.");return 0;}
             queue(obj({{"action",str("add_watch")},{"item_id",field(items[at],"id")},{"quality",num(std::atoi(q.c_str()))},{"price",num(price)},{"unit",str(text(536))}}));}
@@ -393,7 +443,7 @@ void show(HWND parent,const std::filesystem::path& directory,const std::string& 
     folder=directory;bool changed=mode!=name;mode=name;
     if(!page){WNDCLASSW cls{};cls.lpfnWndProc=procedure;cls.hInstance=GetModuleHandleW(nullptr);cls.lpszClassName=L"SynthScanCompanion";cls.hCursor=LoadCursor(nullptr,IDC_ARROW);cls.hbrBackground=background;RegisterClassW(&cls);
         font=CreateFontW(-14,0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH,L"Segoe UI");
-        page=CreateWindowExW(WS_EX_CONTROLPARENT,cls.lpszClassName,L"SynthScan companion",WS_CHILD|WS_CLIPCHILDREN|WS_CLIPSIBLINGS,0,0,620,580,parent,nullptr,cls.hInstance,nullptr);changed=true;SetTimer(page,1,1000,nullptr);}
+        page=CreateWindowExW(WS_EX_CONTROLPARENT,cls.lpszClassName,L"SynthScan companion",WS_CHILD|WS_CLIPCHILDREN|WS_CLIPSIBLINGS,0,0,mode=="people"?860:620,mode=="people"?700:580,parent,nullptr,cls.hInstance,nullptr);changed=true;SetTimer(page,1,1000,nullptr);}
     if(changed)createControls();SynthPages::mount(page);ShowWindow(page,SW_SHOW);
 }
 void close(){if(page){KillTimer(page,1);DestroyWindow(page);}page=nullptr;if(font)DeleteObject(font);font=nullptr;}
@@ -413,9 +463,9 @@ int stylePreview(const std::filesystem::path& output){
         SynthGlass::text(g,L"128 MEMBERS  /  LIVE SHARD",{242,225,500,24},10,SynthGlass::Muted);
         std::vector<float> widths={300,230,85,170,184};const wchar_t* names[]={L"PLAYER",L"TAGS",L"ALERTS",L"RELATIONSHIP",L"SOURCE"};float x=242;
         for(int i=0;i<5;i++){SynthGlass::text(g,names[i],{x+(i?12:74),266,widths[i]-24,28},10,SynthGlass::Muted);x+=widths[i];}
-        const std::vector<std::vector<std::wstring>> rows={{L"A_PLAYER_LIKE_TO_PLAY",L"Crew, Friendly",L"On",L"Party",L"Shard group"},{L"Nova Drift",L"Trader",L"Off",L"Friend",L"Shard group"},{L"Orion Atlas",L"Org Affiliate",L"On",L"Org",L"Shard group"},{L"Pilot Wildflower",L"",L"Off",L"—",L"Shard group"},{L"Starlight Echo",L"Friendly",L"Off",L"Friend",L"Shard group"},{L"Wanderer",L"",L"Off",L"—",L"Shard group"},{L"Cassiopeia",L"Crew",L"On",L"Party",L"Shard group"}};
+        const std::vector<std::vector<std::wstring>> rows={{L"Example Pilot One",L"Crew, Friendly",L"On",L"Party",L"Shard group"},{L"Nova Drift",L"Trader",L"Off",L"Friend",L"Shard group"},{L"Orion Atlas",L"Org Affiliate",L"On",L"Org",L"Shard group"},{L"Pilot Wildflower",L"",L"Off",L"—",L"Shard group"},{L"Starlight Echo",L"Friendly",L"Off",L"Friend",L"Shard group"},{L"Wanderer",L"",L"Off",L"—",L"Shard group"},{L"Cassiopeia",L"Crew",L"On",L"Party",L"Shard group"}};
         for(size_t i=0;i<rows.size();++i)drawPersonRow(g,{242,300+float(i)*42,969,40},rows[i],widths,i==0||i==2,i==3,i==0||i==6?Gdiplus::Color(255,116,183,255):i==1||i==4?Gdiplus::Color(255,121,225,158):SynthGlass::Muted,i==0);
-        SynthGlass::panel(g,{242,615,969,180},false,false,14);SynthGlass::text(g,L"2 SELECTED",{259,625,180,25},10,SynthGlass::Accent,true);SynthGlass::text(g,L"A_PLAYER_LIKE_TO_PLAY, Orion Atlas",{440,625,744,25},12,SynthGlass::Muted);
+        SynthGlass::panel(g,{242,615,969,180},false,false,14);SynthGlass::text(g,L"2 SELECTED",{259,625,180,25},10,SynthGlass::Accent,true);SynthGlass::text(g,L"Example Pilot One, Orion Atlas",{440,625,744,25},12,SynthGlass::Muted);
         SynthGlass::panel(g,{259,663,192,36});SynthGlass::text(g,L"Friendly   \u2304",{273,663,163,36},13);SynthGlass::button(g,{463,663,116,36},L"Add tag","tag");SynthGlass::panel(g,{592,663,402,36});SynthGlass::text(g,L"Crew, Friendly",{606,663,375,36},13);SynthGlass::button(g,{1007,663,184,36},L"Add tags to all","check");
         SynthGlass::button(g,{259,716,160,36},L"Add friend…","friend");SynthGlass::button(g,{430,716,160,36},L"Invite selected…","invite");SynthGlass::button(g,{601,716,160,36},L"Mark org","tag");SynthGlass::button(g,{772,716,160,36},L"Remove tags","clear");SynthGlass::text(g,L"Ctrl-click or Shift-click to select multiple people",{259,761,900,24},11,SynthGlass::Muted);
         CLSID png{0x557cf406,0x1a04,0x11d3,{0x9a,0x73,0x00,0x00,0xf8,0x1e,0xf3,0x2e}};result=bitmap.Save(output.c_str(),&png,nullptr)==Gdiplus::Ok?0:2;
@@ -428,9 +478,11 @@ int preview(const std::filesystem::path& directory){
     rows.items.push_back(obj({{"id",str("demo-one")},{"handle",str("DemoPilot")},{"tag",str("Friendly, Trader, Org")},{"is_org",SynthScan::boolean(true)},{"alert",SynthScan::boolean(true)},{"is_friend",SynthScan::boolean(true)},{"relationship",str("Friend")}}));
     rows.items.push_back(obj({{"id",str("demo-two")},{"handle",str("DemoZebra")},{"tag",str("Org Affiliate")},{"is_org",SynthScan::boolean(true)},{"alert",SynthScan::boolean(false)},{"is_friend",SynthScan::boolean(true)},{"in_party",SynthScan::boolean(true)},{"relationship",str("Party + Friend")}}));
     rows.items.push_back(obj({{"id",str("demo-self")},{"handle",str("YourPilot")},{"is_self",SynthScan::boolean(true)},{"is_org",SynthScan::boolean(true)},{"is_friend",SynthScan::boolean(true)},{"in_party",SynthScan::boolean(true)},{"relationship",str("You")}}));
+    for(auto& row:rows.items)row.members.push_back({"on_shard",SynthScan::boolean(true)});
+    Json initialActions=arr();initialActions.items={rows.items[0],rows.items[1]};Json options=arr();for(const auto* tag:{"Aggressive","Org","Trader"})options.items.push_back(str(tag));
     Json watches=arr();watches.items.push_back(obj({{"id",str("demo-watch")},{"name",str("Carinite (Pure)")},{"quality",num(1000)},{"minimum_price",num(0)},{"enabled",SynthScan::boolean(true)},{"checked_at",num(at-60)},{"matches",arr()}}));
     write(directory/L"companion_state.json",obj({{"owner_pid",num(GetCurrentProcessId())},{"written_at",num(at)},{"session_token",str("synthetic-fixture")},
-          {"rows",rows},{"search",arr()},{"roster_at",num(at-12)},{"friends_known",SynthScan::boolean(true)},{"party_known",SynthScan::boolean(true)},
+          {"rows",rows},{"action_people",initialActions},{"tag_options",options},{"search",arr()},{"roster_at",num(at-12)},{"friends_known",SynthScan::boolean(true)},{"party_known",SynthScan::boolean(true)},
           {"status",str("Synthetic preview — no game queries or outgoing requests")},{"watches",watches},{"notifications",arr()}}));
     write(directory/L"finder_market_index.json",obj({{"items",obj({{"5011",obj({{"id",num(5011)},{"name",str("Carinite (Pure)")}})}})}}));
     Gdiplus::GdiplusStartupInput input;ULONG_PTR token=0;Gdiplus::GdiplusStartup(&token,&input,nullptr);
@@ -439,7 +491,7 @@ int preview(const std::filesystem::path& directory){
     const CLSID png={0x557cf406,0x1a04,0x11d3,{0x9a,0x73,0x00,0x00,0xf8,0x1e,0xf3,0x2e}};
     bool saved=true;
     bool tagRoute=false,watchRoute=false,heartbeatScroll=false,relationshipScroll=false,membershipScroll=false,removedAnchor=false,filterReset=false,draftPreserved=false;
-    bool multiPreserved=false,markOrgRoute=false,bulkTagRoute=false,orgRecipients=false,confirmationCancelled=false;
+    bool multiPreserved=false,markOrgRoute=false,bulkTagRoute=false,orgRecipients=false,confirmationCancelled=false,pauseRoute=false,resumeRoute=false,cancelRoute=false,queueControls=false,actionFilterStable=false,stageRoute=false,removeRoute=false,tagStageRoute=false,customTagRoute=false,controlsFit=true;
     const bool relationshipColors=personColor(rows.items[0])==RGB(121,225,158)&&personColor(rows.items[1])==RGB(116,183,255)&&personColor(rows.items[2])==RGB(193,157,255)&&personColor(obj())==RGB(234,240,247);
     std::string scrollDiagnostics;
     for(const auto* name:{"people","buyer_alerts"}){
@@ -474,10 +526,24 @@ int preview(const std::filesystem::path& directory){
             SetWindowTextW(child(501),L"Pilot");filterReset=ListView_GetTopIndex(list)==0;
             model=savedModel;SetWindowTextW(child(501),L"");write(directory/L"companion_state.json",model);refresh(true);layout();
             auto org=inviteCandidates(true);orgRecipients=org.size()==1&&org.front().textOr("id")=="demo-one";
+            SetWindowTextW(child(501),L"No player matches this");actionFilterStable=ListView_GetItemCount(child(508))==0&&ListView_GetItemCount(child(528))==2;SetWindowTextW(child(501),L"");
             std::vector<Json> confirmationRows;for(int i=0;i<40;i++)confirmationRows.push_back(obj({{"handle",str("Demo org pilot "+std::to_string(i+1))}}));
             // Exercise the visible-home page capture hook, entirely offscreen.
             SetWindowPos(parent,nullptr,-32000,-32000,0,0,SWP_NOSIZE|SWP_NOZORDER|SWP_NOACTIVATE);ShowWindow(parent,SW_SHOWNOACTIVATE);auto mounted=SynthPages::current();
             confirmationCancelled=!showRecipients(confirmationRows,false,directory/L"confirmation.png")&&SynthPages::current()==mounted;ShowWindow(parent,SW_HIDE);
+            Json queueRows=arr();for(int i=0;i<40;i++)queueRows.items.push_back(obj({{"id",str("queue-"+std::to_string(i))},{"handle",str("Demo org pilot "+std::to_string(i+1))},{"outcome",str(i<2?"Sent":i==2?"Skipped":"Queued")},{"detail",str(i<2?"Invitation receipt returned; awaiting acceptance.":i==2?"Already in party":"Waiting in the paced queue.")}}));
+            auto queueModel=[&](bool paused){return obj({{"id",str("fixture-queue")},{"active",SynthScan::boolean(true)},{"paused",SynthScan::boolean(paused)},{"state",str(paused?"Paused":"Waiting")},{"sent",num(2)},{"skipped",num(1)},{"remaining",num(37)},{"total",num(40)},{"next_in_seconds",num(paused?0:4)},{"results",queueRows}});};
+            put("invite_queue",queueModel(true));put("batch_results",queueRows);put("social_busy",SynthScan::boolean(true));heartbeat();
+            queueControls=IsWindowEnabled(child(525))&&IsWindowEnabled(child(526))&&text(525)=="Resume"&&text(524).find("37 remaining")!=std::string::npos;
+            SendMessageW(page,WM_COMMAND,MAKEWPARAM(525,BN_CLICKED),0);SendMessageW(page,WM_COMMAND,MAKEWPARAM(526,BN_CLICKED),0);
+            put("invite_queue",queueModel(false));heartbeat();queueControls=queueControls&&text(525)=="Pause";SendMessageW(page,WM_COMMAND,MAKEWPARAM(525,BN_CLICKED),0);
+            auto draft=text(510);
+            for(auto size:std::vector<std::pair<int,int>>{{860,700},{1200,850},{1600,1000}}){
+                MoveWindow(page,0,0,size.first,size.second,TRUE);layout();RECT client{};GetClientRect(page,&client);
+                for(HWND c=GetWindow(page,GW_CHILD);c;c=GetWindow(c,GW_HWNDNEXT)){if(!(GetWindowLongPtrW(c,GWL_STYLE)&WS_VISIBLE))continue;RECT r{};GetWindowRect(c,&r);MapWindowPoints(nullptr,page,reinterpret_cast<POINT*>(&r),2);controlsFit=controlsFit&&r.left>=0&&r.top>=0&&r.right<=client.right&&r.bottom<=client.bottom;}
+                controlsFit=controlsFit&&text(510)==draft&&ListView_GetItemCount(child(528))==2&&ListView_GetColumnWidth(child(508),0)<=260&&ListView_GetColumnWidth(child(508),1)<=180;
+            }
+            MoveWindow(page,0,0,900,700,TRUE);layout();
         }
         HDC dc=GetDC(page),memory=CreateCompatibleDC(dc);HBITMAP bitmap=CreateCompatibleBitmap(dc,900,700);auto previous=SelectObject(memory,bitmap);
         SendMessageW(page,WM_PRINT,reinterpret_cast<WPARAM>(memory),PRF_CLIENT|PRF_CHILDREN|PRF_ERASEBKGND|PRF_NONCLIENT);
@@ -495,9 +561,13 @@ int preview(const std::filesystem::path& directory){
         {Gdiplus::Bitmap image(bitmap,nullptr);saved=saved&&image.Save((directory/std::filesystem::u8path(std::string(name)+".png")).c_str(),&png,nullptr)==Gdiplus::Ok;}
         SelectObject(memory,previous);DeleteObject(bitmap);DeleteDC(memory);ReleaseDC(page,dc);
         if(mode=="people"){
+            auto put=[&](const char* key,const Json& value){for(auto& pair:model.members)if(pair.first==key){pair.second=value;return;}model.members.push_back({key,value});};
+            put("social_busy",SynthScan::boolean(false));
             ListView_SetItemState(child(508),0,LVIS_SELECTED|LVIS_FOCUSED,LVIS_SELECTED|LVIS_FOCUSED);selection();
+            SendMessageW(page,WM_COMMAND,MAKEWPARAM(527,BN_CLICKED),0);SendMessageW(page,WM_COMMAND,MAKEWPARAM(520,BN_CLICKED),0);SendMessageW(child(553),CB_SETCURSEL,2,0);SendMessageW(page,WM_COMMAND,MAKEWPARAM(554,BN_CLICKED),0);
+            Json one=arr();one.items.push_back(rows.items[0]);put("action_people",one);write(directory/L"companion_state.json",model);refresh(true);
             SendMessageW(page,WM_COMMAND,MAKEWPARAM(517,BN_CLICKED),0);SendMessageW(page,WM_COMMAND,MAKEWPARAM(512,BN_CLICKED),0);
-            ListView_SetItemState(child(508),1,LVIS_SELECTED,LVIS_SELECTED);selection();
+            put("action_people",initialActions);write(directory/L"companion_state.json",model);refresh(true);ListView_SetItemState(child(528),1,LVIS_SELECTED,LVIS_SELECTED);SendMessageW(page,WM_COMMAND,MAKEWPARAM(529,BN_CLICKED),0);
             SendMessageW(page,WM_COMMAND,MAKEWPARAM(521,BN_CLICKED),0);label(510,"Friendly");SendMessageW(page,WM_COMMAND,MAKEWPARAM(512,BN_CLICKED),0);
         }else SendMessageW(page,WM_COMMAND,MAKEWPARAM(537,BN_CLICKED),0);
     }
@@ -508,6 +578,9 @@ int preview(const std::filesystem::path& directory){
         const auto& ids=field(command,"player_ids").items;bool two=ids.size()==2&&encode(ids[0])==encode(str("demo-one"))&&encode(ids[1])==encode(str("demo-two"));
         markOrgRoute=markOrgRoute||(command.textOr("action")=="mark_org"&&two);
         bulkTagRoute=bulkTagRoute||(command.textOr("action")=="tag_many"&&two&&command.textOr("label")=="Friendly");
+        if(command.textOr("queue_id")=="fixture-queue"){pauseRoute=pauseRoute||command.textOr("action")=="pause_invites";resumeRoute=resumeRoute||command.textOr("action")=="resume_invites";cancelRoute=cancelRoute||command.textOr("action")=="cancel_invites";}
+        stageRoute=stageRoute||(command.textOr("action")=="stage_people"&&ids.size()==1&&ids[0].text=="demo-one");removeRoute=removeRoute||(command.textOr("action")=="unstage_people"&&ids.size()==1&&ids[0].text=="demo-two");tagStageRoute=tagStageRoute||(command.textOr("action")=="stage_tag"&&command.textOr("label")=="Org"&&command.textOr("scope")=="shard");
+        customTagRoute=customTagRoute||(command.textOr("action")=="stage_tag"&&command.textOr("label")=="Trader"&&command.textOr("scope")=="shard");
         watchRoute=watchRoute||(command.textOr("action")=="add_watch"&&command.numberOr("quality")==1000&&command.numberOr("item_id")==5011);
     }
     write(directory/L"ui_validation.json",obj({{"tag_command",SynthScan::boolean(tagRoute)},{"buyer_watch_command",SynthScan::boolean(watchRoute)},
@@ -516,9 +589,11 @@ int preview(const std::filesystem::path& directory){
         {"people_removed_anchor_keeps_neighbour",SynthScan::boolean(removedAnchor)},{"people_filter_resets_intentionally",SynthScan::boolean(filterReset)},
         {"people_unsaved_tags_preserved",SynthScan::boolean(draftPreserved)},{"self_purple_party_blue_friend_green_priority",SynthScan::boolean(relationshipColors)},
         {"multi_selection_and_range_anchor_preserved",SynthScan::boolean(multiPreserved)},{"mark_org_command",SynthScan::boolean(markOrgRoute)},
-        {"bulk_tag_command",SynthScan::boolean(bulkTagRoute)},{"org_recipients_exclude_self_and_party",SynthScan::boolean(orgRecipients)},{"recipient_confirmation_cancelled",SynthScan::boolean(confirmationCancelled)},{"outgoing_requests_sent",num(0)}}));
+        {"bulk_tag_command",SynthScan::boolean(bulkTagRoute)},{"org_recipients_exclude_self_and_party",SynthScan::boolean(orgRecipients)},{"recipient_confirmation_cancelled",SynthScan::boolean(confirmationCancelled)},
+        {"queue_progress_and_controls",SynthScan::boolean(queueControls&&pauseRoute&&resumeRoute&&cancelRoute)},
+        {"action_list_independent_of_roster_filter",SynthScan::boolean(actionFilterStable)},{"stage_remove_and_add_org_routes",SynthScan::boolean(stageRoute&&removeRoute&&tagStageRoute&&customTagRoute)},{"action_panes_fit_compact_normal_large",SynthScan::boolean(controlsFit)},{"outgoing_requests_sent",num(0)}}));
     write(directory/L"scroll_diagnostics.json",obj({{"details",str(scrollDiagnostics)}}));
     close();SynthPages::close();DestroyWindow(parent);Gdiplus::GdiplusShutdown(token);
-    return saved&&tagRoute&&watchRoute&&heartbeatScroll&&relationshipScroll&&membershipScroll&&removedAnchor&&filterReset&&draftPreserved&&relationshipColors&&multiPreserved&&markOrgRoute&&bulkTagRoute&&orgRecipients&&confirmationCancelled&&GetForegroundWindow()==before?0:3;
+    return saved&&tagRoute&&watchRoute&&heartbeatScroll&&relationshipScroll&&membershipScroll&&removedAnchor&&filterReset&&draftPreserved&&relationshipColors&&multiPreserved&&markOrgRoute&&bulkTagRoute&&orgRecipients&&confirmationCancelled&&queueControls&&pauseRoute&&resumeRoute&&cancelRoute&&actionFilterStable&&stageRoute&&removeRoute&&tagStageRoute&&customTagRoute&&controlsFit&&GetForegroundWindow()==before?0:3;
 }
 }

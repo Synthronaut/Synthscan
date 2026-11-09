@@ -35,12 +35,15 @@ class GuidedSetupTests(unittest.TestCase):
         with patch('community_startup.owns_shortcut',return_value=False),patch('community_startup.subprocess.Popen') as spawn:
             ensure_watcher();spawn.assert_not_called()
 
-    def test_uninstall_restores_only_owned_names_and_keeps_player_records(self):
+    def test_uninstall_restores_journaled_changes_and_keeps_player_records(self):
         import community_uninstall as uninstall
         with tempfile.TemporaryDirectory() as d:
             root=Path(d);profile=root/'profile';profile.mkdir()
             ini=root/'game/Data/Localization/english/global.ini';ini.parent.mkdir(parents=True)
             ini.write_text('Adagio=Adagio (249 / 800)\nMission=Keep my marks\n')
+            from game_text_lifecycle import Manager,INI
+            ini.write_text('Adagio=Adagio\nMission=Keep my marks\n')
+            Manager(root/'game',profile).write(INI,b'Adagio=Adagio (249 / 800)\nMission=Keep my marks\n')
             (profile/'diary.json').write_text('personal record fixture')
             (profile/'reputation_localization_state.json').write_text(json.dumps(dict(entries={'adagio':dict(original='Adagio',written='Adagio (249 / 800)')})))
             with patch.object(uninstall,'PROFILE',profile),patch.object(uninstall,'game_directory',return_value=root/'game'),patch.object(uninstall,'send_signal'),patch('community_startup.owns_shortcut',return_value=False):
@@ -51,6 +54,11 @@ class GuidedSetupTests(unittest.TestCase):
     def test_new_player_gets_login_guidance_without_a_profile(self):
         with tempfile.TemporaryDirectory() as d:
             self.assertEqual(reputation_view(Path(d),100)['state'],'waiting')
+
+    def test_hud_only_setup_does_not_advertise_reputation_restart(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);(root/'setup_result.json').write_text(json.dumps(dict(strings_enabled=False)))
+            self.assertEqual(reputation_view(root,100)['state'],'disabled')
 
     def test_restart_prompt_follows_the_actual_game_process(self):
         with tempfile.TemporaryDirectory() as d:

@@ -1,0 +1,10 @@
+# Windows x64 / CPython 3.14; all direct and transitive dependencies pinned.
+grpcio==1.84.0 --hash=sha256:800b7e00d92553313c0463c200087930aa78678ec1d528193aeb50906f55989b
+numpy==2.4.6 --hash=sha256:b507f5c4c1d508876d1819b6bf9a49d365b96320b5d4993426b33a23ca4b8261
+packaging==26.3 --hash=sha256:d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c
+protobuf==7.35.1 --hash=sha256:230a75ddfc2de4806e56696ce9640c1cdfdb6543b7cfce98d42a4c0a0e7bdb87
+PyYAML==6.0.3 --hash=sha256:4a2e8cebe2ff6ab7d1050ecd59c25d4c8bd7e6f400f5f82b96557ac0abafd0ac
+resvg_py==0.5.0 --hash=sha256:1f6b8956c4143dbfe107bcd35799d0dfd778a40a8cd537893c0bf489898a6c3c
+shapely==2.2.0 --hash=sha256:48dd1d961391f314ab7fa8812c86ca2a727bee2bdca1478730eacaea007da18e
+six==1.17.0 --hash=sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274
+typing_extensions==4.16.0 --hash=sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8

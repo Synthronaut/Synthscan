@@ -6,7 +6,7 @@ import tkinter as tk
 import tkinter.font as tkfont
 
 from config import get_monitor_by_id, load_config, save_config
-from displayinfo_reader import translate_location, translate_region
+from telemetry_labels import translate_location, translate_region
 from validated_displayinfo import ValidatedDisplayInfoReader
 from hud_appearance import render_original_bar
 from network_source import read_network_ping

@@ -16,16 +16,18 @@ def cleanup():
     if owns_shortcut():shortcut.unlink()
     send_signal('watcher-stop');send_signal('setup-stop')
     result=dict(at=time.time(),player_records_preserved=True,names_restored=False)
-    state=read(PROFILE/'reputation_localization_state.json',limit=1024*1024)
-    if state.get('entries'):
-        try:
-            game=game_directory(True);file=game/'Data/Localization/english/global.ini'
-            before=file.read_bytes()
-            snapshot=dict(own_character_verified=True,complete=True,read_at=time.time(),character_key=state.get('character_key'),records=[])
-            text,_=annotate_names(before.decode('utf-8'),snapshot,{}, {},state)
-            temporary=file.with_name('global.ini.synthscan-uninstall.tmp');temporary.write_bytes(text.encode('utf-8'))
-            if file.read_bytes()!=before:raise ValueError('Game text changed during cleanup')
-            temporary.replace(file);result['names_restored']=True
-        except (OSError,ValueError):result['game_text_preserved']=True
+    from game_text_lifecycle import Manager
+    channels=set()
+    for journal in (PROFILE/'game_text').glob('*/journal.json'):
+        state=read(journal,limit=4*1024*1024)
+        if state.get('game'):channels.add(state['game'])
+    try:channels.add(str(game_directory(True)))
+    except FileNotFoundError:pass
+    result['game_text']={}
+    for channel in channels:
+        try:result['game_text'][channel]=Manager(channel,PROFILE).restore()
+        except (OSError,ValueError) as error:result['game_text'][channel]=dict(error=str(error))
+    # No before-install baseline exists for old installs. Preserve their text
+    # and offer explicit archival in Setup instead of guessing at ownership.
     PROFILE.mkdir(parents=True,exist_ok=True)
     (PROFILE/'uninstall_result.json').write_text(json.dumps(result),encoding='utf-8')

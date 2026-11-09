@@ -55,10 +55,11 @@ void layout(){
         float x=16,y=110+nav*navStep,w=170,h=std::min(34.f,navStep-4);
         if(b.navigation)nav++;
         else if(b.id>=200&&b.id<=203){x=224+(b.id-200)*(tile+gap);y=119;w=tile;h=82;}
-        else if(b.id==210||b.id==211){w=114;h=30;x=width-264+(b.id-210)*120;y=234;}
+        else if(b.id==210||b.id==211){w=136;h=30;x=width-302+(b.id-210)*142;y=234;}
         else if(b.id==212){x=width-192;y=622;w=166;h=30;}
         MoveWindow(b.hwnd,int(x*scale),int(y*scale),int(w*scale),int(h*scale),TRUE);
-        ShowWindow(b.hwnd,b.navigation||activePage=="home"?SW_SHOW:SW_HIDE);
+        const bool hasNotice=b.id!=212||!overview.textOr("refinery_notice").empty();
+        ShowWindow(b.hwnd,b.navigation||(activePage=="home"&&hasNotice)?SW_SHOW:SW_HIDE);
         InvalidateRect(b.hwnd,nullptr,FALSE);
     }
     SynthPages::place(int(218*scale),int(110*scale),int((width-234)*scale),std::max(1,int(r.bottom)-int(124*scale)),activePage!="home");
@@ -88,7 +89,8 @@ void paintButton(const DRAWITEMSTRUCT& item){
     std::wstring label=b.label;auto cut=label.find(L'\n');
     if(b.navigation){SynthGlass::rounded(g,{8*scale,(r.Height-24*scale)/2,24*scale,24*scale},Gdiplus::Color(38,154,185,206),7*scale);SynthGlass::icon(g,b.action,{12*scale,(r.Height-16*scale)/2,16*scale,16*scale},selected?SynthGlass::Accent:SynthGlass::Muted);
         SynthGlass::text(g,label,{40*scale,0,r.Width-47*scale,r.Height},11.5f*scale,selected?SynthGlass::Ink:SynthGlass::Muted,selected);
-    }else words(g,label.substr(0,cut),16,tile?16:3,r.Width/scale-28,tile?26:24,tile?15:12,INK,true);
+    }else if(tile)words(g,label.substr(0,cut),16,16,r.Width/scale-28,26,15,INK,true);
+    else SynthGlass::text(g,label,{12*scale,0,r.Width-24*scale,r.Height},12*scale,INK,true);
     if(cut!=std::wstring::npos)words(g,label.substr(cut+1),16,45,r.Width/scale-28,28,11,MUTED);
     if(item.itemState&ODS_FOCUS){Gdiplus::Pen pen(Gdiplus::Color(100,161,205,208));Gdiplus::GraphicsPath focus;SynthGlass::shape(focus,{2,2,r.Width-5,r.Height-5},8*scale);g.DrawPath(&pen,&focus);}
 }
@@ -104,7 +106,7 @@ void paint(){
         words(g,L"SynthScan",66,29,130,31,20,INK,true);
         words(g,L"YOUR VERSE, CONNECTED",24,73,164,20,9,MUTED,true);
         auto cap=CapturePrivacy::snapshot();double age=cap.numberOr("frame_age_ms",-1);
-        words(g,CapturePrivacy::policy().paused?L"CAPTURE PAUSED":age>=0&&age<1500?L"READING GAME WINDOW":L"CAPTURE IDLE · GAME ONLY",24,height-91,164,20,10,ACCENT,true);
+        words(g,!SynthEdition::screenReading?L"STANDARD · NO SCREEN READER":CapturePrivacy::policy().paused?L"CAPTURE PAUSED":age>=0&&age<1500?L"READING GAME WINDOW":L"CAPTURE IDLE · GAME ONLY",24,height-91,164,20,10,ACCENT,true);
         words(g,L"LOCAL PROFILE",24,height-66,164,20,9,ACCENT,true);
         words(g,L"Your records stay on this PC",24,height-45,166,30,10,MUTED);
         std::wstring heading=L"Home";
@@ -112,7 +114,7 @@ void paint(){
         words(g,heading,224,30,main,40,29,INK,true);
         words(g,activePage=="home"?L"Find your next upgrade. See what you've accomplished.":activePage=="people"?L"A familiar face in a very large universe.":L"",224,76,main,28,13,MUTED);
         if(activePage=="home"){
-        words(g,L"SESSION RECAP",224,241,main-260,24,11,ACCENT,true);
+        words(g,L"SESSION RECAP",224,241,main-300,24,11,ACCENT,true);
         const Json& session=field(overview,previous?"previous":"current");
         const auto& blueprints=field(session,"blueprints").items;const auto& rep=field(session,"reputation").items;
         for(int i=0;i<3;i++){
@@ -125,26 +127,30 @@ void paint(){
         rounded(g,{224*scale,371*scale,col*scale,220*scale},CARD);
         rounded(g,{(240+col)*scale,371*scale,col*scale,220*scale},CARD);
         words(g,L"Blueprints received",240,387,col-32,26,14,INK,true);
-        words(g,L"Observed reputation changes",256+col,387,col-32,26,14,INK,true);
+        words(g,L"Reputation balance changes",256+col,387,col-32,26,14,INK,true);
         auto baseline=clockLabel(session.numberOr("rep_baseline_at"));
-        if(!baseline.empty())words(g,L"Verified baseline · "+baseline,256+col,411,col-32,18,10,MUTED);
+        auto checked=clockLabel(session.numberOr("rep_checked_at"));
+        if(!baseline.empty())words(g,L"Baseline "+baseline+L" · last read "+checked,256+col,411,col-32,18,10,MUTED);
+        words(g,L"Account balances · checks about every 30s while playing",256+col,430,col-32,18,10,MUTED);
         if(blueprints.empty())words(g,session.kind==Json::Kind::Null?L"No saved session yet. Play normally to build your recap.":L"No blueprint grants recorded in this session.",240,432,col-32,68,12,MUTED);
         for(size_t i=0;i<std::min(size_t(6),blueprints.size());i++)words(g,wide(blueprints[i].textOr("name")),240,428+23*float(i),col-32,23,12,INK);
         if(blueprints.size()>6)words(g,L"+ "+std::to_wstring(blueprints.size()-6)+L" more · open Blueprint library",240,568,col-32,18,10,ACCENT);
-        if(rep.empty())words(g,session.numberOr("rep_checked_at")>0?L"No balance changes since this session's first verified read.":L"Waiting for verified reputation balances. Mission payouts aren't treated as confirmed gains.",256+col,432,col-32,85,12,MUTED);
+        if(rep.empty())words(g,session.numberOr("rep_checked_at")>0?L"No balance changes between the saved reads.":L"Waiting for verified reputation balances. Mission payouts aren't treated as confirmed gains.",256+col,453,col-32,85,12,MUTED);
         for(size_t i=0;i<std::min(size_t(4),rep.size());i++){
-            const auto& change=rep[i];float y=437+37*float(i);
+            const auto& change=rep[i];float y=453+32*float(i);
             auto delta=change.numberOr("delta");auto label=wide(change.textOr("faction"))+L"  "+(delta>0?L"+":L"")+number(delta);
             words(g,label,256+col,y,col-32,22,12,delta>0?ACCENT:INK,true);
             auto scope=wide(change.textOr("scope"));if(flag(change,"standing_changed"))scope+=L" · standing changed";
-            words(g,scope,256+col,y+19,col-32,18,10,MUTED);
+            words(g,scope+L" · "+number(change.numberOr("before"))+L" → "+number(change.numberOr("after")),256+col,y+17,col-32,18,10,MUTED);
         }
-        rounded(g,{224*scale,609*scale,main*scale,59*scale},CARD);
         auto notice=overview.textOr("refinery_notice");
-        words(g,notice.empty()?L"Refinery reminders":wide(notice),240,621,main-200,23,13,notice.empty()?INK:ACCENT,true);
-        words(g,notice.empty()?L"Completed-order notifications appear here and in the Mining HUD.":L"Confirmed game notification · dismiss after reviewing your orders",240,645,main-200,19,10,MUTED);
+        if(!notice.empty()){
+            rounded(g,{224*scale,609*scale,main*scale,59*scale},CARD);
+            words(g,wide(notice),240,621,main-200,23,13,ACCENT,true);
+            words(g,L"Confirmed game notification · dismiss after reviewing your orders",240,645,main-200,19,10,MUTED);
+        }
         words(g,connected?wide(identity):L"No live shard observation",224,690,main,22,11,connected?INK:MUTED);
-        words(g,flag(overview,"history_warning")?L"Saved recap could not be read. The original file has been preserved.":L"Recap includes logged grants and completions; reputation is measured between verified reads.",224,716,main,28,10,MUTED);
+        words(g,flag(overview,"history_warning")?L"Saved recap could not be read. The original file has been preserved.":L"Reputation is net balance change between reads; activity before the baseline is not included.",224,716,main,28,10,MUTED);
         }
         Gdiplus::Graphics screen(dc);screen.DrawImage(&bitmap,0,0);
     }EndPaint(window,&ps);
@@ -191,7 +197,9 @@ void initialize(HWND parent,const std::filesystem::path& data,std::function<void
 void update(const SCMiner::JsonValue& value,const std::string& label,bool live){
     static bool wasPaused=false;bool paused=CapturePrivacy::policy().paused;
     bool changed=encode(value)!=encode(overview)||identity!=label||connected!=live||paused!=wasPaused;wasPaused=paused;
+    bool noticesChanged=overview.textOr("refinery_notice")!=value.textOr("refinery_notice");
     overview=value;identity=label;connected=live;
+    if(window&&noticesChanged)layout();
     if(!sessionChosen&&value.kind==Json::Kind::Object){
         const auto& current=field(value,"current");
         previous=field(value,"previous").kind==Json::Kind::Object&&field(current,"blueprints").items.empty()&&field(current,"reputation").items.empty()&&current.numberOr("contracts_completed")==0;

@@ -11,6 +11,12 @@ permissions:
 jobs:
   build:
     runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        edition: [standard, full]
+    env:
+      SYNTHSCAN_EDITION: ${{ matrix.edition }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -25,38 +31,46 @@ jobs:
         run: python -B tools/build_native_app.py
       - name: Native self-tests
         run: python -B -c "import subprocess; subprocess.run(['dist/native/SynthScan.exe', '--selftest'], check=True, timeout=180)"
+      - name: Native People UI regression fixtures
+        if: matrix.edition == 'full'
+        env:
+          SYNTHSCAN_DATA_DIR: ${{ runner.temp }}\SynthScan-ui-fixtures
+        run: |
+          python -B -c "import pathlib,subprocess; pathlib.Path('out/ui-validation').mkdir(parents=True,exist_ok=True); subprocess.run(['dist/native/SynthScan.exe','--companion-preview','out/ui-validation/companion'],check=True,timeout=120,creationflags=0x08000000)"
+          python -B -c "import subprocess; subprocess.run(['dist/native/SynthScan.exe','--people-style-preview','out/ui-validation/people-style.png'],check=True,timeout=60,creationflags=0x08000000)"
       - name: Unit tests
         run: python -B -m unittest discover -s tests -q
       - name: Package clean source and standalone app
-        run: python -B tools/package_community.py --source out/public-source --package out/SynthScan-Windows-x64 --native dist/native
+        run: python -B tools/package_community.py --edition ${{ matrix.edition }} --source out/public-source --package out/SynthScan-${{ matrix.edition }}-Windows-x64 --native dist/native
       - name: Build guided Windows installer
         run: |
-          python -B tools/verify_portable_runtime.py --payload out/SynthScan-Windows-x64
+          python -B tools/verify_portable_runtime.py --payload out/SynthScan-${{ matrix.edition }}-Windows-x64
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python -B tools/verify_update_runtime.py --payload out/SynthScan-Windows-x64
+          python -B tools/verify_update_runtime.py --payload out/SynthScan-${{ matrix.edition }}-Windows-x64
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python -B tools/build_installer.py --payload out/SynthScan-Windows-x64 --output out/installer
+          python -B tools/build_installer.py --payload out/SynthScan-${{ matrix.edition }}-Windows-x64 --output out/installer
       - name: Sign application update manifest
         env:
           SYNTHSCAN_SIGNING_PRIVATE_B64: ${{ secrets.SYNTHSCAN_SIGNING_PRIVATE_B64 }}
         shell: pwsh
         run: |
           if ($env:SYNTHSCAN_SIGNING_PRIVATE_B64) {
-            $version = (Get-Content out/SynthScan-Windows-x64/release.json | ConvertFrom-Json).version
-            python -B tools/sign_release.py --archive out/SynthScan-Windows-x64.zip --url "https://github.com/Synthronaut/Synthscan/releases/download/v$version/SynthScan-Windows-x64.zip" --output out/synthscan-update.json
+            $version = (Get-Content out/SynthScan-${{ matrix.edition }}-Windows-x64/release.json | ConvertFrom-Json).version
+            python -B tools/sign_release.py --archive out/SynthScan-${{ matrix.edition }}-Windows-x64.zip --url "https://github.com/Synthronaut/Synthscan/releases/download/v$version/SynthScan-${{ matrix.edition }}-Windows-x64.zip" --output out/synthscan-update-${{ matrix.edition }}.json
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           } elseif ('${{ inputs.publish }}' -eq 'true') {
             throw 'Publishing requires the protected release-signing secret.'
           }
       - uses: actions/upload-artifact@v4
         with:
-          name: SynthScan-Windows-x64
+          name: SynthScan-${{ matrix.edition }}-Windows-x64
           path: |
-            out/SynthScan-Windows-x64.zip
-            out/SynthScan-Windows-x64.zip.sha256
-            out/installer/SynthScan-Setup-Windows-x64.exe
-            out/installer/SynthScan-Setup-Windows-x64.exe.sha256
-            out/synthscan-update.json
+            out/SynthScan-${{ matrix.edition }}-Windows-x64.zip
+            out/SynthScan-${{ matrix.edition }}-Windows-x64.zip.sha256
+            out/installer/*.exe
+            out/installer/*.sha256
+            out/synthscan-update-${{ matrix.edition }}.json
+            out/ui-validation/
   publish:
     if: inputs.publish
     needs: build
@@ -68,22 +82,25 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: SynthScan-Windows-x64
+          pattern: SynthScan-*-Windows-x64
+          merge-multiple: true
           path: out
       - name: Publish immutable release, then promote signed channel
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
-          $envelope = Get-Content out/synthscan-update.json | ConvertFrom-Json
+          $envelope = Get-Content out/synthscan-update-full.json | ConvertFrom-Json
           $manifest = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($envelope.payload)) | ConvertFrom-Json
           $tag = 'v' + $manifest.version
-          gh release create $tag out/SynthScan-Windows-x64.zip out/SynthScan-Windows-x64.zip.sha256 out/installer/SynthScan-Setup-Windows-x64.exe out/installer/SynthScan-Setup-Windows-x64.exe.sha256 --repo Synthronaut/Synthscan --target '${{ github.sha }}' --title "SynthScan $($manifest.version)" --generate-notes
+          $assets = @(Get-ChildItem out -Recurse -File | Where-Object { $_.Name -match '\.(zip|exe|sha256)$' } | ForEach-Object { $_.FullName })
+          gh release create $tag @assets --repo Synthronaut/Synthscan --target '${{ github.sha }}' --title "SynthScan $($manifest.version) — Standard and Full" --notes 'Choose Standard for no screen-reading components, or Full for local game-window OCR. Updates preserve your edition.'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           gh release view update-channel --repo Synthronaut/Synthscan *> $null
           if ($LASTEXITCODE -ne 0) {
-            gh release create update-channel --repo Synthronaut/Synthscan --target '${{ github.sha }}' --title 'SynthScan automatic update channel' --notes 'Signed application update manifest. Install SynthScan using a versioned release.' --prerelease
+            gh release create update-channel --repo Synthronaut/Synthscan --target '${{ github.sha }}' --title 'SynthScan automatic update channels' --notes 'Signed manifests for Standard and Full editions.' --prerelease
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
-          gh release upload update-channel out/synthscan-update.json --repo Synthronaut/Synthscan --clobber
+          Copy-Item out/synthscan-update-full.json out/synthscan-update.json
+          gh release upload update-channel out/synthscan-update.json out/synthscan-update-standard.json --repo Synthronaut/Synthscan --clobber
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

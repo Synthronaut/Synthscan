@@ -18,6 +18,7 @@ import uuid
 import zipfile
 
 from update_signing import strict_json,verify
+from edition_payload import validate_edition,check_update_edition,forbidden_standard_path
 
 SCHEMA=1
 INTERVAL=6*3600
@@ -68,6 +69,9 @@ def config(root):
     value=load(Path(root)/'update_trust.json')
     if value.get('schema')!=SCHEMA or not value.get('keys') or not value.get('manifest_url'):
         raise ValueError('No trusted application update channel is configured')
+    if load(Path(root)/'release.json').get('edition','full')=='standard':
+        value=dict(value,manifest_url=value.get('standard_manifest_url',''))
+        if not value['manifest_url']:raise ValueError('No Standard update channel configured')
     return value
 
 
@@ -96,6 +100,7 @@ def manifest(raw,trust,now=None):
     value=verify(raw,trust)
     if value.get('schema')!=SCHEMA or value.get('kind')!='application' or value.get('platform')!='windows-x64':
         raise ValueError('Unsupported application update schema or platform')
+    validate_edition(value.get('edition','full'))
     version_key(value.get('version'))
     for key in ('sequence','size','unpacked_size'):
         if not isinstance(value.get(key),int) or isinstance(value[key],bool) or value[key]<=0:raise ValueError('Invalid update '+key)
@@ -147,6 +152,9 @@ def inspect_archive(archive,value,destination=None):
         if not required.issubset(files):raise ValueError('Required application files are missing')
         release=strict_json(zipped.read(files['release.json']))
         if release.get('version')!=value['version'] or release.get('updater_schema')!=SCHEMA:raise ValueError('Unsupported packaged application')
+        if 'edition' in release and 'edition_payload.py' not in files:raise ValueError('Edition validation module is missing')
+        edition=check_update_edition(release,value)
+        if edition=='standard' and any(forbidden_standard_path(p) for p in files):raise ValueError('Standard payload contains screen-reading components')
         for relative,member in files.items():
             h=hashlib.sha256();target=None
             if destination is not None:
@@ -165,7 +173,7 @@ def inspect_archive(archive,value,destination=None):
 def stage(root,directory,trust=None,opener=request,now=None):
     now=time.time() if now is None else now;root=Path(root);directory=Path(directory);trust=trust or config(root)
     with opener(trust['manifest_url'],trust) as response:raw=response.read(256*1024+1)
-    value=manifest(raw,trust,now);installed=load(root/'release.json').get('version','development')
+    value=manifest(raw,trust,now);installed_release=load(root/'release.json');check_update_edition(installed_release,value);installed=installed_release.get('version','development')
     if installed=='development':return dict(status='development',detail='Development checkout: automatic replacement is disabled.')
     if version_key(value['version'])<=version_key(installed):return dict(status='current',version=installed,detail='Installed application matches or is newer than the signed channel.')
     folder=directory/'updates';folder.mkdir(parents=True,exist_ok=True)
@@ -227,6 +235,7 @@ def activate(root,current,directory,health,launch,trust=None,can_activate=lambda
     trust=trust or config(current);updates=directory/'updates';pending=load(updates/'pending.json');token=pending.get('sha256','')
     if not HEX.fullmatch(token):raise ValueError('No verified staged update')
     value=manifest((updates/(token+'.json')).read_bytes(),trust)
+    check_update_edition(load(current/'release.json'),value)
     if value['sha256']!=token or version_key(value['version'])<=version_key(load(current/'release.json').get('version')):raise ValueError('Staged update no longer applies')
     archive=updates/(token+'.zip')
     if archive.stat().st_size!=value['size'] or digest(archive)!=token:raise ValueError('Staged application archive changed')
@@ -321,7 +330,7 @@ def prepare_agent(root,directory):
     for name in ('Lib','DLLs'):
         shutil.copytree(runtime/name,target/name,ignore=shutil.ignore_patterns('site-packages','__pycache__','test','tests','idlelib'))
     (target/'python314._pth').write_text('..\n.\nLib\nDLLs\nimport site\n',encoding='ascii')
-    for name in ('app_updates.py','update_signing.py','update_agent.py','app_lifecycle.py'):shutil.copy2(root/name,folder/name)
+    for name in ('app_updates.py','update_signing.py','update_agent.py','app_lifecycle.py','edition_payload.py'):shutil.copy2(root/name,folder/name)
     return folder
 
 

@@ -8,6 +8,8 @@ READS={('social','SocialService','ListGroups'),('identity','IdentityService','Ge
        ('contacts','ContactsService','SearchAccount'),('contacts','ContactsService','ListContacts')}
 WRITES={('contacts','ContactsService','SendFriendRequest'),('social','SocialService','InviteToParty')}
 
+class PlayerLeftShard(ValueError):pass
+
 
 def public_error(error):
     try:code=error.code().name
@@ -46,7 +48,7 @@ class PlayerClient:
     def call(self,domain,service,method,request,confirmed=False):
         route=(domain,service,method)
         if route not in READS and not (route in WRITES and confirmed):raise ValueError('Social action requires explicit confirmation')
-        from capture_privacy import require_account_access
+        from account_permission import require_account_access
         require_account_access()
         response=self.message(domain,method+'Response')
         return self.account.channel.unary_unary('/sc.external.services.'+domain+'.v1.'+service+'/'+method,
@@ -78,8 +80,8 @@ class PlayerClient:
         self.scope(context)
         return dict(rows=rows,limited=response.page_info.has_next_page,observed_at=time.time())
 
-    def roster(self,context,known=None):
-        self.scope(context);known=known or {};groups=[];cursor=''
+    def server_member_ids(self,context):
+        self.scope(context);groups=[];cursor=''
         for _ in range(4):
             request=self.message('social','ListGroupsRequest')();request.filters.types.append(2);request.pagination.first=5
             if cursor:request.pagination.after=cursor
@@ -96,6 +98,10 @@ class PlayerClient:
         urns={m.urn for m in groups[0].members}
         if not 0<len(urns)<=4096 or any(not u.startswith(PLAYER_PREFIX) or not u[len(PLAYER_PREFIX):].isdigit() for u in urns):
             raise ValueError('Unrecognised shard member identities.')
+        self.scope(context);return urns
+
+    def roster(self,context,known=None):
+        urns=self.server_member_ids(context);known=known or {}
         names={u:known[u] for u in urns if known.get(u)}
         missing=sorted(int(u[len(PLAYER_PREFIX):]) for u in urns if u not in names)
         for start in range(0,len(missing),256):
@@ -118,6 +124,7 @@ class PlayerClient:
         if len(exact)!=1 or exact[0]['id']==self.account.subject:raise ValueError('Exact recipient could not be verified. Refresh and select again.')
         target=exact[0]
         self.scope(context)
+        if target['id'] not in self.server_member_ids(context):raise PlayerLeftShard('Player is no longer reported on your shard.')
         if action=='friend':
             request=self.message('contacts','SendFriendRequestRequest')();request.account_id=target['account_id'];request.player_id=int(target['player_id'])
             response=self.call('contacts','ContactsService','SendFriendRequest',request,confirmed=True)
@@ -168,36 +175,55 @@ class PlayerClient:
         self.scope(context)
         return output
 
-    def invite_many(self,people,context,confirmed=False,previous=(),cancel=None):
+    def invite_many(self,people,context,confirmed=False,previous=(),cancel=None,control=None,require_shard=True,operation='party'):
+        if operation not in ('friend','party'):raise ValueError('Unknown social operation')
+        if not require_shard:raise ValueError('Social actions are limited to the current shard.')
         if confirmed is not True:raise ValueError('Confirm the selected recipients first.')
         if not people or len(people)>4096 or len({p['id'] for p in people})!=len(people):raise ValueError('Invalid party recipients.')
+        from party_invites import PartyInviteQueue
+        control=control or PartyInviteQueue(people,cancel=cancel,operation=operation)
+        revision=control.membership_revision()
         # Recheck shard and party immediately before the first outgoing invitation.
-        roster={p['id'] for p in self.roster(context)['rows']}
+        roster=self.server_member_ids(context)
         relations=self.relationships(context)
-        if not relations.get('party_at'):raise ValueError('Party membership unavailable. No invitations sent; refresh and try again.')
-        party=set(relations['party']);attempted=set(previous);results=[];stopped=False;sent=0
+        membership='friends' if operation=='friend' else 'party';stamp='friends_at' if operation=='friend' else 'party_at'
+        if not relations.get(stamp):raise ValueError('Social membership unavailable. No requests sent; refresh and try again.')
+        party=set(relations[membership]);attempted=set(previous);results=[];stopped=False;sent=0
         for person in people:
             row=dict(id=person['id'],handle=person['handle'])
-            reason='You' if person['id']==self.account.subject else 'Already in party' if person['id'] in party else 'No longer on shard' if person['id'] not in roster else 'Already attempted this session' if person['id'] in attempted else ''
+            reason='You' if person['id']==self.account.subject else ('Already a friend' if operation=='friend' else 'Already in party') if person['id'] in party else 'No longer on shard' if require_shard and person['id'] not in roster else 'Already attempted this session; explicitly enable repeat requests' if person['id'] in attempted else ''
             if reason:row.update(outcome='Skipped',detail=reason)
-            elif cancel is not None and cancel.is_set():row.update(outcome='Not sent',detail='Batch cancelled after app shutdown or a session change.')
+            elif control.cancel_event.is_set():row.update(outcome='Not sent',detail='Invitation queue cancelled.')
             elif stopped:row.update(outcome='Not sent',detail='Batch stopped after an unsuccessful invitation.')
             else:
                 try:
-                    if sent:
-                        if cancel is not None:cancel.wait(.75)
-                        else:time.sleep(.75)
-                    if cancel is not None and cancel.is_set():
-                        row.update(outcome='Not sent',detail='Batch cancelled after app shutdown or a session change.');results.append(row);continue
-                    detail=self.send('party',person,context,True)
-                    row.update(outcome='Sent',detail=detail);sent+=1
+                    if not control.before_send(person):row.update(outcome='Not sent',detail='Invitation queue cancelled.')
+                    else:
+                        if control.membership_revision()!=revision:
+                            roster=self.server_member_ids(context)
+                            latest=self.relationships(context)
+                            if not latest.get(stamp):raise ValueError('Could not recheck social membership after resuming.')
+                            party=set(latest[membership]);revision=control.membership_revision()
+                        reason=('Already a friend' if operation=='friend' else 'Already in party') if person['id'] in party else 'No longer on shard after resume' if require_shard and person['id'] not in roster else ''
+                        if reason:row.update(outcome='Skipped',detail=reason)
+                        else:
+                            try:control.remember(person)
+                            except (OSError,ValueError) as error:
+                                row.update(outcome='Not sent',detail=str(error));stopped=True
+                        if not stopped and not reason:
+                            if control.cancel_event.is_set():row.update(outcome='Not sent',detail='Invitation queue cancelled before sending.')
+                            else:
+                                detail=self.send(operation,person,context,True)
+                                row.update(outcome='Sent',detail=detail);sent+=1
+                except PlayerLeftShard as error:row.update(outcome='Skipped',detail=str(error))
                 except Exception as error:
                     message=str(error)[:240] if isinstance(error,ValueError) else public_error(error)
                     row.update(outcome='Check in game',detail=message+' Batch stopped; check in-game before retrying.');stopped=True
-            results.append(row)
+            results.append(row);control.update(row)
         skipped=sum(r['outcome']=='Skipped' for r in results)
         unsent=sum(r['outcome']=='Not sent' for r in results)
-        return dict(status=f'Party invites: {sent} sent, {skipped} skipped'+(', 1 needs checking' if stopped else '')+(f', {unsent} not sent' if unsent else '')+'. See Invite results.',results=results)
+        control.finish(results,error='Queue stopped after an unsuccessful invitation.' if stopped else '')
+        return dict(status=('Friend requests' if operation=='friend' else 'Party invites')+f': {sent} sent, {skipped} skipped'+(', queue stopped' if stopped else '')+(f', {unsent} not sent' if unsent else '')+'. See Queue / results.',results=results)
 
 
 def social_job(kind,context,**options):
@@ -207,7 +233,7 @@ def social_job(kind,context,**options):
         if kind=='roster':return client.roster(context,options.get('known'))
         if kind=='search':return client.search(options['query'],context)
         if kind=='relationships':return client.relationships(context)
-        if kind=='party_many':return client.invite_many(options['people'],context,options.get('confirmed'),options.get('previous',()),options.get('cancel'))
+        if kind in ('party_many','friend_many'):return client.invite_many(options['people'],context,options.get('confirmed'),options.get('previous',()),options.get('cancel'),options.get('control'),options.get('require_shard',True),'friend' if kind=='friend_many' else 'party')
         if kind in ('friend','party'):return client.send(kind,options['person'],context,options.get('confirmed'))
         raise ValueError('Unknown social operation')
     except (ValueError,FileNotFoundError) as error:

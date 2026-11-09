@@ -24,9 +24,10 @@ def build(payload,output):
     payload=Path(payload).resolve();output=Path(output).resolve();output.mkdir(parents=True,exist_ok=True)
     from package_community import audit
     audit(payload)
-    version=json.loads((payload/'release.json').read_text(encoding='utf-8'))['version']
-    subprocess.run([str(compiler()),'/Qp','/DAppVersion='+version,'/DPayload='+str(payload),'/DOutput='+str(output),str(ROOT/'installer/SynthScan.iss')],check=True)
-    file=output/'SynthScan-Setup-Windows-x64.exe'
+    release=json.loads((payload/'release.json').read_text(encoding='utf-8'));version=release['version'];edition=release.get('edition','full')
+    if edition not in ('standard','full'):raise ValueError('Unknown edition')
+    subprocess.run([str(compiler()),'/Qp','/DEdition='+edition,'/DAppVersion='+version,'/DPayload='+str(payload),'/DOutput='+str(output),str(ROOT/'installer/SynthScan.iss')],check=True)
+    file=output/('SynthScan-'+edition.title()+'-Setup-Windows-x64.exe')
     digest=hashlib.sha256(file.read_bytes()).hexdigest()
     file.with_suffix('.exe.sha256').write_text(digest+'  '+file.name+'\n',encoding='ascii')
     print(json.dumps(dict(installer=str(file),sha256=digest,bytes=file.stat().st_size)))

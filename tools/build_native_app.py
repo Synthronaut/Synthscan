@@ -25,6 +25,8 @@ ZSTD_SOURCE=ROOT/'third_party/build_tools/zstd-1.5.7/lib'
 def digest(path):return hashlib.sha256(path.read_bytes()).hexdigest()
 
 def main():
+    edition=os.environ.get('SYNTHSCAN_EDITION','full')
+    if edition not in ('standard','full'):raise ValueError('Unknown edition')
     BUILD.mkdir(exist_ok=True);OUT.mkdir(parents=True,exist_ok=True)
     env=os.environ.copy()
     env['PATH']=str(MSVC/'bin/Hostx64/x64')+os.pathsep+str(SDK/'bin'/VERSION/'x64')+os.pathsep+env['PATH']
@@ -33,12 +35,15 @@ def main():
     flags=['/nologo','/std:c++20','/EHsc','/MD','/O2','/utf-8','/bigobj','/D_CRT_SECURE_NO_WARNINGS','/DNOMINMAX','/Gy',
            '/Brepro','/experimental:deterministic','/pathmap:'+str(ROOT)+'=SYNTHSCAN',
            '/I'+str(SOURCE/'include'),'/I'+str(OPENCV/'include'),'/I'+str(ZSTD_SOURCE),'/FI'+str(SOURCE/'include/SynthCompatibility.h')]
+    if edition=='standard':flags.append('/DSYNTHSCAN_NO_SCREEN_READING=1')
     cmake=(SOURCE/'CMakeLists.txt').read_text()
     files=[]
     for group in ['CORE_SOURCES','SOURCES']:
         body=re.search(r'set\('+group+r'\s+(.*?)\n\)',cmake,re.S)[1]
         files.extend(SOURCE/name for name in re.findall(r'src/[A-Za-z_0-9]+\.cpp',body))
     files=list(dict.fromkeys(files))+[p for p in sorted((SOURCE/'src').glob('Synth*.cpp')) if p not in files]
+    files=[p for p in files if p.name not in (('SynthGameCapture.cpp','DxgiCapture.cpp') if edition=='standard' else ('StandardCapture.cpp',))]
+    if edition=='standard':files.append(SOURCE/'src/StandardCapture.cpp')
     def dependencies(path,seen=None):
         seen=set() if seen is None else seen
         if path in seen:return ''
@@ -79,7 +84,7 @@ def main():
         with ThreadPoolExecutor(max_workers=2) as pool:zstd_objects=list(pool.map(compile_zstd,zstd_files))
         cache_path.write_text(json.dumps(next_cache,indent=2))
         resource=BUILD/'app.res'
-        run([SDK/'bin'/VERSION/'x64/rc.exe','/nologo','/fo',resource,SOURCE/'resources/bedrock.rc'],SOURCE/'resources')
+        run([SDK/'bin'/VERSION/'x64/rc.exe','/nologo','/fo',resource,*(['/dSYNTHSCAN_NO_SCREEN_READING=1'] if edition=='standard' else []),SOURCE/'resources/bedrock.rc'],SOURCE/'resources')
         binary=BUILD/'SynthScan.exe'
         run([MSVC/'bin/Hostx64/x64/link.exe','/nologo','/OUT:'+str(binary),'/SUBSYSTEM:WINDOWS','/OPT:REF','/Brepro',*objects,resource,
              OPENCV/'x64/vc16/lib/opencv_world4120.lib',*zstd_objects,
@@ -93,7 +98,7 @@ def main():
         shutil.copy2(ROOT/'LICENSES.md',OUT/'LICENSES.md')
         (OUT/'native_runtime.json').write_text(json.dumps(dict(workspace=str(ROOT),pythonw=str(Path(sys.executable).with_name('pythonw.exe'))),indent=2))
         shutil.copy2(ZSTD_SOURCE.parent/'LICENSE',OUT/'LICENSE-zstd')
-        manifest=dict(upstream=json.loads((ROOT/'native/synthscan-upstream.json').read_text())['commit'],
+        manifest=dict(edition=edition,screen_reading=edition=='full',upstream=json.loads((ROOT/'native/synthscan-upstream.json').read_text())['commit'],
                       source_files={p.relative_to(SOURCE).as_posix():digest(p) for p in files+list((SOURCE/'include').glob('*.h'))+[SOURCE/'resources/bedrock.rc',SOURCE/'resources/synthscan.ico']},
                       binary_files={p.name:digest(p) for p in OUT.glob('*') if p.suffix in ('.exe','.dll')},toolchain=dict(msvc=str(MSVC),sdk=VERSION),reproducibility=dict(deterministic=True,path_prefix='SYNTHSCAN'),
                       zstd=json.loads((ROOT/'third_party/build_tools/zstd_source.json').read_text()))

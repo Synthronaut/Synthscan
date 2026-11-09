@@ -4,7 +4,7 @@ from pathlib import Path
 from telemetry_core import IncrementalGameLog,ShardHistory,SHARD_RE
 from session_store import ServerLogManager,format_duration
 from refinery_orders import atomic_json
-from displayinfo_reader import translate_region
+from telemetry_labels import translate_region
 from network_source import read_network_ping
 from frame_source import read_client_fps
 from native_workspace_data import migrate,plan_rows
@@ -181,6 +181,8 @@ class SessionService:
         elif action=='session_note':
             if not self.sessions.set_session_note(command['session_id'],command.get('text','')[:5000]):raise ValueError('That session is no longer available')
             self.note='Session note saved.'
+        elif action in ('fabricator_memory','fabricator_file') and not __import__('app_edition').screen_reading():
+            raise PermissionError('Screen reading is not installed in Standard.')
         elif action=='fabricator_memory':
             import mmap,re
             import cv2,numpy as np

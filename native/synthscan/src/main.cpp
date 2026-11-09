@@ -190,13 +190,10 @@ int runScanPanelLive(const std::string& outDir) {
     // the thing to be measured is behind it. Desktop Duplication hands back
     // what is actually on the screen, so the game has to be the thing on it.
     for (int left = 6; left > 0; left--) {
-        std::cout << "
-Switch to Star Citizen - capturing in " << left << " ... " << std::flush;
+        std::cout << "\rSwitch to Star Citizen - capturing in " << left << " ... " << std::flush;
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
-    std::cout << "
-
-" << std::flush;
+    std::cout << "\r                                          \r" << std::flush;
 
     SCMiner::ScreenCapture capture;
     cv::Rect area(GetSystemMetrics(SM_XVIRTUALSCREEN), GetSystemMetrics(SM_YVIRTUALSCREEN),
@@ -4106,9 +4103,33 @@ int runCraftTest() {
 } // namespace
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
+#ifdef SYNTHSCAN_NO_SCREEN_READING
+    for(int i=1;i<__argc;i++)if(std::string(__argv[i])=="--selftest"||std::string(__argv[i])=="--test"){
+        setupConsole(true);int failures=0;
+        auto check=[&](bool ok,const char* label){std::cout<<(ok?"[PASS] ":"[FAIL] ")<<label<<std::endl;if(!ok)failures++;};
+        SCMiner::GameWindowCapture capture;SCMiner::DxgiCapture desktop;
+        check(capture.grab(nullptr,{0,0,64,64}).empty(),"Standard game capture provider returns no pixels");
+        check(desktop.grab({0,0,64,64}).empty(),"Standard desktop provider returns no pixels");
+        check(!FindResourceW(nullptr,L"TEXTLINE_MODEL",MAKEINTRESOURCEW(10)),"No embedded OCR model");
+        check(!FindResourceW(nullptr,L"GLYPHS",MAKEINTRESOURCEW(10))&&!FindResourceW(nullptr,L"GLYPHS_MFD",MAKEINTRESOURCEW(10)),"No embedded recognition templates");
+        return failures?1:0;
+    }
+#endif
+
     // Release setup uses the same guarded writer as the Blueprints window.
     // It never requests credentials and preserves other localization packs.
     int setupArgc=0;auto setupArgv=CommandLineToArgvW(GetCommandLineW(),&setupArgc);
+    for(int i=1;setupArgv&&i+3<setupArgc;i++)if(std::wstring(setupArgv[i])==L"--render-texts") {
+        std::wstring bits=setupArgv[i+3];if(bits.size()!=SCMiner::CRAFT_BLUEPRINT_COUNT||bits.find_first_not_of(L"01")!=std::wstring::npos){LocalFree(setupArgv);return 3;}
+        auto output=std::filesystem::path(setupArgv[i+2]);
+        std::error_code pathError;auto allowed=std::filesystem::weakly_canonical(SCMiner::AppPaths::data()/L"game_text",pathError);
+        auto destination=std::filesystem::weakly_canonical(output,pathError);auto relative=destination.lexically_relative(allowed);
+        if(pathError||relative.empty()||relative.is_absolute()||*relative.begin()==L".."){LocalFree(setupArgv);return 3;}
+        std::vector<bool> owned;for(auto c:bits)owned.push_back(c==L'1');
+        std::string text,note;int marked=0;bool built=SCMiner::GameTexts::build(std::filesystem::path(setupArgv[i+1]),owned,text,marked,note);
+        if(built){std::ofstream stream(output,std::ios::binary|std::ios::trunc);stream<<text;built=stream.good();}
+        LocalFree(setupArgv);return built?0:2;
+    }
     for(int i=1;setupArgv&&i+2<setupArgc;i++)if(std::wstring(setupArgv[i])==L"--setup-texts") {
         SCMiner::BlueprintLibrary library;library.load();
         std::vector<bool> owned(SCMiner::CRAFT_BLUEPRINT_COUNT,false);

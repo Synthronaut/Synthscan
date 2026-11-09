@@ -27,6 +27,8 @@ def ready():
 
 def reputation_view(directory=PROFILE,now=None,session=None):
     now=time.time() if now is None else now
+    if read(directory/'setup_result.json').get('strings_enabled') is False:
+        return dict(state='disabled',title='HUD and library ready — SynthStrings is off',detail='Enable SynthStrings in Setup when you want reputation and blueprint labels inside the game.')
     status=read(directory/'reputation_labels_status.json')
     if session is None:session=read(directory/'session_state.json',limit=8*1024*1024)
     running=bool(session.get('game_pids')) and 0<=now-session.get('written_at',0)<10

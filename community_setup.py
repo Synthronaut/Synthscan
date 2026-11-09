@@ -31,7 +31,7 @@ def prepare_reputation(paths):
     paths['audit'].write_text(json.dumps(report,ensure_ascii=False),encoding='utf-8')
 
 
-def prepare(progress=print,force=False):
+def prepare(progress=print,force=False,strings=None):
     PROFILE.mkdir(parents=True,exist_ok=True)
     game=game_directory(True)
     (PROFILE/'installation.json').write_text(json.dumps(dict(game_dir=str(game))),encoding='utf-8')
@@ -62,39 +62,27 @@ def prepare(progress=print,force=False):
     lines=config.read_text(encoding='utf-8').splitlines() if config.exists() else []
     lines=[v for v in lines if not v.startswith('gamelog=')]
     lines.append('gamelog='+str(game/'Game.log'))
-    if not any(v.startswith('gametexts=') for v in lines):lines.append('gametexts=1')
+    from game_text_lifecycle import Manager,enabled
+    manager=Manager(game,PROFILE)
+    if strings is None:strings=enabled(game,PROFILE)
+    lines=[v for v in lines if not v.startswith('gametexts=')];lines.append('gametexts='+('1' if strings else '0'))
     config.write_text('\n'.join(lines)+'\n',encoding='utf-8')
-    progress('Preparing SynthStrings using your own game text…')
-    cfg=game/'user.cfg'
-    cfg_text=cfg.read_text(encoding='utf-8-sig',errors='replace') if cfg.exists() else ''
-    language=re.search(r'^\s*g_language\s*=\s*[\"\x27]?([\w-]+)',cfg_text,re.I|re.M)
-    if language and language[1].casefold()!='english':
-        raise ValueError('Choose English in RSI Launcher before setting up SynthStrings. Other game languages are not supported yet.')
-    if not refreshed and (game/'Data/Localization/english/global.ini').exists() and language:
-        note='Existing game text preserved. Reputation syncs automatically when you enter the game.'
-        (PROFILE/'setup_result.json').write_text(json.dumps(dict(schema=2,app_version=version(),build_id=paths['root'].name,
-            game_dir=str(game),complete=True,strings_installed=True,strings_note=note)),encoding='utf-8')
-        return note
-    backup=PROFILE/'localization_backups'/('setup_'+time.strftime('%Y%m%d_%H%M%S'))
-    for relative in ['Data/Localization/english/global.ini','user.cfg']:
-        existing=game/relative
-        if existing.exists():
-            backup.mkdir(parents=True,exist_ok=True)
-            shutil.copy2(existing,backup/existing.name)
+    manager.set_enabled(strings)
+    if not strings:
+        cleanup=manager.restore()
+        note='HUD and library ready. SynthStrings is off; no new game-text changes will be made.'
+        if cleanup['conflicts']:note+=' Older or externally edited text was preserved for review in Remove SynthStrings.'
+        (PROFILE/'setup_result.json').write_text(json.dumps(dict(schema=2,app_version=version(),build_id=paths['root'].name,game_dir=str(game),complete=True,strings_installed=False,strings_enabled=False,cleanup=cleanup,strings_note=note)),encoding='utf-8');return note
+    progress('Preparing managed SynthStrings; recovery copies stay in AppData…')
     report=PROFILE/'strings_setup.txt'
-    result=subprocess.run([str(native/'SynthScan.exe'),'--setup-texts',str(game),str(report)],
-                          cwd=native,creationflags=0x08000000,timeout=300)
+    result=subprocess.run([str(native/'SynthScan.exe'),'--setup-texts',str(game),str(report)],cwd=native,creationflags=0x08000000,timeout=360)
     note=report.read_text(encoding='utf-8',errors='replace') if report.exists() else 'No setup response'
     if result.returncode not in (0,2):raise RuntimeError('SynthStrings preparation failed')
-    if result.returncode==2 and ('could not' in note or 'no Data.p4k' in note):raise PermissionError(note)
-    if result.returncode==2 and 'language' in note and 'someone else' not in note:
-        raise ValueError('SynthStrings currently requires the English game language. '+note)
-    if result.returncode==2 and 'someone else' in note and not language:
-        cfg.write_text(cfg_text+('\r\n' if cfg_text and not cfg_text.endswith('\n') else '')+'g_language = english\r\n',encoding='utf-8')
-    progress(note)
-    (PROFILE/'setup_result.json').write_text(json.dumps(dict(schema=2,app_version=version(),build_id=paths['root'].name,
-        game_dir=str(game),complete=True,strings_installed=result.returncode==0,strings_note=note)),encoding='utf-8')
+    if result.returncode==2 and ('access' in note.lower() or 'permission' in note.lower()):raise PermissionError(note)
+    if result.returncode==2 and 'English' in note:raise ValueError(note)
+    (PROFILE/'setup_result.json').write_text(json.dumps(dict(schema=2,app_version=version(),build_id=paths['root'].name,game_dir=str(game),complete=True,strings_installed=result.returncode==0,strings_enabled=True,strings_note=note)),encoding='utf-8')
     return note
+
 
 
 if __name__=='__main__':prepare()
