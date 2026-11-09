@@ -12,7 +12,7 @@ class CommunityIsolationTests(unittest.TestCase):
     def test_versioned_runtime_preserves_installation_anchor_and_mutex_namespace(self):
         import app_lifecycle
         with tempfile.TemporaryDirectory() as folder:
-            root=Path(folder);(root/'SynthScan.exe').write_bytes(b'bootstrap')
+            root=Path(folder).resolve();(root/'SynthScan.exe').write_bytes(b'bootstrap')
             version=root/'versions'/('a'*64);version.mkdir(parents=True)
             self.assertEqual(installation.installation_root(version),root)
             with patch.object(app_lifecycle,'ROOT',root):expected=app_lifecycle.object_name('watcher')

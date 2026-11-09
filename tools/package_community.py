@@ -84,6 +84,7 @@ def stage_source(destination):
     shutil.copy2(ROOT/'docs/privacy-review.md',destination/'docs/privacy-review.md')
     shutil.copy2(ROOT/'docs/people-and-buyer-alerts.md',destination/'docs/people-and-buyer-alerts.md')
     shutil.copy2(ROOT/'docs/page-layout-audit.md',destination/'docs/page-layout-audit.md')
+    shutil.copy2(ROOT/'docs/installation-footprint.md',destination/'docs/installation-footprint.md')
     shutil.copy2(ROOT/'assets/snare_watch.wav',destination/'assets/snare_watch.wav')
     copy_tree(ROOT/'assets/branding',destination/'assets/branding')
     if (ROOT/'.github').exists():copy_tree(ROOT/'.github',destination/'.github')

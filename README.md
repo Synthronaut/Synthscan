@@ -94,6 +94,8 @@ drives, using their exact game item IDs. The vehicle index and purchase-price
 cache refresh every 12 hours; equipment prices refresh daily. Missing purchase
 offers remain unknown rather than being inferred from another variant.
 
+See the [installation footprint audit](docs/installation-footprint.md) for exactly what SynthStrings writes to the game folder and the current uninstall limitations.
+
 ## Download and start
 
 SynthStrings shortens juvenile creature tags to **Vlk Jr** and irradiated

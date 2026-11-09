@@ -23,7 +23,7 @@ class UpdateTests(unittest.TestCase):
         cls.trust=dict(schema=1,keys={cls.key_id:base64.b64encode(cls.public).decode()},
                        manifest_url='https://updates.example.test/current.json',allowed_hosts=['updates.example.test'])
     def setUp(self):
-        self.temp=tempfile.TemporaryDirectory();self.directory=Path(self.temp.name)
+        self.temp=tempfile.TemporaryDirectory();self.directory=Path(self.temp.name).resolve()
         self.root=self.directory/'Programs/SynthScan';self.root.mkdir(parents=True)
         self.profile=self.directory/'profile';self.profile.mkdir()
         (self.root/'SynthScan.exe').write_bytes(b'previous stable bootstrap')
