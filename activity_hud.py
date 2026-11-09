@@ -8,10 +8,13 @@ def fresh_activity_status(status,owner,now):
     try:return status.get('pid')==owner and 0<=now-float(status.get('at',0))<3
     except (TypeError,ValueError):return False
 
+def popout_expanded(status):
+    return bool(status.get('activity_expanded',True) and status.get('hud_visible',True) and status.get('overlay_mode',True))
+
 def toggle_request(status,owner,now,request_id=None):
     if not fresh_activity_status(status,owner,now):raise ValueError('Activity HUD is not ready')
-    return dict(id=request_id or uuid.uuid4().hex,action='set_activity_expanded',at=now,owner_pid=owner,
-                expanded=not bool(status.get('activity_expanded',True)))
+    return dict(id=request_id or uuid.uuid4().hex,action='toggle_activity_expanded',at=now,owner_pid=owner,
+                expanded=not popout_expanded(status))
 
 def afk_request(status,owner,now,request_id=None):
     if not fresh_activity_status(status,owner,now):raise ValueError('Activity HUD is not ready')
@@ -94,14 +97,14 @@ class ActivityButton:
         if not control_hit(event,self.WIDTH,self.height) or self.pending:return
         try:
             request=toggle_request(self.status,self.owner,time.time())
-            if self.collapse_only:request['expanded']=False
+            if self.collapse_only:request.update(action='set_activity_expanded',expanded=False)
             if publish_json(self.directory/'activity_hud_command.json',request):
                 self.pending=request;notify_native(self.status,self.owner)
         except (OSError,ValueError):return
         self.paint()
     def paint(self):
         ready=fresh_activity_status(self.status,self.owner,time.time())
-        expanded=bool(self.status.get('activity_expanded',True));label='−' if self.collapse_only else 'HUD '+('−' if expanded else '+')
+        expanded=popout_expanded(self.status);label='−' if self.collapse_only else 'HUD '+('−' if expanded else '+')
         if self.pending:label='·' if self.collapse_only else 'HUD ·'
         key=(label,ready,self.height)
         if getattr(self,'paint_key',None)==key:return
@@ -179,7 +182,7 @@ class ActivityQuickControls(ActivityCollapseButton):
         try:
             now=time.time()
             request=afk_request(self.status,self.owner,now) if action=='afk' else toggle_request(self.status,self.owner,now)
-            if action=='collapse':request['expanded']=False
+            if action=='collapse':request.update(action='set_activity_expanded',expanded=False)
             if publish_json(self.directory/'activity_hud_command.json',request):
                 self.pending=request;notify_native(self.status,self.owner)
         except (OSError,ValueError):return

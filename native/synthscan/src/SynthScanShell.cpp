@@ -189,7 +189,12 @@ LRESULT CALLBACK shortcutEdit(HWND hwnd,UINT message,WPARAM w,LPARAM l,UINT_PTR,
 }
 
 void showHud(bool value){if(!value)SynthFinder::sync(false);manualHudPreview=value&&!SCMiner::ScreenCapture::gameWindow();hudVisible=value;if(mining){if(HudVisibility::shouldShow(value,activityExpanded,SCMiner::ScreenCapture::gameWindow()!=nullptr,manualHudPreview)){ShowWindow(mining->windowHandle(),SW_SHOWNOACTIVATE);mining->keepOverlayAboveGame(true);}else mining->hide();}saveSettings();}
+bool popoutExpanded(){return mining&&mining->isOverlayMode()&&!SynthPages::contains(mining->windowHandle())&&IsWindowVisible(mining->windowHandle())&&activityExpanded;}
 void setActivityExpanded(bool value){
+    if(value){
+        hudVisible=true;
+        if(mining&&SynthPages::contains(mining->windowHandle())){SynthHome::selectPage("home");SynthPages::release(mining->windowHandle());}
+    }
     if(value&&!SCMiner::ScreenCapture::gameWindow())manualHudPreview=true;
     activityExpanded=value;if(!value)SynthFinder::sync(false);
     if(mining){if(value&&hudVisible){if(!mining->isOverlayMode()){auto window=mining->windowHandle();bool hadNoActivate=(GetWindowLongPtrW(window,GWL_EXSTYLE)&WS_EX_NOACTIVATE)!=0;SetWindowLongPtrW(window,GWL_EXSTYLE,GetWindowLongPtrW(window,GWL_EXSTYLE)|WS_EX_NOACTIVATE);mining->toggleOverlayMode();if(!hadNoActivate)SetWindowLongPtrW(window,GWL_EXSTYLE,GetWindowLongPtrW(window,GWL_EXSTYLE)&~WS_EX_NOACTIVATE);}ShowWindow(mining->windowHandle(),SW_SHOWNOACTIVATE);mining->keepOverlayAboveGame(true);}else mining->hide();}
@@ -200,9 +205,9 @@ void handleHudHotkey(int id,LPARAM packed,bool polled=false){
     if(action>=0){if(polled)++polledKeyEdges;else ++windowsKeyMessages;}
     if(testing||!mining||!hudKeyGate.accept(action,GetTickCount64(),hudKeys.enabled,hotkeyOK,hotkeyContext(),keyEditing,binding,HIWORD(packed),LOWORD(packed)))return;
     if(action==0)++togglePresses;else ++cyclePresses;lastHudKeyAt=epoch();
-    auto window=mining->windowHandle();bool shown=mining->isOverlayMode()&&!SynthPages::contains(window)&&IsWindowVisible(window)&&activityExpanded;
+    auto window=mining->windowHandle();bool shown=popoutExpanded();
     if(action==1){setMode(HudHotkeys::nextTab(finder?4:hangars?3:quest?2:pirate?1:0));if(!shown&&!SynthPages::contains(window))mining->hide();if(shown&&finder)SynthFinder::sync(true);return;}
-    if(shown){showHud(false);return;}
+    if(shown){setActivityExpanded(false);return;}
     if(SynthPages::contains(window)){SynthHome::selectPage("home");SynthPages::release(window);}
     if(!mining->isOverlayMode())mining->toggleOverlayMode(false);
     setActivityExpanded(true);showHud(true);if(finder)SynthFinder::sync(true);
@@ -221,8 +226,8 @@ void activityControl(){
     if(!id.empty()&&id!=activityCommandId&&request.numberOr("owner_pid")==GetCurrentProcessId()&&age>=-.25&&age<5){
         auto action=request.textOr("action");
         if(action=="dock_hud_top_right"){activityCommandId=id;dockHud();}
-        else if(action=="set_activity_expanded"){
-            activityCommandId=id;setActivityExpanded(flag(request,"expanded",activityExpanded));
+        else if(action=="set_activity_expanded"||action=="toggle_activity_expanded"){
+            activityCommandId=id;setActivityExpanded(action=="toggle_activity_expanded"?!popoutExpanded():flag(request,"expanded",activityExpanded));
         }else if(action=="set_afk_armed"&&field(request,"armed").kind==Json::Kind::Bool){
             activityCommandId=id;if(flag(request,"armed")!=afk.armed)toggleAfk();
         }

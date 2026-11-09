@@ -5,11 +5,18 @@ from types import SimpleNamespace
 import time
 
 class ActivityHUDTests(unittest.TestCase):
+    def test_manual_toggle_recovers_hotkey_hidden_and_legacy_visibility_states(self):
+        for expanded,visible,overlay in ((True,False,True),(False,True,True),(False,False,True),(True,True,False)):
+            state=dict(pid=42,at=100,activity_expanded=expanded,hud_visible=visible,overlay_mode=overlay)
+            self.assertTrue(toggle_request(state,42,101)['expanded'])
+        state=dict(pid=42,at=100,activity_expanded=True,hud_visible=True,overlay_mode=True)
+        self.assertFalse(toggle_request(state,42,101)['expanded'])
+
     def test_toggle_is_explicit_owner_bound_and_rejects_stale_state(self):
         state=dict(pid=42,at=100,activity_expanded=True)
         command=toggle_request(state,42,101,'one')
         self.assertFalse(command['expanded']);self.assertEqual(command['owner_pid'],42)
-        self.assertEqual(command['action'],'set_activity_expanded')
+        self.assertEqual(command['action'],'toggle_activity_expanded')
         for owner,now in [(41,101),(42,104),(42,99)]:
             with self.assertRaises(ValueError):toggle_request(state,owner,now)
         state['activity_expanded']=False
