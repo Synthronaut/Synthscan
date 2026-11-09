@@ -2,7 +2,7 @@
 
 [Download SynthScan for Windows](https://github.com/Synthronaut/Synthscan/releases/latest/download/SynthScan-Setup-Windows-x64.exe) · [Release notes](https://github.com/Synthronaut/Synthscan/releases)
 
-One installer, 13 optional features. Uncheck anything you do not want; change your choices later in **Feature modules**. Live Mining Recognition is the optional screen-reading add-on.
+One installer, 13 optional features. Uncheck anything you do not want; change your choices later in **Feature modules**.
 
 Modular installation: Choose the features you want. Live mining screen reading is an optional add-on.
 
