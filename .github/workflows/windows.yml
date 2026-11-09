@@ -25,6 +25,12 @@ jobs:
         run: python -B tools/build_native_app.py
       - name: Native self-tests
         run: python -B -c "import subprocess; subprocess.run(['dist/native/SynthScan.exe', '--selftest'], check=True, timeout=180)"
+      - name: Native People UI regression fixtures
+        env:
+          SYNTHSCAN_DATA_DIR: ${{ runner.temp }}\SynthScan-ui-fixtures
+        run: |
+          python -B -c "import pathlib,subprocess; pathlib.Path('out/ui-validation').mkdir(parents=True,exist_ok=True); subprocess.run(['dist/native/SynthScan.exe','--companion-preview','out/ui-validation/companion'],check=True,timeout=120,creationflags=0x08000000)"
+          python -B -c "import subprocess; subprocess.run(['dist/native/SynthScan.exe','--people-style-preview','out/ui-validation/people-style.png'],check=True,timeout=60,creationflags=0x08000000)"
       - name: Unit tests
         run: python -B -m unittest discover -s tests -q
       - name: Package clean source and standalone app
@@ -57,6 +63,7 @@ jobs:
             out/installer/SynthScan-Setup-Windows-x64.exe
             out/installer/SynthScan-Setup-Windows-x64.exe.sha256
             out/synthscan-update.json
+            out/ui-validation/
   publish:
     if: inputs.publish
     needs: build

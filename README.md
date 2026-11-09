@@ -1,5 +1,7 @@
 # SynthScan
 
+[Download the Windows installer](https://github.com/Synthronaut/Synthscan/releases/latest/download/SynthScan-Setup-Windows-x64.exe) · [Release notes](https://github.com/Synthronaut/Synthscan/releases)
+
 A Windows companion for Star Citizen: mining assistance, blueprints, SynthStrings,
 reputation labels, a server HUD, and Mining / Piracy / Missions / Hangars / Finder activity tabs.
 
@@ -19,9 +21,10 @@ editable SVG lives in `assets/branding/synthscan.svg`.
 top-right edge. Turn off **Lock HUD position** to drag it elsewhere; the saved
 placement preserves the nearer screen edge across tab sizes and restarts.
 
-Opening SynthScan starts at **Home**, with a fixed sidebar for Mining, the item
-and ship finder, blueprints, refinery orders, planners, personal records and
-settings. Sidebar tabs switch the content inside the same desktop window; they do not open separate tool windows or resize the desktop. Larger pages scroll inside that area. The explicit HUD buttons still open the pop-out. **Full** on the pop-out opens Home; **Home** on the Mining window returns
+Opening SynthScan starts at **Home**, with a fixed sidebar for the item
+and ship finder, People, server history, blueprints, mining planning, personal
+records, refinery orders and settings. Rock bookmarks are inside Mining Diary;
+Day/Night Forecast plans destination lighting. Sidebar tabs switch the content inside the same desktop window; they do not open separate tool windows or resize the desktop. Larger pages scroll inside that area. The explicit HUD buttons still open the pop-out. **Full** on the pop-out opens Home; **Home** on the Mining window returns
 there. The session recap separates this game run from the previous run, records
 actual blueprint and contract notifications, and shows reputation changes since
 the first verified balance read in that run. Missed history is not reconstructed
@@ -67,7 +70,8 @@ continuous uptime; see [server-history limits](SERVER_HISTORY.md).
 
 **More → Item directory** searches items, recipes and blueprint mission rewards.
 Item pages put UEX shop locations/prices and linked crafting blueprints before
-flavor text. Shop reports show their patch and age, cache offline and refresh
+flavor text. Blueprint entries skip purchase listings and show crafting and
+acquisition information instead. Shop reports show their patch and age, cache offline and refresh
 daily when viewed. Select **Blueprints for this item** for the exact item's
 recipes and known unlock missions. Unknown sources remain labelled unknown.
 The directory reloads after background game-reference refreshes without an app
