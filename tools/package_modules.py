@@ -36,9 +36,6 @@ OWNERS = {
     'hangars': {'executive_hangar.py','executive_hangar_hud.py','hangar_card.py','hangar_verification.py','hangar_reset_feed.py','compboard_inventory.py','data/executive_hangar_schedule.json'},
     'daylight': {'daylight.py','daylight_catalogue.py','daylight_planner.py','data/daylight_catalogue.json'},
     'acceptance': {'contract_share.py','contract_share_helper.py'},
-    # Notes are implemented in the shared native UI, with no background process.
-    # Their pack carries its signed capability declaration; no dedicated native
-    # DLL or resource-saving claim is made for this small feature.
 }
 RETIRED = {'main.py','detector.py','telemetry_hud.py','blueprint_library_ui.py',
     'telemetry_hud.py','overlay.py','performance_lab_ui.py','performance_lab.py',

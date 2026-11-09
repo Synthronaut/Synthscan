@@ -27,7 +27,26 @@ jobs:
       - run: python -B tools/fetch_build_dependencies.py
       - run: python -B tools/build_native_app.py
       - name: Native engine checks
-        run: python -B -c "import subprocess; subprocess.run(['dist/native/SynthScan.exe','--selftest'],check=True,timeout=180)"
+        shell: python
+        run: |
+          import os, subprocess, tempfile
+          from pathlib import Path
+          with tempfile.TemporaryDirectory(prefix='SynthScan-native-selftest-') as profile:
+              env = dict(os.environ, SYNTHSCAN_DATA_DIR=profile, BEDROCK_DATA_DIR=profile)
+              result = subprocess.run(['dist/native/SynthScan.exe', '--selftest'], env=env, capture_output=True, text=True, timeout=180)
+              output = result.stdout + result.stderr
+              Path('native-selftest.log').write_text(output, encoding='utf-8')
+              print(output, flush=True)
+              result.check_returncode()
+      - name: Retain failed native-check diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: failed-native-${{ matrix.edition }}
+          path: |
+            native-selftest.log
+            dist/native/SynthScan.exe
+            dist/native/build_manifest.json
       - name: Real workspace responsiveness and People interactions
         run: python -B tools/verify_companion_responsiveness.py
       - name: Python regression suite
