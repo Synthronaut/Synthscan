@@ -43,7 +43,7 @@ class PartyInviteQueue:
         self.condition=Condition();self.paused=False;self.finished=False;self.phase='Checking'
         self.inflight=False;self.current='';self.due=0.;self.error=''
         self.revision=0
-        self.rows={p['id']:dict(id=p['id'],handle=p['handle'],outcome='Queued',detail='Waiting for confirmation from the queue.') for p in people}
+        self.rows={p['id']:dict(id=p['id'],handle=p['handle'],outcome='Queued',detail='Waiting for the queue to send this request.') for p in people}
 
     def pause(self,paused):
         with self.condition:

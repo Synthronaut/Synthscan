@@ -1,0 +1,45 @@
+name: Verify People UI and request results
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.14'
+      - name: Fetch pinned native build inputs
+        run: python -B tools/fetch_native_build_inputs.py
+      - name: Build the native app
+        run: python -B tools/build_native_app.py
+      - name: Native checks and synthetic People render
+        shell: pwsh
+        run: |
+          $env:SYNTHSCAN_DATA_DIR = "$env:RUNNER_TEMP\SynthScan-people-fixture"
+          $env:BEDROCK_DATA_DIR = $env:SYNTHSCAN_DATA_DIR
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+          python -B -c "import subprocess; subprocess.run(['dist/native/SynthScan.exe','--selftest'],stdout=open('artifacts/native-checks.log','w'),stderr=subprocess.STDOUT,check=True,timeout=180,creationflags=0x08000000)"
+          if ($LASTEXITCODE -ne 0) { throw 'Native checks failed' }
+          python -B -c "import subprocess; subprocess.run(['dist/native/SynthScan.exe','--companion-preview','artifacts/people'],check=True,timeout=180,creationflags=0x08000000)"
+          if ($LASTEXITCODE -ne 0) { throw 'People layout/action fixture failed' }
+      - name: Install pinned test dependencies
+        run: python -m pip install --require-hashes -r requirements-release.lock
+      - name: Mocked social tests and screenshot surface check
+        shell: pwsh
+        run: |
+          $env:SYNTHSCAN_DATA_DIR = "$env:RUNNER_TEMP\SynthScan-people-tests"
+          $env:BEDROCK_DATA_DIR = $env:SYNTHSCAN_DATA_DIR
+          python -B -m unittest discover -s tests -p test_people_polish.py
+          if ($LASTEXITCODE -ne 0) { throw 'Friend/receipt/retry tests failed' }
+          python -B -m unittest discover -s tests -p test_party_invites.py
+          if ($LASTEXITCODE -ne 0) { throw 'Queue tests failed' }
+          python -B -c "import cv2,json,pathlib; p=pathlib.Path('artifacts/people/people.png'); im=cv2.imread(str(p)); assert im is not None; mask=cv2.inRange(im,(249,249,249),(255,255,255)); n,labels,stats,centers=cv2.connectedComponentsWithStats(mask); areas=[int(s[4]) for s in stats[1:] if s[2]>=100 and s[3]>=100]; assert not areas,areas; pathlib.Path('artifacts/surface-check.json').write_text(json.dumps({'large_white_regions':areas,'scope':'synthetic static page render; not a live game or transient-flash guarantee'}))"
+          if ($LASTEXITCODE -ne 0) { throw 'Synthetic page has a large white region' }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: people-ui-verification
+          path: artifacts/

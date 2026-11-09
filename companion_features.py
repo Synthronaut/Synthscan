@@ -12,7 +12,7 @@ from party_invites import InviteHistory,PartyInviteQueue
 
 MARKET_INTERVAL=1800
 ROSTER_INTERVAL=30
-TAG_PRESETS=('Aggressive','Trader','Friendly','Org','Org Affiliate','Crew','Buyer','Avoid')
+TAG_PRESETS=('Org','Friend','Friendly','Aggressive','Trader','Org Affiliate','Crew','Buyer','Avoid')
 
 
 def tag_labels(value):
@@ -135,20 +135,25 @@ class CompanionService:
         self.store.data['commands']=(self.store.data['commands']+[identifier])[-1000:];self.store.save()
         self.batch_results=[];self.cancel_batch=Event()
         remembered=self.friend_requested if operation=='friend' else self.invited;remembered.update(history.ids(self.session))
+        next_send=self.invite_queue.due if self.invite_queue else 0.
         self.invite_queue=PartyInviteQueue(targets,identifier,cancel=self.cancel_batch,history=history,session=self.session,operation=operation)
+        self.invite_queue.due=next_send
         previous=[] if command.get('resend') is True else list(remembered)
         self.jobs['action']=(self.pool.submit(self.social,'friend_many' if operation=='friend' else 'party_many',dict(self.context),people=[dict(p) for p in targets],confirmed=True,previous=previous,
-                            cancel=self.cancel_batch,control=self.invite_queue,require_shard=True),dict(self.context))
+                            cancel=self.cancel_batch,control=self.invite_queue,require_shard=True,allow_friends=operation=='party' and command.get('from_actions') is True),dict(self.context))
         self.action_status=f'Queued {len(targets)} player(s). Requests have a four-second gap; Pause / Cancel is available.'
+    def friend_ids(self,now):
+        stamp=self.relationships.get('friends_at',0)
+        return set(self.relationships.get('friends',[])) if stamp and 0<=now-stamp<120 else set()
     def available_people(self):
         saved=[dict(id=key,handle=value['handle']) for key,value in self.store.data['tags'].items()]
-        return {p['id']:p for p in reversed(self.roster+self.search+self.store.data['actions']+saved)}
-    def stage(self,targets):
+        return {p['id']:p for p in reversed(self.roster+self.relationships.get('friend_rows',[])+self.search+self.store.data['actions']+saved)}
+    def stage(self,targets,friends=()):
         if self.invite_queue and self.invite_queue.snapshot()['active']:raise ValueError('Cancel the running queue before changing the Action list.')
         current={p['id']:p for p in self.store.data['actions']}
         before=len(current)
         for p in targets:
-            if not p.get('is_self'):current[p['id']]=dict(id=p['id'],handle=p['handle'])
+            if not p.get('is_self'):current[p['id']]=dict(id=p['id'],handle=p['handle'],friend_scope=p['id'] in friends)
         if len(current)>4096:raise ValueError('Action list limit reached.')
         self.store.data['actions']=list(current.values());self.store.data['actions_session']=self.session;self.action_status=f"Added {len(current)-before} player(s). Action list: {len(current)}. Review before choosing a bulk action."
     def command(self,command,now):
@@ -161,16 +166,19 @@ class CompanionService:
             if not self.session or command.get('session_token')!=self.session:raise ValueError('Session changed. Refresh People before continuing.')
         if action=='stage_people':
             ids=command.get('player_ids');available=self.available_people()
-            active={p['id'] for p in self.roster}
-            if not isinstance(ids,list) or not ids or len(ids)>4096 or any(not isinstance(key,str) or key not in available or key not in active for key in ids):raise ValueError('Only current shard members can be added to the Action list.')
-            self.stage([available[key] for key in ids])
+            active={p['id'] for p in self.roster}|self.friend_ids(now)
+            if not isinstance(ids,list) or not ids or len(ids)>4096 or any(not isinstance(key,str) or key not in available or key not in active for key in ids):raise ValueError('Only current shard members or verified friends can be added to the Action list.')
+            self.stage([available[key] for key in ids],self.friend_ids(now))
         elif action=='stage_tag':
             if command.get('scope','shard')!='shard':raise ValueError('Add by tag is limited to current shard members.')
             label=command.get('label','');wanted=tag_labels(label)
             if len(wanted)!=1:raise ValueError('Choose one exact tag to add.')
             matched={key for key,tag in self.store.data['tags'].items() if wanted[0].casefold() in {v.casefold() for v in tag_labels(tag['label'])} or command.get('include_org_affiliate') is True and wanted[0]=='Org' and is_org(tag)}
             available={p['id']:p for p in self.roster}
-            self.stage([p for key,p in available.items() if key in matched])
+            if wanted[0]=='Friend':
+                matched=self.friend_ids(now);available=self.available_people()
+                if not self.relationships.get('friends_at') or not 0<=now-self.relationships['friends_at']<120:raise ValueError('Friends are still loading or stale. Refresh People and try again.')
+            self.stage([p for key,p in available.items() if key in matched],self.friend_ids(now))
         elif action in ('unstage_people','clear_actions'):
             if self.invite_queue and self.invite_queue.snapshot()['active']:raise ValueError('Cancel the running queue before changing the Action list.')
             ids=command.get('player_ids',[])
@@ -190,9 +198,10 @@ class CompanionService:
         elif action in ('tag','friend','party'):
             saved=[dict(id=key,handle=value['handle']) for key,value in self.store.data['tags'].items()]
             target=self.available_people().get(command.get('player_id'))
-            if not target or target.get('is_self') or target['id'] not in {p['id'] for p in self.roster}:raise ValueError('Select another current-shard player first.')
+            if not target or target.get('is_self') or target['id'] not in ({p['id'] for p in self.roster}|self.friend_ids(now)):raise ValueError('Select another current-shard player first.')
             if action=='tag':
                 labels=tag_labels(command.get('label',''))
+                if 'Friend' in labels:raise ValueError('Friend is automatic from your game friends list; use Friendly for a custom tag.')
                 if labels:self.store.data['tags'][target['id']]=dict(handle=target['handle'],label=', '.join(labels),labels=labels,alert=command.get('alert') is True)
                 else:self.store.data['tags'].pop(target['id'],None)
             elif action=='party':self.start_party_queue([target],command)
@@ -209,8 +218,8 @@ class CompanionService:
             ids=list(dict.fromkeys(ids))
             saved=[dict(id=key,handle=value['handle']) for key,value in self.store.data['tags'].items()]
             available=self.available_people()
-            active={p['id'] for p in self.roster}
-            if any(key not in available or available[key].get('is_self') or key not in active for key in ids):raise ValueError('Selection changed. Actions are limited to current shard members.')
+            active={p['id'] for p in self.roster}|self.friend_ids(now)
+            if any(key not in available or available[key].get('is_self') or key not in active for key in ids):raise ValueError('Selection changed. Actions are limited to current shard members or verified friends.')
             targets=[available[key] for key in ids]
             if action in ('party_many','friend_many'):
                 if command.get('from_actions') is True and not set(ids).issubset({p['id'] for p in self.store.data['actions']}):raise ValueError('Action list changed. Review the recipients again.')
@@ -220,6 +229,7 @@ class CompanionService:
                 self.start_party_queue(targets,command,'friend' if action=='friend_many' else 'party')
             else:
                 labels=['Org'] if action=='mark_org' else tag_labels(command.get('label',''))
+                if 'Friend' in labels:raise ValueError('Friend is automatic from your game friends list; use Friendly for a custom tag.')
                 if not labels and command.get('clear_tags') is not True:raise ValueError('Choose a tag to add, or use Remove tags.')
                 updates={}
                 for p in targets:
@@ -279,7 +289,7 @@ class CompanionService:
                 elif kind=='roster':
                     self.roster=result['rows'];self.roster_at=result['observed_at'];self.roster_error=''
                     active={p['id'] for p in self.roster};old=len(self.store.data['actions'])
-                    self.store.data['actions']=[p for p in self.store.data['actions'] if p['id'] in active]
+                    self.store.data['actions']=[p for p in self.store.data['actions'] if p['id'] in active or p.get('friend_scope')]
                     if old!=len(self.store.data['actions']):self.store.save()
                     arrivals=self.gate.observe(self.roster,now)
                     notified=False
@@ -293,6 +303,10 @@ class CompanionService:
                 elif kind=='relationships':
                     # A failed read invalidates that highlight independently.
                     self.relationships=result
+                    if result.get('friends_at'):
+                        allowed={p['id'] for p in self.roster}|set(result.get('friends',[]))
+                        self.store.data['actions']=[p for p in self.store.data['actions'] if p['id'] in allowed]
+                        self.store.save()
                 elif kind=='action':
                     if isinstance(result,dict):
                         self.action_status=result['status'];self.batch_results=result['results']
@@ -334,14 +348,34 @@ class CompanionService:
         self.friend_requested.update(self.friend_history.ids(self.session))
         queue=self.invite_queue.snapshot() if self.invite_queue else {}
         if queue:self.batch_results=queue['results']
+        saved_changed=False
+        if self.session and self.store.data.get('request_results_session')!=self.session:
+            self.store.data['request_results_session']=self.session;self.store.data['request_results']={};saved_changed=True
+        saved=self.store.data.setdefault('request_results',{})
+        if queue and queue.get('operation') in ('friend','party'):
+            for row in queue.get('results',[]):
+                if row.get('outcome') in ('Sent','Skipped','Check in game','Not sent'):
+                    person=saved.setdefault(row['id'],{});operation=queue['operation']
+                    if person.get(operation,{}).get('queue_id')!=queue['id']:
+                        person[operation]=dict(queue_id=queue['id'],outcome=row['outcome'],detail=row.get('detail',''),at=now);saved_changed=True
+        if saved_changed and not self.store.read_only:self.store.save()
+        def request_status(identifier):
+            if self.store.data.get('request_results_session')!=self.session:return {}
+            result=dict(saved.get(identifier,{}) if isinstance(saved.get(identifier),dict) else {})
+            if queue and queue.get('operation') in ('friend','party'):
+                row=next((r for r in queue.get('results',[]) if r.get('id')==identifier),None)
+                if row:result[queue['operation']]=dict(outcome=row.get('outcome',''),detail=row.get('detail',''))
+            return result
         tags=self.store.data['tags'];relations=self.relationships;active={p['id'] for p in self.roster};available=self.available_people()
         friends_known=bool(relations.get('friends_at')) and 0<=now-relations['friends_at']<120
         party_known=bool(relations.get('party_at')) and 0<=now-relations['party_at']<120
-        friends=set(relations.get('friends',[])) if friends_known else set();party=set(relations.get('party',[])) if party_known else set()
+        friends=set(relations.get('friends',[])) if friends_known else set();eligible=active|friends;party=set(relations.get('party',[])) if party_known else set()
         def decorate(p):
             is_friend=p['id'] in friends;in_party=p['id'] in party
             relationship='You' if p.get('is_self') else 'Party + Friend' if in_party and is_friend else 'Party' if in_party else 'Friend' if is_friend else '—' if friends_known and party_known else 'Unknown'
-            return dict(p,tag=tags.get(p['id'],{}).get('label',''),alert=tags.get(p['id'],{}).get('alert',False),is_org=is_org(tags.get(p['id'],{})),is_friend=is_friend,in_party=in_party,relationship=relationship,invited_before=p['id'] in self.invited,friend_requested_before=p['id'] in self.friend_requested,on_shard=p['id'] in active)
+            manual=', '.join(label for label in tag_labels(tags.get(p['id'],{}).get('label','')) if label!='Friend')
+            labels=([manual] if manual else [])+(['Friend'] if is_friend else [])
+            return dict(p,tag=', '.join(labels),manual_tag=manual,requests=request_status(p['id']),alert=tags.get(p['id'],{}).get('alert',False),is_org=is_org(tags.get(p['id'],{})),is_friend=is_friend,in_party=in_party,relationship=relationship,invited_before=p['id'] in self.invited,friend_requested_before=p['id'] in self.friend_requested,on_shard=p['id'] in active)
         rows=[decorate(p) for p in self.roster];search=[decorate(p) for p in self.search]
         tagged={key:dict(tag,is_friend=key in friends,in_party=key in party,on_shard=key in active,relationship='Party + Friend' if key in party and key in friends else 'Party' if key in party else 'Friend' if key in friends else '—' if friends_known and party_known else 'Unknown') for key,tag in tags.items()}
         notices=self.store.data['notifications']
@@ -350,9 +384,9 @@ class CompanionService:
             search_query=self.search_query,search_limited=self.search_limited,roster_at=self.roster_at,roster_error=self.roster_error,
             roster_loading='roster' in self.jobs,status=self.action_status,read_only=self.store.read_only,
             watches=watches,tags=tagged,notifications=list(reversed(notices[-40:])),market_interval=MARKET_INTERVAL,
-            friends_known=friends_known,party_known=party_known,
+            friends_known=friends_known,party_known=party_known,friend_people=[decorate(p) for p in sorted(available.values(),key=lambda p:p['handle'].casefold()) if p['id'] in friends],friend_names_error=relations.get('friend_names_error',''),
             social_busy='action' in self.jobs,search_busy='search' in self.jobs,batch_results=self.batch_results,invite_queue=queue,
-            action_people=[decorate(dict(available.get(p['id'],p))) for p in self.store.data['actions'] if p['id'] in active],tag_options=sorted({label for t in tags.values() for label in tag_labels(t['label'])}|set(TAG_PRESETS),key=str.casefold))
+            action_people=[decorate(dict(available.get(p['id'],p))) for p in self.store.data['actions'] if p['id'] in eligible],tag_options=sorted({label for t in tags.values() for label in tag_labels(t['label'])}|set(TAG_PRESETS),key=lambda label:(0 if label=='Org' else 1 if label=='Friend' else 2 if label=='Friendly' else 3,label.casefold())))
         publish_json(self.directory/'companion_state.json',view)
         publish_json(self.directory/'companion_alerts.json',dict(owner_pid=self.owner,written_at=now,events=notices[-20:]))
     def close(self):

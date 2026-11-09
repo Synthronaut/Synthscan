@@ -102,12 +102,12 @@ HWND host(){return container;}HWND current(){return active;}
 unsigned generation(){return revision;}
 void beginTransition(){
     if(!container||transitioning)return;transitioning=true;
-    SendMessageW(container,WM_SETREDRAW,FALSE,0);
-    InvalidateRect(mainWindow,nullptr,FALSE);UpdateWindow(mainWindow);
+    // Keep WS_VISIBLE stable; child geometry is batched by each page.
+    InvalidateRect(mainWindow,nullptr,FALSE);
 }
 void endTransition(){
     if(!container||!transitioning)return;transitioning=false;
-    SendMessageW(container,WM_SETREDRAW,TRUE,0);ShowWindow(container,wantVisible?SW_SHOW:SW_HIDE);
-    if(wantVisible)RedrawWindow(container,nullptr,nullptr,RDW_INVALIDATE|RDW_ERASE|RDW_ALLCHILDREN|RDW_UPDATENOW);
+    ShowWindow(container,wantVisible?SW_SHOW:SW_HIDE);
+    if(wantVisible)RedrawWindow(container,nullptr,nullptr,RDW_INVALIDATE|RDW_NOERASE|RDW_ALLCHILDREN|RDW_UPDATENOW);
 }
 }
