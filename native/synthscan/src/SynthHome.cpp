@@ -3,6 +3,9 @@
 #include "resource.h"
 #include "SynthPages.h"
 #include "SynthGlass.h"
+#include "NativeRedraw.h"
+#include "HudModules.h"
+#include "AppPaths.h"
 #include <commctrl.h>
 #include "SynthCapturePrivacy.h"
 #include <gdiplus.h>
@@ -42,43 +45,56 @@ void publish(){
     if(!window)return;RECT r{};GetWindowRect(window,&r);
     write(directory/L"home_status.json",obj({{"owner_pid",num(GetCurrentProcessId())},{"visible",SynthScan::boolean(IsWindowVisible(window)!=0)},
         {"last_action",str(lastAction)},{"previous_session",SynthScan::boolean(previous)},
+        {"synthstrings",field(overview,"synthstrings")},
         {"active_page",str(activePage)},{"page_handle",num(double(reinterpret_cast<UINT_PTR>(SynthPages::current())))},
         {"left",num(r.left)},{"top",num(r.top)},{"right",num(r.right)},{"bottom",num(r.bottom)}}));
 }
 void layout(){
     if(!window)return;RECT r{};GetClientRect(window,&r);
     scale=std::max(.7f,std::min(float(GetDpiForWindow(window))/96.f,std::min(r.right/900.f,r.bottom/760.f)));
-    float width=r.right/scale,main=width-248,gap=12,tile=(main-3*gap)/4;
+    int tiles=int(std::count_if(buttons.begin(),buttons.end(),[](const auto& b){return b.id>=200&&b.id<=203;})),tileAt=0;
+    float width=r.right/scale,main=width-248,gap=12,tile=(main-std::max(0,tiles-1)*gap)/std::max(1,tiles);
     int nav=0;int navCount=int(std::count_if(buttons.begin(),buttons.end(),[](const auto& b){return b.navigation;}));
     float navStep=std::min(39.f,(r.bottom/scale-198.f)/std::max(1,navCount));
+    NativeRedraw::Layout pending(window);
     for(auto& b:buttons){
         float x=16,y=110+nav*navStep,w=170,h=std::min(34.f,navStep-4);
         if(b.navigation)nav++;
-        else if(b.id>=200&&b.id<=203){x=224+(b.id-200)*(tile+gap);y=119;w=tile;h=82;}
+        else if(b.id>=200&&b.id<=203){x=224+(tileAt++)*(tile+gap);y=119;w=tile;h=82;}
         else if(b.id==210||b.id==211){w=136;h=30;x=width-302+(b.id-210)*142;y=234;}
         else if(b.id==212){x=width-192;y=622;w=166;h=30;}
-        MoveWindow(b.hwnd,int(x*scale),int(y*scale),int(w*scale),int(h*scale),TRUE);
-        const bool hasNotice=b.id!=212||!overview.textOr("refinery_notice").empty();
-        ShowWindow(b.hwnd,b.navigation||(activePage=="home"&&hasNotice)?SW_SHOW:SW_HIDE);
-        InvalidateRect(b.hwnd,nullptr,FALSE);
+        else if(b.id==213){x=width-160;y=686;w=134;h=28;}
+        else if(b.id==214){x=width-306;y=686;w=134;h=28;}
+        const bool hasNotice=(b.id!=212||!overview.textOr("refinery_notice").empty())&&
+            ((b.id!=213&&b.id!=214)||!field(overview,"synthstrings").textOr("title").empty());
+        pending.place(b.hwnd,int(x*scale),int(y*scale),int(w*scale),int(h*scale),b.navigation||(activePage=="home"&&hasNotice));
     }
+    pending.apply();
     SynthPages::place(int(218*scale),int(110*scale),int((width-234)*scale),std::max(1,int(r.bottom)-int(124*scale)),activePage!="home");
-    InvalidateRect(window,nullptr,FALSE);
+    RedrawWindow(window,nullptr,nullptr,RDW_INVALIDATE|RDW_NOERASE|RDW_ALLCHILDREN);
 }
 LRESULT CALLBACK navigationHover(HWND hwnd,UINT m,WPARAM w,LPARAM l,UINT_PTR,DWORD_PTR){
+    // BUTTON's default erase uses the system button-face brush, which is light
+    // even though WM_DRAWITEM later paints a dark tile.
+    if(m==WM_ERASEBKGND){RECT r{};GetClientRect(hwnd,&r);static HBRUSH dark=CreateSolidBrush(RGB(15,16,19));FillRect(reinterpret_cast<HDC>(w),&r,dark);return 1;}
     if(m==WM_MOUSEMOVE&&!GetPropW(hwnd,L"SynthGlass.Hot")){SetPropW(hwnd,L"SynthGlass.Hot",HANDLE(1));TRACKMOUSEEVENT track{sizeof(track),TME_LEAVE,hwnd,0};TrackMouseEvent(&track);InvalidateRect(hwnd,nullptr,FALSE);}
     if(m==WM_MOUSELEAVE){RemovePropW(hwnd,L"SynthGlass.Hot");InvalidateRect(hwnd,nullptr,FALSE);}
     if(m==WM_NCDESTROY){RemovePropW(hwnd,L"SynthGlass.Hot");RemoveWindowSubclass(hwnd,navigationHover,1);}
     return DefSubclassProc(hwnd,m,w,l);
 }
 void add(int id,const wchar_t* label,const char* command,bool navigation){
-    HWND child=CreateWindowExW(0,L"BUTTON",label,WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_OWNERDRAW,0,0,10,10,window,reinterpret_cast<HMENU>(INT_PTR(id)),GetModuleHandleW(nullptr),nullptr);
+    const auto release=read(SCMiner::AppPaths::program().parent_path().parent_path()/L"release.json");
+    if(!HudModules::actionAvailable(release,command,SynthEdition::screenReading))return;
+    HWND child=CreateWindowExW(0,L"BUTTON",label,WS_CHILD|WS_VISIBLE|WS_CLIPSIBLINGS|WS_TABSTOP|BS_OWNERDRAW,0,0,10,10,window,reinterpret_cast<HMENU>(INT_PTR(id)),GetModuleHandleW(nullptr),nullptr);
     SetWindowSubclass(child,navigationHover,1,0);
     buttons.push_back({child,id,label,command,navigation});
 }
 void paintButton(const DRAWITEMSTRUCT& item){
     auto found=std::find_if(buttons.begin(),buttons.end(),[&](const auto& b){return b.id==int(item.CtlID);});if(found==buttons.end())return;
-    const auto& b=*found;Gdiplus::Graphics g(item.hDC);g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);g.SetTextRenderingHint(Gdiplus::TextRenderingHintClearTypeGridFit);
+    const auto& b=*found;int width=item.rcItem.right-item.rcItem.left,height=item.rcItem.bottom-item.rcItem.top;
+    if(width<=0||height<=0)return;
+    Gdiplus::Bitmap frame(width,height,PixelFormat32bppPARGB);
+    {Gdiplus::Graphics g(&frame);g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);g.SetTextRenderingHint(Gdiplus::TextRenderingHintClearTypeGridFit);
     bool selected=(b.navigation&&b.action==activePage)||(b.id==210&&!previous)||(b.id==211&&previous);
     g.Clear(b.navigation?SIDE:BG);
     if(b.navigation){RECT at{},root{};GetWindowRect(item.hwndItem,&at);MapWindowPoints(nullptr,window,reinterpret_cast<POINT*>(&at),2);GetClientRect(window,&root);Gdiplus::LinearGradientBrush rail(Gdiplus::PointF(0,14*scale-at.top),Gdiplus::PointF(0,float(root.bottom)-14*scale-at.top),Gdiplus::Color(255,28,35,47),Gdiplus::Color(255,19,25,35));g.FillRectangle(&rail,0,0,item.rcItem.right,item.rcItem.bottom);}
@@ -93,6 +109,9 @@ void paintButton(const DRAWITEMSTRUCT& item){
     else SynthGlass::text(g,label,{12*scale,0,r.Width-24*scale,r.Height},12*scale,INK,true);
     if(cut!=std::wstring::npos)words(g,label.substr(cut+1),16,45,r.Width/scale-28,28,11,MUTED);
     if(item.itemState&ODS_FOCUS){Gdiplus::Pen pen(Gdiplus::Color(100,161,205,208));Gdiplus::GraphicsPath focus;SynthGlass::shape(focus,{2,2,r.Width-5,r.Height-5},8*scale);g.DrawPath(&pen,&focus);}
+    }
+    // Commit only the complete button, respecting the supplied owner's DC clip.
+    Gdiplus::Graphics screen(item.hDC);screen.DrawImage(&frame,int(item.rcItem.left),int(item.rcItem.top));
 }
 void paint(){
     PAINTSTRUCT ps{};HDC dc=BeginPaint(window,&ps);RECT r{};GetClientRect(window,&r);
@@ -106,13 +125,13 @@ void paint(){
         words(g,L"SynthScan",66,29,130,31,20,INK,true);
         words(g,L"YOUR VERSE, CONNECTED",24,73,164,20,9,MUTED,true);
         auto cap=CapturePrivacy::snapshot();double age=cap.numberOr("frame_age_ms",-1);
-        words(g,!SynthEdition::screenReading?L"STANDARD · NO SCREEN READER":CapturePrivacy::policy().paused?L"CAPTURE PAUSED":age>=0&&age<1500?L"READING GAME WINDOW":L"CAPTURE IDLE · GAME ONLY",24,height-91,164,20,10,ACCENT,true);
+        words(g,!SynthEdition::screenReading?L"NO SCREEN READER INSTALLED":CapturePrivacy::policy().paused?L"CAPTURE PAUSED":age>=0&&age<1500?L"READING GAME WINDOW":L"CAPTURE IDLE · GAME ONLY",24,height-91,164,20,10,ACCENT,true);
         words(g,L"LOCAL PROFILE",24,height-66,164,20,9,ACCENT,true);
         words(g,L"Your records stay on this PC",24,height-45,166,30,10,MUTED);
         std::wstring heading=L"Home";
         for(const auto& button:buttons)if(button.navigation&&button.action==activePage)heading=button.label;
         words(g,heading,224,30,main,40,29,INK,true);
-        words(g,activePage=="home"?L"Find your next upgrade. See what you've accomplished.":activePage=="people"?L"A familiar face in a very large universe.":L"",224,76,main,28,13,MUTED);
+        words(g,activePage=="home"?L"Find your next upgrade. See what you've accomplished.":activePage=="people"?L"A familiar face in a very large universe.":activePage=="executive_hangar"?L"Watch the window. Keep your next full set ready.":L"",224,76,main,28,13,MUTED);
         if(activePage=="home"){
         words(g,L"SESSION RECAP",224,241,main-300,24,11,ACCENT,true);
         const Json& session=field(overview,previous?"previous":"current");
@@ -149,8 +168,19 @@ void paint(){
             words(g,wide(notice),240,621,main-200,23,13,ACCENT,true);
             words(g,L"Confirmed game notification · dismiss after reviewing your orders",240,645,main-200,19,10,MUTED);
         }
-        words(g,connected?wide(identity):L"No live shard observation",224,690,main,22,11,connected?INK:MUTED);
-        words(g,flag(overview,"history_warning")?L"Saved recap could not be read. The original file has been preserved.":L"Reputation is net balance change between reads; activity before the baseline is not included.",224,716,main,28,10,MUTED);
+        const auto& strings=field(overview,"synthstrings");
+        if(!strings.textOr("title").empty()){
+            const auto color=flag(strings,"warning")?Gdiplus::Color(255,255,195,105):ACCENT;
+            float cardHeight=std::max(70.f,height-696.f);
+            rounded(g,{224*scale,678*scale,main*scale,cardHeight*scale},CARD);
+            words(g,wide(strings.textOr("title")),240,688,main-324,24,13,color,true);
+            std::string detail=strings.textOr("summary",strings.textOr("detail"));
+            if(flag(strings,"restart_required")&&strings.textOr("state")!="attention")detail="Restart Star Citizen once to load the prepared text. Open details for the adaptation result and recovery information.";
+            words(g,wide(detail),240,716,main-32,cardHeight-42,11,MUTED);
+        }else{
+            words(g,connected?wide(identity):L"No live shard observation",224,690,main,22,11,connected?INK:MUTED);
+            words(g,flag(overview,"history_warning")?L"Saved recap could not be read. The original file has been preserved.":L"Reputation is net balance change between reads; activity before the baseline is not included.",224,716,main,28,10,MUTED);
+        }
         }
         Gdiplus::Graphics screen(dc);screen.DrawImage(&bitmap,0,0);
     }EndPaint(window,&ps);
@@ -162,11 +192,25 @@ LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM w,LPARAM l){
     if(message==WM_DRAWITEM){paintButton(*reinterpret_cast<DRAWITEMSTRUCT*>(l));return TRUE;}
     if(message==WM_COMMAND&&HIWORD(w)==BN_CLICKED){
         int id=LOWORD(w);
+        if(id==213){
+            const auto& strings=field(overview,"synthstrings");std::string text;
+            for(const auto& channel:field(strings,"channels").items){
+                text+=channel.textOr("channel")+": "+channel.textOr("title")+"\n"+channel.textOr("detail")+"\n";
+                if(flag(channel,"restart_required"))text+=channel.textOr("state")=="attention"?"Resolve the recovery issue in Setup before restarting Star Citizen.\n":"Restart Star Citizen once to load the prepared text.\n";
+                const auto& history=field(channel,"history").items;
+                if(!history.empty())text+="\nRecent results:\n";
+                for(size_t i=history.size()>5?history.size()-5:0;i<history.size();++i){
+                    auto at=clockLabel(history[i].numberOr("at"));text+=SynthScan::utf8(at)+"  "+history[i].textOr("title")+"\n"+history[i].textOr("detail")+"\n";
+                }
+                text+="\n";
+            }
+            MessageBoxW(hwnd,wide(text).c_str(),L"SynthStrings patch status",MB_OK|(flag(strings,"warning")?MB_ICONWARNING:MB_ICONINFORMATION));return 0;
+        }
         if(id==210||id==211){previous=id==211;sessionChosen=true;InvalidateRect(hwnd,nullptr,FALSE);for(auto& b:buttons)InvalidateRect(b.hwnd,nullptr,FALSE);publish();return 0;}
         auto found=std::find_if(buttons.begin(),buttons.end(),[&](const auto& b){return b.id==id;});
         if(found!=buttons.end()){
             lastAction=found->action;
-            if(found->navigation)navigate(lastAction);
+            if(found->navigation&&lastAction!="modules")navigate(lastAction);
             else if(action)action(lastAction);
             publish();
         }return 0;
@@ -180,16 +224,21 @@ void create(){
     if(window)return;WNDCLASSW cls{};cls.hInstance=GetModuleHandleW(nullptr);cls.lpszClassName=L"SynthScanHome";cls.lpfnWndProc=procedure;cls.hbrBackground=CreateSolidBrush(RGB(15,16,19));cls.hCursor=LoadCursor(nullptr,IDC_ARROW);cls.hIcon=LoadIconW(cls.hInstance,MAKEINTRESOURCEW(IDI_APPICON));RegisterClassW(&cls);
     MONITORINFO info{sizeof(info)};GetMonitorInfo(MonitorFromWindow(owner,MONITOR_DEFAULTTONEAREST),&info);
     float dpi=GetDpiForWindow(owner)/96.f;int width=std::min(int(1240*dpi),int(info.rcWork.right-info.rcWork.left)-48),height=std::min(int(840*dpi),int(info.rcWork.bottom-info.rcWork.top)-48);
-    window=CreateWindowExW(WS_EX_APPWINDOW|WS_EX_CONTROLPARENT,cls.lpszClassName,L"SynthScan — Home",WS_OVERLAPPEDWINDOW|WS_CLIPCHILDREN,
+    // Composite the entire native control tree, rather than buffering only the
+    // background and presenting child erase/paint stages separately.
+    window=CreateWindowExW(WS_EX_APPWINDOW|WS_EX_CONTROLPARENT|WS_EX_COMPOSITED,cls.lpszClassName,L"SynthScan — Home",WS_OVERLAPPEDWINDOW|WS_CLIPCHILDREN,
         info.rcWork.left+(info.rcWork.right-info.rcWork.left-width)/2,info.rcWork.top+(info.rcWork.bottom-info.rcWork.top-height)/2,width,height,nullptr,nullptr,cls.hInstance,nullptr);
     BOOL dark=TRUE;DwmSetWindowAttribute(window,20,&dark,sizeof(dark));
     SynthPages::initialize(window);
-    const wchar_t* names[]={L"Home",L"Item & Ship Finder",L"People",L"Server History",L"Blueprint Library",L"Mining Planner",L"Mining Diary",L"Refinery",L"Piracy",L"Day/Night Forecast",L"Automatic Acceptance",L"Personal Notes",L"Settings",L"Privacy & capture"};
-    const char* actions[]={"home","directory","people","servers","blueprints","planner","diary","refinery","hud_piracy","daylight","acceptance","notes","settings","privacy"};
+    const wchar_t* names[]={L"Home",L"Item & Ship Finder",L"People",L"Mission & Wallet Log",L"Server History",L"Blueprint Library",L"Mining Planner",L"Mining Diary",L"Refinery",L"Executive Hangar",L"Piracy",L"Day/Night Forecast",L"Automatic Acceptance",L"Personal Notes",L"Settings",L"Privacy & capture"};
+    const char* actions[]={"home","directory","people","mission_log","servers","blueprints","planner","diary","refinery","executive_hangar","hud_piracy","daylight","acceptance","notes","settings","privacy"};
     for(int i=0;i<int(sizeof(names)/sizeof(names[0]));i++)add(100+i,names[i],actions[i],true);
     add(200,L"Mining HUD\nAutomatic scan reading","hud_mining",false);add(201,L"Finder HUD\nShops & player market","hud_finder",false);
     add(202,L"Missions HUD\nContracts & reputation","hud_missions",false);add(203,L"Hangars HUD\nContested-zone timing","hud_hangars",false);
     add(210,L"This session","this",false);add(211,L"Previous session","previous",false);add(212,L"Dismiss notices","dismiss_refinery",false);
+    add(213,L"Patch details","strings_details",false);
+    add(214,L"Text settings","strings_settings",false);
+    add(116,L"Feature modules","modules",true);
     layout();
 }
 }
@@ -197,7 +246,8 @@ void initialize(HWND parent,const std::filesystem::path& data,std::function<void
 void update(const SCMiner::JsonValue& value,const std::string& label,bool live){
     static bool wasPaused=false;bool paused=CapturePrivacy::policy().paused;
     bool changed=encode(value)!=encode(overview)||identity!=label||connected!=live||paused!=wasPaused;wasPaused=paused;
-    bool noticesChanged=overview.textOr("refinery_notice")!=value.textOr("refinery_notice");
+    bool noticesChanged=overview.textOr("refinery_notice")!=value.textOr("refinery_notice")||
+        field(overview,"synthstrings").textOr("title")!=field(value,"synthstrings").textOr("title");
     overview=value;identity=label;connected=live;
     if(window&&noticesChanged)layout();
     if(!sessionChosen&&value.kind==Json::Kind::Object){
@@ -232,4 +282,46 @@ bool routeMessage(MSG& message){
     return window&&(message.hwnd==window||IsChild(window,message.hwnd))&&IsDialogMessage(window,&message);
 }
 void close(){SynthPages::close();if(window)DestroyWindow(window);window=nullptr;buttons.clear();}
+int paintCheck(const std::filesystem::path& output){
+    // Exercise the actual Home BUTTON procedures, including the erase phase
+    // that a final-frame WM_PRINT screenshot cannot reveal. All HWNDs stay hidden.
+    std::filesystem::create_directories(output);
+    HWND foreground=GetForegroundWindow();
+    INITCOMMONCONTROLSEX controls{sizeof(controls),ICC_STANDARD_CLASSES};InitCommonControlsEx(&controls);
+    Gdiplus::GdiplusStartupInput input;ULONG_PTR token=0;Gdiplus::GdiplusStartup(&token,&input,nullptr);
+    HWND fixture=CreateWindowExW(WS_EX_NOACTIVATE,L"STATIC",L"Hidden paint check",WS_POPUP,-32000,-32000,10,10,nullptr,nullptr,GetModuleHandleW(nullptr),nullptr);
+    initialize(fixture,output,[](const std::string&){});create();
+    SetWindowPos(window,nullptr,-32000,-32000,1240,840,SWP_NOZORDER|SWP_NOACTIVATE);
+    BITMAPINFO info{};info.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);info.bmiHeader.biWidth=2048;info.bmiHeader.biHeight=-1024;info.bmiHeader.biPlanes=1;info.bmiHeader.biBitCount=32;info.bmiHeader.biCompression=BI_RGB;
+    HDC dc=CreateCompatibleDC(nullptr);void* pixels=nullptr;HBITMAP bitmap=CreateDIBSection(dc,&info,DIB_RGB_COLORS,&pixels,nullptr,0);HGDIOBJ old=SelectObject(dc,bitmap);
+    RECT all{0,0,2048,1024};HBRUSH sentinel=CreateSolidBrush(RGB(241,12,219));bool eraseDark=true,bounded=true,painted=true;
+    int cases=0;LARGE_INTEGER start{},finish{},frequency{};QueryPerformanceFrequency(&frequency);QueryPerformanceCounter(&start);
+    for(int cycle=0;cycle<12;cycle++){
+        SetWindowPos(window,nullptr,0,0,cycle%2?1000:1400,cycle%2?780:980,SWP_NOMOVE|SWP_NOZORDER|SWP_NOACTIVATE);
+        for(const auto& button:buttons){
+            RECT r{};GetClientRect(button.hwnd,&r);FillRect(dc,&all,sentinel);IntersectClipRect(dc,0,0,r.right,r.bottom);
+            SendMessageW(button.hwnd,WM_ERASEBKGND,reinterpret_cast<WPARAM>(dc),0);
+            GdiFlush();eraseDark&=GetPixel(dc,2,2)==RGB(15,16,19);
+            SelectClipRgn(dc,nullptr);bounded&=GetPixel(dc,r.right+2,2)==RGB(241,12,219);
+            FillRect(dc,&all,sentinel);IntersectClipRect(dc,0,0,r.right,r.bottom);
+            DRAWITEMSTRUCT item{};item.CtlType=ODT_BUTTON;item.CtlID=button.id;item.itemAction=ODA_DRAWENTIRE;item.hwndItem=button.hwnd;item.hDC=dc;item.rcItem=r;
+            SendMessageW(window,WM_DRAWITEM,button.id,reinterpret_cast<LPARAM>(&item));
+            GdiFlush();SelectClipRgn(dc,nullptr);
+            auto corner=GetPixel(dc,2,2);painted&=GetRValue(corner)<100&&GetGValue(corner)<100&&GetBValue(corner)<100;
+            bounded&=GetPixel(dc,r.right+2,2)==RGB(241,12,219);++cases;
+        }
+    }
+    // Repeating an unchanged layout must not send another WINDOWPOSCHANGED to
+    // every control. Count actual native notifications, not requested positions.
+    unsigned notifications=0;
+    auto count=+[](HWND h,UINT m,WPARAM w,LPARAM l,UINT_PTR,DWORD_PTR data)->LRESULT{if(m==WM_WINDOWPOSCHANGED)++*reinterpret_cast<unsigned*>(data);return DefSubclassProc(h,m,w,l);};
+    for(const auto& b:buttons)SetWindowSubclass(b.hwnd,count,99,reinterpret_cast<DWORD_PTR>(&notifications));
+    for(int i=0;i<20;i++)layout();
+    for(const auto& b:buttons)RemoveWindowSubclass(b.hwnd,count,99);
+    bool composited=(GetWindowLongPtrW(window,GWL_EXSTYLE)&WS_EX_COMPOSITED)!=0;
+    QueryPerformanceCounter(&finish);bool focus=foreground==GetForegroundWindow();
+    write(output/L"paint_validation.json",obj({{"erase_stays_dark",SynthScan::boolean(eraseDark)},{"owner_draw_stays_in_bounds",SynthScan::boolean(bounded)},{"buttons_painted",SynthScan::boolean(painted)},{"descendants_composited",SynthScan::boolean(composited)},{"unchanged_layout_notifications",num(notifications)},{"foreground_unchanged",SynthScan::boolean(focus)},{"button_paint_cases",num(cases)},{"elapsed_ms",num((finish.QuadPart-start.QuadPart)*1000./frequency.QuadPart)}}));
+    SelectObject(dc,old);DeleteObject(bitmap);DeleteObject(sentinel);DeleteDC(dc);close();DestroyWindow(fixture);Gdiplus::GdiplusShutdown(token);
+    return eraseDark&&bounded&&painted&&composited&&focus&&notifications==0?0:3;
+}
 }

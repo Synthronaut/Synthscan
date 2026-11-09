@@ -180,7 +180,6 @@ class SynthScanApp:
         )
         self.root.app_instance = self
         self.last_top_hud_poll = 0.0
-        self.last_loading_ocr_scan = 0.0
         self.telemetry_queue = queue.Queue(maxsize=2)
         self.ui_events = queue.SimpleQueue()
         self.telemetry_stop = threading.Event()
@@ -3551,26 +3550,15 @@ class SynthScanApp:
             command=_save
         ).pack(side="right")
 
-    def _on_shard_name_autodetected(self, found_name):
-        sh_id = self.top_hud.state.get("shard_id", "--")
-        reg = self.top_hud.state.get("region_raw", "")
-        self.top_hud.set_custom_shard_name(sh_id, reg, found_name, source="loading_screen_ocr")
-        if hasattr(self, "btn_hdr_shard"):
-            short_n = found_name if len(found_name) <= 16 else found_name[:14] + ".."
-            self.btn_hdr_shard.configure(text=f"🏷️ {short_n}")
-        self.log_comms(f"CIG SHARD DETECTED // AUTO-NAMED '{found_name}'", level="ok")
-        if hasattr(self, "_refresh_server_log_view"):
-            self._refresh_server_log_view()
-
     # =========================================================================
     # BACKGROUND SCANNER & TELEMETRY LOOP (ZERO-LAG / BELOW-NORMAL PRIORITY)
     # =========================================================================
 
     def _read_terminal_image(self, image, terminal_gate=False):
-        from screen_readers import read_image, refinery_orders, fabricator_candidates
+        from screen_readers import read_image, refinery_orders
         observed_at, station_hint = time.time(), self.terminal_station
         # The native reader understands actual terminal geometry. Preserve the
-        # existing fabricator reader and conservative fallback for other layouts.
+        # conservative refinery fallback for other layouts; blueprint OCR is retired.
         from native_mining import native_refinery_orders
         try:
             result=self.detector.get_native_client(terminal=True).request_image(image,marker=False,refinery=True,
@@ -3581,7 +3569,7 @@ class SynthScanApp:
             logging.exception('Native terminal reader unavailable; using terminal OCR fallback')
         boxes = read_image(image, terminal_gate=terminal_gate)
         return dict(observed_at=observed_at, orders=refinery_orders(boxes, station_hint),
-                    blueprints=fabricator_candidates(boxes))
+                    blueprints=[])
 
     def _poll_terminal_screens(self, now):
         if not self.terminal_tracking or now - self.last_terminal_scan < 6:
@@ -3643,18 +3631,6 @@ class SynthScanApp:
 
         while self.is_running:
             now = time.time()
-
-            # Loading screen shard codename auto-detection
-            if getattr(self.top_hud.log_reader, "is_loading_screen", False) and (now - self.last_loading_ocr_scan) >= 1.5:
-                self.last_loading_ocr_scan = now
-                try:
-                    cur_cs = self.top_hud.state.get("callsign", "")
-                    if not cur_cs or cur_cs.startswith("SHARD ") or cur_cs == "AWAITING TELEMETRY":
-                        found_name = self.detector.scan_loading_screen_for_shard_name()
-                        if found_name:
-                            self.ui_events.put(("shard_name", found_name, self.top_hud.state.get("session_token")))
-                except Exception:
-                    pass
 
             self._poll_terminal_screens(now)
 
@@ -3799,8 +3775,6 @@ class SynthScanApp:
                     self._apply_native_mining_reading(value,token)
                 elif kind == 'native_status':
                     self.native_reader_status=value
-                elif kind == "shard_name" and token and token == self.top_hud.state.get("session_token"):
-                    self._on_shard_name_autodetected(value)
             self._refresh_active_server()
         except Exception:
             logging.exception("Telemetry update failed")

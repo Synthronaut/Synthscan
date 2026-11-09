@@ -1,6 +1,12 @@
 # SynthScan
 
-[Download Standard — no screen reading](https://github.com/Synthronaut/Synthscan/releases/latest/download/SynthScan-Standard-Setup-Windows-x64.exe) · [Download Full](https://github.com/Synthronaut/Synthscan/releases/latest/download/SynthScan-Full-Setup-Windows-x64.exe) · [Release notes](https://github.com/Synthronaut/Synthscan/releases)
+[Download SynthScan for Windows](https://github.com/Synthronaut/Synthscan/releases/latest/download/SynthScan-Setup-Windows-x64.exe) · [Release notes](https://github.com/Synthronaut/Synthscan/releases)
+
+One installer, with every feature selected by default. Uncheck anything you do
+not want. **Live Mining Recognition [SCREEN READING]** is the only reader add-on;
+leaving it unchecked installs the screen-free engine without capture/OCR
+components. Change your selection later in **Feature modules**.
+See [feature choices](docs/modules.md).
 
 A Windows companion for Star Citizen: mining assistance, blueprints, SynthStrings,
 reputation labels, a server HUD, and Mining / Piracy / Missions / Hangars / Finder activity tabs.
@@ -31,6 +37,13 @@ the first verified balance read in that run. Missed history is not reconstructed
 from configured rewards. **Live on/off** controls automatic mining screen reading;
 the other background tools continue to work.
 
+**Mission & Wallet Log** retains mission outcomes, reputation gains/losses and
+observed aUEC balance changes. Filter activity, compare configured rewards with
+recent participant counts, review session recaps, classify known wallet changes,
+and export CSV, JSON or a readable HTML report. Unknown changes stay visible;
+balance polling cannot recover every individual transaction. See
+[mission and wallet history](docs/mission-wallet-log.md).
+
 Finder expands with the desktop: wide windows put results beside purchase details;
 narrower windows stack them. Inline item icons preserve the existing type/category
 labels. Click a result-column header to sort ascending or descending. Different
@@ -51,7 +64,8 @@ bonuses. **Work orders** contains orders read from the game terminal; **Collecte
 stock** retains confirmed collection receipts with quantities and qualities.
 These receipts record output collected, not a continuously reconciled cargo
 inventory after subsequent sales or transfers. Estimated completion alone never
-adds stock. Terminal OCR runs in every HUD mode while the game is being viewed.
+adds stock. With Live Mining Recognition installed and enabled, terminal OCR can
+run while the game is being viewed. Without that add-on, records remain manual.
 
 Automatic HUD display requires the game window; the launcher alone does not show
 it. Explicit HUD buttons or the tray's Show HUD action can preview it without the
@@ -108,6 +122,13 @@ and keeps automatic acceptance **off** until explicitly enabled. Your choice is
 saved on this PC and retained across window closes and game sessions. It waits for
 the matching queued notification's `Next` event. Shared contracts, party invitations
 and friend requests have separate saved toggles; party and friend acceptance default off.
+**Hide global chat after joining (F12)** is a separate saved toggle, off by default.
+It waits for the game's final loading-screen completion, then presses F12 once
+per join while Star Citizen is the foreground window. If you are tabbed out,
+it waits until you return; disconnecting cancels that pending join. It applies
+to loads completed after enabling, including reconnects and server changes,
+and never retries F12 because another press would show chat again. Keep the
+game's chat toggle bound to F12. Chat visibility itself is not read.
 Ordinary notifications never qualify. Normal movement and mouse activity do not block acceptance; held modifiers
 or the accept key do. An ignored key press stays pending: the helper retries
 every 750 ms while the exact logged contract prompt is active, stopping on
@@ -262,10 +283,16 @@ larger discrepancy keep valuation pending. Partial scans continue to be retried.
   community timing arrives. Data refreshes automatically; no app update is needed
   for timing changes. A successful download of unchanged old timing is not a new
   sync. Unannounced resets and individual hangar claims cannot be inferred.
-- Compboard inventory: open **Compboard inventory** from the tray menu or
-  **Startup & HUD**. Set quantities for boards 1–7 with +/− or typed counts.
-  **Use one set** subtracts one of each only when a full set is available;
-  **Undo last set** restores that use until counts are edited. Counts save on
+- Compboard inventory: click **Boards** beside **More** and **Full** in the
+  Hangars pop-out. Add or subtract each of boards 1–7, see the **full sets**
+  total, or choose **+ full set**, **Use full set**, and **Undo last use**.
+  **Timer** returns to the hangar countdown in the same HUD. The desktop sidebar's
+  **Executive Hangar** tab combines a larger timer with the inventory, typed counts
+  and **Save counts**. The old standalone inventory window and Settings/tray
+  inventory shortcuts have been removed.
+  Both views share the same saved inventory; conflicting edits refresh before retrying.
+  **Use full set** subtracts one of each only when a full set is available;
+  **Undo set** restores that use until counts are edited. Counts save on
   this PC; the Hangars HUD shows the number of complete sets. These are manual records;
   the button does not operate the in-game hangar or claim a ship.
 - Missions observations and configured rewards. Party splits are estimates, not
@@ -407,9 +434,9 @@ These are laser-to-rock ranges from the selected loadout. Pilot-seat parking
 guidance needs the deployed turret/muzzle geometry and marker-distance reference
 to be validated; the app does not present a guessed cockpit offset as exact.
 
-## Choose your edition
+## Choose your features
 
-**Standard** installs SynthScan without screen-reading components. **Full** adds
-local game-window OCR for live mining and screen-derived readings/imports. Both
-keep Finder, People, reputation, log-based server information and manual planning.
-Automatic updates preserve your choice. See [edition details](docs/editions.md).
+The single installer starts with every feature checked. Uncheck **Live Mining
+Recognition [SCREEN READING]** to leave out the capture engine and recognition
+models. Other tools remain independently selectable. Automatic updates preserve
+your choice; change it later in **Feature modules**. See [module details](docs/modules.md).

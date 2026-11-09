@@ -92,7 +92,7 @@ std::string now() {
 
 // The game's own text for this channel, out of its Data.p4k - or out of the
 // copy kept in Bedrock's data folder, while the archive is the same one
-bool baseText(const std::filesystem::path& channel, std::string& text, std::string& error) {
+bool baseText(const std::filesystem::path& channel, std::string& text, std::string& error, bool fresh = false) {
     const std::filesystem::path archive = GameTexts::placeFor(channel, {"Data.p4k"});
     std::error_code ec;
     const auto size = std::filesystem::file_size(archive, ec);
@@ -101,13 +101,14 @@ bool baseText(const std::filesystem::path& channel, std::string& text, std::stri
         return false;
     }
     const auto time = std::filesystem::last_write_time(archive, ec);
-    const std::string stamp = std::to_string(size) + " " + std::to_string((long long)time.time_since_epoch().count());
+    std::string manifest;readFile(channel / "build_manifest.id", manifest);
+    const std::string stamp = std::filesystem::weakly_canonical(channel).string() + "\n" + manifest + "\n" + std::to_string(size) + " " + std::to_string((long long)time.time_since_epoch().count());
     // one copy per channel: LIVE and PTU are different builds
     const std::string name = "game_text_" + channel.filename().string();
     const std::filesystem::path copy = AppPaths::data() / (name + ".ini");
     const std::filesystem::path copyStamp = AppPaths::data() / (name + ".txt");
     std::string kept;
-    if (readFile(copyStamp, kept) && kept == stamp && readFile(copy, text) && !text.empty()) return true;
+    if (!fresh && readFile(copyStamp, kept) && kept == stamp && readFile(copy, text) && !text.empty()) return true;
     if (!P4kReader::read(archive, ARCHIVE_NAME, text, error)) return false;
     // kept for the next time; a copy that could not be written only costs
     // the next write another read of the archive
@@ -300,12 +301,13 @@ bool GameTexts::wantEnglish(std::string& cfg, std::string& language, bool& chang
 }
 
 bool GameTexts::build(const std::filesystem::path& channel, const std::vector<bool>& owned,
-                      std::string& text, int& marked, std::string& note) {
+                      std::string& text, int& marked, std::string& note, std::string* freshBaseline) {
     std::string base, error;
-    if (!baseText(channel, base, error)) {
+    if (!baseText(channel, base, error, freshBaseline != nullptr)) {
         note = "the game's text could not be read: " + error;
         return false;
     }
+    if (freshBaseline) *freshBaseline = base;
     const OwnedFn isOwned = [&owned](int b) { return b >= 0 && b < (int)owned.size() && owned[b]; };
     marked = compose(base, isOwned, text);
     if (marked == 0) {

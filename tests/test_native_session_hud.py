@@ -97,6 +97,7 @@ class NativeSessionHUDTests(unittest.TestCase):
             render_original_bar(hud)
             labels = [str(call.kwargs.get('text','')) for call in canvas.create_text.call_args_list]
             self.assertEqual(sum('SHARD' in label.upper() for label in labels), 1, labels)
+            self.assertFalse(any('NAME NOT CAPTURED' in label for label in labels),labels)
 
     def test_actual_ribbon_painter_keeps_identity_and_shows_updating_without_stale_stats(self):
         from hud_appearance import render_original_bar

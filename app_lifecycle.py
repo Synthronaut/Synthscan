@@ -99,8 +99,9 @@ class ProcessEntry(ctypes.Structure):
                 ("pcPriClassBase", w.LONG), ("dwFlags", w.DWORD), ("szExeFile", w.WCHAR * 260)]
 
 
-def game_process_ids():
-    """Read process names from Windows' snapshot; no handles to the game needed."""
+def named_processes(names):
+    """PID/parent inventory by executable name; no process handles or memory."""
+    names={name.casefold() for name in names}
     api = kernel()
     api.CreateToolhelp32Snapshot.argtypes = [w.DWORD, w.DWORD]
     api.CreateToolhelp32Snapshot.restype = w.HANDLE
@@ -111,17 +112,45 @@ def game_process_ids():
         raise ctypes.WinError(ctypes.get_last_error())
     try:
         entry = ProcessEntry(dwSize=ctypes.sizeof(ProcessEntry))
-        found = set()
+        found = {}
         more = api.Process32FirstW(handle, ctypes.byref(entry))
         while more:
-            if entry.szExeFile.casefold() == "starcitizen.exe":
-                found.add(entry.th32ProcessID)
+            if entry.szExeFile.casefold() in names:
+                found[entry.th32ProcessID]=(entry.szExeFile.casefold(),entry.th32ParentProcessID)
             more = api.Process32NextW(handle, ctypes.byref(entry))
         if ctypes.get_last_error() != 18:  # ERROR_NO_MORE_FILES
             raise ctypes.WinError(ctypes.get_last_error())
-        return frozenset(found)
+        return found
     finally:
         api.CloseHandle(handle)
+
+
+def game_process_ids():
+    return frozenset(named_processes({'starcitizen.exe'}))
+
+
+def launcher_process_ids():
+    """Only launcher roots: Electron renderer restarts are not new sessions."""
+    rows=named_processes({'rsi launcher.exe','rsilauncher.exe'})
+    return frozenset(pid for pid,(_,parent) in rows.items() if parent not in rows)
+
+
+def launcher_session_key(pids):
+    """Launcher creation time keeps a reused PID from suppressing a new check."""
+    if os.name!='nt':return ','.join(map(str,sorted(pids)))
+    api=kernel();api.OpenProcess.argtypes=[w.DWORD,w.BOOL,w.DWORD];api.OpenProcess.restype=w.HANDLE
+    api.GetProcessTimes.argtypes=[w.HANDLE,*([ctypes.POINTER(w.FILETIME)]*4)]
+    result=[]
+    for pid in sorted(pids):
+        handle=api.OpenProcess(0x1000,False,pid)
+        if not handle:result.append(str(pid));continue
+        try:
+            created,exited,system,user=(w.FILETIME() for _ in range(4))
+            if api.GetProcessTimes(handle,ctypes.byref(created),ctypes.byref(exited),ctypes.byref(system),ctypes.byref(user)):
+                result.append(f'{pid}:{created.dwHighDateTime}:{created.dwLowDateTime}')
+            else:result.append(str(pid))
+        finally:api.CloseHandle(handle)
+    return ','.join(result)
 
 
 class LaunchPolicy:

@@ -1,5 +1,6 @@
 {
   "schema": 1,
+  "modules_manifest_url": "https://github.com/Synthronaut/Synthscan/releases/download/update-channel/synthscan-modules.json",
   "manifest_url": "https://github.com/Synthronaut/Synthscan/releases/download/update-channel/synthscan-update.json",
   "allowed_hosts": [
     "github.com",

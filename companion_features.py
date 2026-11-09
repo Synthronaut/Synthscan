@@ -398,13 +398,21 @@ class CompanionService:
 class CompanionRunner:
     """Adapter to the existing independent Finder worker; no additional poll thread."""
     def __init__(self,directory,owner):
-        self.service=CompanionService(directory,owner);self.directory=Path(directory);self.owner=owner;self.due=0
+        self.service=CompanionService(directory,owner);self.directory=Path(directory);self.owner=owner;self.due=0;self.context={}
     def tick(self,current_patch=''):
         now=time.time()
         if now<self.due:return
         self.due=now+1
-        context=load(self.directory/'session_ribbon.json',{}) or {}
-        if context.get('owner_pid')!=self.owner or not 0<=now-context.get('written_at',0)<5:context={}
+        from player_session import require_current_session
+        published=load(self.directory/'session_ribbon.json',None)
+        context=self.context if published is None else published
+        stamp=context.get('written_at',0) if isinstance(context,dict) else 0
+        if not isinstance(context,dict) or context.get('owner_pid')!=self.owner or type(stamp) not in (int,float) or not math.isfinite(stamp) or now<stamp:
+            context={}
+        else:
+            try:require_current_session(context)
+            except (OSError,ValueError,TypeError):context={}
+        self.context=dict(context)
         desktop=load(self.directory/'home_status.json',{}) or {}
         visible=desktop.get('owner_pid')==self.owner and desktop.get('visible') and desktop.get('active_page')=='people'
         self.service.tick(context,visible,now)

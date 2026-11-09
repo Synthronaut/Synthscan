@@ -112,6 +112,24 @@ class HangarVerificationTests(unittest.TestCase):
             self.assertGreater(sum(1 for i in range(0,len(pixels),3) if min(pixels[i:i+3])>150),100,'Timer glyphs must render with the bundled Windows font choices')
         finally:service.close()
 
+    def test_board_edits_publish_independently_of_timer_visibility(self):
+        service=HangarScheduleService(self.directory,Mock(return_value=self.schedule));publisher=HangarPublisher(self.directory,123)
+        publisher.game=None
+        try:
+            publisher.tick(service,False,self.now)
+            state=json.loads((self.directory/'compboard_hud.json').read_text())
+            self.assertEqual(state['counts'],[0]*7)
+            command=dict(id='hud-add',owner_pid=123,at=self.now,action='add_set',revision=0)
+            (self.directory/'compboard_hud_command.json').write_text(json.dumps(command))
+            publisher.tick(service,False,self.now+.1)
+            state=json.loads((self.directory/'compboard_hud.json').read_text())
+            self.assertEqual(state['counts'],[1]*7);self.assertEqual(state['complete_sets'],1)
+            self.assertTrue(state['result']['ok']);self.assertFalse((self.directory/'hangar_hud.png').exists())
+            desktop=json.loads((self.directory/'hangar_desktop.json').read_text())
+            self.assertEqual(desktop['owner_pid'],123);self.assertIn('verification',desktop)
+            self.assertIn('view',desktop)
+        finally:service.close()
+
     def test_background_sync_recovers_the_published_card_after_a_build_change(self):
         game=self.directory/'LIVE';game.mkdir();manifest=game/'build_manifest.id'
         data=dict(Data=dict(Branch='sc-alpha-4.10.2',BuildId='a',RequestedP4ChangeNum='1',BuildDateStamp='Mon Oct 12 2026'))

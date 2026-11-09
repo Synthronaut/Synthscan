@@ -1,6 +1,7 @@
 """Manual, per-user board counts. Claims and undo commit atomically in SQLite."""
 import json
 import sqlite3
+import math
 from contextlib import closing
 from pathlib import Path
 
@@ -99,6 +100,17 @@ class CompboardInventory:
             return [n-1 for n in old['counts']], old['counts']
         return self._change(consume, expected_revision)
 
+    def adjust(self, index, delta, expected_revision):
+        if type(index) is not int or not 0 <= index < 7 or type(delta) is not int or delta not in (-1, 1):
+            raise ValueError('Choose a board and add or subtract one.')
+        def change(old):
+            counts = list(old['counts']);counts[index] += delta
+            return counts, None
+        return self._change(change, expected_revision)
+
+    def add_set(self, expected_revision):
+        return self._change(lambda old: ([n+1 for n in old['counts']], None), expected_revision)
+
     def undo_set(self, expected_revision):
         def undo(old):
             if not old['can_undo']:
@@ -108,3 +120,43 @@ class CompboardInventory:
 
     def close(self):
         self.db.close()
+
+
+class CompboardHudCommands:
+    """One pending native-HUD edit, using the same revision-checked inventory.
+
+    Commands are never retried against a newer revision. Replaying a command
+    after a helper restart cannot apply the same edit twice.
+    """
+    def __init__(self, directory, owner):
+        self.directory=Path(directory);self.owner=owner;self.last_id='';self.result={}
+
+    def tick(self, now):
+        from telemetry_ipc import read_shared_json
+        try:command=read_shared_json(self.directory/'compboard_hud_command.json',limit=16384) or {}
+        except (OSError,ValueError):command={}
+        if not isinstance(command,dict):command={}
+        identifier=command.get('id')
+        if isinstance(identifier,str) and identifier and identifier!=self.last_id:
+            self.last_id=identifier
+            try:
+                at=command.get('at')
+                if (command.get('owner_pid')!=self.owner or type(at) not in (int,float)
+                        or not math.isfinite(at) or not 0<=now-at<15):
+                    raise ValueError('That edit expired. Review the current counts and try again.')
+                action=command.get('action');revision=command.get('revision')
+                if action not in ('adjust','add_set','use_set','undo_set','set_counts'):
+                    raise ValueError('Unknown board inventory action.')
+                repository=CompboardInventory(self.directory)
+                try:
+                    if action=='adjust':repository.adjust(command.get('index'),command.get('delta'),revision)
+                    elif action=='set_counts':repository.set_counts(command.get('counts'),revision)
+                    else:getattr(repository,action)(revision)
+                finally:repository.close()
+                self.result=dict(id=identifier,ok=True,message='Counts saved on this PC.')
+            except (OSError,ValueError,sqlite3.Error) as exc:
+                self.result=dict(id=identifier,ok=False,message=str(exc))
+        try:inventory=read_inventory(self.directory)
+        except (OSError,ValueError,sqlite3.Error):inventory=dict(unavailable=True)
+        inventory.pop('undo_counts',None)
+        return dict(at=now,owner_pid=self.owner,result=self.result,**inventory)

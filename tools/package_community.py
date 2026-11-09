@@ -13,7 +13,7 @@ import zipfile
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
-VERSION='0.1.0-alpha.10'
+VERSION='0.1.0-alpha.11'
 PRIVATE={'quantum_timer_status.json','quantum_timer_status.json.tmp','quantum_timer_command.json','quantum_timer_command.json.tmp','contract_share_preferences.json','contract_share_preferences.json.tmp','contract_share_status.json','contract_share_status.json.tmp','daylight_preferences.json.tmp','daylight_calibration.json.tmp','daylight_preferences.json','daylight_calibration.json','daylight_catalogue.json.tmp','loginData.json','inventory.json','config.json','region_config.txt','owned_blueprints.txt',
     'blueprints_library.json','blueprints_favorites.json','reputation_snapshot.json','reputation_localization_state.json',
     'server_log.json','shard_history.json','uex_token.dat','uex_key.dat','portable.txt',
@@ -21,6 +21,7 @@ PRIVATE={'quantum_timer_status.json','quantum_timer_status.json.tmp','quantum_ti
     'reputation_names_preview.json','reputation_labels_status.json','blueprint_strings_status.json','setup_result.json',
     'fabricator_scan_inbox.json','refinery_orders.json','crafting_recipes.json','mining_loadout.json',
     'executive_hangar_sync.json','executive_hangar_verification.json','hangar_hud.json','hangar_hud.png','hangar_hud.png.tmp',
+    'compboard_hud.json','compboard_hud_command.json','compboard_hud.json.tmp','compboard_hud_command.json.tmp','hangar_desktop.json','hangar_desktop.json.tmp',
     'compboard_inventory.sqlite3','compboard_inventory.sqlite3-journal',
     'compboard_inventory.sqlite3-wal','compboard_inventory.sqlite3-shm',
     'native_status.json','top_hud_status.json','session_state.json','credentials.json','.env'}
@@ -32,18 +33,24 @@ PRIVATE.update({'update_preferences.json','app_update_status.json','reference_so
 PRIVATE.update({'finder_market_index.json','finder_market_request.json','finder_market_detail.json','finder_market_cache'})
 PRIVATE.add('session_ribbon.json')
 PRIVATE.add('session_overview.json')
+PRIVATE.update({'mission_log.sqlite3','mission_log.sqlite3-wal','mission_log.sqlite3-shm','mission_log.sqlite3-journal',
+                'mission_evidence.jsonl','mission_log_view.json','mission_log_status.json','mission_log_commands',
+                'mission_service_snapshot.json','mission_capture_status.json','mission_log_view.json.tmp',
+                'mission_log_status.json.tmp','mission_service_snapshot.json.tmp','mission_capture_status.json.tmp'})
 PRIVATE.add('hud_hotkeys.json')
 PRIVATE.update({'capture_privacy.json','capture_privacy.json.tmp','fabricator_frame.png','fabricator_frame_ack.json','fabricator_frame_ack.json.tmp','privacy_diagnostics.json','ocr_isolation_status.json'})
 PRIVATE.add('capture_activity.json')
 PRIVATE.add('home_status.json')
+PRIVATE.add('synthstrings_notice_seen.json')
 PRIVATE.update({'refinery_orders.txt','refinery_orders.txt.tmp'})
 PRIVATE.add('daylight_embed_request.json')
-PRIVATE.update({'game_text','localization_backups','uninstall_result.json'})
+PRIVATE.update({'mission_hud.json','mission_hud.json.tmp'})
 PRIVATE.update({'companion_private.json','companion_private.json.tmp','companion_state.json','companion_state.json.tmp',
                 'companion_alerts.json','companion_alerts.json.tmp','companion_commands'})
 PRIVATE.update({'party_invite_attempts.json','party_invite_attempts.json.tmp'})
 PRIVATE.update({'friend_request_attempts.json','friend_request_attempts.json.tmp'})
 PRIVATE.update({'game_text','localization_backups','uninstall_result.json'})
+PRIVATE.update({'module_selection.json','module_install_error.json','module_text_cleanup.json'})
 
 
 def is_private(name):
@@ -93,6 +100,11 @@ def stage_source(destination,edition="full"):
     shutil.copy2(ROOT/'docs/people-and-buyer-alerts.md',destination/'docs/people-and-buyer-alerts.md')
     shutil.copy2(ROOT/'docs/page-layout-audit.md',destination/'docs/page-layout-audit.md')
     shutil.copy2(ROOT/'docs/installation-footprint.md',destination/'docs/installation-footprint.md')
+    shutil.copy2(ROOT/'docs/modular-build-plan.md',destination/'docs/modular-build-plan.md')
+    shutil.copy2(ROOT/'docs/synthstrings-patch-protection.md',destination/'docs/synthstrings-patch-protection.md')
+    shutil.copy2(ROOT/'docs/mission-wallet-log.md',destination/'docs/mission-wallet-log.md')
+    shutil.copy2(ROOT/'docs/hud-screen-sharing.md',destination/'docs/hud-screen-sharing.md')
+    shutil.copy2(ROOT/'docs/modules.md',destination/'docs/modules.md')
     shutil.copy2(ROOT/'assets/snare_watch.wav',destination/'assets/snare_watch.wav')
     copy_tree(ROOT/'assets/branding',destination/'assets/branding')
     if (ROOT/'.github').exists():copy_tree(ROOT/'.github',destination/'.github')

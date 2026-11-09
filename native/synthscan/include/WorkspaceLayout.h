@@ -53,7 +53,7 @@ inline Box bookmarks(Box box,int id,int width,int height){
     if(id==705)return {40+left,295,width-left-60,220+dy};
     if(id>=710&&id<=712){int cell=(width-70)/3;return {20+(id-710)*(cell+15),202,cell,34};}
     if(id>=713&&id<=716){int cell=(width-85)/4;return {20+(id-713)*(cell+15),532+dy,cell,32};}
-    if(id==717){box.x+=dx;return box;}
+    if(id==717)return box;
     if(box.y>=532)box.y+=dy;
     if(box.x>=440){box.x+=dx/2;if(id!=703)box.width+=dx-dx/2;}
     else if(id==701||box.y==95)box.width+=dx/2;

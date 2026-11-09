@@ -1,5 +1,36 @@
 ## 0.1.0-alpha.9 — 2026-11-09
 
+- Add an Executive Hangar desktop tab with a large countdown, power-cell lights
+  and the saved comp board inventory. Remove the standalone inventory window
+  and its Settings/tray shortcuts. Put existing desktop Back controls at the top left.
+- Add a Boards / Timer switch beside More and Full in the Hangars pop-out.
+  Edit each comp board with +/−, add or use a full set, undo the last set use,
+  and see the full-set count using the same saved inventory as the desktop tab.
+
+- Trigger SynthStrings checks from RSI Launcher opening and installation-file
+  events instead of recurring scans. Pause automatic checks during play. Explain
+  preserved existing packs accurately, retain diagnostic reasons in patch history,
+  and add direct Text settings on Home with manual checks and a backed-up switch
+  to generated SynthStrings; no tray-menu navigation is required.
+
+- Add a saved, opt-in global-chat toggle under Automatic acceptance. Press F12
+  once after a new join finishes loading, only with Star Citizen focused; wait
+  through focus loss and suppress duplicate input across session refreshes.
+
+- Remove the redundant server-stat footer from the Mining HUD and reclaim its
+  height in the automatic layout. Scope the optional session strip to Missions.
+
+- Guard SynthStrings before game launch while the resident watcher is running.
+  Quarantine outdated owned overrides before rebuilding, validate against fresh
+  CIG text, retry failed adaptations using game defaults, and show persistent
+  patch results and session-specific restart guidance on Home with quiet tray
+  notifications. Preserve external packs and edits for review.
+
+- Add a persistent Mission & Wallet Log with mission outcomes, verified
+  reputation gains/losses, observed aUEC changes, participant/ownership evidence,
+  split comparisons, wallet categories, session reconciliation and CSV/JSON/HTML
+  exports. Keep overlapping rewards and unclassified net changes explicit.
+
 - Centralize SynthStrings writes behind an AppData ownership/recovery journal. Add HUD-only setup and explicit safe removal; preserve unrelated game settings and third-party text edits. Keep backups outside LIVE, journal text-permission repair and clean recorded changes on uninstall. Document legacy conflicts and the completed footprint cleanup.
 
 - Replace Windows desktop/region capture fallback with a verified game-window

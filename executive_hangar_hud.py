@@ -44,7 +44,7 @@ def hangar_svg(view,inventory=None):
                 f'<text x="12" y="61" fill="#94a3b8" font-family="Segoe UI" font-size="10">{escape(footer)}</text>',
                 '<path d="M10 68H420" stroke="#263446"/>'])
     if inventory is not None and inventory.get('unavailable'):
-        svg.append('<text x="12" y="84" fill="#62ccff" font-family="Segoe UI" font-size="10">Board counts unavailable · open Compboard inventory</text>')
+        svg.append('<text x="12" y="84" fill="#62ccff" font-family="Segoe UI" font-size="10">Board counts unavailable · open Executive Hangar</text>')
     else:
         counts=(inventory or {}).get('counts',[0]*7);sets=min(counts)
         svg.append('<text x="12" y="84" fill="#94a3b8" font-family="Segoe UI" font-size="9">Boards</text>')

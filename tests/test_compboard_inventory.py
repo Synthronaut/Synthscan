@@ -104,38 +104,3 @@ class CompboardInventoryTests(unittest.TestCase):
         for value in ['1:2', '2:1', '7:7', '1 set']:self.assertIn(value, svg)
         bad = hangar_svg(None, dict(unavailable=True))
         self.assertIn('Board counts unavailable', bad);self.assertNotIn('1:0', bad)
-
-
-class CompboardTrackerTests(unittest.TestCase):
-    def setUp(self):
-        from tests.gui_guard import require_game_closed
-        require_game_closed()
-        import tkinter as tk
-        try:self.root = tk.Tk();self.root.withdraw()
-        except tk.TclError as exc:raise unittest.SkipTest(str(exc))
-        self.addCleanup(self.root.destroy)
-        self.folder = tempfile.TemporaryDirectory();self.addCleanup(self.folder.cleanup)
-        from compboard_tracker import CompboardTracker
-        self.tracker = CompboardTracker(self.root, self.folder.name)
-        self.addCleanup(self.tracker.repository.close)
-
-    def test_buttons_persist_typed_counts_consume_and_undo(self):
-        for variable in self.tracker.vars:variable.set('2')
-        self.tracker.save();self.tracker.use_button.invoke()
-        self.assertEqual(self.tracker.state['counts'], [1]*7)
-        self.tracker.use_button.invoke()  # rapid duplicate click is ignored
-        self.assertEqual(self.tracker.state['counts'], [1]*7)
-        self.tracker.undo_button.invoke();self.assertEqual(self.tracker.state['counts'], [2]*7)
-        self.tracker.minus[0].invoke();self.assertEqual(read_inventory(self.folder.name)['counts'][0], 1)
-        self.tracker.plus[0].invoke();self.assertEqual(read_inventory(self.folder.name)['counts'][0], 2)
-
-    def test_invalid_or_incomplete_drafts_cannot_consume(self):
-        self.assertTrue(self.tracker.use_button.instate(['disabled']))
-        self.tracker.vars[0].set('-1');self.tracker.use_set()
-        self.assertEqual(self.tracker.repository.view()['counts'], [0]*7)
-        self.assertFalse(self.tracker.save())
-
-    def test_all_widgets_fit_the_desktop_window(self):
-        self.root.update_idletasks()
-        self.assertLessEqual(self.root.winfo_reqwidth(), 760)
-        self.assertLessEqual(self.root.winfo_reqheight(), 650)

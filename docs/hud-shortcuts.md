@@ -1,5 +1,9 @@
 # HUD shortcuts
 
+The Mining HUD reserves space for mining results and its controls. Server stats
+are not repeated in its footer, and automatic fitting reclaims those two rows.
+The optional session-strip setting applies to the Missions HUD.
+
 Open Settings → HUD keyboard / mouse shortcuts. Enable the shortcuts, choose
 whether they should work only with Star Citizen or its HUD focused, and save.
 New installations leave shortcuts disabled until the player enables them.

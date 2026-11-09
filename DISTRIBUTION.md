@@ -4,6 +4,33 @@ Distribute the guided Windows installer from a versioned GitHub release of
 Synthronaut/Synthscan. Each person installs once and selects their game folder.
 Records, credentials and caches remain in their Windows profile, outside the app.
 
+## Unified modular installer
+
+New downloads use **SynthScan-Setup-Windows-x64.exe**. Every feature begins
+checked. Only **Live Mining Recognition** is tagged for screen reading. Uncheck
+it to exclude its capture engine and embedded models. The offline installer
+contains the feature packages; users do not manage ZIP files or install Python.
+See [module guide](docs/modules.md).
+
+The modular updater checks the signed `synthscan-modules.json` catalog on the
+update-channel release. It fetches Core and the user's selected feature packages,
+then verifies and assembles a fresh app version. Selection persists across app
+updates, and new features are not silently added. A screen-free recovery Core
+also replaces the older legacy Full base. Removal prunes old reader versions and
+cached reader packages after healthy activation; personal data stays in AppData.
+
+Use **Unified modular release** in GitHub Actions for new releases. It builds
+both internal engines, runs regression checks, creates signed module packages,
+tests isolated selections, builds the branded installer and prepares compatible
+updates for older Standard/Full installations. Its publish option defaults off.
+The existing protected signing key is configured as an encrypted Actions secret;
+it is scoped to signing steps. This is update signing, not a Windows publisher
+certificate. Source changes alone do not update public installers or channels.
+
+`tools/release_downloads.py` reports GitHub's public asset download counts. There
+is no usage beacon, analytics service or consent prompt. Counts do not identify
+unique or active users.
+
 ## Automatic reference updates
 
 The installed game build is checked automatically. Outdated local catalogs rebuild

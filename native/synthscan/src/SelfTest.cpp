@@ -1,3 +1,6 @@
+#ifdef _WIN32
+#include "HudModules.h"
+#endif
 #include "MiningTrip.h"
 #include "CraftingBonus.h"
 #include "HudHotkeys.h"
@@ -203,9 +206,10 @@ int runSelfTest() {
     {
         using namespace SCMiner;
         bool controls = true;
-        for (int id : {1002,1011,1017,1021,31810,31811,31813,31814,31815,31817,31818})
+        for (int id : {1002,1011,1017,1021,31810,31811,31813,31814,31815,31817,31818,31819,31920,31921,31922,31923})
             controls = controls && overlayButtonId(id);
-        allPassed &= check(controls && !overlayButtonId(0) && !overlayButtonId(1015),
+          for(int id=31930;id<=31947;++id)controls=controls&&overlayButtonId(id);
+          allPassed &= check(controls && !overlayButtonId(31948) && !overlayButtonId(0) && !overlayButtonId(1015),
                            "overlay permits only explicit HUD button IDs during play");
         allPassed &= check(overlayPointerInteractive(false,true,true,false,false) &&
                            !overlayPointerInteractive(false,false,true,false,false),
@@ -5131,6 +5135,22 @@ int runSelfTest() {
         auto marks=WorkspaceLayout::bookmarks({20,295,310,220},704,1800,1200),details=WorkspaceLayout::bookmarks({350,295,530,220},705,1800,1200),button=WorkspaceLayout::bookmarks({705,532,175,32},716,1800,1200);
         allPassed &= check(marks.height==760&&details.height==760&&marks.x+marks.width<details.x&&details.x+details.width==1780&&button.y+button.height<1200,"Rock bookmarks expand both panes and keep actions below the lists");
     }
+#ifdef _WIN32
+    {
+        using namespace SynthScan;
+        auto manifest=obj({{"modules",arr()}});
+        auto& modules=manifest.members[0].second;
+        modules.items={str("piracy"),str("missions")};
+        auto modes=HudModules::modes(manifest,true);
+        allPassed &= check(modes==std::vector<int>({1,2})&&HudModules::next(modes,2)==1,"HUD tabs and cycling use only installed modules");
+        modules.items={str("mining_recognition")};
+        allPassed &= check(HudModules::modes(manifest,true).empty(),"Live mining requires the general mining pack");
+        modules.items.push_back(str("mining_tools"));
+        allPassed &= check(HudModules::available(manifest,0,true)&&!HudModules::available(manifest,0,false),"Screen-free builds cannot enable the recognition HUD through a manifest");
+        modules.items.clear();
+        allPassed &= check(HudModules::next(HudModules::modes(manifest,true),0)==-1,"No installed HUD modules means no dead tab fallback");
+    }
+#endif
     std::cout << "\n=== Self-test " << (allPassed ? "PASSED" : "FAILED") << " ===\n" << std::endl;
     return allPassed ? 0 : 1;
 }

@@ -112,6 +112,16 @@ class NativeSessionTests(unittest.TestCase):
         self.assertIsNone(stopped['session_token'])
         self.assertEqual(stopped['summary'],'Game closed')
 
+    def test_loading_completion_is_published_and_cleared_on_exit(self):
+        self.assertIsNone(self.service.tick(True,101)['gameplay_ready_at'])
+        with self.log.open('a') as stream:
+            stream.write(f'<{utc_iso(102)}> StopLoadingScreen Finished\n')
+        state=self.service.tick(True,103)
+        self.assertEqual(state['gameplay_ready_at'],102)
+        self.assertFalse(state['is_loading_screen'])
+        self.assertEqual(state['connection_status'],'connected')
+        self.assertIsNone(self.service.tick(False,104)['gameplay_ready_at'])
+
     def test_current_join_required_for_name_and_cooldown_commands(self):
         state=self.service.tick(True,101);token=state['session_token']
         with self.assertRaises(ValueError):self.service.command(dict(id='old',action='name',session_token='old',name='Wrong'))

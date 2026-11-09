@@ -1,0 +1,33 @@
+SYNTHSCAN
+Your verse, connected.
+
+One installer. Your choice of features.
+
+All features start checked. On the next page, uncheck anything you do not want.
+Live Mining Recognition is the only screen-reading add-on. Its label covers
+rock signatures, detailed composition/quality readings and refinery imports.
+Unchecked reader components are not installed.
+
+Your privacy
+Player records, ownership, notes and account credentials are not included in
+this installer and are not shared with other machines. SynthScan does not
+collect usage analytics or upload screen frames. Supported account features
+use your locally signed-in game session; no password is requested.
+
+Your game
+Optional SynthStrings manages the English localization override and language
+setting, with recovery copies in AppData. It does not patch the game executable
+or archives. Setup explains any game-text permission request separately.
+
+Your controls
+Automatic Acceptance and the AFK helper stay off until you enable them. The
+mining reader does not move your mouse or control your ship.
+
+Alpha release
+Star Citizen changes frequently. Source-dependent readings and community
+timers can be unavailable or estimates; SynthScan labels these states. This
+community application is not affiliated with Cloud Imperium Games.
+
+Shared UI and game-data infrastructure remain in Core. Optional background
+providers, feature resources and screen-reading dependencies follow your
+selection. You can change features later from Feature modules in SynthScan.

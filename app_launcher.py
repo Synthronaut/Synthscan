@@ -26,14 +26,16 @@ class SetupWindow:
     def __init__(self,window,status_only=False):
         window_icon(window)
         self.window=window;self.busy=False;self.messages=queue.Queue();self.status_only=status_only;self.initial=not ready()
-        window.title('SynthScan — Setup & reputation');window.geometry('800x620');window.minsize(760,600)
+        window.title('SynthScan — Setup & reputation')
+        from setup_viewport import size,panel
+        size(window,820,750)
         style=ttk.Style(window);style.theme_use('clam')
         window.configure(bg='#101820')
         style.configure('.',background='#101820',foreground='#e5edf3',font=('Segoe UI',10))
         style.configure('TButton',background='#243947',padding=(12,7));style.map('TButton',background=[('active','#345569')])
         style.configure('Header.TLabel',font=('Segoe UI',21,'bold'));style.configure('Sub.TLabel',foreground='#9eb3c3')
         style.configure('TProgressbar',background='#69cbbd',troughcolor='#243947',bordercolor='#243947',lightcolor='#69cbbd',darkcolor='#69cbbd')
-        outer=ttk.Frame(window,padding=28);outer.pack(fill='both',expand=True)
+        outer=panel(window,padding=28)
         ttk.Label(outer,text='SynthScan',style='Header.TLabel').pack(anchor='w')
         ttk.Label(outer,text='Your HUD, game library and reputation — set up for this PC.',style='Sub.TLabel').pack(anchor='w',pady=(4,18))
         self.title=ttk.Label(outer,text='Finding Star Citizen…',font=('Segoe UI',13,'bold'),wraplength=630);self.title.pack(anchor='w')
@@ -44,9 +46,21 @@ class SetupWindow:
         try:strings=enabled(game_directory(True),PROFILE)
         except (OSError,ValueError):strings=True
         self.strings=tk.BooleanVar(value=strings)
+        from feature_modules import enabled
+        self.strings_available=enabled('synthstrings')
+        if not enabled('synthstrings'):self.strings.set(False)
         self.strings_choice=ttk.Checkbutton(outer,text='Enable SynthStrings — reputation and blueprint labels in game',variable=self.strings)
         self.strings_choice.pack(anchor='w',pady=(12,4))
+        if not enabled('synthstrings'):self.strings_choice.state(['disabled'])
         ttk.Label(outer,text='Optional: updates only Data/Localization/english/global.ini and the language setting in user.cfg. Recovery copies stay in AppData. Uncheck for HUD and library only.',style='Sub.TLabel',wraplength=680).pack(anchor='w')
+        from telemetry_ipc import read_shared_json
+        try:privacy=read_shared_json(PROFILE/'capture_privacy.json') or {}
+        except (OSError,ValueError):privacy={}
+        account_feature=any(enabled(name) for name in ('synthstrings','missions','people'))
+        self.account=tk.BooleanVar(value=bool(privacy.get('account_access',account_feature)))
+        if account_feature:
+            ttk.Checkbutton(outer,text='Allow selected features to read my signed-in game account',variable=self.account).pack(anchor='w',pady=(12,3))
+            ttk.Label(outer,text='For your reputation, contracts, wallet and People. Uses the local game session directly with CIG; no password or token is sent to SynthScan. You can turn this off in Privacy.',style='Sub.TLabel',wraplength=700).pack(anchor='w')
         controls=ttk.Frame(outer);controls.pack(fill='x',pady=(15,12))
         self.retry=ttk.Button(controls,text='Retry setup',command=self.start);self.retry.pack(side='left',padx=(0,8))
         self.browse=ttk.Button(controls,text='Choose game folder',command=self.choose);self.browse.pack(side='left',padx=(0,8))
@@ -132,6 +146,12 @@ class SetupWindow:
             self.detail.config(text='Open RSI Launcher and finish installing or updating Star Citizen, then choose Retry setup. You can also choose its folder yourself.')
             self.retry.pack(side='left',before=self.browse,padx=(0,8));return
         os.environ['SYNTHSCAN_GAME_DIR']=str(game);self.game.config(text='Game: '+str(game))
+        from telemetry_ipc import read_shared_json,publish_json
+        try:privacy=read_shared_json(PROFILE/'capture_privacy.json') or {}
+        except (OSError,ValueError):privacy={}
+        privacy={**dict(schema=1,paused=False,pause_unfocused=True),**privacy,'account_access':self.account.get()}
+        if not publish_json(PROFILE/'capture_privacy.json',privacy):
+            self.detail.config(text='Could not save your account-access choice. Your previous setting was kept.');return
         self.busy=True;self.retry.pack_forget();self.allow.pack_forget();self.bar.configure(mode='indeterminate',value=0);self.bar.start(12)
         strings=self.strings.get();self.strings_choice.state(['disabled'])
         self.title.config(text='Preparing SynthScan for this PC')
@@ -162,7 +182,7 @@ class SetupWindow:
         self.window.withdraw()
 
     def finished(self):
-        self.strings_choice.state(['!disabled'])
+        self.strings_choice.state(['!disabled'] if self.strings_available else ['disabled'])
         self.busy=False;self.bar.stop();self.bar.configure(mode='determinate',value=100);self.title.config(text='Your HUD and library are ready')
         self.detail.config(text='Enter Star Citizen normally. Your own reputation syncs automatically; this window will tell you when the numbers are ready.')
         if self.initial:
@@ -180,7 +200,7 @@ class SetupWindow:
                 kind,value=self.messages.get_nowait()
                 if kind=='progress':self.detail.config(text=value)
                 elif kind=='error':
-                    self.strings_choice.state(['!disabled'])
+                    self.strings_choice.state(['!disabled'] if self.strings_available else ['disabled'])
                     self.busy=False;self.bar.stop();self.title.config(text='One step needs attention');self.detail.config(text=value[0])
                     self.retry.pack(side='left',before=self.browse,padx=(0,8))
                     if value[1]:self.allow.pack(side='left')
@@ -213,6 +233,10 @@ def main():
     if '--watch' in sys.argv:
         from native_control import watch
         watch();return
+    from feature_modules import modular
+    if modular() and not read(ROOT/'release.json').get('selection_configured'):
+        from module_ui import main as choose_modules
+        choose_modules(first_run=True);return
     if '--status' not in sys.argv and '--repair' not in sys.argv and ready():
         from community_startup import ensure_watcher
         ensure_watcher()

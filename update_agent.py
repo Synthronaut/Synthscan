@@ -104,7 +104,7 @@ def run(root,current,directory):
         stop_native(current/'dist/native/SynthScan.exe');stopped=True
         send_signal('contract-share-stop')
         deadline=time.monotonic()+8
-        while any(instance_running(kind) for kind in ('contract-share','native-top-hud','data-updates')) and time.monotonic()<deadline:time.sleep(.1)
+        while any(instance_running(kind) for kind in ('contract-share','native-top-hud','data-updates','native-timing','network-probe','mission-log')) and time.monotonic()<deadline:time.sleep(.1)
         if game_process_ids():return
         result=activate(root,current,directory,health=lambda target:ready(target,directory),launch=launch,
                         can_activate=lambda:not game_process_ids() and load(directory/'update_preferences.json').get('automatic_app',True) is True)

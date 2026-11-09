@@ -43,6 +43,7 @@ inline void icon(Graphics& g,const std::string& name,RectF box,Color color=Accen
     else if(name=="hud_piracy"){g.DrawEllipse(&p,5.f,3.f,14.f,14.f);g.DrawEllipse(&p,8.f,8.f,2.f,3.f);g.DrawEllipse(&p,14.f,8.f,2.f,3.f);line(8,21,16,21);line(10,17,10,21);line(14,17,14,21);}
     else if(name=="planner"||name=="mining"){line(4,7,17,4);line(17,4,22,8);line(12,6,7,21);line(10,9,17,17);}
     else if(name=="directory"){g.DrawEllipse(&p,3.f,3.f,18.f,18.f);line(12,6,15,12);line(15,12,9,18);line(9,18,12,6);}
+    else if(name=="executive_hangar"){line(3,21,3,8);line(3,8,12,3);line(12,3,21,8);line(21,8,21,21);line(3,21,21,21);line(7,21,7,11);line(7,11,17,11);line(17,11,17,21);line(12,11,12,21);}
     else if(name=="settings"){g.DrawEllipse(&p,8.f,8.f,8.f,8.f);for(int i=0;i<8;++i){auto t=g.Save();g.TranslateTransform(12.f,12.f);g.RotateTransform(float(i*45));line(0,-9,0,-7);g.Restore(t);}}
     else if(name=="refinery"){line(9,3,15,3);line(10,3,10,10);line(14,3,14,10);line(10,10,4,21);line(4,21,20,21);line(20,21,14,10);line(7,16,17,16);}
     else {GraphicsPath r;shape(r,{5,3,14,18},3);g.DrawPath(&p,&r);line(9,8,15,8);line(9,12,15,12);line(9,16,13,16);}

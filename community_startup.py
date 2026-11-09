@@ -1,5 +1,6 @@
 """Honor the installer's per-user startup choice in the current Windows session."""
 from pathlib import Path
+import json
 import subprocess
 import sys
 from installation import ROOT
@@ -9,11 +10,16 @@ def owns_shortcut():
     shortcut=shortcut_path()
     if not shortcut.exists():return False
     literal=lambda s:"'"+str(s).replace("'","''")+"'"
-    script="[Console]::OutputEncoding=New-Object System.Text.UTF8Encoding;$s=(New-Object -ComObject WScript.Shell).CreateShortcut("+literal(shortcut)+");$s.TargetPath"
+    script="[Console]::OutputEncoding=New-Object System.Text.UTF8Encoding;$s=(New-Object -ComObject WScript.Shell).CreateShortcut("+literal(shortcut)+");[PSCustomObject]@{target=$s.TargetPath;arguments=$s.Arguments}|ConvertTo-Json -Compress"
     try:
-        target=subprocess.check_output(['powershell.exe','-NoProfile','-NonInteractive','-Command',script],text=True,encoding='utf-8',creationflags=0x08000000,timeout=10).strip()
-        return bool(target) and Path(target).resolve().is_relative_to(ROOT.resolve())
-    except (OSError,subprocess.SubprocessError):return False
+        value=json.loads(subprocess.check_output(['powershell.exe','-NoProfile','-NonInteractive','-Command',script],text=True,encoding='utf-8',creationflags=0x08000000,timeout=10))
+        from installation import RELEASE,INSTALL_ROOT
+        if RELEASE:
+            return Path(value.get('target','')).resolve()==(INSTALL_ROOT/'SynthScan.exe').resolve() and value.get('arguments','').strip()=='--watch'
+        from auto_launch import python_windowless
+        expected=subprocess.list2cmdline(['-B',str(ROOT/'auto_launch.py'),'--watch'])
+        return Path(value.get('target','')).resolve()==Path(python_windowless()).resolve() and value.get('arguments')==expected
+    except (OSError,ValueError,TypeError,subprocess.SubprocessError):return False
 
 def ensure_watcher():
     from app_lifecycle import instance_running

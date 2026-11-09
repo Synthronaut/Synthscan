@@ -5,7 +5,7 @@ from telemetry_ipc import publish_json
 BUTTON_WIDTH=52
 
 def fresh_activity_status(status,owner,now):
-    try:return status.get('pid')==owner and 0<=now-float(status.get('at',0))<3
+    try:return status.get('activity_available',True) is not False and status.get('pid')==owner and 0<=now-float(status.get('at',0))<3
     except (TypeError,ValueError):return False
 
 def popout_expanded(status):
@@ -75,7 +75,7 @@ class ActivityButton:
         self.hwnd=api.GetParent(self.window.winfo_id()) or self.window.winfo_id()
         # Only this small control accepts clicks; it never activates the app.
         style=(api.GetWindowLongW(self.hwnd,-20)|0x80000|0x80|0x08000000)&~0x20
-        api.SetWindowLongW(self.hwnd,-20,style);api.SetWindowDisplayAffinity.argtypes=[w.HWND,w.DWORD];api.SetWindowDisplayAffinity(self.hwnd,0x11)
+        api.SetWindowLongW(self.hwnd,-20,style);api.SetWindowDisplayAffinity.argtypes=[w.HWND,w.DWORD];api.SetWindowDisplayAffinity(self.hwnd,0)
         # Explicitly retain the game's focus on the first click as well.
         proc_type=ctypes.WINFUNCTYPE(ctypes.c_ssize_t,w.HWND,w.UINT,w.WPARAM,w.LPARAM)
         api.GetWindowLongPtrW.argtypes=[w.HWND,ctypes.c_int];api.GetWindowLongPtrW.restype=ctypes.c_ssize_t
@@ -116,7 +116,7 @@ class ActivityButton:
         import ctypes
         from ctypes import wintypes as w
         self.height=ribbon.BAR_HEIGHT
-        visible=bool(getattr(ribbon,'_visible',False))
+        visible=bool(getattr(ribbon,'_visible',False) and self.status.get('activity_available',True))
         if visible:
             match=re.fullmatch(r'(\d+)x(\d+)([+-]\d+)([+-]\d+)',getattr(ribbon,'_last_geometry','') or '')
             bar=(int(match[3]),int(match[4]),int(match[1]),int(match[2])) if match else (ribbon.bar_win.winfo_x(),ribbon.bar_win.winfo_y(),ribbon.bar_width,ribbon.BAR_HEIGHT)

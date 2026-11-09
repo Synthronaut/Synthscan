@@ -1,5 +1,6 @@
 #pragma once
 #include "WorkspaceLayout.h"
+#include "NativeRedraw.h"
 #include <windows.h>
 #include <commctrl.h>
 #include <vector>
@@ -23,11 +24,12 @@ public:
     }
     template<class Layout> void apply(HWND parent,double scale,Layout layout){
         RECT client{};GetClientRect(parent,&client);
+        NativeRedraw::Layout pending(parent);
         for(const auto& control:controls)if(IsWindow(control.window)){
             auto box=layout(control.box,control.id,int(client.right/scale+.5),int(client.bottom/scale+.5));
-            MoveWindow(control.window,int(box.x*scale+.5),int(box.y*scale+.5),int(box.width*scale+.5),int(box.height*scale+.5),TRUE);
+            pending.place(control.window,int(box.x*scale+.5),int(box.y*scale+.5),int(box.width*scale+.5),int(box.height*scale+.5));
         }
-        InvalidateRect(parent,nullptr,FALSE);
+        if(pending.apply())RedrawWindow(parent,nullptr,nullptr,RDW_INVALIDATE|RDW_NOERASE|RDW_ALLCHILDREN);
     }
     void clear(){controls.clear();}
 };

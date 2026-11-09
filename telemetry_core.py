@@ -158,6 +158,7 @@ class IncrementalGameLog:
         self.medical_imprint = ""
         self.entities = None
         self.is_loading_screen = False
+        self.gameplay_ready_at = None
         self.observations.clear()
         if previous:
             self.events.append({"type": "left", "session": previous, "at": event_at if event_at is not None else time.time(), "reason": reason,
@@ -228,6 +229,7 @@ class IncrementalGameLog:
             self.player_name = match.group(1)
         if "OpenLoadingScreen" in line:
             self.is_loading_screen = True
+            self.gameplay_ready_at = None
             self.jurisdiction.reset()
         if "StopLoadingScreen" in line and ("Finished" in line or "Starting CET" in line):
             self.is_loading_screen = False
@@ -273,6 +275,10 @@ class IncrementalGameLog:
             self.connection_status = "recovering"
         if "StopLoadingScreen" in line and "Finished" in line:
             self.connection_status = "connected"
+            # A connection/join alone precedes the playable world. Only the
+            # final loading-screen event authorizes on-join automation.
+            if self.gameplay_ready_at is None and time_source=='game_log_timestamp':
+                self.gameplay_ready_at = at
 
         # Prefer explicit, player-scoped location names. Numeric inventory IDs are
         # not assumed to be universal station identifiers.
@@ -305,6 +311,7 @@ class IncrementalGameLog:
         if self.session_token:
             self.reset("rejoined", at,'next_join_bound')
         self.connected = True
+        self.gameplay_ready_at = None
         self.connection_status = "connected"
         self.full_shard_id = full_id
         self.region_raw, self.env_id, self.shard_id = shard.groups()

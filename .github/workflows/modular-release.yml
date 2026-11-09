@@ -1,0 +1,128 @@
+name: Unified modular release
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the verified unified installer and update channels
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  engines:
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        edition: [standard, full]
+    env:
+      SYNTHSCAN_EDITION: ${{ matrix.edition }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+          architecture: x64
+      - run: python -m pip install --require-hashes -r requirements-release.lock
+      - run: python -B tools/fetch_build_dependencies.py
+      - run: python -B tools/build_native_app.py
+      - name: Native engine checks
+        run: python -B -c "import subprocess; subprocess.run(['dist/native/SynthScan.exe','--selftest'],check=True,timeout=180)"
+      - name: Python regression suite
+        run: python -B -m unittest discover -s tests -q
+      - name: Assemble verified intermediate engine payload
+        run: python -B tools/package_community.py --edition ${{ matrix.edition }} --source out/source --package out/SynthScan-${{ matrix.edition }}-engine --native dist/native
+      - uses: actions/upload-artifact@v4
+        with:
+          name: modular-engine-${{ matrix.edition }}
+          path: out/SynthScan-${{ matrix.edition }}-engine.zip
+  assemble:
+    needs: engines
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+          architecture: x64
+      - run: python -m pip install --require-hashes -r requirements-release.lock
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: modular-engine-*
+          merge-multiple: true
+          path: out/engines
+      - name: Build signed feature packages
+        env:
+          SYNTHSCAN_SIGNING_PRIVATE_B64: ${{ secrets.SYNTHSCAN_SIGNING_PRIVATE_B64 }}
+        shell: pwsh
+        run: |
+          if (-not $env:SYNTHSCAN_SIGNING_PRIVATE_B64) { throw 'Configure the protected release-signing secret first.' }
+          Expand-Archive out/engines/SynthScan-standard-engine.zip out/standard
+          Expand-Archive out/engines/SynthScan-full-engine.zip out/full
+          $version = (Get-Content out/standard/SynthScan/release.json | ConvertFrom-Json).version
+          python -B tools/package_modules.py --standard out/standard/SynthScan --full out/full/SynthScan --output out/modules --url-base "https://github.com/Synthronaut/Synthscan/releases/download/v$version"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Validate isolated packaged selections
+        run: python -B tools/verify_modules.py --payload out/modules --output out/module-validation.json
+      - name: Build branded single installer
+        run: python -B tools/build_modular_installer.py --payload out/modules --output out/installer
+      - name: Verify actual installer, reader removal and uninstall
+        run: python -B tools/verify_modular_installer.py --installer out/installer/SynthScan-Setup-Windows-x64.exe --output out/installer-validation.json
+      - name: Build migration update packages
+        env:
+          SYNTHSCAN_SIGNING_PRIVATE_B64: ${{ secrets.SYNTHSCAN_SIGNING_PRIVATE_B64 }}
+        shell: pwsh
+        run: |
+          python -B tools/package_modular_updates.py --payload out/modules --output out/migration
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          New-Item -ItemType Directory out/signed | Out-Null
+          $version = (Get-Content out/modules/core/release.json | ConvertFrom-Json).version
+          foreach ($edition in @('standard','full')) {
+            $file = "SynthScan-$edition-Windows-x64.zip"
+            python -B tools/sign_release.py --archive "out/migration/$file" --url "https://github.com/Synthronaut/Synthscan/releases/download/v$version/$file" --output "out/signed/synthscan-update-$edition.json"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SynthScan-unified-release
+          path: |
+            out/installer/*.exe
+            out/installer/*.sha256
+            out/modules/*.zip
+            out/modules/synthscan-modules.json
+            out/modules/module-build-report.json
+            out/migration/*.zip
+            out/migration/*.sha256
+            out/signed/*.json
+            out/module-validation.json
+            out/installer-validation.json
+  publish:
+    if: inputs.publish
+    needs: assemble
+    runs-on: windows-2022
+    environment: community-release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: SynthScan-unified-release
+          path: out
+      - name: Publish immutable assets then promote signed channels
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $manifestFile = Get-ChildItem out -Recurse -Filter synthscan-update-full.json | Select-Object -First 1
+          $envelope = Get-Content $manifestFile.FullName | ConvertFrom-Json
+          $manifest = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($envelope.payload)) | ConvertFrom-Json
+          $tag = 'v' + $manifest.version
+          $assets = @(Get-ChildItem out -Recurse -File | ForEach-Object { $_.FullName })
+          gh release create $tag @assets --repo Synthronaut/Synthscan --target '${{ github.sha }}' --title "SynthScan $($manifest.version) — One installer, your features" --notes-file .github/modular-release-notes.md
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item $manifestFile.FullName out/synthscan-update.json
+          $standard = (Get-ChildItem out -Recurse -Filter synthscan-update-standard.json | Select-Object -First 1).FullName
+          $modules = (Get-ChildItem out -Recurse -Filter synthscan-modules.json | Select-Object -First 1).FullName
+          gh release upload update-channel out/synthscan-update.json $standard $modules --repo Synthronaut/Synthscan --clobber
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

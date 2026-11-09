@@ -11,6 +11,8 @@
 
 #include "AppPaths.h"
 #include "SynthScanShell.h"
+#include "HudModules.h"
+#include "SynthEdition.h"
 #include "CraftingData.h"
 #include "MiniJson.h"
 #include "RefineryData.h"
@@ -38,6 +40,11 @@ namespace SCMiner {
 static std::string uexToken();
 
 namespace {
+
+bool featureInstalled(const char* name){
+    static const auto release=SynthScan::read(AppPaths::program().parent_path().parent_path()/L"release.json");
+    return SynthScan::HudModules::installed(release,name,SynthEdition::screenReading);
+}
 
 // The OCR floor lives in MiningData.h, shared with the offline benchmark
 
@@ -582,6 +589,8 @@ Application::~Application() {
 bool Application::initialize() {
     // Load the saved capture region first
     loadRegionConfig();
+    if(!featureInstalled("synthstrings"))gameTextsWanted_=false;
+    if(!featureInstalled("mining_tools")&&!featureInstalled("item_finder"))uexWanted_=false;
 #ifndef BEDROCK_DEV_TOOLS
     recordScans_=false;
 #endif
@@ -2941,6 +2950,8 @@ CaptureRegion Application::trackingSearchArea() const {
 }
 
 void Application::applyLiveMode(bool active) {
+    auto modes=SynthScan::availableHudModes();
+    if(std::find(modes.begin(),modes.end(),0)==modes.end())active=false;
 #ifdef SYNTHSCAN_NO_SCREEN_READING
     active=false;
     if(gui_)gui_->setLiveModeActive(false);
@@ -4096,6 +4107,7 @@ void Application::applyGameState() {
 // to live mode: the player at a refinery has put the ship away, and the
 // terminal is the one thing on screen worth reading then.
 void Application::lookForRefinery() {
+    if(!featureInstalled("mining_recognition"))return;
     if (!gui_ || !textLines_.ready()) return;
     if (refineryJob_.valid()) {
         if (refineryJob_.wait_for(std::chrono::seconds(0)) != std::future_status::ready) return;
@@ -4281,6 +4293,7 @@ bool Application::queueRefineryShare(const RefineryShare::Reading& reading) {
 // the service could not be reached or was busy - and, while the Refinery
 // window is open, every five minutes what the service knows of each station
 void Application::serviceRefineryShare() {
+    if(!featureInstalled("mining_tools"))return;
     const std::string base = refineryServiceUrl();
     if (base.empty()) return;
     const auto now = std::chrono::steady_clock::now();
@@ -4350,6 +4363,7 @@ void Application::pushRefineryWorkloads() {
 // Only once the player has left the terminal: a long list has been scrolled
 // through by then, and the order has all its parts.
 void Application::handRefineryOrdersToUex() {
+    if(!featureInstalled("mining_tools"))return;
     const auto now = std::chrono::steady_clock::now();
     if (now - refineryHandCheck_ < std::chrono::seconds(5)) return;
     refineryHandCheck_ = now;
@@ -4484,6 +4498,7 @@ void Application::pollLibrary() {
 // taken away and the game shows its own texts from its next start. Either way
 // the choice is gametexts= in region_config.txt, written at once.
 void Application::setGameTextsWanted(bool wanted) {
+    if(wanted&&!featureInstalled("synthstrings"))return;
     gameTextsWanted_ = wanted;
     if(!library_.gameLog().empty())GameTexts::setEnabled(library_.gameLog().parent_path(),wanted);
     saveRegionConfig();
@@ -4516,6 +4531,7 @@ void Application::setGameTextsWanted(bool wanted) {
 // the whole library is known (the old logs read), and off the UI thread - the
 // first write of a game build reads the game's text out of Data.p4k.
 void Application::serviceGameTexts() {
+    if(!featureInstalled("synthstrings"))return;
     if (gameTextsJob_.valid() && gameTextsJob_.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
         const GameTexts::Outcome done = gameTextsJob_.get();
         gameTextsNote_ = done.note;
@@ -5004,6 +5020,7 @@ void Application::reportRefineryJob(const UexRefineryJob& job) {
 // station is not exactly one of UEX's refineries is left out, and the window
 // says why
 void Application::serviceUexReports() {
+    if(!featureInstalled("mining_tools")&&!featureInstalled("item_finder"))return;
     const auto now = std::chrono::steady_clock::now();
     if (uexSendJob_.valid() && uexSendJob_.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
         UexSent sent = uexSendJob_.get();
@@ -5182,6 +5199,12 @@ void Application::uexAccountAction(int action, const std::string& text) {
 // library is not the one at hand - and the game shows its own text there
 // until it is played with Bedrock open again, rather than an old one.
 void Application::keepGameTextsFresh() {
+#ifdef _WIN32
+    // The resident Python guard now monitors build identity before game launch,
+    // quarantines stale packs immediately and rechecks every write at commit.
+    // The old timestamp-only handler could restore an old pack on other channels.
+    return;
+#endif
     const auto now = std::chrono::steady_clock::now();
     if (now - lastGameTextsCheck_ < std::chrono::seconds(30)) return;
     lastGameTextsCheck_ = now;

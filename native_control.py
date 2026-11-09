@@ -2,7 +2,7 @@
 import argparse,ctypes,hashlib,json,logging,os,subprocess,time
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from app_lifecycle import ROOT,SingleInstance,Signal,game_process_ids,instance_running,send_signal,kernel
+from app_lifecycle import ROOT,SingleInstance,Signal,game_process_ids,launcher_process_ids,instance_running,send_signal,kernel,LaunchPolicy
 from refinery_orders import atomic_json
 
 BINARY=ROOT/'dist/native/SynthScan.exe'
@@ -29,10 +29,14 @@ def validate_binary():
 
 def launch(automatic=False):
     validate_binary()
+    # Re-anchor generated paths after an installer, move or version switch.
+    # These contain no credentials and are excluded from signed payload files.
+    import sys
+    atomic_json(BINARY.parent/'native_runtime.json',dict(workspace=str(ROOT),pythonw=str(Path(sys.executable).with_name('pythonw.exe'))))
+    atomic_json(TARGET,dict(schema=1,target='native',binary=str(BINARY)))
     if RELEASE:
         from setup_status import ready
         if not ready():
-            import sys
             return subprocess.Popen([str(Path(sys.executable).with_name('pythonw.exe')),'-I',str(ROOT/'app_launcher.py')],
                 cwd=ROOT,creationflags=subprocess.CREATE_NO_WINDOW)
     return subprocess.Popen([str(BINARY)]+(['--autostart'] if automatic else []),cwd=BINARY.parent,
@@ -87,11 +91,24 @@ def watch():
     handler=RotatingFileHandler(DATA/'launcher.log',maxBytes=1024*1024,backupCount=2,encoding='utf-8')
     handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(message)s'));logger.addHandler(handler)
     logger.info('Recovery watcher started')
+    from synthstrings_guard import GuardService
+    from feature_modules import enabled
+    from feature_services import IdleProvider
+    strings_guard=GuardService(DATA,BINARY) if enabled('synthstrings') else IdleProvider()
+    from launcher_activity import LauncherActivity
+    launcher_activity=LauncherActivity(DATA);launcher_launch=LaunchPolicy()
     last_error='';process=None
     try:
         while True:
             try:
                 games=game_process_ids();running=native_running();ready=native_ready()
+                launchers=launcher_process_ids()
+                launcher_activity.update(launchers,games)
+                strings_guard.tick()
+                if launcher_launch.needs_launch(launchers,running or setup_busy() or instance_running('updating')):
+                    process=launch(False);launcher_launch.mark_launched()
+                    logger.info('Started SynthScan for RSI Launcher')
+                    running=True
                 if process is not None and process.poll() is not None:
                     code=process.returncode
                     atomic_json(DATA/'native_process_exit.json',dict(at=time.time(),pid=process.pid,
@@ -110,6 +127,8 @@ def watch():
                 last_error=str(exc);logger.exception('Native game watcher poll failed')
             if stop.wait(3):break
     finally:
+        launcher_activity.close()
+        strings_guard.close()
         stop.close();lock.close();logger.removeHandler(handler);handler.close()
 
 def install():

@@ -89,22 +89,31 @@ class PopulationWatchTests(unittest.TestCase):
         self.assertTrue(all(p['at']>=3099 for p in view['points']))
 
     def test_switching_tabs_pauses_manual_timer_and_hides_metrics(self):
-        with patch('piracy_watch.threading.Thread.start'):
-            reader=PiracyReader(None)
+        reader=PiracyReader(None)
         reader.tick(True,'join-a',1000)
         reader.watch.command('toggle_wait',1000)
-        reader.latest=(sample(),1001,'join-a')
-        self.assertTrue(reader.tick(True,'join-a',1001)['fresh'])
+        self.assertFalse(reader.tick(True,'join-a',1001)['fresh'])
         view=reader.tick(False,'join-a',1010)
         self.assertFalse(view['waiting_active']);self.assertEqual(view['waiting_s'],10)
         self.assertEqual(view['metrics'],{})
         self.assertEqual(reader.tick(True,'join-a',1020)['waiting_s'],10)
 
     def test_inflight_frame_from_old_join_does_not_repopulate_new_join(self):
-        with patch('piracy_watch.threading.Thread.start'):
-            reader=PiracyReader(None)
+        reader=PiracyReader(None)
         reader.tick(True,'join-a',1000)
         reader.latest=(sample(),1001,'join-a')
         view=reader.tick(True,'join-b',1001)
         self.assertFalse(view['fresh']);self.assertEqual(view['metrics'],{})
         self.assertEqual(view['points'],[])
+
+    def test_piracy_never_starts_capture_and_never_publishes_old_screen_values(self):
+        import threading
+        with patch.object(threading.Thread,'start') as start:
+            reader=PiracyReader(None)
+            reader.tick(True,'join-a',1000)
+            reader.watch.observe(sample(),1001,'join-a',1001)
+            view=reader.tick(True,'join-a',1002)
+            start.assert_not_called()
+        self.assertEqual(view['metrics'],{})
+        self.assertEqual(view['points'],[])
+        self.assertEqual(view['source'],'Game logs and manual timer')

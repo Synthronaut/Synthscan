@@ -2,6 +2,8 @@
 #pragma once
 #include <string>
 #include <functional>
+#include <vector>
+#include <filesystem>
 namespace SCMiner {class MinerGUI;struct RockStats;struct RockContents;}
 namespace Gdiplus {class Graphics;}
 namespace SynthScan {
@@ -13,9 +15,16 @@ bool piracyDetails();
 int piracyHeight();
 int activityFooterHeight();
 bool questingMode();
+int missionsHudTab();
+int missionHudPreview(const std::filesystem::path& output);
 bool activityMode();
 bool hangarsMode();
+bool hangarInventoryMode();
+int hangarsHeight();
+int compboardHudPreview(const std::filesystem::path& output);
+bool compboardActionEnabled(int id);
 bool finderMode();
+std::vector<int> availableHudModes();
 bool finderKey(unsigned int message,size_t value,void* target);
 bool finderOwnsInput(void* target);
 void drawFinder(Gdiplus::Graphics& g,float width,float height,float scale);

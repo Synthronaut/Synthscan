@@ -5,7 +5,7 @@ import threading
 
 class FinderServices:
     def __init__(self, shops, market, extras=()):
-        self.services = (shops, market, *extras)
+        self.services = tuple(s for s in (shops, market, *extras) if s is not None)
         self.current_patch = ''
         self.stop = threading.Event()
         self.thread = threading.Thread(target=self.run, name='finder-services', daemon=True)

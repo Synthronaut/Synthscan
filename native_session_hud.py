@@ -71,11 +71,9 @@ def main():
     from hud_controller import game_window_rect
     from hud_controller import get_monitor_by_id
     from activity_hud import ActivityButton,ActivityQuickControls
-    from executive_hangar import HangarScheduleService
-    from hangar_card import HangarPublisher
+    from feature_modules import enabled as feature_enabled
     from region_history_hud import RegionHistory
     from interdiction_watch import AlertGate,piracy_alerts_enabled
-    from snare_alert_ui import SnareAlertWindow
     try:ctypes.windll.shcore.SetProcessDpiAwareness(2)
     except OSError:pass
     class ReadOnlyHistory:
@@ -137,15 +135,23 @@ def main():
                 self.bar_canvas.create_text(12,self.BAR_HEIGHT//2,anchor='w',text='SERVER INFORMATION UNAVAILABLE · waiting for session service',fill='#62ccff',font=('Consolas',9,'bold'))
                 self._last_rendered_key=None;return
             super().render_bar()
-    root=tk.Tk();root.withdraw();ribbon=Ribbon(root);gate=AlertGate(started_at);alert=SnareAlertWindow(root,game_window_rect);activity=ActivityButton(root,DATA,args.owner);collapse=ActivityQuickControls(root,DATA,args.owner);ribbon.activity_button=activity
-    from companion_toasts import NoticeGate,CompanionToast
-    companion_gate=NoticeGate(started_at);companion_toast=CompanionToast(root,game_window_rect)
+    class SilentVisual:
+        shown=0
+        def update(self,*args,**kwargs):pass
+        def consume(self,*args,**kwargs):return []
+    root=tk.Tk();root.withdraw();ribbon=Ribbon(root);gate=AlertGate(started_at);alert=SilentVisual();activity=ActivityButton(root,DATA,args.owner);collapse=ActivityQuickControls(root,DATA,args.owner);ribbon.activity_button=activity
+    if feature_enabled('piracy'):
+        from snare_alert_ui import SnareAlertWindow
+        alert=SnareAlertWindow(root,game_window_rect)
+    companion_gate=companion_toast=SilentVisual()
+    if feature_enabled('people'):
+        from companion_toasts import NoticeGate,CompanionToast
+        companion_gate=NoticeGate(started_at);companion_toast=CompanionToast(root,game_window_rect)
     session_view=RibbonSessionState();cached_settings={};last_feed_status=None
     def callback_error(kind,value,traceback):
         logging.error('HUD input callback failed',exc_info=(kind,value,traceback))
     root.report_callback_exception=callback_error
     history=RegionHistory(root);ribbon.region_history=history
-    hangar=HangarPublisher(DATA,args.owner);hangar_service=HangarScheduleService(DATA)
     def protected_now():
         from overlay_input import foreground_process_id,protect_game_input
         return protect_game_input(foreground_process_id(),{os.getpid(),args.owner},bool(game_window_rect()))
@@ -197,13 +203,7 @@ def main():
             activity.sync(ribbon,native,game_window_rect() or get_monitor_by_id(ribbon.game_monitor))
             collapse.sync(ribbon,native,game_window_rect() or get_monitor_by_id(ribbon.game_monitor))
             history.follow(ribbon,game_window_rect() or get_monitor_by_id(ribbon.game_monitor))
-            hangar_enabled=settings.get('hud_mode')=='hangars'
-            try:
-                hangar.tick(hangar_service,hangar_enabled)
-            except Exception:
-                logging.exception('Optional hangar timer refresh failed')
-                pass
-            enabled=piracy_alerts_enabled(settings,bool(game_window_rect()))
+            enabled=feature_enabled('piracy') and piracy_alerts_enabled(settings,bool(game_window_rect()))
             notices=gate.consume(snapshot,args.owner,time.time(),enabled)
             alert.update(notices,ribbon.state.get('session_token'),enabled)
             try:companion_snapshot=read_shared_json(DATA/'companion_alerts.json',limit=65536)
@@ -219,7 +219,7 @@ def main():
                         visible=bool(ribbon._visible),geometry=ribbon._last_geometry,input_protected=protected,
                         session_token=ribbon.state.get('session_token'),callsign=ribbon.state.get('callsign'),layout='ribbon',
                         connection_status=feed_status,last_known_identity=bool(ribbon.state.get('last_known_identity')),feed_age_seconds=ribbon.state.get('feed_age_seconds',0),
-                        draggable=ribbon.editing,server_bar_locked=ribbon.server_bar_locked,position=ribbon.position,region_history_visible=history.visible,region_history_open=history.open,region_color=(getattr(ribbon,'region_hit',None) or {}).get('color'),region_text=(getattr(ribbon,'region_hit',None) or {}).get('text'),region_last_input=getattr(history,'last_input',None),region_transition=getattr(history,'last_transition',None),region_canvas_size=[history.canvas.winfo_width(),history.canvas.winfo_height()],region_geometry=history.geometry,region_popup_geometry=getattr(history,'popup_rect',None),activity_button_visible=activity.visible,activity_button_geometry=activity.geometry,collapse_button_visible=collapse.visible,collapse_button_geometry=collapse.geometry,hangar_timer_visible=hangar.visible,hangar_timer_geometry=hangar.geometry,hangar_timer_phase=(hangar.view or {}).get('phase'),hangar_timer_lights=(hangar.view or {}).get('lights'),activity_expanded=native.get('activity_expanded',True),snare_watch_enabled=enabled,snare_alerts_shown=alert.shown))
+                        draggable=ribbon.editing,server_bar_locked=ribbon.server_bar_locked,position=ribbon.position,region_history_visible=history.visible,region_history_open=history.open,region_color=(getattr(ribbon,'region_hit',None) or {}).get('color'),region_text=(getattr(ribbon,'region_hit',None) or {}).get('text'),region_last_input=getattr(history,'last_input',None),region_transition=getattr(history,'last_transition',None),region_canvas_size=[history.canvas.winfo_width(),history.canvas.winfo_height()],region_geometry=history.geometry,region_popup_geometry=getattr(history,'popup_rect',None),activity_button_visible=activity.visible,activity_button_geometry=activity.geometry,collapse_button_visible=collapse.visible,collapse_button_geometry=collapse.geometry,activity_expanded=native.get('activity_expanded',True),snare_watch_enabled=enabled,snare_alerts_shown=alert.shown))
         except (OSError,ValueError,TypeError,KeyError):
             try:games=game_process_ids()
             except OSError:games=None
@@ -229,6 +229,6 @@ def main():
             logging.exception('Top HUD refresh failed')
         root.after(250,poll)
     try:poll();root.mainloop()
-    finally:hangar_service.close();lock.close()
+    finally:lock.close()
 
 if __name__=='__main__':main()

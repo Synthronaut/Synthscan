@@ -383,7 +383,7 @@ void renderPeople(){
         InvalidateRect(list,nullptr,FALSE);filling=false;
     }
     renderActions();ensureTagWidth(508,people);ensureTagWidth(528,actionRows);selection();
-    std::string status=!fresh()?"Services unavailable":model.textOr("session_token").empty()?"Join a shard to load people":std::to_string(field(model,"rows").items.size())+" reported shard members · "+age(model.numberOr("roster_at"));
+    std::string status=!fresh()?"Services unavailable":model.textOr("session_token").empty()?"Waiting for current shard":model.numberOr("roster_at")<=0?(model.textOr("roster_error").empty()?"Loading shard members…":"Shard list unavailable"):std::to_string(field(model,"rows").items.size())+" reported shard members · "+age(model.numberOr("roster_at"));
     if(source==1){
         bool matching=!query.empty()&&query==normalizedQuery(model.textOr("search_query"));
         status=matching?(flag(model,"search_busy")?"Searching handles…":std::to_string(people.size())+" result(s) for “"+model.textOr("search_query")+"”"):(query.empty()?"Enter a handle, then click Find player.":"Click Find player to look up “"+text(501)+"”. Previous results are hidden.");

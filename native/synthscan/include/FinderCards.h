@@ -1,6 +1,7 @@
 #pragma once
 #include "SynthJson.h"
 #include "FinderLayout.h"
+#include "HudTheme.h"
 #include <gdiplus.h>
 #include <functional>
 #include <algorithm>
@@ -13,7 +14,7 @@
 // Paint-only content. No window, capture, focus or transparency changes.
 namespace FinderCards {
 using namespace SynthScan;
-inline const Gdiplus::Color Ink(255,238,239,241),Muted(255,160,166,176),Accent(255,98,204,255),Card(255,24,26,30),Green(255,92,215,162),Red(255,245,127,130);
+inline const Gdiplus::Color Ink=HudTheme::Text,Muted=HudTheme::Muted,Accent=HudTheme::modeAccent(4),Card(255,24,26,30),Green(255,92,215,162),Red(255,245,127,130);
 struct Link {Gdiplus::RectF rect;std::string url;};
 inline std::string money(double value){std::ostringstream out;out<<std::fixed<<std::setprecision(0)<<value;auto s=out.str();for(int at=int(s.size())-3;at>0;at-=3)s.insert(at,",");return s;}
 inline std::string quantity(double value){std::ostringstream out;out<<std::setprecision(6)<<value;return out.str();}

@@ -55,16 +55,8 @@ class PlayerClient:
             request_serializer=lambda v:v.SerializeToString(),response_deserializer=response.FromString)(request,timeout=8,metadata=self.account.metadata)
 
     def scope(self,context):
-        from app_lifecycle import game_process_ids
-        from installation import game_directory
-        from telemetry_core import IncrementalGameLog
-        if not context.get('session_token') or not game_process_ids():raise ValueError('Join a shard to use social tools.')
-        reader=IncrementalGameLog(game_directory(True)/'Game.log');length=Path(reader.log_path).stat().st_size
-        while reader.last_pos<length:
-            previous=reader.last_pos;reader.poll()
-            if reader.last_pos==previous:break
-        if not reader.connected or reader.full_shard_id!=context.get('full_shard_id') or reader.joined_at!=context.get('joined_at'):
-            raise ValueError('Session changed. Refresh the player list.')
+        from player_session import require_current_session
+        require_current_session(context)
 
     def search(self,query,context):
         query=query.strip()

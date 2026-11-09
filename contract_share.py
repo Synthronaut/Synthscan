@@ -1,7 +1,8 @@
-"""Notification acceptance policy. No input or game access in this module."""
+"""Notification acceptance and on-join policy. No input or game access here."""
 from datetime import datetime
 import re
 import time
+import math
 import xml.etree.ElementTree as ET
 
 UUID=r'[0-9a-fA-F-]{36}'
@@ -31,6 +32,64 @@ def acceptance_settings(raw):
     """Migrate the existing contract preference; social acceptance is opt-in."""
     return dict(contract=raw.get('enabled') is True,
                 party=raw.get('party_enabled') is True, friend=raw.get('friend_enabled') is True)
+
+
+class GlobalChatOnJoin:
+    """One F12 attempt per newly loaded join; never retry a toggle key.
+
+    Starting/re-enabling the helper in an already loaded world must not undo
+    a previous manual or automatic toggle. Old log completions are ignored.
+    Focus loss and stale snapshots only pause; neither rearms a sent join.
+    """
+    SETTLE_SECONDS=2
+    def __init__(self,now,enabled=False):
+        self.enabled=enabled;self.armed_at=now;self.attempted=set();self.processes={}
+        self.message='Waiting for the next game join' if enabled else 'Off'
+
+    def set_enabled(self,enabled,now):
+        if enabled!=self.enabled:
+            self.enabled=enabled;self.armed_at=now
+            self.message='Waiting for the next game join' if enabled else 'Off'
+
+    def candidate(self,snapshot,owner,now,foreground_pid,held=()):
+        self.message='Off'
+        if not self.enabled:return None
+        self.message='Waiting for fresh game session data'
+        stamp=snapshot.get('written_at')
+        if (snapshot.get('owner_pid')!=owner or not self.number(stamp)
+                or not 0<=now-stamp<3):return None
+        token=snapshot.get('session_token')
+        joined=snapshot.get('joined_at');shard=snapshot.get('full_shard_id')
+        self.message='Waiting for the game to finish loading'
+        if not token or not shard or not self.number(joined):return None
+        # Reader generations change when a process/log restarts. The actual
+        # timestamped join remains the same and must not authorize another F12.
+        join=(shard,joined);pids=tuple(sorted(snapshot.get('game_pids',[])))
+        if not pids:return None
+        self.processes.setdefault(join,pids)
+        if self.processes[join]!=pids:return None
+        if (snapshot.get('is_loading_screen') is not False
+                or snapshot.get('connection_status')!='connected'):return None
+        if join in self.attempted:
+            self.message='F12 sent for this join';return None
+        ready=snapshot.get('gameplay_ready_at')
+        if not self.number(ready) or not joined<=ready<=now:return None
+        if ready<self.armed_at:
+            self.message='Waiting for the next game join';return None
+        if now-ready<self.SETTLE_SECONDS:return None
+        self.message='Waiting for Star Citizen to be focused'
+        if not foreground_pid or foreground_pid not in snapshot.get('game_pids',[]):return None
+        self.message='Waiting for modifier/F12 key release'
+        if accept_blockers(held,0x7b):return None
+        self.message='Ready to hide global chat'
+        return join
+
+    def attempted_once(self,join):
+        if join in self.attempted:return False
+        self.attempted.add(join);self.message='F12 sent for this join';return True
+
+    @staticmethod
+    def number(value):return isinstance(value,(int,float)) and not isinstance(value,bool) and math.isfinite(value)
 
 def notification_kind(title):
     plain=re.sub(r'<[^>]+>','',title).strip()

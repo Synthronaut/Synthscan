@@ -40,13 +40,24 @@ uex_key.dat
 portable.txt
 reputation_snapshot.json
 reputation_localization_state.json
+mission_log.sqlite3*
+mission_evidence.jsonl
+mission_log_view.json
+mission_hud.json
+mission_log_status.json
+mission_log_commands/
+mission_service_snapshot.json
+mission_capture_status.json
 
 /native/mining_worker/build/
 
 # Local daylight observations and saved destination
 /daylight_preferences.json
 /daylight_calibration.json
-
 /game_text/
 /localization_backups/
 /uninstall_result.json
+/synthstrings_notice_seen.json
+/module_selection.json
+/module_install_error.json
+/module_text_cleanup.json

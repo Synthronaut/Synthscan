@@ -53,7 +53,7 @@ def main():
         other_owner=hangar_state.get('owner_pid')!=os.getpid() and 0<=time.time()-hangar_state.get('at',0)<15
         if hangar_service and other_owner:
             hangar_service.close();hangar_service=None;hangar_publisher=None
-        elif not other_owner:
+        elif not other_owner and __import__('feature_modules').enabled('hangars'):
             if hangar_service is None:
                 from executive_hangar import HangarScheduleService
                 from hangar_card import HangarPublisher

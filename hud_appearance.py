@@ -225,14 +225,10 @@ def render_original_bar(self):
         x = (bbox[2] + 8) if bbox else (x + 140)
     else:
         # Clean unified server string: "SHARD 200 [GAME-7]" or "SHARD 200" (no duplicate "SHARD 200" stutter!)
-        display_srv = "NAME NOT CAPTURED" if is_connected else callsign
-        cs_id = c.create_text(x, cy, text=display_srv, anchor="w", fill="#94a3b8", font=("Consolas", 8, "bold"))
+        display_srv = shard_str if is_connected else callsign
+        cs_id = c.create_text(x, cy, text=display_srv, anchor="w", fill="#cbd5e1", font=("Consolas", 8, "bold"))
         bbox = c.bbox(cs_id)
         x = (bbox[2] + 8) if bbox else (x + 105)
-        if is_connected:
-            x = _sep(x)
-            sh_item = c.create_text(x, cy, text=shard_str, anchor="w", fill="#cbd5e1", font=("Consolas", 8, "bold"))
-            bbox = c.bbox(sh_item);x = (bbox[2]+8) if bbox else (x+90)
 
     if is_connected and shard_id != "--" and hop_status:
         is_new = "NEW" in hop_status

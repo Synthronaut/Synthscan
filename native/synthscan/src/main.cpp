@@ -31,6 +31,8 @@
 #include "MiningLocations.h"
 #include "AppPaths.h"
 #include "SynthScanShell.h"
+#include "SynthHome.h"
+#include "SynthExecutiveHangar.h"
 namespace SynthScan {int workspacePreview(const std::filesystem::path& directory);}
 #include "SynthCompanion.h"
 #include "Updater.h"
@@ -4120,13 +4122,22 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     // It never requests credentials and preserves other localization packs.
     int setupArgc=0;auto setupArgv=CommandLineToArgvW(GetCommandLineW(),&setupArgc);
     for(int i=1;setupArgv&&i+3<setupArgc;i++)if(std::wstring(setupArgv[i])==L"--render-texts") {
-        std::wstring bits=setupArgv[i+3];if(bits.size()!=SCMiner::CRAFT_BLUEPRINT_COUNT||bits.find_first_not_of(L"01")!=std::wstring::npos){LocalFree(setupArgv);return 3;}
+        std::wstring bits=setupArgv[i+3];
+        std::vector<bool> owned;
+        if(bits==L"-"){
+            SCMiner::BlueprintLibrary library;library.load();
+            library.setGameLog(std::filesystem::path(setupArgv[i+1])/L"Game.log");
+            for(int b=0;b<SCMiner::CRAFT_BLUEPRINT_COUNT;b++)owned.push_back(library.owned(b));
+        }else{
+            if(bits.size()!=SCMiner::CRAFT_BLUEPRINT_COUNT||bits.find_first_not_of(L"01")!=std::wstring::npos){LocalFree(setupArgv);return 3;}
+            for(auto c:bits)owned.push_back(c==L'1');
+        }
         auto output=std::filesystem::path(setupArgv[i+2]);
         std::error_code pathError;auto allowed=std::filesystem::weakly_canonical(SCMiner::AppPaths::data()/L"game_text",pathError);
         auto destination=std::filesystem::weakly_canonical(output,pathError);auto relative=destination.lexically_relative(allowed);
         if(pathError||relative.empty()||relative.is_absolute()||*relative.begin()==L".."){LocalFree(setupArgv);return 3;}
-        std::vector<bool> owned;for(auto c:bits)owned.push_back(c==L'1');
-        std::string text,note;int marked=0;bool built=SCMiner::GameTexts::build(std::filesystem::path(setupArgv[i+1]),owned,text,marked,note);
+        std::string text,note,base;int marked=0;bool built=SCMiner::GameTexts::build(std::filesystem::path(setupArgv[i+1]),owned,text,marked,note,&base);
+        if(built){auto baseline=output;baseline+=L".base";std::ofstream stream(baseline,std::ios::binary|std::ios::trunc);stream<<base;built=stream.good();}
         if(built){std::ofstream stream(output,std::ios::binary|std::ios::trunc);stream<<text;built=stream.good();}
         LocalFree(setupArgv);return built?0:2;
     }
@@ -4151,6 +4162,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         LocalFree(setupArgv);return prices&&value.rawKnown&&value.refinedKnown?0:2;
     }
     if(setupArgv)LocalFree(setupArgv);
+    for(int i=1;i+1<__argc;i++)if(std::string(__argv[i])=="--mission-hud-preview")return SynthScan::missionHudPreview(std::filesystem::u8path(__argv[i+1]));
     for(int i=1;i+1<__argc;i++)if(std::string(__argv[i])=="--people-style-preview") {
         // GDI+ bitmap only: no HWND, foreground change, capture or game input.
         return SynthCompanion::stylePreview(std::filesystem::u8path(__argv[i+1]));
@@ -4162,6 +4174,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         // Synthetic controls under a hidden parent; no game capture or input.
         setupConsole(true);return SynthScan::workspacePreview(std::filesystem::u8path(__argv[i+1]));
     }
+    for(int i=1;i+1<__argc;i++)if(std::string(__argv[i])=="--compboard-hud-preview")return SynthScan::compboardHudPreview(std::filesystem::u8path(__argv[i+1]));
+    for(int i=1;i+1<__argc;i++)if(std::string(__argv[i])=="--executive-hangar-preview")return SynthExecutiveHangar::preview(std::filesystem::u8path(__argv[i+1]));
+    for(int i=1;i+1<__argc;i++)if(std::string(__argv[i])=="--home-paint-check")return SynthHome::paintCheck(std::filesystem::u8path(__argv[i+1]));
     for(int i=1;i+1<__argc;i++)if(std::string(__argv[i])=="--ui-test") {
         // Interactive window fixtures are never run alongside the game.
         if(SCMiner::ScreenCapture::gameWindow())return 4;

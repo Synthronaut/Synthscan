@@ -27,6 +27,14 @@ Player records and restoration journals are excluded from public source/package 
 
 ## Removal and recovery
 
+Launcher opening and installation-file events trigger patch protection before
+play. Automatic checks pause during play and when the launcher is closed.
+Outdated, exclusively owned SynthStrings packs are quarantined in AppData before
+rebuilding against fresh game text. Home provides specific results and direct
+Text settings controls, including an explicit backed-up switch from an existing
+pack to generated SynthStrings. See [patch protection](synthstrings-patch-protection.md)
+for ownership rules, checks and timing limits.
+
 Native generation, blueprint annotation, reputation annotation and older Python editors now use one managed transaction layer. It records originals **before** changing game text and rejects linked/hard-linked targets.
 
 Setup provides **Remove SynthStrings** separately from uninstall. Uninstall also cleans recorded channels:

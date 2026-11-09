@@ -47,7 +47,7 @@ def install():
         f"$link.TargetPath = {literal(python_windowless())}",
         f"$link.Arguments = {literal(subprocess.list2cmdline(['-B', str(ROOT / 'auto_launch.py'), '--watch']))}",
         f"$link.WorkingDirectory = {literal(ROOT)}",
-        "$link.Description = 'Start SynthScan when Star Citizen launches'",
+        "$link.Description = 'Open SynthScan with RSI Launcher'",
         "$link.WindowStyle = 7",
         f"$link.IconLocation = {literal(str(ROOT / 'assets/branding/SynthScan-Blue.ico')+',0')}",
         "$link.Save()",

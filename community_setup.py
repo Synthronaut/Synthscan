@@ -32,6 +32,8 @@ def prepare_reputation(paths):
 
 
 def prepare(progress=print,force=False,strings=None):
+    from feature_modules import enabled
+    if not enabled('synthstrings'):strings=False
     PROFILE.mkdir(parents=True,exist_ok=True)
     game=game_directory(True)
     (PROFILE/'installation.json').write_text(json.dumps(dict(game_dir=str(game))),encoding='utf-8')

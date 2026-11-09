@@ -2,7 +2,8 @@
 import math
 
 from app_lifecycle import game_process_ids
-from frame_telemetry import LIVE_FRAMES
+from installation import PROFILE
+LIVE_FRAMES=PROFILE.parent/'network-research/live-frames.json'
 from telemetry_ipc import read_shared_json
 
 

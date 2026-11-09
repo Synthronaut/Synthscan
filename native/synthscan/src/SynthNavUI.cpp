@@ -45,7 +45,7 @@ LRESULT CALLBACK proc(HWND h,UINT m,WPARAM w,LPARAM l){
  if(m==WM_COMMAND){int id=LOWORD(w);if(id==704&&HIWORD(w)==LBN_SELCHANGE&&!busy){int i=int(SendDlgItemMessageW(h,704,LB_GETCURSEL,0,0));const auto& marks=field(model,"marks").items;if(i>=0&&i<int(marks.size()))send(obj({{"action",str("nav_select")},{"bookmark_id",field(marks[i],"id")}}));}else if(HIWORD(w)==BN_CLICKED)act(id);return 0;}
  if(m==WM_CTLCOLORSTATIC||m==WM_CTLCOLOREDIT||m==WM_CTLCOLORLISTBOX){SetTextColor((HDC)w,TEXT);SetBkColor((HDC)w,m==WM_CTLCOLORSTATIC?BG:CARD);return (LRESULT)(m==WM_CTLCOLORSTATIC?bg:input);}
  if(m==WM_ERASEBKGND)return TRUE;
- if(m==WM_PAINT){PAINTSTRUCT ps;HDC dc=BeginPaint(h,&ps);RECT r;GetClientRect(h,&r);FillRect(dc,&r,bg);SelectObject(dc,title);SetBkMode(dc,TRANSPARENT);SetTextColor(dc,GOLD);const wchar_t* s=L"Rock bookmarks · field test";TextOutW(dc,px(20),px(16),s,int(wcslen(s)));EndPaint(h,&ps);return 0;}
+ if(m==WM_PAINT){PAINTSTRUCT ps;HDC dc=BeginPaint(h,&ps);RECT r;GetClientRect(h,&r);FillRect(dc,&r,bg);SelectObject(dc,title);SetBkMode(dc,TRANSPARENT);SetTextColor(dc,GOLD);const wchar_t* s=L"Rock bookmarks · field test";TextOutW(dc,px(270),px(16),s,int(wcslen(s)));EndPaint(h,&ps);return 0;}
  return DefWindowProcW(h,m,w,l);
 }
 }
@@ -59,7 +59,7 @@ void open(){
  ctl(L"STATIC",L"Body / coordinate model",0,20,95,370,20,0);ctl(L"COMBOBOX",L"",CBS_DROPDOWNLIST|WS_VSCROLL,20,119,400,350,701);
  ctl(L"STATIC",L"Bookmark name",0,440,95,300,20,0);ctl(L"EDIT",L"Rock / station test",ES_AUTOHSCROLL,440,119,440,28,702);SendDlgItemMessageW(win,702,EM_SETLIMITTEXT,200,0);
  ctl(L"STATIC",L"Distance from ship to rock · meters (uncertainty)",0,20,162,460,20,0);ctl(L"EDIT",L"0",ES_AUTOHSCROLL,500,158,120,28,703);SendDlgItemMessageW(win,703,EM_SETLIMITTEXT,10,0);
- ctl(L"BUTTON",L"Back to Mining Diary",BS_PUSHBUTTON,650,16,230,30,717);
+ ctl(L"BUTTON",L"‹ Mining Diary",BS_PUSHBUTTON,20,16,230,30,717);
  ctl(L"BUTTON",L"1  Arm new bookmark",BS_PUSHBUTTON,20,202,265,34,710);ctl(L"BUTTON",L"2  Arm stationary check",BS_PUSHBUTTON,300,202,280,34,711);ctl(L"BUTTON",L"3  Arm current fix",BS_PUSHBUTTON,595,202,285,34,712);
  ctl(L"STATIC",L"After arming, type /showlocation in game chat. For step 2, stay parked for at least 30 seconds.",0,20,250,860,35,0);
  ctl(L"LISTBOX",L"",LBS_NOTIFY|WS_VSCROLL,20,295,310,220,704);

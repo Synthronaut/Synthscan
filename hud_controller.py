@@ -7,7 +7,6 @@ import tkinter.font as tkfont
 
 from config import get_monitor_by_id, load_config, save_config
 from telemetry_labels import translate_location, translate_region
-from validated_displayinfo import ValidatedDisplayInfoReader
 from hud_appearance import render_original_bar
 from network_source import read_network_ping
 from frame_source import read_client_fps
@@ -60,6 +59,7 @@ class TopTelemetryHUD:
         self.BAR_HEIGHT = 24 if self.compact else 28
         self._content_width = None
         self.medical_imprint = self.cfg.get("medical_imprint", "UNKNOWN")
+        from validated_displayinfo import ValidatedDisplayInfoReader
         self.bitmap_reader = ValidatedDisplayInfoReader()
         self.log_reader = IncrementalGameLog(**({"log_path": game_log_path} if game_log_path else {}), translate_location=translate_location)
         self.shard_tracker = ShardHistory(history_path or BASE_DIR / "shard_history.json")
@@ -402,7 +402,8 @@ class TopTelemetryHUD:
         style = user.GetWindowLongW(hwnd,-20) | 0x80000 | 0x80 | 0x08000000
         style = style & ~0x20 if self.editing else style | 0x20
         user.SetWindowLongW(hwnd,-20,style)
-        user.SetWindowDisplayAffinity(hwnd,0x11)
+        # OCR captures the game window itself; allow this separate HUD in streams.
+        user.SetWindowDisplayAffinity(hwnd,0)
 
     def set_editing(self, enabled):
         self.editing = bool(enabled)

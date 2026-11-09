@@ -1,6 +1,5 @@
 """DisplayInfo observations for piracy planning; population is not a catch signal."""
 import math
-import threading
 import time
 
 FIELDS=('shard_pop','srv_pop','server_fps','ping_ms')
@@ -67,69 +66,19 @@ class PopulationWatch:
                     timer_note='Manual timer · not snare detection')
 
 class PiracyReader:
+    """Log-only piracy support. No capture worker, OCR imports or screen metrics."""
     def __init__(self, directory):
         self.watch=PopulationWatch(directory)
-        self.context=(False,None);self.lock=threading.Lock();self.latest=None;self.error=''
-        self.stop_event=threading.Event()
-        self.thread=threading.Thread(target=self._run,name='piracy-displayinfo',daemon=True)
-        from app_edition import screen_reading
-        if screen_reading():self.thread.start()
-
-    def _run(self):
-        capture=None;reader=None;retry=0
-        try:
-            while not self.stop_event.wait(.5):
-                enabled,token=self.context
-                if not enabled or not token:
-                    if capture:capture.stop();capture=None
-                    continue
-                if time.monotonic()<retry:continue
-                try:
-                    from window_telemetry_capture import WindowTelemetryCapture,game_window_handle
-                    hwnd=game_window_handle()
-                    if not hwnd:
-                        if capture:capture.stop();capture=None
-                        continue
-                    if capture and (capture.hwnd!=hwnd or capture.finished):capture.stop();capture=None
-                    if not capture:
-                        capture=WindowTelemetryCapture(lambda:self.context[1],interval=1)
-                        capture.start(hwnd)
-                    frame=capture.take_latest()
-                    if frame:
-                        image,at,frame_token=frame
-                        if reader is None:
-                            from validated_displayinfo import ValidatedDisplayInfoReader
-                            reader=ValidatedDisplayInfoReader()
-                        values=reader.parse_image(image)
-                        with self.lock:self.latest=(values,at,frame_token);self.error=''
-                except Exception as exc:
-                    with self.lock:self.error='Screen reader unavailable ('+type(exc).__name__+')'
-                    if capture:
-                        try:capture.stop()
-                        except Exception:pass
-                        capture=None
-                    retry=time.monotonic()+10
-        finally:
-            if capture:
-                try:capture.stop()
-                except Exception:pass
 
     def tick(self, enabled, token, now=None):
         now=time.time() if now is None else now
         self.watch.session(token,now)
         if not enabled and self.watch.started is not None:self.watch.command('toggle_wait',now)
-        self.context=(enabled,token)
-        with self.lock:latest,self.latest=self.latest,None;error=self.error
-        if latest:self.watch.observe(*latest,now)
-        view=self.watch.view(now,enabled)
-        from app_edition import screen_reading
-        if not screen_reading():
-            view.update(status='Screen readings are not installed · manual timer available',source='Manual timer',metrics={},fresh=False)
-            return view
-        if error:view['status']=error
-        if not token:view['status']='Join a shard to watch population'
+        view=self.watch.view(now,False)
+        view.update(metrics={},field_ages={},held_fields=[],points=[],delta_5m=None,delta_15m=None,
+                    observed_at=0,age_s=None,fresh=False,source='Game logs and manual timer',
+                    status='Log reports and manual wait timer' if token else 'Join a shard to use the wait timer')
         return view
 
     def close(self):
-        self.stop_event.set()
-        if self.thread.ident is not None:self.thread.join(timeout=2)
+        pass

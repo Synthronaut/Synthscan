@@ -1,5 +1,8 @@
 #include "MinerGUI.h"
 #include "MiningTrip.h"
+#include "HudTheme.h"
+#include "CompboardHudLayout.h"
+#include "HudFeather.h"
 #include "CraftingBonus.h"
 #include "OverlayPlacement.h"
 #include "ScreenCapture.h"
@@ -838,6 +841,7 @@ MinerGUI::MinerGUI() {
 }
 
 MinerGUI::~MinerGUI() {
+    HudFeather::destroy();
     if (crafting_) DestroyWindow(crafting_);
     if (hwnd_) {
         // Both, not just the one: DestroyWindow releases them anyway, but
@@ -1142,9 +1146,15 @@ void MinerGUI::createControls() {
     CreateWindowW(L"BUTTON",L"Missions",btnStyle,0,0,10,10,hwnd_,(HMENU)31813,hInstance_,nullptr);
     CreateWindowW(L"BUTTON",L"Hangars",btnStyle,0,0,10,10,hwnd_,(HMENU)31818,hInstance_,nullptr);
     CreateWindowW(L"BUTTON",L"Finder",btnStyle,0,0,10,10,hwnd_,(HMENU)31819,hInstance_,nullptr);
+    const wchar_t* missionTabs[]={L"Active",L"aUEC",L"Reputation",L"Runs"};
+    for(int i=0;i<4;++i)CreateWindowW(L"BUTTON",missionTabs[i],btnStyle,0,0,10,10,hwnd_,(HMENU)(INT_PTR)(31920+i),hInstance_,nullptr);
     CreateWindowW(L"BUTTON",L"Start wait",btnStyle,0,0,10,10,hwnd_,(HMENU)31814,hInstance_,nullptr);
     CreateWindowW(L"BUTTON",L"Reset",btnStyle,0,0,10,10,hwnd_,(HMENU)31815,hInstance_,nullptr);
     CreateWindowW(L"BUTTON",L"Alerts on",btnStyle,0,0,10,10,hwnd_,(HMENU)31817,hInstance_,nullptr);
+    for(int id=31930;id<=31947;++id){
+        const wchar_t* label=CompboardHud::caption(id,false);
+        CreateWindowW(L"BUTTON",label,btnStyle&~WS_VISIBLE,0,0,10,10,hwnd_,(HMENU)(INT_PTR)id,hInstance_,nullptr);
+    }
 
     btnAbout_ = CreateWindowW(L"BUTTON", L"?", btnStyle,
         0, 0, 10, 10, hwnd_, (HMENU)ID_BTN_ABOUT, hInstance_, nullptr);
@@ -1165,7 +1175,9 @@ void MinerGUI::createControls() {
     btnOreRows_ = CreateWindowW(L"BUTTON", L"Rows", btnStyle & ~WS_VISIBLE,
         0, 0, 10, 10, hwnd_, (HMENU)ID_BTN_ORE_ROWS, hInstance_, nullptr);
 #ifdef _WIN32
-    for (int id : {1002,1011,1017,1021,31810,31811,31813,31814,31815,31817,31818,31819})
+    for(int id=31930;id<=31947;++id)
+        SetWindowSubclass(GetDlgItem(hwnd_,id),passiveOverlayButton,1,reinterpret_cast<DWORD_PTR>(this));
+    for (int id : {1002,1011,1017,1021,31810,31811,31813,31814,31815,31817,31818,31819,31920,31921,31922,31923})
         SetWindowSubclass(GetDlgItem(hwnd_, id), passiveOverlayButton, 1, reinterpret_cast<DWORD_PTR>(this));
 #endif
 }
@@ -1193,7 +1205,14 @@ void MinerGUI::layoutControls() {
         MoveWindow(btnLiveMode_, cw - z(scale(8)) - z(scale(46)) - z(scale(4)) - z(scale(58)), btnY,
                    z(scale(58)), btnH, TRUE);
         MoveWindow(btnKeys_,cw-z(scale(8+46+4+58+4+52)),btnY,z(scale(52)),btnH,TRUE);
-        for(int i=0;i<5;i++){HWND tab=GetDlgItem(hwnd_,i==4?31819:i==3?31818:i==2?31813:31810+i);ShowWindow(tab,SW_SHOWNOACTIVATE);int gap=z(scale(4)),margin=z(scale(8)),width=(cw-margin*2-gap*4)/5;MoveWindow(tab,margin+i*(width+gap),rc.bottom-z(scale(27)),width,z(scale(22)),TRUE);}
+        auto modes=SynthScan::availableHudModes();
+        for(int id:{31810,31811,31813,31818,31819})ShowWindow(GetDlgItem(hwnd_,id),SW_HIDE);
+        for(size_t at=0;at<modes.size();++at){
+            int mode=modes[at],id=mode==4?31819:mode==3?31818:mode==2?31813:31810+mode;
+            HWND tab=GetDlgItem(hwnd_,id);int gap=z(scale(4)),margin=z(scale(8));
+            int width=(cw-margin*2-gap*int(modes.size()-1))/int(modes.size());
+            ShowWindow(tab,SW_SHOWNOACTIVATE);MoveWindow(tab,margin+int(at)*(width+gap),rc.bottom-z(scale(27)),width,z(scale(22)),TRUE);
+        }
         ShowWindow(btnLiveMode_,(SynthScan::hangarsMode()||SynthScan::finderMode())?SW_HIDE:SW_SHOWNOACTIVATE);
         if(SynthScan::hangarsMode()||SynthScan::finderMode())MoveWindow(btnKeys_,cw-z(scale(8+46+4+52)),btnY,z(scale(52)),btnH,TRUE);
         placeOreRowsButton();
@@ -1293,12 +1312,8 @@ void MinerGUI::toggleOverlayMode(bool showWindow) {
         SetWindowLongPtr(hwnd_, GWL_STYLE, WS_POPUP | (showWindow?WS_VISIBLE:0) | WS_CLIPCHILDREN);
         LONG_PTR ex = GetWindowLongPtr(hwnd_, GWL_EXSTYLE);
         SetWindowLongPtr(hwnd_, GWL_EXSTYLE, ex | WS_EX_LAYERED);
-        SetLayeredWindowAttributes(hwnd_, 0, SynthScan::piracyMode()?255:235, LWA_ALPHA);  // slightly translucent
-        // Exclude the overlay from screen capture: the scan reads the desktop, and
-        // the overlay's own figures would be read back as a signature. It also
-        // hides the overlay from screenshots and streams, so the full window is
-        // left alone. Windows 10 2004+; where it fails, ownWindows masks it.
-        // Only while scanning (keepOutOfCaptures).
+        SetLayeredWindowAttributes(hwnd_, 0, HudTheme::Opacity, LWA_ALPHA);
+        // OCR captures the game surface; the separate HUD remains streamable.
         keepOutOfCaptures();
 
         SetWindowTextW(btnOverlay_, L"Full");
@@ -1363,19 +1378,19 @@ void MinerGUI::toggleOverlayMode(bool showWindow) {
 // it holds, the verdict's three lines and the gadget - and under either
 // the ship on a line of its own. Without a ship to name, 178. (212: three
 // matches, "no exact match" over them and the ship under them.)
-int MinerGUI::overlayBaseWidth() const {return SynthScan::finderMode()?560:SynthScan::hangarsMode()?430:SynthScan::piracyMode()?600:OVERLAY_WIDTH;}
+int MinerGUI::overlayBaseWidth() const {return SynthScan::hangarsMode()?HudTheme::HangarWidth:HudTheme::Width;}
 
 void MinerGUI::refreshActivityLayout(){
     if(!overlayMode_||!hwnd_)return;
-    SetLayeredWindowAttributes(hwnd_,0,SynthScan::piracyMode()?255:235,LWA_ALPHA);
+    SetLayeredWindowAttributes(hwnd_,0,HudTheme::Opacity,LWA_ALPHA);
     fitSmallerSince_=std::chrono::steady_clock::now()-std::chrono::milliseconds(FIT_SHRINK_MS+1);
     measureOverlay();fitOverlay();layoutControls();InvalidateRect(hwnd_,nullptr,FALSE);
 }
 
 int MinerGUI::overlayHeight() const {
-    if(SynthScan::finderMode())return 420+30;
-    if(SynthScan::hangarsMode())return 150+30;
-    if(SynthScan::questingMode())return 350+30+SynthScan::sessionHeight();
+    if(SynthScan::finderMode())return HudTheme::MainHeight+30;
+    if(SynthScan::hangarsMode())return SynthScan::hangarsHeight()+30;
+    if(SynthScan::questingMode())return HudTheme::MainHeight+30;
     if(SynthScan::piracyMode())return SynthScan::piracyHeight()+30;
     // Two rows taller where a rock's ores stand one to a row: three of them,
     // and the verdict under them still in view
@@ -1388,14 +1403,35 @@ int MinerGUI::overlayHeight() const {
 // way it is.
 void MinerGUI::placeOreRowsButton() {
     if (!btnOreRows_ || !hwnd_) return;
+    RECT hangarClient{};GetClientRect(hwnd_,&hangarClient);
+    const float boardScale=scaleF(1)*(overlayMode_?overlayZoom_:1.f);
+    auto boardPixel=[&](int value){return int(std::lround(value*boardScale));};
+    for(int id=31930;id<=31947;++id){
+        HWND button=GetDlgItem(hwnd_,id);
+        const bool visible=overlayMode_&&SynthScan::hangarsMode()&&(id==31930||SynthScan::hangarInventoryMode());
+        if(visible){
+            const auto rect=CompboardHud::control(id,int(std::lround(hangarClient.right/boardScale)));
+            SetWindowTextW(button,CompboardHud::caption(id,SynthScan::hangarInventoryMode()));
+            MoveWindow(button,boardPixel(rect.x),boardPixel(rect.y),boardPixel(rect.width),boardPixel(rect.height),TRUE);
+            EnableWindow(button,id==31930||SynthScan::compboardActionEnabled(id));ShowWindow(button,SW_SHOWNOACTIVATE);
+        }else ShowWindow(button,SW_HIDE);
+    }
+    for(int i=0;i<4;++i){
+        HWND button=GetDlgItem(hwnd_,31920+i);bool visible=overlayMode_&&SynthScan::questingMode();
+        if(visible){RECT client{};GetClientRect(hwnd_,&client);int gap=overlayZoomed(scale(4)),margin=overlayZoomed(scale(10));
+            int width=(client.right-2*margin-3*gap)/4;
+            MoveWindow(button,margin+i*(width+gap),overlayZoomed(scale(42)),width,overlayZoomed(scale(24)),TRUE);ShowWindow(button,SW_SHOWNOACTIVATE);
+        }else ShowWindow(button,SW_HIDE);
+    }
+
     for(int i=0;i<2;i++){
         HWND button=GetDlgItem(hwnd_,31814+i);bool visible=overlayMode_&&SynthScan::piracyMode()&&SynthScan::piracyDetails();
-        if(visible){MoveWindow(button,overlayZoomed(scale(10+i*110)),overlayZoomed(scale(218)),overlayZoomed(scale(i?60:104)),overlayZoomed(scale(22)),TRUE);ShowWindow(button,SW_SHOWNOACTIVATE);}
+        if(visible){MoveWindow(button,overlayZoomed(scale(10+i*110)),overlayZoomed(scale(238)),overlayZoomed(scale(i?60:104)),overlayZoomed(scale(22)),TRUE);ShowWindow(button,SW_SHOWNOACTIVATE);}
         else ShowWindow(button,SW_HIDE);
     }
 
     HWND alerts=GetDlgItem(hwnd_,31817);bool alertsVisible=overlayMode_&&SynthScan::piracyMode()&&SynthScan::piracyDetails();
-    if(alertsVisible){MoveWindow(alerts,overlayZoomed(scale(190)),overlayZoomed(scale(218)),overlayZoomed(scale(84)),overlayZoomed(scale(22)),TRUE);ShowWindow(alerts,SW_SHOWNOACTIVATE);}else ShowWindow(alerts,SW_HIDE);
+    if(alertsVisible){MoveWindow(alerts,overlayZoomed(scale(190)),overlayZoomed(scale(238)),overlayZoomed(scale(84)),overlayZoomed(scale(22)),TRUE);ShowWindow(alerts,SW_SHOWNOACTIVATE);}else ShowWindow(alerts,SW_HIDE);
     const bool wanted = !SynthScan::activityMode() && overlayMode_ && rockInView_ && !rockContents_.parts.empty();
     if (!wanted) {
         if (IsWindowVisible(btnOreRows_)) ShowWindow(btnOreRows_, SW_HIDE);
@@ -1544,7 +1580,7 @@ void MinerGUI::fitOverlay() {
     if (GetMonitorInfo(MonitorFromWindow(hwnd_, MONITOR_DEFAULTTONEAREST), &mi)) {
         const RECT& screen = mi.rcMonitor;
         if (win.left + win.right > screen.left + screen.right) at.x = win.right - w;
-        if (win.top + win.bottom > screen.top + screen.bottom) at.y = win.bottom - h;
+        // Keep the top edge steady; the final clamp alone may lift a taller HUD.
     }
     at = overlayOnMonitor(at, w, h);
     SetWindowPos(hwnd_, nullptr, at.x, at.y, w, h, SWP_NOZORDER | SWP_NOACTIVATE);
@@ -2312,14 +2348,12 @@ bool MinerGUI::isOpen() const {
     return isOpen_;
 }
 
-// The overlay is kept out of screen captures while the scan runs, and only
-// then: with live mode off Bedrock captures nothing it could see itself in,
-// and a window kept out shows in Virtual Desktop's stream as "Protected
-// content blocked". What keeping it out costs the compositor has not been
-// measured.
+// Keep the HUD available to screen sharing, including during live scans.
+// Windows OCR reads the verified game-window surface through WGC, where our
+// separate overlay windows are absent; capture exclusion is no longer needed.
 void MinerGUI::keepOutOfCaptures() {
 #ifdef _WIN32
-    if (hwnd_) SetWindowDisplayAffinity(hwnd_, overlayMode_ && liveModeActive_ ? WDA_EXCLUDEFROMCAPTURE : WDA_NONE);
+    if (hwnd_) SetWindowDisplayAffinity(hwnd_, WDA_NONE);
 #endif
 }
 
@@ -2392,7 +2426,11 @@ bool MinerGUI::isOverlayButton(HWND button) const {
 HWND MinerGUI::overlayButtonAt(POINT point) const {
 #ifdef _WIN32
     if (!hwnd_ || !IsWindowVisible(hwnd_)) return nullptr;
-    for (int id : {1002,1011,1017,1021,31810,31811,31813,31814,31815,31817,31818,31819}) {
+    for(int id=31930;id<=31947;++id){
+        HWND button=GetDlgItem(hwnd_,id);RECT rect{};
+        if(isOverlayButton(button)&&GetWindowRect(button,&rect)&&PtInRect(&rect,point))return button;
+    }
+    for (int id : {1002,1011,1017,1021,31810,31811,31813,31814,31815,31817,31818,31819,31920,31921,31922,31923}) {
         HWND button = GetDlgItem(hwnd_, id); RECT rect{};
         if (isOverlayButton(button) && GetWindowRect(button, &rect) && PtInRect(&rect, point)) return button;
     }
@@ -2491,6 +2529,10 @@ LRESULT CALLBACK MinerGUI::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARA
 
 LRESULT MinerGUI::handleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     switch (uMsg) {
+        case WM_WINDOWPOSCHANGED:
+        case WM_SHOWWINDOW:
+            HudFeather::sync(hwnd,overlayMode_&&!headless_,scaleF(1)*overlayZoom_);
+            break;
         case WM_PAINT: {
             PAINTSTRUCT ps;
             HDC hdc = BeginPaint(hwnd, &ps);
@@ -3146,6 +3188,7 @@ LRESULT MinerGUI::handleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
             return 0;
 
         case WM_DESTROY:
+            HudFeather::destroy();
             PostQuitMessage(0);
             return 0;
     }
@@ -3173,6 +3216,7 @@ void MinerGUI::onPaint(HDC hdc) {
         g.FillRectangle(&bgBrush, 0, 0, cw, ch);
 
         if (overlayMode_) {
+            HudTheme::backdrop(g,{0,0,float(cw),float(ch)});
             measureOverlay();
             // grown or shrunk by its grip (overlayZoom_): drawn at its own
             // size and scaled as a whole - the letters drawn at the size they
@@ -14071,7 +14115,7 @@ void MinerGUI::drawCompactUpdateChip(Gdiplus::Graphics& g, int cw, float leftOf)
     centre.SetAlignment(Gdiplus::StringAlignmentCenter);
     centre.SetLineAlignment(Gdiplus::StringAlignmentCenter);
     centre.SetFormatFlags(Gdiplus::StringFormatFlagsNoWrap);
-    Gdiplus::SolidBrush chipBrush(pressable ? COL_ACCENT : COL_TEXT_DIM);
+    Gdiplus::SolidBrush chipBrush(pressable ? COL_ACCENT : HudTheme::Muted);
     g.DrawString(label.c_str(), -1, &chipFont, face, &centre, &chipBrush);
     if (pressable) updateHit_ = chip;
 }
@@ -14089,9 +14133,9 @@ void MinerGUI::drawCompactRock(Gdiplus::Graphics& g, int cw, int ch) {
     Gdiplus::Font labelFont(&textFamily(), scaleF(10), Gdiplus::FontStyleBold, Gdiplus::UnitPixel);
 
     Gdiplus::SolidBrush accentBrush(COL_ACCENT);
-    Gdiplus::SolidBrush dimBrush(COL_TEXT_DIM);
-    Gdiplus::SolidBrush faintBrush(COL_TEXT_FAINT);
-    Gdiplus::SolidBrush textBrush(COL_TEXT);
+    Gdiplus::SolidBrush dimBrush(HudTheme::Muted);
+    Gdiplus::SolidBrush faintBrush(HudTheme::Faint);
+    Gdiplus::SolidBrush textBrush(HudTheme::Text);
     Gdiplus::SolidBrush yellowBrush(COL_YELLOW);
 
     const float M = scaleF(10);
@@ -14431,7 +14475,7 @@ void MinerGUI::drawCompactRock(Gdiplus::Graphics& g, int cw, int ch) {
 
     // the verdict, the way the full window puts it
     const RockVerdict v = rockVerdict();
-    Gdiplus::Color tone = COL_TEXT_DIM;
+    Gdiplus::Color tone = HudTheme::Muted;
     switch (v.kind) {
         case RockVerdict::Solo: tone = v.good ? COL_GREEN : COL_YELLOW; break;
         case RockVerdict::SoloOverpowered: tone = COL_YELLOW; break;
@@ -14503,8 +14547,8 @@ void MinerGUI::drawCompactShip(Gdiplus::Graphics& g, int cw, int ch, float above
     if (nameY < above + scaleF(2)) return;
     Gdiplus::Font infoFont(&textFamily(), scaleF(10), Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
     Gdiplus::Font labelFont(&textFamily(), scaleF(10), Gdiplus::FontStyleBold, Gdiplus::UnitPixel);
-    Gdiplus::SolidBrush dimBrush(COL_TEXT_DIM);
-    Gdiplus::SolidBrush faintBrush(COL_TEXT_FAINT);
+    Gdiplus::SolidBrush dimBrush(HudTheme::Muted);
+    Gdiplus::SolidBrush faintBrush(HudTheme::Faint);
     Gdiplus::StringFormat oneLine;
     oneLine.SetFormatFlags(Gdiplus::StringFormatFlagsNoWrap);
     oneLine.SetTrimming(Gdiplus::StringTrimmingEllipsisCharacter);
@@ -14540,9 +14584,9 @@ void MinerGUI::drawCompactShip(Gdiplus::Graphics& g, int cw, int ch, float above
 }
 
 void MinerGUI::drawCompact(Gdiplus::Graphics& g, int cw, int ch) {
-    if(SynthScan::finderMode()){SynthScan::drawFinder(g,float(cw),float(ch),scaleF(1));wantHeight(scaleF(420));return;}
-    if(SynthScan::hangarsMode()){SynthScan::drawHangars(g,float(cw),float(ch),scaleF(1));wantHeight(scaleF(150));return;}
-    if(SynthScan::questingMode()){SynthScan::drawQuesting(g,float(cw),float(ch),scaleF(1));wantHeight(scaleF(350));return;}
+    if(SynthScan::finderMode()){SynthScan::drawFinder(g,float(cw),float(ch),scaleF(1));wantHeight(scaleF(HudTheme::MainHeight));return;}
+    if(SynthScan::hangarsMode()){SynthScan::drawHangars(g,float(cw),float(ch),scaleF(1));wantHeight(scaleF(float(SynthScan::hangarsHeight())));return;}
+    if(SynthScan::questingMode()){SynthScan::drawQuesting(g,float(cw),float(ch),scaleF(1));wantHeight(scaleF(HudTheme::MainHeight));return;}
     if(SynthScan::piracyMode()){SynthScan::drawPiracy(g,float(cw),float(ch),scaleF(1));wantHeight(scaleF(float(SynthScan::piracyHeight())));return;}
     Gdiplus::Font sigFont(&numeralFamily(), scaleF(26), Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
     Gdiplus::Font nameFont(&markFamily(), scaleF(12), Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
@@ -14550,17 +14594,15 @@ void MinerGUI::drawCompact(Gdiplus::Graphics& g, int cw, int ch) {
     Gdiplus::Font pctFont(&numeralFamily(), scaleF(13), Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
 
     Gdiplus::SolidBrush accentBrush(COL_ACCENT);
-    Gdiplus::SolidBrush dimBrush(COL_TEXT_DIM);
-    Gdiplus::SolidBrush faintBrush(COL_TEXT_FAINT);
-    Gdiplus::SolidBrush textBrush(COL_TEXT);
+    Gdiplus::SolidBrush dimBrush(HudTheme::Muted);
+    Gdiplus::SolidBrush faintBrush(HudTheme::Faint);
+    Gdiplus::SolidBrush textBrush(HudTheme::Text);
 
     // The overlay is a pane over the game - the window itself lets a little
     // of it through, see toggleOverlayMode - so its edge is the sheets' rim
     // of light rather than a frame. Not their sheen: LIVE and FULL are child
     // windows painted on the plain background, and under a sheen they stood
     // out as two darker boxes. The live state is a dot, not a red border.
-    Gdiplus::Pen framePen(COL_GLASS_RIM, 1.0f);
-    g.DrawRectangle(&framePen, 0.5f, 0.5f, cw - 1.0f, ch - 1.0f);
     if (liveModeActive_) {
         Gdiplus::SolidBrush dot(pulseOn_ ? COL_RED : tint(COL_RED, 110));
         g.FillEllipse(&dot, scaleF(6), scaleF(6), scaleF(5), scaleF(5));
@@ -14668,7 +14710,7 @@ void MinerGUI::drawCompact(Gdiplus::Graphics& g, int cw, int ch) {
 
         std::wstring label = toW(result.name);
         if (result.clusterSize > 1) label += L" \u00D7" + std::to_wstring(result.clusterSize);
-        Gdiplus::SolidBrush nameBrush(dimmed ? COL_TEXT_FAINT : COL_TEXT);
+        Gdiplus::SolidBrush nameBrush(dimmed ? HudTheme::Faint : HudTheme::Text);
         // what stands on the right of the row, measured first: the name ends
         // before it rather than running into it ("Gold x3" over "not at Pyro II
         // (Monox)"), and the row is as wide as both want
@@ -14710,7 +14752,7 @@ void MinerGUI::drawCompact(Gdiplus::Graphics& g, int cw, int ch) {
         } else {
             std::wstringstream pct;
             pct << std::fixed << std::setprecision(0) << result.probability << L" %";
-            Gdiplus::SolidBrush pctBrush(best ? COL_GREEN : COL_TEXT);
+            Gdiplus::SolidBrush pctBrush(best ? COL_GREEN : HudTheme::Text);
             g.DrawString(pct.str().c_str(), -1, &pctFont, r, &rightAlign, &pctBrush);
         }
 
@@ -14752,7 +14794,7 @@ void MinerGUI::paintOwnerButton(Gdiplus::Graphics& g, const DRAWITEMSTRUCT* dis)
     const float w = (float)(dis->rcItem.right - dis->rcItem.left) / zoom;
     const float h = (float)(dis->rcItem.bottom - dis->rcItem.top) / zoom;
 
-    Gdiplus::SolidBrush underlay(COL_BG);
+    Gdiplus::SolidBrush underlay(overlayMode_?HudTheme::Bottom:COL_BG);
     g.FillRectangle(&underlay, 0.0f, 0.0f, w, h);
 
     // The same button every card draws (drawButton): a rounded surface and
@@ -14764,6 +14806,11 @@ void MinerGUI::paintOwnerButton(Gdiplus::Graphics& g, const DRAWITEMSTRUCT* dis)
     Gdiplus::Font font(&markFamily(), scaleF(12), Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
     const Gdiplus::RectF face(0.5f, 0.5f, w - 1.0f, h - 1.0f);
     const float radius = scaleF(R_CONTROL);
+    if(id>=31931&&id<=31947&&(dis->itemState&ODS_DISABLED)){
+        fillRoundRect(g,face,radius,COL_CARD_HI);
+        Gdiplus::StringFormat centred;centred.SetAlignment(Gdiplus::StringAlignmentCenter);centred.SetLineAlignment(Gdiplus::StringAlignmentCenter);
+        Gdiplus::SolidBrush ink(HudTheme::Faint);g.DrawString(label,-1,&font,face,&centred,&ink);return;
+    }
     if (id == ID_BTN_LIVEMODE && liveModeActive_) {
         fillRoundRect(g, face, radius, tint(COL_GREEN, pressed ? 48 : 34));
         strokeRoundRect(g, face, radius, tint(COL_GREEN, 170));
@@ -14774,7 +14821,15 @@ void MinerGUI::paintOwnerButton(Gdiplus::Graphics& g, const DRAWITEMSTRUCT* dis)
         g.DrawString(label, -1, &font, face, &centred, &ink);
         return;
     }
-    const bool on = (id == ID_BTN_AUTO_REGION && regionAuto_) || (id==31810&&!SynthScan::activityMode()) || (id==31811&&SynthScan::piracyMode()) || (id==31813&&SynthScan::questingMode()) || (id==31818&&SynthScan::hangarsMode()) || (id==31819&&SynthScan::finderMode());
+    const bool on = (id == ID_BTN_AUTO_REGION && regionAuto_) || (id==31810&&!SynthScan::activityMode()) || (id==31811&&SynthScan::piracyMode()) || (id==31813&&SynthScan::questingMode()) || (id==31818&&SynthScan::hangarsMode()) || (id==31819&&SynthScan::finderMode()) || (id>=31920&&id<31924&&SynthScan::questingMode()&&SynthScan::missionsHudTab()==id-31920);
+    if(id==31810||id==31811||id==31813||id==31818||id==31819||(id>=31920&&id<31924)){
+        int mode=id>=31920?2:id==31811?1:id==31813?2:id==31818?3:id==31819?4:0;
+        auto accent=HudTheme::modeAccent(mode);
+        fillRoundRect(g,face,radius,on?tint(accent,30):COL_CARD_HI);
+        strokeRoundRect(g,face,radius,tint(accent,on?200:55));
+        Gdiplus::StringFormat centred;centred.SetAlignment(Gdiplus::StringAlignmentCenter);centred.SetLineAlignment(Gdiplus::StringAlignmentCenter);
+        Gdiplus::SolidBrush ink(on?accent:HudTheme::Text);g.DrawString(label,-1,&font,face,&centred,&ink);return;
+    }
     drawButton(g, face, label, font, on ? ButtonKind::Selected : ButtonKind::Secondary, pressed, radius);
     // The work orders that are done, waiting at their refinery: a green
     // badge with their number at the button's right end

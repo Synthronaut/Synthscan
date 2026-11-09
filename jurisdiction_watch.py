@@ -37,9 +37,16 @@ class JurisdictionWatch:
                 return False
             condition = ('jurisdiction', match[1].strip())
         key, value = condition
+        jurisdiction = self.fields.get('jurisdiction')
+        if key == 'monitoring' and jurisdiction and at < jurisdiction['observed_at']:
+            return False
         old = self.fields.get(key)
         if old and at <= old['observed_at']:
             return False
+        if key == 'jurisdiction' and old and old['value'] != value:
+            # A monitoring notice from the previous jurisdiction cannot establish
+            # conditions here. Await an explicit report instead of inferring law.
+            self.fields.pop('monitoring', None)
         self.fields[key] = dict(value=value, observed_at=at)
         if not old or old['value'] != value:
             self.changed_at = max(self.changed_at or at, at)

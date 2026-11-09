@@ -56,6 +56,25 @@ class JurisdictionTests(unittest.TestCase):
         watch.feed(notice('Monitored Space Down', 105), 105, 'game_log_timestamp')
         self.assertEqual(watch.view(106, session_token='a')['armistice'], 'outside')
 
+    def test_jurisdiction_crossing_does_not_carry_old_monitoring_into_nyx(self):
+        watch = JurisdictionWatch()
+        for at, title in [(101, 'Entered Monitored Space'),
+                          (114, "Entered People's Alliance Jurisdiction"),
+                          (209, 'Entering Armistice Zone - Combat Prohibited'),
+                          (262, 'Leaving Armistice Zone - Caution Advised'),
+                          (263, 'Entered Ungoverned Jurisdiction')]:
+            watch.feed(notice(title, at), at, 'game_log_timestamp')
+        view = watch.view(264, session_token='a')
+        self.assertEqual(view['jurisdiction'], 'Ungoverned')
+        self.assertEqual(view['armistice'], 'outside')
+        self.assertEqual(view['monitoring'], 'unknown')
+        self.assertNotIn('monitoring', view['observations'])
+        self.assertEqual(view['security_hostility'], 'unknown')
+        self.assertFalse(watch.feed(notice('Entered Monitored Space', 220), 220, 'game_log_timestamp'))
+        self.assertEqual(watch.view(264, session_token='a')['monitoring'], 'unknown')
+        watch.feed(notice('Monitored Space Restored', 265), 265, 'game_log_timestamp')
+        self.assertEqual(watch.view(266, session_token='a')['monitoring'], 'monitored')
+
     def test_noise_repeated_updates_and_missing_timestamps_do_not_change_state(self):
         watch = JurisdictionWatch()
         self.assertFalse(watch.feed(notice('Entered Monitored Space'), 101, 'observation'))

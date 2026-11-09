@@ -1,65 +1,39 @@
 import tempfile,unittest
 from pathlib import Path
-from types import SimpleNamespace
-from concurrent.futures import Future
-from unittest.mock import Mock,patch
-from shard_names import clean_name,loading_name,ShardNameCollector
+from unittest.mock import patch
+from shard_names import clean_name
 from telemetry_core import ShardHistory,IncrementalGameLog,utc_iso
 from region_history_hud import recent_visits
 from native_session_hud import hud_state
 
 A='pub_use1b_12881860_310'
 B='pub_asia1_12881860_310'
-class Executor:
-    def __init__(self):self.jobs=[]
-    def submit(self,fn):
-        f=Future();self.jobs.append((fn,f));return f
-    def finish(self,value=None):self.jobs[-1][1].set_result(value)
-    def shutdown(self,**kwargs):pass
-
 class ShardNameTests(unittest.TestCase):
-    def test_label_confidence_and_ambiguity(self):
-        box=lambda s,c=.99:SimpleNamespace(text=s,confidence=c,top=0,left=0)
-        self.assertEqual(loading_name([box('Connecting to shard: Triumphant Penguin')]),'TRIUMPHANT PENGUIN')
-        self.assertEqual(loading_name([box('SHARD NAME: Triumphant_Penguin')]),'TRIUMPHANT PENGUIN')
-        for boxes in ([box('Triumphant Penguin')],[box('Connecting to Main Menu')],[box('Connecting to Triumphant Penguin',.7)],
-                      [box('Shard: Triumphant Penguin Shard: Curious Otter')]):
-            self.assertIsNone(loading_name(boxes))
-        self.assertIsNone(clean_name('GAME-7'));self.assertIsNone(clean_name('shard 310'))
+    def test_log_name_validation(self):
+        self.assertEqual(clean_name('Triumphant_Penguin'),'TRIUMPHANT PENGUIN')
+        for value in ('GAME-7','shard 310','Main Menu','Connecting to',None):
+            self.assertIsNone(clean_name(value))
 
-    def test_two_matching_reads_and_no_more_capture(self):
-        e=Executor();c=ShardNameCollector(True,lambda:None,e)
-        self.assertIsNone(c.tick(A,'join',True,100));e.finish('Triumphant Penguin')
-        self.assertIsNone(c.tick(A,'join',True,101));e.finish('Triumphant Penguin')
-        result=c.tick(A,'join',True,102)
-        self.assertEqual(result['full_shard_id'],A);self.assertEqual(result['name'],'TRIUMPHANT PENGUIN')
-        c.tick(A,'join',True,110);self.assertEqual(len(e.jobs),2)
-
-    def test_stale_read_not_assigned_to_next_shard_or_after_loading(self):
-        e=Executor();c=ShardNameCollector(True,lambda:None,e)
-        c.tick(A,'first',True,100);e.finish('Triumphant Penguin')
-        self.assertIsNone(c.tick(B,'second',True,101));self.assertEqual(c.count,0)
-        e.finish('Curious Otter');c.tick(B,'second',True,102)
-        e.finish('Curious Otter');self.assertIsNone(c.tick(B,'second',False,103));self.assertIsNone(c.done)
-
-    def test_standard_and_nonloading_do_not_start_worker(self):
-        for enabled,loading in ((False,True),(True,False)):
-            c=ShardNameCollector(enabled=enabled,sample=Mock(side_effect=AssertionError('capture')))
-            for now in range(100,105):self.assertIsNone(c.tick(A,'join',loading,now))
-            self.assertIsNone(c.executor);c.close()
-
-    def test_timeout_and_errors_fail_closed(self):
-        e=Executor();c=ShardNameCollector(True,lambda:None,e)
-        c.tick(A,'join',True,100);e.jobs[-1][1].set_exception(RuntimeError('unavailable'))
-        c.tick(A,'join',True,221);self.assertEqual(len(e.jobs),1);self.assertIsNone(c.done)
-
-    def test_capture_uses_existing_verified_window_api(self):
-        import numpy as np
-        c=ShardNameCollector(True);capture=Mock();capture.grab.return_value=np.zeros((100,200,3),dtype=np.uint8)
-        c.capture=capture
-        with patch('app_edition.require_screen_reading'),patch('screen_readers.read_image',return_value=[]) as read:
-            self.assertIsNone(c._sample());self.assertEqual(read.call_args.args[0].shape,(58,136,3))
-        capture.grab.assert_called_once_with();c._release();capture.stop.assert_called_once()
+    def test_rejoins_work_without_any_screen_reading_modules(self):
+        from native_bridge import SessionService
+        unavailable={name:None for name in ('capture_privacy','screen_readers','windows_capture','rapidocr_onnxruntime')}
+        with tempfile.TemporaryDirectory() as d,patch.dict('sys.modules',unavailable),patch('native_bridge.read_network_ping',return_value=None),patch('native_bridge.read_client_fps',return_value=None):
+            root=Path(d);log=root/'Game.log'
+            log.write_text(f'<{utc_iso(100)}> [Notice] <Join PU> address[192.0.2.1] port[64000] shard[{A}]\n<{utc_iso(101)}> OpenLoadingScreen\n')
+            service=SessionService(root,log)
+            try:
+                first=service.tick(True,102)
+                self.assertTrue(first['is_loading_screen'])
+                self.assertEqual(first['shard_name'],'Shard 310')
+                self.assertIsNone(first['game_shard_name'])
+                with log.open('a') as stream:
+                    stream.write(f'<{utc_iso(110)}> [Notice] <Join PU> address[192.0.2.2] port[64001] shard[{B}]\n<{utc_iso(111)}> OpenLoadingScreen\n')
+                second=service.tick(True,112)
+                self.assertEqual(second['full_shard_id'],B)
+                self.assertNotEqual(first['session_token'],second['session_token'])
+                self.assertIsNone(second['game_shard_name'])
+                self.assertEqual(second['shard_name'],'Shard 310')
+            finally:service.close()
 
     def test_history_is_persistent_and_full_identity_scoped(self):
         with tempfile.TemporaryDirectory() as d:

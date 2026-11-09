@@ -1,6 +1,7 @@
 #include "SynthFinderHUD.h"
 #include "SynthJson.h"
 #include "FinderCards.h"
+#include "HudTheme.h"
 #include <commctrl.h>
 #include <gdiplus.h>
 #include <windowsx.h>
@@ -42,7 +43,7 @@ constexpr int SEARCH_ID=43101;
 constexpr UINT_PTR LOADING_TIMER=2;
 void pollDetails();
 // Same palette as MinerGUI's other activity tabs.
-const Gdiplus::Color BG(255,15,16,19),CARD(255,24,26,30),BORDER(255,44,47,54),INK(255,238,239,241),MUTED(255,160,166,176),ACCENT(255,98,204,255);
+const Gdiplus::Color BG=HudTheme::Bottom,CARD(255,24,26,30),BORDER(255,44,47,54),INK=HudTheme::Text,MUTED=HudTheme::Muted,ACCENT=HudTheme::modeAccent(4);
 void repaint(){if(window)InvalidateRect(window,nullptr,FALSE);}
 std::wstring normalize(const std::wstring& text){
     std::wstring result,word;
@@ -176,7 +177,7 @@ int listRows(){RECT r{};GetClientRect(window,&r);return std::max(1,std::min(7,in
 void paint(HWND hwnd){
     PAINTSTRUCT ps{};HDC dc=BeginPaint(hwnd,&ps);RECT r{};GetClientRect(hwnd,&r);
     if(r.right>0&&r.bottom>0){
-        Gdiplus::Bitmap buffer(r.right,r.bottom,PixelFormat32bppPARGB);Gdiplus::Graphics g(&buffer);g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);g.SetTextRenderingHint(Gdiplus::TextRenderingHintClearTypeGridFit);g.Clear(BG);
+        Gdiplus::Bitmap buffer(r.right,r.bottom,PixelFormat32bppPARGB);Gdiplus::Graphics g(&buffer);g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);g.SetTextRenderingHint(Gdiplus::TextRenderingHintClearTypeGridFit);HudTheme::backdrop(g,{0,0,float(r.right),float(r.bottom)});
         float w=float(r.right),h=float(r.bottom),pad=12*ui;linkHits.clear();float contentTop=(playerMarket?137.f:99.f)*ui;
         rounded(g,{pad,6*ui,w-pad*2,43*ui},10*ui,Gdiplus::Color(255,34,37,43));
         Gdiplus::Pen pen(GetFocus()==search?ACCENT:MUTED,1.5f*ui);
@@ -250,7 +251,7 @@ void paint(HWND hwnd){
 }
 void layout(){
     RECT r{};GetClientRect(window,&r);if(font&&r.right==lastWidth&&r.bottom==lastHeight)return;
-    lastWidth=r.right;lastHeight=r.bottom;ui=std::max(.6f,r.right/544.f);
+    lastWidth=r.right;lastHeight=r.bottom;ui=std::max(.6f,r.right/float(HudTheme::Width-16));
     if(font)DeleteObject(font);font=CreateFontW(-int(14*ui),0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH,L"Segoe UI");
     if(search){MoveWindow(search,int(49*ui),int(17*ui),std::max(1,int(r.right)-int(100*ui)),int(24*ui),TRUE);SendMessageW(search,WM_SETFONT,(WPARAM)font,TRUE);}
     repaint();
@@ -278,7 +279,7 @@ LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM w,LPARAM l){
     if(message==WM_PAINT){paint(hwnd);return 0;}
     if(message==WM_SIZE){layout();return 0;}
     if(message==WM_ERASEBKGND)return 1;
-    if(message==WM_CTLCOLOREDIT){SetTextColor((HDC)w,RGB(238,239,241));SetBkColor((HDC)w,RGB(34,37,43));return(LRESULT)fieldBrush;}
+    if(message==WM_CTLCOLOREDIT){SetTextColor((HDC)w,RGB(240,237,229));SetBkColor((HDC)w,RGB(34,37,43));return(LRESULT)fieldBrush;}
     if(message==WM_LBUTTONDOWN){
         float x=GET_X_LPARAM(l)/ui,y=GET_Y_LPARAM(l)/ui;RECT r{};GetClientRect(hwnd,&r);
         if(y<51){SetFocus(search);suggestions();return 0;}
@@ -326,7 +327,7 @@ void prepare(const SCMiner::JsonValue& library){
 void sync(bool show){
     if(!owner)return;
     if(!show){if(window&&visible){releaseInput();ShowWindow(window,SW_HIDE);KillTimer(window,LOADING_TIMER);}visible=false;return;}
-    create();RECT r{};GetClientRect(owner,&r);float scale=r.right/560.f;int margin=int(8*scale),top=int(42*scale),bottom=int(37*scale);
+    create();RECT r{};GetClientRect(owner,&r);float scale=r.right/float(HudTheme::Width);int margin=int(8*scale),top=int(42*scale),bottom=int(37*scale);
     int width=r.right-r.left-2*margin,height=r.bottom-r.top-top-bottom;if(width<100||height<80)return;
     RECT current{};GetWindowRect(window,&current);MapWindowPoints(HWND_DESKTOP,owner,reinterpret_cast<POINT*>(&current),2);
     if(!visible||current.left!=margin||current.top!=top||current.right-current.left!=width||current.bottom-current.top!=height)

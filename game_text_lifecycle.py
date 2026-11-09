@@ -100,10 +100,20 @@ class Manager:
                 if relative not in state['directories']:state['directories'].append(relative)
         self.store(state);return entry
     def reconcile(self,state,name):
-        entry=state['files'][name];pending=entry.get('pending_sha256')
+        entry=state['files'][name]
+        if entry.get('pending_suspend'):
+            path=self.target(name);current=digest(path.read_bytes()) if path.exists() else None
+            if current is None:
+                entry.update(last_sha256=None,suspended=True,touched=True)
+                if entry.get('pending_replace_original'):entry['patch_quarantined']=True
+            elif current!=entry['pending_suspend']:raise ValueError('Game text changed during interrupted quarantine')
+            entry.pop('pending_suspend',None);entry.pop('pending_replace_original',None);self.store(state)
+        pending=entry.get('pending_sha256')
         if pending is None:return
         path=self.target(name);current=digest(path.read_bytes()) if path.exists() else None
-        if current==pending:entry.update(last_sha256=pending,touched=True,written=entry.get('pending_written',entry.get('written')))
+        if current==pending:
+            entry.update(last_sha256=pending,touched=True,written=entry.get('pending_written',entry.get('written')),suspended=False,restored=False)
+            if entry.get('pending_source'):entry['source']=entry['pending_source']
         elif current!=entry.get('last_sha256'):raise ValueError('Game text changed during an interrupted update')
         temporary=entry.get('pending_temp')
         if temporary:
@@ -114,8 +124,8 @@ class Manager:
                 if leftover.resolve()!=leftover or stat.st_nlink!=1 or stat.st_ino!=temporary['file_id']:raise ValueError('Temporary recovery file changed ownership')
                 leftover.unlink()
         entry.pop('pending_temp',None)
-        entry.pop('pending_sha256',None);entry.pop('pending_written',None);self.store(state)
-    def write(self,name,raw):
+        entry.pop('pending_sha256',None);entry.pop('pending_written',None);entry.pop('pending_source',None);self.store(state)
+    def write(self,name,raw,source=None):
         with localization_lock(self.game/INI):
             state=self.state()
             if not state.get('enabled',True):raise ValueError('SynthStrings is disabled for this game channel')
@@ -123,22 +133,68 @@ class Manager:
             if state.get('phase')=='restored':
                 state.update(files={},directories=[],permissions={},phase='active');self.store(state)
             entry=self.capture(state,name);self.reconcile(state,name);path=self.target(name)
+            if name==INI:
+                expected=source or entry.get('source')
+                if entry.get('suspended') and not source:raise ValueError('SynthStrings is paused until fresh game text is verified')
+                if expected:
+                    from synthstrings_guard import snapshot
+                    if snapshot(self.game)['fingerprint']!=expected['fingerprint']:raise ValueError('Game build changed before localization could be committed')
             before=path.read_bytes() if path.exists() else None
-            if before==raw:return False
+            if before==raw:
+                if source:entry['source']=source;self.store(state)
+                return False
             # Capture the exact version being replaced before committing the change.
             if entry.get('last_sha256')!=(digest(before) if before is not None else None):
                 raise ValueError('Game text changed outside SynthScan; review it before rewriting')
             after_name=digest(raw)+'-written.bin';atomic(self.folder/after_name,raw)
             entry.update(pending_sha256=digest(raw),pending_written=after_name);self.store(state)
+            if source:entry['pending_source']=source;self.store(state)
             def record_temp(path,file_id):
                 entry['pending_temp']=dict(name=path.name,file_id=file_id);self.store(state)
             atomic(path,raw,on_temp=record_temp)
             permission=state.get('permissions',{}).get(name)
             if permission:permission['applied']=read_dacl(path)
-            entry.update(last_sha256=digest(raw),touched=True,written=after_name);entry.pop('pending_sha256',None);entry.pop('pending_written',None);entry.pop('pending_temp',None);self.store(state)
+            entry.update(last_sha256=digest(raw),touched=True,written=after_name,suspended=False,restored=False)
+            if source:entry['source']=source
+            entry.pop('pending_sha256',None);entry.pop('pending_written',None);entry.pop('pending_temp',None);entry.pop('pending_source',None);self.store(state)
             referenced={e.get(key) for e in state['files'].values() for key in ('written','pending_written')}
             for old in self.folder.glob('*-written.bin'):
                 if re.fullmatch(r'[0-9a-f]{64}-written.bin',old.name) and old.name not in referenced:old.unlink(missing_ok=True)
+            return True
+    def suspend(self,affected=(),replace_sha256=None):
+        """Quarantine only our complete generated pack; retain the on preference.
+
+        Never restore an old pre-patch full pack, delete a foreign pack or undo
+        another program's edits. The archive and journal stay in AppData.
+        """
+        with localization_lock(self.game/INI):
+            state=self.state();path=self.target(INI)
+            if INI in state['files']:self.reconcile(state,INI)
+            if not path.exists():
+                entry=state['files'].get(INI)
+                if entry and (replace_sha256 is not None or entry.get('source')):
+                    entry.update(last_sha256=None,suspended=True,touched=True)
+                    if replace_sha256 is not None:entry['patch_quarantined']=True
+                    self.store(state)
+                return False
+            raw=path.read_bytes()
+            # A whole generated pack has the explicit final ownership key.
+            # A blueprint heading alone does not establish exclusive ownership.
+            if replace_sha256 is not None and digest(raw)!=replace_sha256:raise ValueError('The language pack changed after you chose to replace it; original preserved')
+            if replace_sha256 is None and not re.search(rb'(?m)^bedrock_game_texts=',raw.lstrip(b'\xef\xbb\xbf')):return False
+            entry=state['files'].get(INI)
+            if entry and entry.get('last_sha256')!=digest(raw) and replace_sha256 is None:return False
+            entry=self.capture(state,INI)
+            saved=self.backup(INI,raw,'patch-quarantine')
+            if saved.read_bytes()!=raw or path.read_bytes()!=raw:raise ValueError('Game text changed during quarantine; original preserved')
+            entry['pending_suspend']=digest(raw)
+            entry['suspended_game_pids']=sorted(set(entry.get('suspended_game_pids',[]))|set(affected))
+            entry['pending_replace_original']=bool(entry.get('legacy') or replace_sha256 is not None)
+            self.store(state)
+            path.unlink()
+            entry.update(last_sha256=None,suspended=True,touched=True)
+            if entry.get('pending_replace_original'):entry['patch_quarantined']=True
+            entry.pop('pending_suspend',None);entry.pop('pending_replace_original',None);self.store(state)
             return True
     def backup(self,name,raw,kind='recovery'):
         target=self.folder/(time.strftime('%Y%m%d_%H%M%S')+'-'+uuid.uuid4().hex+'-'+kind+'.bin');atomic(target,raw);return target
@@ -150,9 +206,12 @@ class Manager:
                     self.reconcile(state,name);path=self.target(name)
                     if entry.get('restored'):continue
                     current=path.read_bytes() if path.exists() else None
+                    if entry.get('suspended') and current is None:
+                        entry['restored']=True;result['preserved'].append(name);continue
                     original=self.recovery(entry['original']).read_bytes() if entry.get('existed') else None
                     if original is not None and digest(original)!=entry['original_sha256']:raise ValueError('Original recovery copy failed verification')
-                    if entry.get('legacy'):
+                    if entry.get('patch_quarantined'):original=None
+                    if entry.get('legacy') and not entry.get('patch_quarantined'):
                         result['legacy'].append(name)
                         if not archive_legacy:result['conflicts'].append(name);continue
                         if current is None:entry['restored']=True;continue
@@ -254,27 +313,86 @@ def archive_legacy_artifacts(game,profile=PROFILE):
             path.unlink();result.append(item)
     return result
 
-def apply_native(game,bits,profile=PROFILE,native=None):
+def _run_text_renderer(command,env,cancel=None):
+    if cancel is None:
+        return subprocess.run(command,env=env,check=True,creationflags=0x08000000,timeout=300)
+    if cancel.is_set():raise ValueError('SynthStrings preparation was stopped')
+    # Only this owned renderer is stopped, never the game or launcher.
+    with subprocess.Popen(command,env=env,creationflags=0x08000000,stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL) as process:
+        deadline=time.monotonic()+300
+        while True:
+            try:
+                code=process.wait(timeout=.25);break
+            except subprocess.TimeoutExpired:
+                if cancel.is_set() or time.monotonic()>=deadline:
+                    process.terminate()
+                    try:process.wait(timeout=2)
+                    except subprocess.TimeoutExpired:process.kill();process.wait(timeout=2)
+                    raise ValueError('SynthStrings preparation was stopped before activation')
+        if code:raise subprocess.CalledProcessError(code,command)
+
+def apply_native(game,bits,profile=PROFILE,native=None,cancel=None):
+    # Serialize renders independently of the short file-transaction lock. A
+    # patch guard must be able to quarantine a pack during a slow archive read.
+    with localization_lock(str(Path(game)/INI)+'.render',timeout_ms=1000 if cancel is not None else 330000):
+        return _apply_native(game,bits,profile,native,cancel)
+
+def _apply_native(game,bits,profile,native,cancel):
     manager=Manager(game,profile)
     from installation import valid_game
+    from synthstrings_guard import snapshot,validate_render,record,current_pids
     if not valid_game(game):raise ValueError('The selected Star Citizen installation is unavailable')
-    with localization_lock(Path(game)/INI):
-        if not enabled(game,profile):return dict(written=False,note='SynthStrings is disabled for this channel')
-        manager.folder.mkdir(parents=True,exist_ok=True);render=manager.folder/('render-'+uuid.uuid4().hex+'.ini')
-        try:
-            env=dict(os.environ,SYNTHSCAN_DATA_DIR=str(profile))
-            subprocess.run([str(native or ROOT/'dist/native/SynthScan.exe'),'--render-texts',str(game),str(render),bits],env=env,check=True,creationflags=0x08000000,timeout=300)
-            raw=render.read_bytes();ini=manager.target(INI)
+    pids=current_pids();removed=False;source=None;ini=manager.target(INI)
+    manager.folder.mkdir(parents=True,exist_ok=True);render=manager.folder/('render-'+uuid.uuid4().hex+'.ini');baseline=Path(str(render)+'.base')
+    try:
+        with localization_lock(Path(game)/INI):
+            if not enabled(game,profile):return dict(written=False,note='SynthStrings is disabled for this channel')
+            entry=manager.read().get('files',{}).get(INI,{})
             if ini.exists() and not any(mark in ini.read_bytes() for mark in MARKERS):return dict(written=False,note="Existing localization pack preserved; its annotations can be synchronized separately")
+            source=snapshot(game)
+            changed_build=entry.get('source',{}).get('fingerprint')!=source['fingerprint']
+            missing_pack=not ini.exists()
+            if changed_build or missing_pack:removed=manager.suspend(pids)
+            if ini.exists() and changed_build:
+                raise ValueError('Externally edited localization needs review before adaptation')
+            if changed_build and time.time()-source['archive_mtime']<120:raise ValueError('Waiting for the game patch to settle before adaptation')
+        env=dict(os.environ,SYNTHSCAN_DATA_DIR=str(profile))
+        _run_text_renderer([str(native or ROOT/'dist/native/SynthScan.exe'),'--render-texts',str(game),str(render),bits],env,cancel)
+        raw=render.read_bytes();validation=validate_render(baseline.read_bytes(),raw)
+        source.update(validation)
+        with localization_lock(Path(game)/INI):
+            if not enabled(game,profile):return dict(written=False,note='SynthStrings was disabled during preparation; no text was activated')
+            if cancel is not None and cancel.is_set():raise ValueError('SynthStrings preparation was stopped before activation')
+            if snapshot(game)['fingerprint']!=source['fingerprint']:raise ValueError('Game files changed while SynthStrings was adapting')
+            # Read config at commit, so settings changed during extraction survive.
             cfg=manager.target(CFG);existing=cfg.read_bytes() if cfg.exists() else b''
             match=re.search(rb'^\s*g_language\s*=\s*[\"\x27]?([\w-]+)',existing.lstrip(b'\xef\xbb\xbf'),re.I|re.M)
             if match and match[1].lower()!=b'english':raise ValueError('SynthStrings requires the English game language')
-            manager.write(INI,raw)
+            written=manager.write(INI,raw,source=source)
             if not match:
                 ending=b'\r\n' if b'\r\n' in existing or not existing else b'\n'
                 manager.write(CFG,existing+(ending if existing and not existing.endswith(b'\n') else b'')+b'g_language = english'+ending)
-            return dict(written=True,note='SynthStrings prepared; original files and recovery journal are kept in AppData')
-        finally:render.unlink(missing_ok=True)
+            if snapshot(game)['fingerprint']!=source['fingerprint']:raise ValueError('Game files changed during localization activation')
+            status=load(manager.folder/'guard_status.json')
+            if changed_build or missing_pack or status.get('state') not in ('ready','adapted'):
+                record(manager,'adapted','SynthStrings adapted successfully',
+                       f"Fresh text for this game build was verified: {validation['keys']} game strings preserved. Enhancements will load on the next game start.",
+                       source,affected=set(pids)|set(current_pids()) if written or removed else ())
+            return dict(written=True,changed=written,note='SynthStrings prepared from verified current game text; see Home for patch and restart status')
+    except (OSError,ValueError,KeyError,TypeError,subprocess.SubprocessError) as error:
+        with localization_lock(Path(game)/INI):
+            if not enabled(game,profile):return dict(written=False,note='SynthStrings is disabled for this channel')
+            try:removed=manager.suspend(set(pids)|set(current_pids())) or removed
+            except (OSError,ValueError) as cleanup_error:error=ValueError(str(error)+'; automatic quarantine could not complete: '+str(cleanup_error))
+            defaults=not ini.exists()
+            record(manager,'fallback' if defaults else 'attention',
+                   'SynthStrings is temporarily using game defaults' if defaults else 'The existing language file was preserved',
+                   ('The text update could not be verified. Game defaults will be used; choose Check now in Text settings to retry. ' if defaults else
+                    'The text update stopped without replacing the existing file. Open Text settings to review it. ')+str(error),
+                   source,affected=set(pids)|set(current_pids()) if removed else ())
+            return dict(written=False,error=True,note=str(error),fallback=defaults)
+    finally:
+        render.unlink(missing_ok=True);baseline.unlink(missing_ok=True)
 
 def main():
     p=argparse.ArgumentParser();p.add_argument('action',choices=['apply-native','remove','enable','disable']);p.add_argument('--game',type=Path,required=True);p.add_argument('--profile',type=Path,default=PROFILE);p.add_argument('--native',type=Path);p.add_argument('--owned',default='');p.add_argument('--result',type=Path,required=True);a=p.parse_args()

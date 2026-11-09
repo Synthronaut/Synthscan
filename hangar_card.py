@@ -1,10 +1,10 @@
-"""Compact native-HUD artwork and its read-only background publisher."""
+"""Compact native-HUD artwork, board commands and background publication."""
 from html import escape
 from pathlib import Path
 import os,time
 from executive_hangar import countdown
 from executive_hangar_hud import render_png
-from compboard_inventory import read_inventory
+from compboard_inventory import CompboardHudCommands
 from hangar_verification import installed_build,HangarVerification
 from telemetry_ipc import publish_json
 
@@ -26,13 +26,13 @@ def card_svg(view,inventory=None,verification=None):
     if certain and view:
         date=view.get('source_modified','');footer='Community estimate · '+date
     out=[f'<svg xmlns="http://www.w3.org/2000/svg" width="{WIDTH}" height="{HEIGHT}" viewBox="0 0 {WIDTH} {HEIGHT}">',
-         '<defs><linearGradient id="bg" x2="0.9" y2="1"><stop stop-color="#171b23"/><stop offset="1" stop-color="#0c1016"/></linearGradient><linearGradient id="edge"><stop stop-color="#baa37b" stop-opacity=".55"/><stop offset="1" stop-color="#baa37b" stop-opacity=".10"/></linearGradient><radialGradient id="glow"><stop stop-color="#80d5b0" stop-opacity=".16"/><stop offset="1" stop-color="#80d5b0" stop-opacity="0"/></radialGradient></defs>',
-         '<rect x=".5" y=".5" width="429" height="149" rx="8" fill="url(#bg)" stroke="url(#edge)"/>',
+         '<defs><linearGradient id="bg" x2="0.9" y2="1"><stop stop-color="#171b23"/><stop offset="1" stop-color="#0c1016"/></linearGradient><linearGradient id="edge"><stop stop-color="#66717f" stop-opacity=".35"/><stop offset="1" stop-color="#66717f" stop-opacity=".10"/></linearGradient><radialGradient id="glow"><stop stop-color="#80d5b0" stop-opacity=".16"/><stop offset="1" stop-color="#80d5b0" stop-opacity="0"/></radialGradient></defs>',
+         '<rect x="0" y="0" width="430" height="150" fill="url(#bg)"/>',
          '<text x="18" y="23" fill="#c7b28c" font-family="Segoe UI" font-size="10" letter-spacing="2.4">PYAM / EXECUTIVE</text>',
-         '<path d="M18 34H42" stroke="#a28c65" stroke-width="1"/>',
+         '<path d="M18 34H42" stroke="#66717f" stroke-width="1"/>',
          '<path d="M32 68H176" stroke="#303745" stroke-width="1"/>']
     if not certain:
-        out.append('<rect x="224" y="11" width="82" height="18" rx="4" fill="#142c40" stroke="#37658a" stroke-width=".5"/><text x="265" y="23" text-anchor="middle" fill="#9cdbff" font-family="Segoe UI" font-size="8" letter-spacing=".8">UNVERIFIED</text>')
+        out.append('<rect x="224" y="93" width="82" height="18" rx="4" fill="#142c40" stroke="#37658a" stroke-width=".5"/><text x="265" y="105" text-anchor="middle" fill="#9cdbff" font-family="Segoe UI" font-size="8" letter-spacing=".8">UNVERIFIED</text>')
     for i,color in enumerate(lights):
         x=32+i*36;ink=colors[color]
         if color=='green' and certain:out.append(f'<circle cx="{x}" cy="68" r="23" fill="url(#glow)"/>')
@@ -57,6 +57,7 @@ class HangarPublisher:
         self.directory=Path(directory);self.owner=owner;self.verification=HangarVerification(directory)
         self.last_key=None;self.next_check=0;self.inventory=None;self.build=None;self.enabled=False
         self.last_command=''
+        self.boards=CompboardHudCommands(directory,owner)
         try:
             from installation import game_directory
             self.game=game_directory()
@@ -64,6 +65,9 @@ class HangarPublisher:
 
     def tick(self,service,enabled,now=None):
         now=time.time() if now is None else now
+        board_state=self.boards.tick(now)
+        self.inventory=board_state
+        publish_json(self.directory/'compboard_hud.json',board_state)
         from telemetry_ipc import read_shared_json
         try:command=read_shared_json(self.directory/'hangar_update_command.json') or {}
         except (OSError,ValueError):command={}
@@ -73,8 +77,6 @@ class HangarPublisher:
             self.next_check=now+1
             try:self.build=installed_build(self.game) if self.game else None
             except (OSError,ValueError,TypeError,KeyError):self.build=None
-            try:self.inventory=read_inventory(self.directory)
-            except Exception:self.inventory={'unavailable':True}
         reset_check=service.reset_state()
         verification=self.verification.evaluate(self.build,service.schedule,now,service.fetched_at,bool(service.note),reset_check)
         if verification['build_changed']:service.attempted_at=-float('inf')
@@ -89,6 +91,8 @@ class HangarPublisher:
             schedule_error=service.note,reset_error=service.reset_error,
             checking=bool(service.future or service.reset_future)))
         self.view=view
+        publish_json(self.directory/'hangar_desktop.json',dict(at=now,owner_pid=self.owner,view=view,verification=verification,
+            fetched_at=service.fetched_at,checking=bool(service.future or service.reset_future)))
         if not enabled:return
         svg=card_svg(view,self.inventory,verification)
         if svg!=self.last_key:

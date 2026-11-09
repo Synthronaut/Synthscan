@@ -8,9 +8,9 @@ from telemetry_labels import translate_region
 from network_source import read_network_ping
 from frame_source import read_client_fps
 from native_workspace_data import migrate,plan_rows
-from app_lifecycle import game_process_ids
-from mining_diary import MiningDiary
-from rock_navigation import RockNavigation
+from app_lifecycle import game_process_ids,launcher_process_ids,instance_running
+from feature_modules import enabled
+from feature_services import IdleProvider,IdleDiary,IdleNavigation,IdleQuests
 from session_timeline import timeline,export_timeline,date_bounds
 from telemetry_ipc import publish_json,read_shared_json
 from interdiction_watch import InterdictionJournal
@@ -43,13 +43,15 @@ class SessionService:
         for event in self.reader.events:event['replayed']=True
         self.interdictions=InterdictionJournal(self.directory)
         self.history=ShardHistory(self.directory/'shard_history.json')
-        from shard_names import ShardNameCollector
-        self.shard_names=ShardNameCollector()
         self.sessions=ServerLogManager(self.directory/'server_log.json')
         self.plans=[];self.last_command='';self.seen_commands=set();self.note='';self.last_token=None
         self.frame_collector=None;self.frame_pid=None
-        self.diary=MiningDiary(self.directory);self.diary_filters={};self.diary_result={}
-        self.navigation=RockNavigation(self.directory);self.navigation_context={};self.game_pids=[]
+        if enabled('mining_tools'):
+            from mining_diary import MiningDiary
+            from rock_navigation import RockNavigation
+            self.diary=MiningDiary(self.directory);self.navigation=RockNavigation(self.directory)
+        else:self.diary=IdleDiary();self.navigation=IdleNavigation()
+        self.diary_filters={};self.diary_result={};self.navigation_context={};self.game_pids=[]
         self.session_filters={};self.session_offset=0;self.last_game_running=None
         from session_overview import SessionOverview
         self.overview=SessionOverview(self.directory,self.reader.log_path)
@@ -98,13 +100,8 @@ class SessionService:
         token=r.session_token if game_running and r.connected else None
         if token:
             hop,_=self.history.observe_shard(r.region_raw,r.shard_id,full_shard_id=r.full_shard_id,join_token=token)
-            observed=self.shard_names.tick(r.full_shard_id,token,r.is_loading_screen,now)
-            if observed:
-                self.history.observe_game_name(observed['full_shard_id'],observed['name'],observed['source'],observed['observed_at'])
-                self.sessions.set_shard_name(r.shard_id,r.region_raw,observed['name'],r.full_shard_id)
             name=self.history.get_game_name(r.full_shard_id) or self.history.get_known_name(r.region_raw,r.shard_id,r.full_shard_id) or 'Shard '+r.shard_id
         else:
-            self.shard_names.tick('',None,False,now)
             self.history.leave_current();self.sessions.end_session(reason='disconnected')
             hop='';name='Game closed' if not game_running else 'Main menu'
         ping=read_network_ping(r,now) if token else None
@@ -135,10 +132,13 @@ class SessionService:
                    storage_warning=self.history.read_only or self.sessions.read_only)
         state['shard_observation']=observations.get(r.full_shard_id,{}) if token else {}
         state['joined_at']=r.joined_at if token else None
+        state['connection_status']=r.connection_status
+        state['is_loading_screen']=r.is_loading_screen
+        state['gameplay_ready_at']=r.gameplay_ready_at if token else None
         state['game_shard_name']=self.history.get_game_name(r.full_shard_id) if token else None
         entry=self.history.shards.get(r.full_shard_id,{}) if token else {}
         state['shard_name_source']=entry.get('game_name_source') if state['game_shard_name'] else entry.get('name_source')
-        self.diary_inbox()
+        if enabled('mining_tools'):self.diary_inbox()
         state['diary']=self.diary.view(**self.diary_filters)
         state['diary_result']=self.diary_result
         state['interdictions']=self.interdictions.view(token,now,r.full_shard_id,r.joined_at)
@@ -196,37 +196,16 @@ class SessionService:
         elif action=='session_note':
             if not self.sessions.set_session_note(command['session_id'],command.get('text','')[:5000]):raise ValueError('That session is no longer available')
             self.note='Session note saved.'
-        elif action in ('fabricator_memory','fabricator_file') and not __import__('app_edition').screen_reading():
-            raise PermissionError('Screen reading is not installed in Standard.')
-        elif action=='fabricator_memory':
-            import mmap,re
-            import cv2,numpy as np
-            from screen_readers import read_image,fabricator_candidates
-            from fabricator_inbox import FabricatorInbox
-            name=command.get('frame_name','');size=command.get('frame_size',0)
-            if not re.fullmatch(r'Local\\SynthScan\.Fabricator\.[0-9]+\.\{[A-Fa-f0-9-]{36}\}',name) or not isinstance(size,int) or not 0<size<=32*1024*1024:raise ValueError('Invalid frame transfer')
-            try:
-                with mmap.mmap(-1,size,tagname=name,access=mmap.ACCESS_READ) as memory:
-                    frame=cv2.imdecode(np.frombuffer(memory[:],dtype=np.uint8),cv2.IMREAD_COLOR)
-                if frame is None:raise ValueError('Invalid game image')
-                candidates=fabricator_candidates(read_image(frame))
-                FabricatorInbox(self.directory/'fabricator_scan_inbox.json').add(candidates)
-                self.note=f'{len(candidates)} blueprint candidates saved for review; image not saved.'
-            finally:atomic_json(self.directory/'fabricator_frame_ack.json',{'frame_name':name})
-        elif action=='fabricator_file':
-            from screen_readers import read_image,fabricator_candidates
-            from fabricator_inbox import FabricatorInbox
-            path=Path(command['path']).resolve()
-            if path.parent!=self.directory.resolve() or path.suffix.lower()!='.png':raise ValueError('Invalid frame path')
-            candidates=fabricator_candidates(read_image(str(path)))
-            inbox=FabricatorInbox(self.directory/'fabricator_scan_inbox.json');inbox.add(candidates)
-            self.note=f'{len(candidates)} blueprint candidates saved for review; ownership was not granted.'
+        elif action in ('fabricator_memory','fabricator_file'):
+            # Retired: never read an image or infer blueprint ownership here.
+            if action=='fabricator_memory':
+                atomic_json(self.directory/'fabricator_frame_ack.json',{'frame_name':str(command.get('frame_name',''))[:160]})
+            self.note='Fabricator screen import has been retired. Use blueprint ownership checkboxes or game-log imports.'
         elif action=='dismiss_refinery_notices':
             self.overview.dismiss_refinery();self.overview.save();self.note='Refinery reminders dismissed.'
         else:raise ValueError('Unknown workspace command')
 
     def close(self):
-        self.shard_names.close()
         self.navigation.close()
         if self.frame_collector:self.frame_collector.stop()
         self.sessions.flush()
@@ -242,38 +221,55 @@ def owner_alive(pid):
     try:return api.WaitForSingleObject(handle,0)==258
     finally:api.CloseHandle(handle)
 
-def run(data_dir,owner):
+def run(data_dir,owner,native=None):
     directory=Path(data_dir);directory.mkdir(parents=True,exist_ok=True)
     logging.basicConfig(filename=directory/'bridge.log',level=logging.INFO,format='%(asctime)s %(levelname)s %(message)s')
     ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(),0x4000)
     migrate(directory)
     service=SessionService(directory)
     service.navigation.start()
-    from questing import Questing
-    quests=Questing(directory,service.reader.log_path)
-    from blueprint_strings import BlueprintTextSync
-    blueprint_texts=BlueprintTextSync(directory,service.reader.log_path)
-    from piracy_watch import PiracyReader
-    piracy=PiracyReader(directory)
+    quests=IdleQuests();blueprint_texts=IdleProvider();piracy=None
+    if enabled('synthstrings') or enabled('missions'):
+        from questing import Questing
+        quests=Questing(directory,service.reader.log_path)
+    if enabled('synthstrings'):
+        from blueprint_strings import BlueprintTextSync
+        blueprint_texts=BlueprintTextSync(directory,service.reader.log_path)
+    if enabled('piracy'):
+        from piracy_watch import PiracyReader
+        piracy=PiracyReader(directory)
     from reputation_notice import NoticeGate
     from setup_status import reputation_view
     rep_notices=NoticeGate();rep_notice=''
+    from synthstrings_guard import GuardService,view as strings_view
+    strings_guard=GuardService(directory,native) if enabled('synthstrings') else IdleProvider()
+    from launcher_activity import LauncherActivity
+    launcher_activity=LauncherActivity(directory)
     from data_updates import DataUpdateService
     updates=DataUpdateService(directory,exclusive=True)
-    from item_directory import ItemDirectoryService
-    item_directory=ItemDirectoryService(directory,owner)
-    from finder_market import FinderMarketService
-    finder_market=FinderMarketService(directory,owner)
+    item_directory=finder_market=companion=None;extras=[]
+    if enabled('item_finder'):
+        from item_directory import ItemDirectoryService
+        from finder_market import FinderMarketService
+        item_directory=ItemDirectoryService(directory,owner)
+        finder_market=FinderMarketService(directory,owner)
+    if enabled('people'):
+        from companion_features import CompanionRunner
+        companion=CompanionRunner(directory,owner);extras.append(companion)
+    if enabled('hangars'):
+        from feature_services import HangarRunner
+        extras.append(HangarRunner(directory,owner))
     from finder_services import FinderServices
-    from companion_features import CompanionRunner
-    companion=CompanionRunner(directory,owner)
-    finder_services=FinderServices(item_directory,finder_market,extras=(companion,))
+    finder_services=FinderServices(item_directory,finder_market,extras=extras)
     finder_services.current_patch=updates.local.get('patch','')
     finder_services.start()
     top_hud=subprocess.Popen([str(Path(sys.executable).with_name('pythonw.exe')),'-B',str(ROOT/'native_session_hud.py'),'--owner',str(owner)],
-                             cwd=ROOT,creationflags=subprocess.CREATE_NO_WINDOW,stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+                             cwd=ROOT,creationflags=subprocess.CREATE_NO_WINDOW,stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL) if enabled('server_hud') else None
     contract_helper=subprocess.Popen([str(Path(sys.executable).with_name('pythonw.exe')),'-B',str(ROOT/'contract_share_helper.py'),'--owner',str(owner),'--watch'],
-                                    cwd=ROOT,creationflags=subprocess.CREATE_NO_WINDOW,stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+                                    cwd=ROOT,creationflags=subprocess.CREATE_NO_WINDOW,stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL) if enabled('acceptance') else None
+    mission_logger=subprocess.Popen([str(Path(sys.executable).with_name('pythonw.exe')),'-B',str(ROOT/'mission_log_service.py'),
+                                     '--directory',str(directory),'--owner',str(owner)],cwd=ROOT,creationflags=subprocess.CREATE_NO_WINDOW,
+                                    stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL) if enabled('missions') else None
     try:
         while owner_alive(owner):
             try:
@@ -306,11 +302,11 @@ def run(data_dir,owner):
                 quest_settings=read_shared_json(directory/'native_settings.json') or {}
                 desktop=read_shared_json(directory/'home_status.json') or {}
                 pirate_mode=quest_settings.get('hud_mode')=='piracy' or (desktop.get('owner_pid')==owner and desktop.get('visible') and desktop.get('active_page')=='hud_piracy')
-                state['piracy_watch']=piracy.tick(pirate_mode,state.get('session_token'))
+                state['piracy_watch']=piracy.tick(pirate_mode,state.get('session_token')) if piracy else {}
                 pirate_command=directory/'piracy_command.json'
                 if pirate_command.exists():
                     value=read_shared_json(pirate_command)
-                    if value.get('owner_pid')==owner and 0<=time.time()-value.get('at',0)<15 and pirate_mode:
+                    if piracy and value.get('owner_pid')==owner and 0<=time.time()-value.get('at',0)<15 and pirate_mode:
                         piracy.watch.command(value.get('action'),time.time())
                         state['piracy_watch']=piracy.watch.view(time.time(),pirate_mode)
                     pirate_command.unlink(missing_ok=True)
@@ -321,7 +317,10 @@ def run(data_dir,owner):
                 try:
                     service.overview.reputation(read_shared_json(directory/'reputation_snapshot.json',limit=2*1024*1024))
                 except (OSError,ValueError,TypeError):pass
+                if not instance_running('watcher'):launcher_activity.update(launcher_process_ids(),games)
+                strings_guard.tick()
                 state['home']=service.overview.view(quests.balance_names,quests.scopes);service.overview.save()
+                state['home']['synthstrings']=strings_view(directory,games)
                 blueprint_texts.tick()
                 rep_view=reputation_view(directory,time.time(),state)
                 if rep_notices.consume(rep_view,games):rep_notice='restart:'+','.join(map(str,sorted(games)))
@@ -332,15 +331,18 @@ def run(data_dir,owner):
                 logging.exception('Native bridge tick failed')
             time.sleep(1)
     finally:
+        launcher_activity.close()
+        strings_guard.close()
         from app_lifecycle import send_signal
         send_signal('contract-share-stop')
-        piracy.close()
+        if piracy:piracy.close()
         finder_services.close()
         updates.close()
         quests.close()
         service.close()
-        if top_hud.poll() is None:top_hud.terminate();top_hud.wait(timeout=5)
+        if top_hud and top_hud.poll() is None:top_hud.terminate();top_hud.wait(timeout=5)
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('--data-dir',required=True);parser.add_argument('--owner',type=int,required=True)
-    args=parser.parse_args();run(args.data_dir,args.owner)
+    parser.add_argument('--native',type=Path)
+    args=parser.parse_args();run(args.data_dir,args.owner,args.native)

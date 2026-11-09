@@ -46,7 +46,7 @@ class GuidedSetupTests(unittest.TestCase):
             Manager(root/'game',profile).write(INI,b'Adagio=Adagio (249 / 800)\nMission=Keep my marks\n')
             (profile/'diary.json').write_text('personal record fixture')
             (profile/'reputation_localization_state.json').write_text(json.dumps(dict(entries={'adagio':dict(original='Adagio',written='Adagio (249 / 800)')})))
-            with patch.object(uninstall,'PROFILE',profile),patch.object(uninstall,'game_directory',return_value=root/'game'),patch.object(uninstall,'send_signal'),patch('community_startup.owns_shortcut',return_value=False):
+            with patch.object(uninstall,'PROFILE',profile),patch.object(uninstall,'send_signal'),patch('community_startup.owns_shortcut',return_value=False),patch('update_agent.stop_native'):
                 uninstall.cleanup()
             self.assertEqual(ini.read_text(),'Adagio=Adagio\nMission=Keep my marks\n')
             self.assertEqual((profile/'diary.json').read_text(),'personal record fixture')

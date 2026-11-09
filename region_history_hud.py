@@ -59,7 +59,7 @@ class RegionHistory:
         api.SetLayeredWindowAttributes.argtypes=[w.HWND,w.DWORD,w.BYTE,w.DWORD]
         if not api.SetLayeredWindowAttributes(hwnd,0,255,2):
             raise OSError('Could not initialize HUD window opacity')
-        api.SetWindowDisplayAffinity.argtypes=[w.HWND,w.DWORD];api.SetWindowDisplayAffinity(hwnd,0x11)
+        api.SetWindowDisplayAffinity.argtypes=[w.HWND,w.DWORD];api.SetWindowDisplayAffinity(hwnd,0)
         # Explicitly accept the first click without activating the window. Tk's
         # default mouse-activation handling must not consume that first click.
         proc_type=ctypes.WINFUNCTYPE(ctypes.c_ssize_t,w.HWND,w.UINT,w.WPARAM,w.LPARAM)

@@ -35,13 +35,22 @@ blueprint and contract notifications, verified reputation balance comparisons,
 and refinery-completion reminders. These records are stored in the player
 profile, are not uploaded, and are excluded from community source and packages.
 
+Mission & Wallet Log additionally retains local mission lifecycle events,
+verified reputation and wallet balance samples, participant counts and
+owner/recipient roles, and any wallet classifications you enter. Wallet owners
+must match the verified own character. Other participants' account identifiers
+are not retained. The journal, views and commands are excluded from releases;
+CSV/JSON/HTML exports are created only at a location you select. Disabling
+game-account access stops collection. Wallet samples describe net changes,
+not a complete itemized transaction history. See `docs/mission-wallet-log.md`.
+
 - Each Windows user stores settings, inventory, blueprint ownership, reputation
   snapshots, mining diary, bookmarks and session history under
   `%LOCALAPPDATA%\SynthScan`. The download contains an empty player profile.
 - Game definitions, icons and service schemas are generated locally from the
   selected installation. `loginData.json`, game logs and personal screenshots
   are never included in a distribution.
-- To read reputation, active missions and optional social information, the app uses the existing signed-in
+- To read reputation, active missions, own-character wallet funds and optional social information, the app uses the existing signed-in
   game's credential in memory, over TLS, directly to the game's
   `*.cloudimperiumgames.com` service. It does not request your password, sign in,
   refresh credentials, or accept another player's identity as an input.

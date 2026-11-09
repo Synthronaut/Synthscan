@@ -44,16 +44,10 @@ region/build/shard identity, never just the short number.
 
 The log collector accepts populated `ShardName[...]` records only when the same
 record identifies a remote PU shard. Empty frontend `local_shard` records are
-ignored. Full can also read an explicitly labelled two-word name from the game's
-loading screen: two matching high-confidence reads are required during the same
-join. This uses the existing game-window-only capture and privacy controls, runs
-in a background worker at most once per second for up to two minutes, and keeps
-images in memory. It stops after detection or loading ends. Standard does not
-capture screens; it uses log observations, cached names, and local manual labels.
-
-Loading-name recognition is conservative and still requires real-game validation
-across loading-screen variants. If no name is observed, the ribbon says name not
-captured and retains the numeric shard; recent visits retain their numeric entry.
-It cannot recover a loading name from a screen that has already disappeared.
-SynthScan does not manufacture a mapping. User-entered history labels remain
-local labels rather than verified CIG names.
+ignored. Shard identity never starts screen capture or OCR in either edition.
+The loading-screen name reader has been retired. Existing saved names and local
+manual labels are preserved; when no name is available, the ribbon simply shows
+the numeric shard without a missing-name warning. There is currently no verified
+background source or ID-to-name algorithm for CIG's two-word names. SynthScan
+does not manufacture a mapping. User-entered history labels remain local labels
+rather than verified CIG names.

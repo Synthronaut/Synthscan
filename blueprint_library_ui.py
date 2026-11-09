@@ -3,11 +3,9 @@ import threading
 import tkinter as tk
 from tkinter import filedialog
 import customtkinter as ctk
-from PIL import ImageGrab
 
 from crafting_catalog import get_catalog, material_coverage, quality_factor
 from refinery_db import load_inventory
-from screen_readers import read_image, fabricator_candidates
 from game_library import ArtworkImages
 
 BG, CARD, EDGE = '#181b22', '#1e222a', '#2c323e'
@@ -32,13 +30,10 @@ class BlueprintLibraryPage(ctk.CTkFrame):
         actions = ctk.CTkFrame(self, fg_color=CARD, corner_radius=8)
         actions.pack(fill='x', pady=(0, 10))
         self.scan_button = ctk.CTkButton(actions, text='Scan fabricator', width=138, command=self.capture)
-        self.scan_button.pack(side='left', padx=10, pady=10)
-        ctk.CTkButton(actions, text='Open screenshot', width=135, command=self.open_image).pack(side='left', padx=4)
-        ctk.CTkButton(actions, text='Paste image', width=100, command=self.paste).pack(side='left', padx=4)
         self.review_button = ctk.CTkButton(actions, text='Review scans (0)', width=145, command=self.review)
         self.review_button.pack(side='left', padx=4)
         ctk.CTkButton(actions, text='Read game logs', width=130, command=app.on_scan_blueprint_logs).pack(side='right', padx=10)
-        self.notice = ctk.CTkLabel(self, text='Scan while browsing your fabricator. Review ownership before importing; existing records are preserved.',
+        self.notice = ctk.CTkLabel(self, text='Use ownership checkboxes or Read game logs. Previous scan candidates remain available for review.',
                                    text_color=MUTED, anchor='w')
         self.notice.pack(fill='x', pady=(0, 8))
         if app.bp_manager.load_errors:
@@ -332,48 +327,19 @@ class BlueprintLibraryPage(ctk.CTkFrame):
         self.refresh()
 
     def open_image(self):
-        path = filedialog.askopenfilename(parent=self, title='Fabricator screenshot', filetypes=[('Images', '*.png *.jpg *.jpeg *.bmp')])
-        if path:
-            self.analyze(path)
+        self.notice.configure(text='Fabricator screen import has been retired. Use ownership checkboxes or game logs.')
 
     def paste(self):
-        image = ImageGrab.grabclipboard()
-        if hasattr(image, 'convert'):
-            self.analyze(image)
-        else:
-            self.notice.configure(text='Copy a fabricator screenshot to the clipboard first.')
+        self.notice.configure(text='Fabricator screen import has been retired. Use ownership checkboxes or game logs.')
 
     def capture(self):
-        # Reuse the existing monitor choice without typing or changing game state.
-        same_monitor = self.app._detect_current_ui_monitor() == self.app.cfg.get('game_monitor', 1)
-        if same_monitor:
-            self.app.root.withdraw()
-            self.after(180, lambda: self.capture_now(True))
-        else:
-            self.capture_now(False)
+        self.notice.configure(text='Fabricator screen import has been retired. Use ownership checkboxes or game logs.')
 
     def capture_now(self, restore):
-        try:
-            image = self.app.detector.grab_full_game_monitor_pil()
-        except Exception as exc:
-            self.notice.configure(text='Screen capture failed: ' + str(exc))
-            return
-        finally:
-            if restore:
-                self.app.root.deiconify()
-        self.analyze(image)
+        self.notice.configure(text='Fabricator screen import has been retired. Use ownership checkboxes or game logs.')
 
     def analyze(self, image):
-        self.scan_button.configure(state='disabled')
-        self.notice.configure(text='Reading fabricator screenshot…')
-        def worker():
-            try:
-                candidates, error = fabricator_candidates(read_image(image)), None
-            except Exception as exc:
-                candidates, error = [], str(exc)
-            # The main UI event pump owns all Tk calls.
-            self.app.ui_events.put(('fabricator_scan', (candidates, error), None))
-        threading.Thread(target=worker, daemon=True).start()
+        self.notice.configure(text='Fabricator screen import has been retired. Use ownership checkboxes or game logs.')
 
     def scan_finished(self, candidates, error=None):
         self.scan_button.configure(state='normal')

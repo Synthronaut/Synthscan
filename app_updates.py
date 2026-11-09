@@ -172,6 +172,11 @@ def inspect_archive(archive,value,destination=None):
 
 def stage(root,directory,trust=None,opener=request,now=None):
     now=time.time() if now is None else now;root=Path(root);directory=Path(directory);trust=trust or config(root)
+    if load(root/'release.json').get('module_schema')==1:
+        from module_distribution import prepare
+        pending=load(directory/'updates/pending.json')
+        if pending.get('kind')=='modules':return dict(status='staged',version=pending.get('version'),detail='Selected features are verified and waiting for safe activation.')
+        return prepare(root,directory,trust=trust,opener=opener,now=now)
     with opener(trust['manifest_url'],trust) as response:raw=response.read(256*1024+1)
     value=manifest(raw,trust,now);installed_release=load(root/'release.json');check_update_edition(installed_release,value);installed=installed_release.get('version','development')
     if installed=='development':return dict(status='development',detail='Development checkout: automatic replacement is disabled.')
@@ -227,6 +232,13 @@ def safe_remove(path,base):
     shutil.rmtree(path)
 
 
+def module_maintenance(target,current,directory,prune=False,install=None):
+    args=['--root',str(install or current),'--profile',str(directory)]
+    args+=['--prune',str(target)] if prune else ['--deactivate-removed',str(current)]
+    subprocess.run([str(Path(target)/'runtime/python.exe'),'-I','-B',str(Path(target)/'module_setup.py'),*args],
+        cwd=target,check=True,timeout=360,creationflags=0x08000000 if os.name=='nt' else 0)
+
+
 def activate(root,current,directory,health,launch,trust=None,can_activate=lambda:True):
     """File-system transaction. Tests inject health/launch without opening UI."""
     root=Path(root).resolve();current=Path(current).resolve();directory=Path(directory).resolve()
@@ -234,11 +246,18 @@ def activate(root,current,directory,health,launch,trust=None,can_activate=lambda
     if not (root/'SynthScan.exe').is_file() or not (current/'release.json').is_file():raise ValueError('Not an installed SynthScan application')
     trust=trust or config(current);updates=directory/'updates';pending=load(updates/'pending.json');token=pending.get('sha256','')
     if not HEX.fullmatch(token):raise ValueError('No verified staged update')
-    value=manifest((updates/(token+'.json')).read_bytes(),trust)
-    check_update_edition(load(current/'release.json'),value)
-    if value['sha256']!=token or version_key(value['version'])<=version_key(load(current/'release.json').get('version')):raise ValueError('Staged update no longer applies')
-    archive=updates/(token+'.zip')
-    if archive.stat().st_size!=value['size'] or digest(archive)!=token:raise ValueError('Staged application archive changed')
+    is_modules=pending.get('kind')=='modules'
+    if is_modules:
+        from module_distribution import activation_payload
+        value,unpack=activation_payload(current,directory,pending,trust)
+    else:
+        if load(current/'release.json').get('module_schema')==1:raise ValueError('A modular installation requires a module-preserving update')
+        value=manifest((updates/(token+'.json')).read_bytes(),trust)
+        check_update_edition(load(current/'release.json'),value)
+        if value['sha256']!=token or version_key(value['version'])<=version_key(load(current/'release.json').get('version')):raise ValueError('Staged update no longer applies')
+        archive=updates/(token+'.zip')
+        if archive.stat().st_size!=value['size'] or digest(archive)!=token:raise ValueError('Staged application archive changed')
+        unpack=lambda destination:inspect_archive(archive,value,destination)
     versions=root/'versions';versions.mkdir(exist_ok=True)
     if versions.is_symlink():raise ValueError('Version directory must not be a link')
     target=versions/token;temporary=versions/('.incoming-'+uuid.uuid4().hex)
@@ -250,7 +269,7 @@ def activate(root,current,directory,health,launch,trust=None,can_activate=lambda
     else:(updates/'setup_before.json').unlink(missing_ok=True)
     write(updates/'transaction.json',journal)
     try:
-        temporary.mkdir();inspect_archive(archive,value,temporary)
+        temporary.mkdir();unpack(temporary)
         for name in ('workspace_library.json',):
             source=directory/name
             if not source.exists():source=current/'dist/native'/name
@@ -267,10 +286,12 @@ def activate(root,current,directory,health,launch,trust=None,can_activate=lambda
                 write(updates/'setup_before.json',setup);setup['app_version']=value['version'];write(setup_path,setup)
         journal['phase']='prepared';write(updates/'transaction.json',journal)
         if not can_activate():raise UpdateDeferred('Game or application activity resumed; update remains staged.')
+        if is_modules:module_maintenance(target,current,directory,install=root)
         write(root/'activation_pending.txt',dict(schema=1))
         set_active(root,token);journal['phase']='activated';write(updates/'transaction.json',journal)
         launch(target,True)
         if not health(target):raise RuntimeError('Updated application did not report healthy readiness')
+        if is_modules:module_maintenance(target,current,directory,prune=True,install=root)
         journal.update(phase='applied',applied_at=time.time());write(updates/'transaction.json',journal)
         (root/'activation_pending.txt').unlink(missing_ok=True);(updates/'pending.json').unlink(missing_ok=True)
         # Only version folders created by this protocol are eligible for pruning.
@@ -330,7 +351,8 @@ def prepare_agent(root,directory):
     for name in ('Lib','DLLs'):
         shutil.copytree(runtime/name,target/name,ignore=shutil.ignore_patterns('site-packages','__pycache__','test','tests','idlelib'))
     (target/'python314._pth').write_text('..\n.\nLib\nDLLs\nimport site\n',encoding='ascii')
-    for name in ('app_updates.py','update_signing.py','update_agent.py','app_lifecycle.py','edition_payload.py'):shutil.copy2(root/name,folder/name)
+    for name in ('app_updates.py','update_signing.py','update_agent.py','app_lifecycle.py','edition_payload.py','feature_modules.py','module_distribution.py'):
+        if (root/name).is_file():shutil.copy2(root/name,folder/name)
     return folder
 
 

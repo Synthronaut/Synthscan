@@ -2,6 +2,7 @@
 from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
+import math
 from pathlib import Path
 import re
 import time
@@ -14,14 +15,14 @@ def mission_event(line):
     match = re.search(r'<CLocalMissionPhaseMarker::CreateMarker>.*missionId \[(' + UUID + r')\].*contractDefinitionId\[(' + UUID + r')\]',line)
     if match:
         return dict(id=match[1].lower(), definition_id=match[2].lower())
-    match = re.search(r'<SHUDEvent_OnNotification> Added notification "Contract Accepted:\s*(.*?)".*MissionId: \[(' + UUID + r')\]', line)
+    match = re.search(r'<SHUDEvent_OnNotification> Added notification "Contract Accepted:\s*(.*)".*MissionId: \[(' + UUID + r')\]', line)
     if match:
         title = re.sub(r'<[^>]*>', '', match[1]).rstrip(': ').strip()
         return dict(id=match[2].lower(), title=title, status='Accepted')
     match = re.search(r'<EndMission>.*MissionId\[(' + UUID + r')\].*CompletionType\[([^]]+)\]', line)
     if match:
         return dict(id=match[1].lower(), status=match[2])
-    match = re.search(r'<SHUDEvent_OnNotification> Added notification "New Objective:\s*(.*?)".*MissionId: \[(' + UUID + r')\]',line)
+    match = re.search(r'<SHUDEvent_OnNotification> Added notification "New Objective:\s*(.*)".*MissionId: \[(' + UUID + r')\]',line)
     if match:
         return dict(id=match[2].lower(), objective=re.sub(r'<[^>]*>','',match[1]).rstrip(': ').strip())
     return None
@@ -41,11 +42,40 @@ def own_missions(client):
     for m in response.missions:
         if m.mission_id not in allowed or not any(p.player_urn == client.subject for p in m.participants):
             raise ValueError('Mission did not verify own participation')
+        def share_values(participant):
+            value = getattr(participant, 'share', ())
+            values = [value] if type(value) in (int, float) else list(value)
+            return [float(v) for v in values if type(v) in (int, float) and math.isfinite(v)]
+        shares = [share_values(p) for p in m.participants]
+        own_index = next(i for i,p in enumerate(m.participants) if p.player_urn == client.subject)
+        normalized = all(len(v) == 1 and 0 <= v[0] <= 1 for v in shares) and abs(sum(v[0] for v in shares)-1) < 1e-5
+        owner = getattr(m, 'mission_owner_urn', '')
         rows.append(dict(id=m.mission_id.lower(), definition_id=m.mission_template.contract_definition_id,
-                         participants=len(m.participants), state=int(m.mission_state)))
+                         participants=len(m.participants), state=int(m.mission_state),
+                         own_share=shares[own_index][0] if normalized else None,
+                         own_share_values=shares[own_index], is_owner=owner == client.subject if owner else None,
+                         share_values=shares))
     return rows
 
+def own_wallet(client):
+    """Read the signed-in character's funds, validating every returned owner."""
+    q = client.message('sc.external.services.ledger.v1.GetFundsRequest')
+    response = client.read('ledger', 'LedgerService', 'GetFunds', q)
+    if not response.ledgers or any(v.owner_urn != client.subject for v in response.ledgers):
+        raise ValueError('Wallet ownership could not be verified')
+    balances = {}
+    currency = client.pool.FindEnumTypeByName('sc.external.services.ledger.v1.Currency')
+    for ledger in response.ledgers:
+        label = currency.values_by_number[ledger.funds.currency].name.removeprefix('CURRENCY_')
+        if label in balances:
+            raise ValueError('Multiple wallets for the same currency; total is ambiguous')
+        balances[label] = int(ledger.funds.amount)
+    return dict(source='authenticated_ledger_service', own_character_verified=True,
+                character_key=hashlib.sha256(client.subject.encode()).hexdigest(), read_at=time.time(), balances=balances)
+
+
 def own_reputation(client):
+    started = time.time()
     q = client.message('sc.external.services.reputation.v1.QueryReputationsRequest')
     q.query.pagination.first = 100
     prop = q.query.filter.property_filter
@@ -65,7 +95,7 @@ def own_reputation(client):
         cursors.add(cursor); q.query.pagination.after = cursor
     else: raise ValueError('Reputation pagination limit')
     if not records: raise ValueError('No reputation records returned')
-    return dict(schema=1, source='authenticated_reputation_service', read_at=time.time(),
+    return dict(schema=1, source='authenticated_reputation_service', read_at=time.time(), request_started_at=started,
                 character_key=hashlib.sha256(client.subject.encode()).hexdigest(),
                 own_character_verified=True, complete=True, records=records)
 
@@ -81,6 +111,8 @@ class Questing:
         self.game_running=False
 
     def sync_names(self,now):
+        from feature_modules import enabled
+        if not enabled('synthstrings'):return
         from installation import reference_paths
         if now<self.label_retry_at:return
         try:
@@ -186,6 +218,9 @@ class Questing:
                     if old != merged:
                         stamp=re.match(r'<(\d{4}-[^>]+)>',raw.decode('utf-8',errors='replace'))
                         if stamp:merged['event_timestamp']=stamp[1]
+                        if stamp and event.get('status')=='Accepted':
+                            from session_overview import stamp as log_stamp
+                            merged['accepted_log_at']=old.get('accepted_log_at') or log_stamp(stamp[1])
                         self.journal[event['id']] = merged
                         if event.get('status')=='Accepted': self.selected=event['id']
                         changed=True
@@ -207,6 +242,10 @@ class Questing:
             try: missions = own_missions(client)
             except Exception as exc:
                 missions=[];errors.append('Mission read unavailable ('+type(exc).__name__+')')
+            snapshot['mission_read_at'] = time.time()
+            snapshot['mission_error'] = '; '.join(errors)
+            try: snapshot['wallet'] = own_wallet(client)
+            except Exception as exc: snapshot['wallet_error'] = 'Wallet read unavailable ('+type(exc).__name__+')'
             return missions, snapshot, '; '.join(errors)
         finally: client.close()
 
@@ -221,6 +260,11 @@ class Questing:
                 if not publish_json(self.directory/'reputation_snapshot.json', snapshot):
                     raise OSError('Could not publish refreshed reputation')
                 self.read_at = snapshot['read_at']; self.error=mission_error
+                publish_json(self.directory/'mission_service_snapshot.json', dict(
+                    character_key=snapshot.get('character_key'), read_at=snapshot.get('mission_read_at', self.read_at),
+                    own_character_verified=snapshot.get('own_character_verified', False),
+                    missions=self.service, mission_error=snapshot.get('mission_error', ''),
+                    wallet=snapshot.get('wallet'), wallet_error=snapshot.get('wallet_error', '')))
             except Exception as exc:
                 # Never publish RPC details, credentials or request metadata.
                 self.error = 'Account read unavailable ('+type(exc).__name__+')'
@@ -280,7 +324,7 @@ class Questing:
         lines=balances[:2]+lines
         return dict(title=title, lines=lines[:8], count=len(active), source='Selected contract · not game tracking',
                     footer=self.error or (f'Balances verified {max(0,int(now-self.read_at))}s ago' if verified else 'Balance refresh pending'),
-                    warning='Configured rewards / split scenarios are estimates.', active_ids=[m['id'] for m in active])
+                    warning='Configured rewards / split scenarios are estimates.', selected_id=selected.get('id',''), active_ids=[m['id'] for m in active])
 
     def next_contract(self):
         ids=self.tick(False).get('active_ids',[])

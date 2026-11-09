@@ -199,12 +199,12 @@ class BlueprintManager:
         base_dir = custom_dir or self.sc_dir
         pattern = re.compile(r"Received Blueprint:\s*(.*?):")
         new_count = 0
-
+        
         all_logs = glob.glob(os.path.join(base_dir, "logbackups", "*.log"))
         game_log = os.path.join(base_dir, "Game.log")
         if os.path.exists(game_log):
             all_logs.append(game_log)
-
+            
         for log_path in all_logs:
             fname = os.path.basename(log_path)
             try:
@@ -397,8 +397,7 @@ class BlueprintManager:
         self.watching = False
 
 def parse_fabricator_screen(img_input):
-    """Return review candidates; a visible name alone never proves ownership."""
-    from screen_readers import read_image, fabricator_candidates
-    return fabricator_candidates(read_image(img_input))
+    raise RuntimeError('Fabricator screen import has been retired. Use blueprint checkboxes or game logs.')
+
 
 

@@ -5,7 +5,7 @@
   #define Output "output"
 #endif
 #ifndef AppVersion
-  #define AppVersion "0.1.0-alpha.10"
+  #define AppVersion "0.1.0-alpha.11"
 #endif
 #ifndef Edition
   #define Edition "full"

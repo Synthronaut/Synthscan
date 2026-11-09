@@ -68,7 +68,7 @@ public:
     // --gametexts, which compares it with gen_game_texts.py's reference.
     // False with the reason in note.
     static bool build(const std::filesystem::path& channel, const std::vector<bool>& owned,
-                      std::string& text, int& marked, std::string& note);
+                      std::string& text, int& marked, std::string& note, std::string* freshBaseline = nullptr);
     // Takes Bedrock's file away again, and only Bedrock's
     static Outcome remove(const std::filesystem::path& channel);
     // Bedrock's file in this channel stands on an older build of the game:

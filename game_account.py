@@ -49,6 +49,8 @@ class OwnAccount:
             for dep in d.dependency: add(dep)
             self.pool.AddSerializedFile(d.SerializeToString()); added.add(name)
         for name in ('sc/external/services/mission_service/v1/api.proto', 'sc/external/services/reputation/v1/api.proto'): add(name)
+        if 'sc/external/services/ledger/v1/api.proto' in descriptors:
+            add('sc/external/services/ledger/v1/api.proto')
         self.factory = message_factory.GetMessageClass
         self.channel = grpc.secure_channel(endpoint.netloc, grpc.ssl_channel_credentials())
 
@@ -59,8 +61,10 @@ class OwnAccount:
         from account_permission import require_account_access
         require_account_access()
         # This allowlist prevents accidental invocation of a mutating RPC.
-        if (service, method) not in {('MissionService', 'QueryActiveMissions'), ('MissionService', 'QueryMissions'), ('ReputationService', 'QueryReputations')}:
+        if (service, method) not in {('MissionService', 'QueryActiveMissions'), ('MissionService', 'QueryMissions'), ('ReputationService', 'QueryReputations'), ('LedgerService', 'GetFunds')}:
             raise ValueError('Read method not allowed')
+        if service == 'LedgerService' and (domain != 'ledger' or request.ledger_name):
+            raise ValueError('Only the authenticated own-wallet lookup is allowed')
         prefix = 'sc.external.services.' + domain + '.v1.'
         response = self.factory(self.pool.FindMessageTypeByName(prefix + method + 'Response'))
         return self.channel.unary_unary('/' + prefix + service + '/' + method,

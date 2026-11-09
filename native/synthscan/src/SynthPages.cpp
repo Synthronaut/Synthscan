@@ -1,4 +1,5 @@
 #include "SynthPages.h"
+#include "NativeRedraw.h"
 #include <commctrl.h>
 #include <map>
 #include <string>
@@ -16,12 +17,26 @@ HBRUSH surface=CreateSolidBrush(RGB(15,16,19));
 constexpr UINT READY=WM_APP+417;
 void arrange(){
     if(!container||!active||!IsWindow(active)||arranging)return;
+    arranging=true;
+    struct Reset {~Reset(){arranging=false;}} reset;
     auto& page=pages[active];RECT r{};GetClientRect(container,&r);
     int width=std::max(int(r.right),page.width),height=std::max(int(r.bottom)+page.crop,page.height);
     page.x=std::clamp(page.x,0,std::max(0,width-int(r.right)));page.y=std::clamp(page.y,0,std::max(0,height-page.crop-int(r.bottom)));
-    SCROLLINFO si{sizeof(si),SIF_RANGE|SIF_PAGE|SIF_POS};si.nMin=0;si.nMax=width-1;si.nPage=r.right;si.nPos=page.x;SetScrollInfo(container,SB_HORZ,&si,TRUE);
-    si.nMax=height-page.crop-1;si.nPage=r.bottom;si.nPos=page.y;SetScrollInfo(container,SB_VERT,&si,TRUE);
-    arranging=true;SetWindowPos(active,nullptr,-page.x,-page.crop-page.y,width,height,SWP_NOZORDER|SWP_NOACTIVATE);arranging=false;
+    auto scroll=[&](int bar,int maximum,UINT extent,int position){
+        SCROLLINFO old{sizeof(old),SIF_RANGE|SIF_PAGE|SIF_POS};GetScrollInfo(container,bar,&old);
+        if(old.nMin==0&&old.nMax==maximum&&old.nPage==extent&&old.nPos==position)return;
+        SCROLLINFO next{sizeof(next),SIF_RANGE|SIF_PAGE|SIF_POS};next.nMax=maximum;next.nPage=extent;next.nPos=position;SetScrollInfo(container,bar,&next,TRUE);
+    };
+    scroll(SB_HORZ,width-1,r.right,page.x);scroll(SB_VERT,height-page.crop-1,r.bottom,page.y);
+    // Scrollbar visibility can change the viewport synchronously. Finish with
+    // that final viewport rather than recursively laying out every descendant.
+    RECT final{};GetClientRect(container,&final);
+    if(final.right!=r.right||final.bottom!=r.bottom){
+        width=std::max(int(final.right),page.width);height=std::max(int(final.bottom)+page.crop,page.height);
+        page.x=std::clamp(page.x,0,std::max(0,width-int(final.right)));page.y=std::clamp(page.y,0,std::max(0,height-page.crop-int(final.bottom)));
+        scroll(SB_HORZ,width-1,final.right,page.x);scroll(SB_VERT,height-page.crop-1,final.bottom,page.y);
+    }
+    NativeRedraw::Layout pending(container);pending.place(active,-page.x,-page.crop-page.y,width,height);pending.apply();
 }
 LRESULT CALLBACK childProc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp,UINT_PTR,DWORD_PTR){
     if(msg==WM_WINDOWPOSCHANGING&&contains(hwnd)&&!arranging){
@@ -51,7 +66,7 @@ LRESULT CALLBACK createHook(int code,WPARAM wp,LPARAM lp){
         if(!(create->style&WS_CHILD)&&!IS_INTRESOURCE(create->lpszClass)){
             std::wstring cls=create->lpszClass;
             bool tool=(cls.rfind(L"SCMiner",0)==0||cls.rfind(L"SynthScan",0)==0)&&
-                cls!=L"SCMinerGUI"&&cls!=L"SynthScanHome"&&cls!=L"SynthScanPageHost"&&cls!=L"SynthScanHost"&&
+                cls!=L"SCMinerGUI"&&cls!=L"SCMinerHudFeather"&&cls!=L"SynthScanHome"&&cls!=L"SynthScanPageHost"&&cls!=L"SynthScanHost"&&
                 cls.find(L"Suggest")==std::wstring::npos&&cls.find(L"Popup")==std::wstring::npos&&cls.find(L"Overlay")==std::wstring::npos;
             if(tool){
                 Page p;p.style=create->style;p.ex=create->dwExStyle;p.parent=create->hwndParent;p.width=std::max(100,create->cx);p.height=std::max(100,create->cy);p.captured=true;
@@ -73,7 +88,10 @@ void initialize(HWND main){
     SetWindowTheme(container,L"DarkMode_Explorer",nullptr);
     hook=SetWindowsHookExW(WH_CBT,createHook,nullptr,GetCurrentThreadId());
 }
-void place(int x,int y,int width,int height,bool visible){wantVisible=visible;if(container){MoveWindow(container,x,y,width,height,!transitioning);if(!transitioning)ShowWindow(container,visible?SW_SHOW:SW_HIDE);arrange();}}
+void place(int x,int y,int width,int height,bool visible){
+    wantVisible=visible;if(!container)return;
+    NativeRedraw::Layout pending(mainWindow);pending.place(container,x,y,width,height,transitioning?-1:int(visible));pending.apply();arrange();
+}
 void mount(HWND page,int cropTop){
     if(!container||!page||!IsWindow(page))return;
     if(active==page&&GetParent(page)==container){if(cropTop)pages[page].crop=cropTop;arrange();return;}
