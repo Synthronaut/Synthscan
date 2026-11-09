@@ -67,7 +67,7 @@ class BlueprintStringsTests(unittest.TestCase):
             import os
             replace=os.replace
             def fail(source,destination):
-                if Path(destination)==ini:raise PermissionError('locked')
+                if Path(destination).resolve()==ini.resolve():raise PermissionError('locked')
                 return replace(source,destination)
             with patch('game_text_lifecycle.os.replace', side_effect=fail):
                 with self.assertRaises(PermissionError):

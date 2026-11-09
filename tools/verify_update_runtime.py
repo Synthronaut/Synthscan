@@ -15,7 +15,7 @@ from app_updates import prepare_agent
 def verify(payload):
     payload=Path(payload).resolve()
     with tempfile.TemporaryDirectory(prefix='SynthScan-update-probe-') as temporary:
-        base=Path(temporary);profile=base/'profile';profile.mkdir()
+        base=Path(temporary).resolve();profile=base/'profile';profile.mkdir()
         agent=prepare_agent(payload,profile)
         output=base/'result.json';env=dict(os.environ,SYNTHSCAN_PROBE_OUTPUT=str(output))
         probe="import app_updates,update_agent,update_signing,app_lifecycle,json,os,pathlib;pathlib.Path(os.environ['SYNTHSCAN_PROBE_OUTPUT']).write_text(json.dumps({'stdlib_agent':True}))"
@@ -32,7 +32,7 @@ def verify(payload):
             subprocess.run([str(agent/'SynthScan.exe'),*arguments],env=env,check=True,timeout=10,creationflags=subprocess.CREATE_NO_WINDOW)
             deadline=time.monotonic()+15
             while not output.exists() and time.monotonic()<deadline:time.sleep(.02)
-            value=json.loads(output.read_text());assert Path(value['origin'])==expected,value
+            value=json.loads(output.read_text());assert Path(value['origin']).resolve()==expected.resolve(),value
             return value
         run(agent,'--probe-flat')
         (agent/'active_version.txt').write_text(token+'\n')
