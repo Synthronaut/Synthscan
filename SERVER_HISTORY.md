@@ -38,7 +38,22 @@ region and environment, rather than by number alone. Names entered in server
 history are local labels, not verified CIG names.
 
 The loading queue's word-based shard name is separate from both the numeric ID
-and a local DGS label such as GAME-7. The inspected client schema contains a
-PlayerShardHistory.shard_name field, but the current collector has no verified
-read source for it. Automatic loading-name capture is not implemented. Unknown
-names remain numeric identifiers; SynthScan does not manufacture a mapping.
+and a local DGS label such as GAME-7. Observed names appear alongside the shard
+number in the server ribbon and recent-visits dropdown. Mappings use the complete
+region/build/shard identity, never just the short number.
+
+The log collector accepts populated `ShardName[...]` records only when the same
+record identifies a remote PU shard. Empty frontend `local_shard` records are
+ignored. Full can also read an explicitly labelled two-word name from the game's
+loading screen: two matching high-confidence reads are required during the same
+join. This uses the existing game-window-only capture and privacy controls, runs
+in a background worker at most once per second for up to two minutes, and keeps
+images in memory. It stops after detection or loading ends. Standard does not
+capture screens; it uses log observations, cached names, and local manual labels.
+
+Loading-name recognition is conservative and still requires real-game validation
+across loading-screen variants. If no name is observed, the ribbon says name not
+captured and retains the numeric shard; recent visits retain their numeric entry.
+It cannot recover a loading name from a screen that has already disappeared.
+SynthScan does not manufacture a mapping. User-entered history labels remain
+local labels rather than verified CIG names.

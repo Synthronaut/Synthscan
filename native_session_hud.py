@@ -15,7 +15,7 @@ def hud_state(snapshot,owner,now):
     full=snapshot.get('full_shard_id','');match=SHARD_RE.fullmatch(full)
     source.update(session_token=snapshot.get('session_token'),full_shard_id=full,
                   shard_id=match.groups()[-1] if match else '--',
-                  region_display=snapshot.get('region','--'),callsign=snapshot.get('shard_name','MAIN MENU'),
+                  region_display=snapshot.get('region','--'),shard_name_source=snapshot.get('shard_name_source'),callsign=snapshot.get('game_shard_name') or snapshot.get('shard_name','MAIN MENU'),
                   hop_status=snapshot.get('hop',''),location_display=snapshot.get('location') or '--',
                   connection_status='connected' if snapshot.get('session_token') else ('game_closed' if not snapshot.get('game_pids') else 'main_menu'))
     observation=snapshot.get('shard_observation') or {}

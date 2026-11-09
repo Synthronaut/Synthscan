@@ -248,6 +248,13 @@ class IncrementalGameLog:
             if shard and shard.group(0).lower() != self.full_shard_id:
                 self._join(shard, at, line,time_source)
 
+        # Ignore the frontend's local_shard/empty-name seeding records.
+        named=re.search(r"ShardName\[([^\]]+)\]",line,re.I)
+        identity=SHARD_RE.search(line)
+        if named and identity:
+            from shard_names import clean_name
+            name=clean_name(named.group(1))
+            if name:self.events.append(dict(type='shard_name',full_shard_id=identity.group(0).lower(),name=name,at=at,source='game_log'))
         if not self.connected:
             return
         self.jurisdiction.feed(line, at, time_source)
@@ -409,7 +416,21 @@ class ShardHistory:
 
     def get_known_name(self, region, shard, full_shard_id=None):
         key = self._resolve_key(region, shard, full_shard_id)
-        return self.shards.get(key, {}).get("name") if key else None
+        return (self.shards.get(key, {}).get("name") or self.shards.get(key, {}).get("game_name")) if key else None
+
+    def observe_game_name(self,full_shard_id,name,source,observed_at=None):
+        from shard_names import clean_name
+        match=SHARD_RE.fullmatch(full_shard_id or '');name=clean_name(name)
+        if not match or not name or source not in ('game_log','loading_screen_ocr'):return False
+        key=full_shard_id.lower();region,env,shard=match.groups();at=self.clock() if observed_at is None else observed_at
+        entry=self.shards.setdefault(key,dict(full_shard_id=key,region_raw=region.lower(),region=region.upper(),shard_id=shard,visits=0,first_seen=at,last_seen=at))
+        if at<entry.get('game_name_observed_at',0):return False
+        if entry.get('game_name')==name and entry.get('game_name_source')==source and at==entry.get('game_name_observed_at'):return True
+        entry.update(game_name=name,game_name_source=source,game_name_observed_at=at)
+        self._save();return True
+
+    def get_game_name(self,full_shard_id):
+        return self.shards.get(str(full_shard_id).lower(),{}).get('game_name')
 
     def set_shard_name(self, region, shard, name, full_shard_id=None, source="manual"):
         key = self._resolve_key(region, shard, full_shard_id)

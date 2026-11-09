@@ -21,7 +21,7 @@ def recent_visits(snapshot, limit=8):
         def date(at):
             return datetime.fromtimestamp(at, TAIPEI).strftime('%Y-%m-%d %H:%M:%S')
         rows.append(dict(joined=joined, region=session.get('region_display') or session.get('region_raw') or '--',
-                         server=shard_label(session.get('server_name'), session.get('shard_id')),
+                         server=shard_label(session.get('game_shard_name') or session.get('server_name'), session.get('shard_id')),
                          full=session.get('full_shard_id', ''), current=current,
                          times=f"{date(joined)} → {date(left) if left is not None else ('now' if current else 'end unrecorded')}"))
     return sorted(rows, key=lambda r: r['joined'], reverse=True)[:limit]

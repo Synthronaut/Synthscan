@@ -192,10 +192,10 @@ class ServerLogManager:
 
     def _get_known_name(self, region, shard, full_shard_id=None):
         try:
-            history = json.loads(Path(SHARD_HISTORY_FILE).read_text(encoding="utf-8"))
+            history = json.loads(self.log_file.with_name('shard_history.json').read_text(encoding="utf-8"))
             entry = history.get("shards", {}).get(full_shard_id, {}) if full_shard_id else {}
-            if entry.get("name"):
-                return entry["name"]
+            if entry.get('game_name') or entry.get('name'):
+                return entry.get('game_name') or entry['name']
         except (OSError, ValueError, TypeError):
             pass
         return f"SHARD {str(shard).lstrip('0') or shard}"

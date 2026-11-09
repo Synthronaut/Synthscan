@@ -20,7 +20,7 @@ ROOT=Path(__file__).resolve().parent
 def ribbon_snapshot(state):
     """Publish the small server ribbon before optional catalog/reputation work."""
     keys=('schema','written_at','owner_pid','game_pids','session_token','full_shard_id','joined_at',
-          'region','shard_name','hop','location','hud_state','shard_observation','sessions','interdictions')
+          'region','shard_name','game_shard_name','shard_name_source','hop','location','hud_state','shard_observation','sessions','interdictions')
     return {key:state[key] for key in keys if key in state}
 
 def poll_latest(reader):
@@ -43,6 +43,8 @@ class SessionService:
         for event in self.reader.events:event['replayed']=True
         self.interdictions=InterdictionJournal(self.directory)
         self.history=ShardHistory(self.directory/'shard_history.json')
+        from shard_names import ShardNameCollector
+        self.shard_names=ShardNameCollector()
         self.sessions=ServerLogManager(self.directory/'server_log.json')
         self.plans=[];self.last_command='';self.seen_commands=set();self.note='';self.last_token=None
         self.frame_collector=None;self.frame_pid=None
@@ -90,13 +92,19 @@ class SessionService:
                     from telemetry_core import timestamp
                     known_closed=not game_running and any(s.get('full_shard_id')==e['full_shard_id'] and s.get('left_at') and abs((timestamp(s.get('joined_at')) or 0)-e['at'])<.002 for s in self.sessions.sessions)
                     if not known_closed:self.sessions.start_new_session(*match.groups(),joined_at=e['at'],ip=e.get('ip',''),time_source=e.get('time_source','observation'))
+            elif e['type']=='shard_name':self.history.observe_game_name(e['full_shard_id'],e['name'],'game_log',e['at'])
             elif e['type']=='location':self.sessions.record_location(e['name'],observed_at=e['at'])
             elif e['type']=='interdiction':self.interdictions.observe(e,now)
         token=r.session_token if game_running and r.connected else None
         if token:
             hop,_=self.history.observe_shard(r.region_raw,r.shard_id,full_shard_id=r.full_shard_id,join_token=token)
-            name=self.history.get_known_name(r.region_raw,r.shard_id,r.full_shard_id) or 'Shard '+r.shard_id
+            observed=self.shard_names.tick(r.full_shard_id,token,r.is_loading_screen,now)
+            if observed:
+                self.history.observe_game_name(observed['full_shard_id'],observed['name'],observed['source'],observed['observed_at'])
+                self.sessions.set_shard_name(r.shard_id,r.region_raw,observed['name'],r.full_shard_id)
+            name=self.history.get_game_name(r.full_shard_id) or self.history.get_known_name(r.region_raw,r.shard_id,r.full_shard_id) or 'Shard '+r.shard_id
         else:
+            self.shard_names.tick('',None,False,now)
             self.history.leave_current();self.sessions.end_session(reason='disconnected')
             hop='';name='Game closed' if not game_running else 'Main menu'
         ping=read_network_ping(r,now) if token else None
@@ -109,7 +117,11 @@ class SessionService:
         summary=' · '.join(x for x in [name,region,hop,*metrics] if x)
         if token:self.sessions.confirm_seen(now)
         self.sessions.flush()
-        sessions=self.sessions.get_sessions()
+        sessions=[]
+        for row in self.sessions.get_sessions():
+            entry=self.history.shards.get(str(row.get('full_shard_id','')).lower(),{})
+            game_name=entry.get('game_name');label=game_name or entry.get('name')
+            sessions.append(dict(row,server_name=label or row.get('server_name',''),game_shard_name=game_name))
         from shard_observations import observation_index
         observations=observation_index(self.sessions.sessions,self.history.shards,now)
         session_view=timeline(self.sessions.sessions,now,self.session_filters,self.history,self.interdictions.entries)
@@ -123,6 +135,9 @@ class SessionService:
                    storage_warning=self.history.read_only or self.sessions.read_only)
         state['shard_observation']=observations.get(r.full_shard_id,{}) if token else {}
         state['joined_at']=r.joined_at if token else None
+        state['game_shard_name']=self.history.get_game_name(r.full_shard_id) if token else None
+        entry=self.history.shards.get(r.full_shard_id,{}) if token else {}
+        state['shard_name_source']=entry.get('game_name_source') if state['game_shard_name'] else entry.get('name_source')
         self.diary_inbox()
         state['diary']=self.diary.view(**self.diary_filters)
         state['diary_result']=self.diary_result
@@ -211,6 +226,7 @@ class SessionService:
         else:raise ValueError('Unknown workspace command')
 
     def close(self):
+        self.shard_names.close()
         self.navigation.close()
         if self.frame_collector:self.frame_collector.stop()
         self.sessions.flush()
