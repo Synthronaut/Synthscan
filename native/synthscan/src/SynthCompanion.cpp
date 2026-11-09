@@ -41,8 +41,11 @@ void drawPersonRow(Gdiplus::Graphics& g,Gdiplus::RectF r,const std::vector<std::
     for(size_t i=0;i<fields.size()&&i<widths.size();++i){
         float left=x+(i==0?74:12),width=widths[i]-(i==0?80:22);
         if(i==1&&!fields[i].empty()){
-            float chip=std::min(width,20.f+float(fields[i].size())*6.2f);SynthGlass::rounded(g,{left,r.Y+(r.Height-22)/2,chip,22},Gdiplus::Color(255,37,43,55),7,Gdiplus::Color(35,173,190,213));
-            SynthGlass::text(g,fields[i],{left+9,r.Y,chip-18,r.Height},11.5f,Gdiplus::Color(255,184,196,215));
+            Gdiplus::Font tagFont(L"Segoe UI",11.5f,Gdiplus::FontStyleRegular,Gdiplus::UnitPixel);
+            Gdiplus::RectF measured;g.MeasureString(fields[i].c_str(),-1,&tagFont,Gdiplus::PointF(0,0),&measured);
+            bool org=fields[i]==L"Org";
+            float chip=std::min(width,measured.Width+24.f);SynthGlass::rounded(g,{left,r.Y+(r.Height-22)/2,chip,22},org?Gdiplus::Color(255,64,35,16):Gdiplus::Color(255,37,43,55),7,org?Gdiplus::Color(160,255,145,40):Gdiplus::Color(35,173,190,213));
+            SynthGlass::text(g,fields[i],{left+9,r.Y,chip-18,r.Height},11.5f,org?Gdiplus::Color(255,255,145,40):Gdiplus::Color(255,184,196,215));
         }else SynthGlass::text(g,fields[i],{left,r.Y,width,r.Height},i==0?13.f:11.5f,i==0?SynthGlass::Ink:(i==3?relationship:SynthGlass::Muted),i==0&&selected);
         x+=widths[i];
     }
