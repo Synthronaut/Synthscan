@@ -3,6 +3,10 @@ import argparse,json,logging,math,os,time
 from pathlib import Path
 from telemetry_core import SHARD_RE
 
+def server_hud_enabled(settings):
+    # show_hud belongs to the pop-out; the server ribbon has its own setting.
+    return bool(settings.get('session_strip',True))
+
 def hud_state(snapshot,owner,now):
     stamp=snapshot.get('written_at',0)
     if snapshot.get('owner_pid')!=owner or not isinstance(stamp,(int,float)) or not math.isfinite(stamp) or not 0<=now-stamp<4:
@@ -184,7 +188,7 @@ def main():
             history_snapshot=snapshot
             if ribbon.state.get('last_known_identity'):history_snapshot=dict(session_view.last,session_token=None)
             ribbon.shard_tracker.snapshot=history_snapshot;history.snapshot=history_snapshot
-            ribbon.enabled=bool(settings.get('show_hud',True) and settings.get('session_strip',True))
+            ribbon.enabled=server_hud_enabled(settings)
             editable=not ribbon.server_bar_locked and not protected
             if ribbon.editing!=editable:ribbon.set_editing(editable)
             ribbon._sync_visibility();ribbon.render_bar()

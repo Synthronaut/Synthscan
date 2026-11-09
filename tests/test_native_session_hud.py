@@ -1,10 +1,16 @@
 import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock
-from native_session_hud import hud_state,RibbonSessionState
+from native_session_hud import hud_state,RibbonSessionState,server_hud_enabled
 from native_bridge import ribbon_snapshot
 
 class NativeSessionHUDTests(unittest.TestCase):
+    def test_popout_visibility_does_not_toggle_server_ribbon(self):
+        for popout in (True,False,True,False):
+            self.assertTrue(server_hud_enabled(dict(show_hud=popout,session_strip=True)))
+            self.assertFalse(server_hud_enabled(dict(show_hud=popout,session_strip=False)))
+        self.assertTrue(server_hud_enabled(dict(show_hud=False)))
+
     def snapshot(self):
         return dict(owner_pid=42,written_at=100,session_token='join',full_shard_id='pub_use1b_12881860_200',
                     shard_name='TEST NAME',region='US-EAST',hop='RETURN #2',location='',game_pids=[9])
