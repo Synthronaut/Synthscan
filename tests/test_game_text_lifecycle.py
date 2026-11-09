@@ -120,6 +120,10 @@ class GameTextLifecycleTests(unittest.TestCase):
         entry.update(pending_sha256=lifecycle.digest(b'new'),pending_temp=dict(name=temporary.name,file_id=temporary.stat().st_ino))
         self.manager.store(state);self.manager.restore()
         self.assertFalse(temporary.exists());self.assertEqual(unknown.read_bytes(),b'leave alone')
+    def test_public_package_audit_rejects_nested_recovery_journals(self):
+        from tools.package_community import audit
+        path=self.root/'package/nested/game_text/channel/journal.json';path.parent.mkdir(parents=True);path.write_text('{}')
+        with self.assertRaisesRegex(ValueError,'Private file'):audit(self.root/'package')
 
 
 if __name__=='__main__':unittest.main()

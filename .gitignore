@@ -46,3 +46,7 @@ reputation_localization_state.json
 # Local daylight observations and saved destination
 /daylight_preferences.json
 /daylight_calibration.json
+
+/game_text/
+/localization_backups/
+/uninstall_result.json
