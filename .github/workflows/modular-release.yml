@@ -122,7 +122,17 @@ jobs:
           $manifest = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($envelope.payload)) | ConvertFrom-Json
           $tag = 'v' + $manifest.version
           $assets = @(Get-ChildItem out -Recurse -File | ForEach-Object { $_.FullName })
-          gh release create $tag @assets --repo Synthronaut/Synthscan --target '${{ github.sha }}' --title "SynthScan $($manifest.version) — One installer, your features" --notes-file .github/modular-release-notes.md
+          gh release create $tag @assets --repo Synthronaut/Synthscan --target '${{ github.sha }}' --title "SynthScan $($manifest.version) — One installer, your features" --notes-file .github/modular-release-notes.md --draft
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $release = gh api "repos/Synthronaut/Synthscan/releases/tags/$tag" | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          foreach ($file in $assets) {
+            $name = [IO.Path]::GetFileName($file)
+            $asset = @($release.assets | Where-Object { $_.name -eq $name })
+            $sha = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($asset.Count -ne 1 -or $asset[0].digest -ne "sha256:$sha") { throw "Draft upload integrity check failed: $name" }
+          }
+          gh release edit $tag --draft=false --latest --repo Synthronaut/Synthscan
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Copy-Item $manifestFile.FullName out/synthscan-update.json
           $standard = (Get-ChildItem out -Recurse -Filter synthscan-update-standard.json | Select-Object -First 1).FullName
