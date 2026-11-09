@@ -35,3 +35,36 @@ and large sizes, with 125% display scaling on the test machine. It checks actual
 control bounds, growth, selected records and unsaved editor text, and renders PNG
 previews. No game images, game input, social requests or real records are used by
 the fixture. The native self-test also checks the layout calculations independently.
+
+## 9 November: live repaint regression
+
+The earlier hidden-parent bitmap checks did not exercise normal Windows paint
+dispatch. A visible People page inside a `WS_EX_COMPOSITED` ancestor could enter
+a synchronous repaint loop and block the entire app's UI thread. A synthetic
+fixture reproduced more than 57,000 window messages before its hard timeout.
+
+Removed whole-tree compositing from Home; individual buffered controls retain
+their existing appearance. People paint handlers release GDI+ graphics before
+`EndPaint`, unchanged labels no longer trigger text redraws, and selection walks
+are bounded even if their control is missing during teardown.
+
+`tools/verify_companion_responsiveness.py` now exercises the actual Home window,
+People and buyer pages with 400 synthetic records, native message dispatch,
+repeated navigation, resizing and service heartbeats. All windows live on a
+separate desktop that is never displayed. No game input, screen capture, account
+requests or real player records are used. The process runs below normal priority,
+on one CPU, with a hard timeout. It also repeats the existing selection, scroll
+and action-routing fixtures. This check is a modular-release gate.
+
+At the local display's 125% scaling, the repaired fixture completed eight seconds
+with 12 service heartbeats, 572 paints and a longest dispatched message of 32 ms.
+The foreground remained unchanged; the existing People interaction checks passed.
+This verifies the reproduced UI fault, not unrelated hardware crashes or every
+possible live-game state.
+
+The repaired native executable was installed locally after 517 native self-tests
+and 20 People interaction checks passed. The previous executable and manifest
+were retained in a local backup. A 35-second observation of the normal app kept
+a fresh UI heartbeat throughout (about 0.02 seconds old at the last sample) and
+used 1.25 CPU seconds in total, including startup. No profile or game files were
+replaced to install this repair. Public release validation is still pending.

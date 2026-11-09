@@ -28,6 +28,8 @@ jobs:
       - run: python -B tools/build_native_app.py
       - name: Native engine checks
         run: python -B -c "import subprocess; subprocess.run(['dist/native/SynthScan.exe','--selftest'],check=True,timeout=180)"
+      - name: Real workspace responsiveness and People interactions
+        run: python -B tools/verify_companion_responsiveness.py
       - name: Python regression suite
         run: python -B -m unittest discover -s tests -q
       - name: Assemble verified intermediate engine payload
@@ -64,6 +66,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Validate isolated packaged selections
         run: python -B tools/verify_modules.py --payload out/modules --output out/module-validation.json
+      - name: Verify installed feature controls and rendered HUDs
+        run: python -B tools/verify_runtime_modules.py --standard out/standard/SynthScan/dist/native --full out/full/SynthScan/dist/native --output out/runtime-modules
       - name: Build branded single installer
         run: python -B tools/build_modular_installer.py --payload out/modules --output out/installer
       - name: Exercise real feature-card click handlers
@@ -99,6 +103,7 @@ jobs:
             out/module-validation.json
             out/installer-validation.json
             out/card-validation.json
+            out/runtime-modules/validation.json
   publish:
     if: inputs.publish
     needs: assemble

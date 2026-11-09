@@ -5,6 +5,13 @@ modular packaging had not been built. The GitHub release identifies its exact
 commit and includes machine-readable validation reports. This is not an
 independent security audit or a guarantee of compatibility with future patches.
 
+**Release hold:** a live Home/People repaint freeze was reported during local
+testing. Whole-window Windows compositing reproduced the fault on an isolated
+desktop. The source fix and a real message-pump regression gate are in place;
+the alpha.11 release must be rebuilt and pass its gates again before publishing.
+Earlier bitmap-only layout checks did not cover this failure. See the amended
+[layout audit](page-layout-audit.md#9-november-live-repaint-regression).
+
 ## Implemented release
 
 - One per-user Windows installer, all 14 optional features checked by default.

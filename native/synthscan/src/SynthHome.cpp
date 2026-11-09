@@ -28,6 +28,10 @@ float scale=1;
 const Gdiplus::Color BG(255,15,16,19),SIDE(255,19,21,25),CARD(255,24,26,30),BORDER(255,44,47,54),INK(255,238,239,241),MUTED(255,160,166,176),ACCENT(255,98,204,255);
 struct Button {HWND hwnd;int id;std::wstring label;std::string action;bool navigation;};
 std::vector<Button> buttons;
+bool available(const std::string& command){
+    static const auto release=read(SCMiner::AppPaths::program().parent_path().parent_path()/L"release.json");
+    return HudModules::actionAvailable(release,command,SynthEdition::screenReading);
+}
 void rounded(Gdiplus::Graphics& g,Gdiplus::RectF r,Gdiplus::Color color,float radius=10){
     radius*=scale;float d=radius*2;Gdiplus::GraphicsPath p;
     p.AddArc(r.X,r.Y,d,d,180,90);p.AddArc(r.GetRight()-d,r.Y,d,d,270,90);
@@ -66,7 +70,7 @@ void layout(){
         else if(b.id==213){x=width-160;y=686;w=134;h=28;}
         else if(b.id==214){x=width-306;y=686;w=134;h=28;}
         const bool hasNotice=(b.id!=212||!overview.textOr("refinery_notice").empty())&&
-            ((b.id!=213&&b.id!=214)||!field(overview,"synthstrings").textOr("title").empty());
+            ((b.id!=213&&b.id!=214)||(available("strings_settings")&&!field(overview,"synthstrings").textOr("title").empty()));
         pending.place(b.hwnd,int(x*scale),int(y*scale),int(w*scale),int(h*scale),b.navigation||(activePage=="home"&&hasNotice));
     }
     pending.apply();
@@ -150,11 +154,12 @@ void paint(){
         auto baseline=clockLabel(session.numberOr("rep_baseline_at"));
         auto checked=clockLabel(session.numberOr("rep_checked_at"));
         if(!baseline.empty())words(g,L"Baseline "+baseline+L" · last read "+checked,256+col,411,col-32,18,10,MUTED);
-        words(g,L"Account balances · checks about every 30s while playing",256+col,430,col-32,18,10,MUTED);
+        const bool reputationAvailable=available("strings_settings")||available("mission_log");
+        words(g,reputationAvailable?L"Account balances · checks about every 30s while playing":L"Saved account balance changes",256+col,430,col-32,18,10,MUTED);
         if(blueprints.empty())words(g,session.kind==Json::Kind::Null?L"No saved session yet. Play normally to build your recap.":L"No blueprint grants recorded in this session.",240,432,col-32,68,12,MUTED);
         for(size_t i=0;i<std::min(size_t(6),blueprints.size());i++)words(g,wide(blueprints[i].textOr("name")),240,428+23*float(i),col-32,23,12,INK);
-        if(blueprints.size()>6)words(g,L"+ "+std::to_wstring(blueprints.size()-6)+L" more · open Blueprint library",240,568,col-32,18,10,ACCENT);
-        if(rep.empty())words(g,session.numberOr("rep_checked_at")>0?L"No balance changes between the saved reads.":L"Waiting for verified reputation balances. Mission payouts aren't treated as confirmed gains.",256+col,453,col-32,85,12,MUTED);
+        if(blueprints.size()>6)words(g,L"+ "+std::to_wstring(blueprints.size()-6)+(available("blueprints")?L" more · open Blueprint library":L" more saved grants"),240,568,col-32,18,10,ACCENT);
+        if(rep.empty())words(g,session.numberOr("rep_checked_at")>0?L"No balance changes between the saved reads.":!reputationAvailable?L"No saved balance changes. Your retained records stay available here.":L"Waiting for verified reputation balances. Mission payouts aren't treated as confirmed gains.",256+col,453,col-32,85,12,MUTED);
         for(size_t i=0;i<std::min(size_t(4),rep.size());i++){
             const auto& change=rep[i];float y=453+32*float(i);
             auto delta=change.numberOr("delta");auto label=wide(change.textOr("faction"))+L"  "+(delta>0?L"+":L"")+number(delta);
@@ -163,13 +168,13 @@ void paint(){
             words(g,scope+L" · "+number(change.numberOr("before"))+L" → "+number(change.numberOr("after")),256+col,y+17,col-32,18,10,MUTED);
         }
         auto notice=overview.textOr("refinery_notice");
-        if(!notice.empty()){
+        if(available("refinery")&&!notice.empty()){
             rounded(g,{224*scale,609*scale,main*scale,59*scale},CARD);
             words(g,wide(notice),240,621,main-200,23,13,ACCENT,true);
             words(g,L"Confirmed game notification · dismiss after reviewing your orders",240,645,main-200,19,10,MUTED);
         }
         const auto& strings=field(overview,"synthstrings");
-        if(!strings.textOr("title").empty()){
+        if(available("strings_settings")&&!strings.textOr("title").empty()){
             const auto color=flag(strings,"warning")?Gdiplus::Color(255,255,195,105):ACCENT;
             float cardHeight=std::max(70.f,height-696.f);
             rounded(g,{224*scale,678*scale,main*scale,cardHeight*scale},CARD);
@@ -224,9 +229,10 @@ void create(){
     if(window)return;WNDCLASSW cls{};cls.hInstance=GetModuleHandleW(nullptr);cls.lpszClassName=L"SynthScanHome";cls.lpfnWndProc=procedure;cls.hbrBackground=CreateSolidBrush(RGB(15,16,19));cls.hCursor=LoadCursor(nullptr,IDC_ARROW);cls.hIcon=LoadIconW(cls.hInstance,MAKEINTRESOURCEW(IDI_APPICON));RegisterClassW(&cls);
     MONITORINFO info{sizeof(info)};GetMonitorInfo(MonitorFromWindow(owner,MONITOR_DEFAULTTONEAREST),&info);
     float dpi=GetDpiForWindow(owner)/96.f;int width=std::min(int(1240*dpi),int(info.rcWork.right-info.rcWork.left)-48),height=std::min(int(840*dpi),int(info.rcWork.bottom-info.rcWork.top)-48);
-    // Composite the entire native control tree, rather than buffering only the
-    // background and presenting child erase/paint stages separately.
-    window=CreateWindowExW(WS_EX_APPWINDOW|WS_EX_CONTROLPARENT|WS_EX_COMPOSITED,cls.lpszClassName,L"SynthScan — Home",WS_OVERLAPPEDWINDOW|WS_CLIPCHILDREN,
+    // The page controls already buffer their own painting. Whole-tree Windows
+    // compositing re-enters the custom People controls during layout and can
+    // trap this UI thread in a synchronous WM_PAINT loop.
+    window=CreateWindowExW(WS_EX_APPWINDOW|WS_EX_CONTROLPARENT,cls.lpszClassName,L"SynthScan — Home",WS_OVERLAPPEDWINDOW|WS_CLIPCHILDREN,
         info.rcWork.left+(info.rcWork.right-info.rcWork.left-width)/2,info.rcWork.top+(info.rcWork.bottom-info.rcWork.top-height)/2,width,height,nullptr,nullptr,cls.hInstance,nullptr);
     BOOL dark=TRUE;DwmSetWindowAttribute(window,20,&dark,sizeof(dark));
     SynthPages::initialize(window);
@@ -243,7 +249,11 @@ void create(){
 }
 }
 void initialize(HWND parent,const std::filesystem::path& data,std::function<void(const std::string&)> callback){owner=parent;directory=data;action=std::move(callback);}
-void update(const SCMiner::JsonValue& value,const std::string& label,bool live){
+void update(const SCMiner::JsonValue& incoming,const std::string& label,bool live){
+    Json value=incoming;
+    value.members.erase(std::remove_if(value.members.begin(),value.members.end(),[](const auto& item){
+        return (item.first=="synthstrings"&&!available("strings_settings"))||(item.first=="refinery_notice"&&!available("refinery"));
+    }),value.members.end());
     static bool wasPaused=false;bool paused=CapturePrivacy::policy().paused;
     bool changed=encode(value)!=encode(overview)||identity!=label||connected!=live||paused!=wasPaused;wasPaused=paused;
     bool noticesChanged=overview.textOr("refinery_notice")!=value.textOr("refinery_notice")||
@@ -263,6 +273,7 @@ void hide(){if(window){ShowWindow(window,SW_HIDE);publish();}}
 HWND pageHost(){create();return SynthPages::host();}
 void selectPage(const std::string& name){activePage=name;SynthPages::hide();layout();publish();}
 void navigate(const std::string& name){
+    if(!available(name))return;
     // Copy before dispatch: navigation may update the selected action itself.
     const std::string destination=name;lastAction=destination;
     SynthPages::beginTransition();selectPage(destination=="bookmarks"?"diary":destination);
@@ -322,6 +333,6 @@ int paintCheck(const std::filesystem::path& output){
     QueryPerformanceCounter(&finish);bool focus=foreground==GetForegroundWindow();
     write(output/L"paint_validation.json",obj({{"erase_stays_dark",SynthScan::boolean(eraseDark)},{"owner_draw_stays_in_bounds",SynthScan::boolean(bounded)},{"buttons_painted",SynthScan::boolean(painted)},{"descendants_composited",SynthScan::boolean(composited)},{"unchanged_layout_notifications",num(notifications)},{"foreground_unchanged",SynthScan::boolean(focus)},{"button_paint_cases",num(cases)},{"elapsed_ms",num((finish.QuadPart-start.QuadPart)*1000./frequency.QuadPart)}}));
     SelectObject(dc,old);DeleteObject(bitmap);DeleteObject(sentinel);DeleteDC(dc);close();DestroyWindow(fixture);Gdiplus::GdiplusShutdown(token);
-    return eraseDark&&bounded&&painted&&composited&&focus&&notifications==0?0:3;
+    return eraseDark&&bounded&&painted&&!composited&&focus&&notifications==0?0:3;
 }
 }

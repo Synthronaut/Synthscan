@@ -34,7 +34,7 @@ HBRUSH background=CreateSolidBrush(RGB(14,18,25)),editBackground=CreateSolidBrus
 double now(){return std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count();}
 HWND child(int id){return GetDlgItem(page,id);}
 std::string text(int id){int size=GetWindowTextLengthW(child(id));std::wstring value(size+1,L'\0');GetWindowTextW(child(id),value.data(),size+1);value.resize(size);return utf8(value);}
-void label(int id,const std::string& value){SetWindowTextW(child(id),wide(value).c_str());}
+void label(int id,const std::string& value){auto h=child(id);if(h&&text(id)!=value)SetWindowTextW(h,wide(value).c_str());}
 std::string buttonIcon(int id){switch(id){case 502:return "search";case 503:case 539:return "refresh";case 515:case 541:case 545:return "clear";case 513:case 556:return "friend";case 514:case 520:return "invite";case 512:return "check";case 517:return "tag";case 522:return "diary";default:return "";}}
 std::vector<std::wstring> splitTags(const std::wstring& value){
     std::vector<std::wstring> result;size_t at=0;
@@ -137,7 +137,7 @@ LRESULT CALLBACK glassControlProc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp,UIN
     if(message==WM_SETFOCUS||message==WM_KILLFOCUS)InvalidateRect(hwnd,nullptr,FALSE);
     if(kind&&message==WM_ERASEBKGND)return 1;
     if(kind&&(message==WM_PAINT||message==WM_PRINTCLIENT)){
-        PAINTSTRUCT ps{};HDC dc=message==WM_PAINT?BeginPaint(hwnd,&ps):reinterpret_cast<HDC>(wp);RECT rc{};GetClientRect(hwnd,&rc);Gdiplus::Graphics g(dc);g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+        PAINTSTRUCT ps{};HDC dc=message==WM_PAINT?BeginPaint(hwnd,&ps):reinterpret_cast<HDC>(wp);RECT rc{};GetClientRect(hwnd,&rc);{Gdiplus::Graphics g(dc);g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
         Gdiplus::RectF r(0,0,float(rc.right),float(rc.bottom));controlBackdrop(g,hwnd);bool hot=GetPropW(hwnd,L"SynthGlass.Hot")!=nullptr;
         wchar_t title[512]{};GetWindowTextW(hwnd,title,512);
         if(kind==1){SynthGlass::panel(g,{1,1,r.Width-2,r.Height-2},false,hot,9);SynthGlass::text(g,title,{13,0,r.Width-42,r.Height},13,GetDlgCtrlID(hwnd)==516||GetDlgCtrlID(hwnd)==553?tagColor(title):SynthGlass::Ink);
@@ -147,7 +147,7 @@ LRESULT CALLBACK glassControlProc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp,UIN
             else SynthGlass::text(g,title,r,GetDlgCtrlID(hwnd)==506||GetDlgCtrlID(hwnd)==518?11.f:12.f,SynthGlass::Muted);
         }else{bool checked=SendMessageW(hwnd,BM_GETCHECK,0,0)==BST_CHECKED;SynthGlass::checkbox(g,{2,(r.Height-18)/2,18,18},checked,hot);SynthGlass::text(g,title,{29,0,r.Width-29,r.Height},12,SynthGlass::Muted);}
         if(GetFocus()==hwnd){Gdiplus::Pen focus(Gdiplus::Color(120,148,198,202));Gdiplus::GraphicsPath outline;SynthGlass::shape(outline,{1,1,r.Width-2,r.Height-2},8);g.DrawPath(&focus,&outline);}
-        if(message==WM_PAINT)EndPaint(hwnd,&ps);return 0;
+        }if(message==WM_PAINT)EndPaint(hwnd,&ps);return 0;
     }
     if(kind==1&&(message==CB_SETCURSEL||message==CB_SHOWDROPDOWN)){auto value=DefSubclassProc(hwnd,message,wp,lp);InvalidateRect(hwnd,nullptr,FALSE);return value;}
     if(kind==2&&message==BM_SETCHECK){auto value=DefSubclassProc(hwnd,message,wp,lp);InvalidateRect(hwnd,nullptr,FALSE);return value;}
@@ -169,7 +169,7 @@ LRESULT CALLBACK peopleListProc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp,UINT_
         int next=-1;if(message==WM_MOUSEMOVE){LVHITTESTINFO hit{};hit.pt={(short)LOWORD(lp),(short)HIWORD(lp)};next=ListView_SubItemHitTest(hwnd,&hit);TRACKMOUSEEVENT track{sizeof(track),TME_LEAVE,hwnd,0};TrackMouseEvent(&track);}
         if(next!=hoveredPerson){int old=hoveredPerson;hoveredPerson=next;if(old>=0)ListView_RedrawItems(hwnd,old,old);if(next>=0)ListView_RedrawItems(hwnd,next,next);}
     }
-    if(message==WM_NCDESTROY){hoveredPerson=-1;RemoveWindowSubclass(hwnd,peopleListProc,1);}
+    if(message==WM_NCDESTROY){hoveredPerson=-1;auto rows=ListView_GetImageList(hwnd,LVSIL_SMALL);ListView_SetImageList(hwnd,nullptr,LVSIL_SMALL);if(rows)ImageList_Destroy(rows);RemoveWindowSubclass(hwnd,peopleListProc,1);}
     return DefSubclassProc(hwnd,message,wp,lp);
 }
 void control(const wchar_t* cls,int id,const wchar_t* title,DWORD style=0){
@@ -233,14 +233,21 @@ void layout(){
     if(batch)EndDeferWindowPos(batch);else for(const auto& p:placements)SetWindowPos(p.window,nullptr,p.x,p.y,p.w,p.h,flags);
     RedrawWindow(page,nullptr,nullptr,RDW_INVALIDATE|RDW_ALLCHILDREN|RDW_NOERASE);
 }
+std::vector<int> selectedRows(int id,size_t count){
+    std::vector<int> result;HWND list=child(id);if(!list||!IsWindow(list))return result;
+    // SendMessage to a missing/destroyed control returns zero, not the ListView
+    // end sentinel (-1). Bound traversal and require forward progress.
+    for(int at=-1;;){int next=ListView_GetNextItem(list,at,LVNI_SELECTED);if(next<=at||next<0||size_t(next)>=count)break;result.push_back(next);at=next;}
+    return result;
+}
 std::vector<Json> chosen(){
-    std::vector<Json> result;int at=-1;
-    while((at=ListView_GetNextItem(child(508),at,LVNI_SELECTED))>=0)if(size_t(at)<people.size()&&!flag(people[size_t(at)],"is_self"))result.push_back(people[size_t(at)]);
+    std::vector<Json> result;
+    for(int at:selectedRows(508,people.size()))if(!flag(people[size_t(at)],"is_self"))result.push_back(people[size_t(at)]);
     return result;
 }
 Json playerIds(const std::vector<Json>& rows){Json ids=arr();for(const auto& p:rows)ids.items.push_back(field(p,"id"));return ids;}
 std::vector<Json> actionTargets(){std::vector<Json> result;for(const auto& row:actionRows)if(!flag(row,"is_self"))result.push_back(row);return result;}
-Json actionSelection(){Json ids=arr();int at=-1;while((at=ListView_GetNextItem(child(528),at,LVNI_SELECTED))>=0)if(size_t(at)<actionRows.size())ids.items.push_back(field(actionRows[size_t(at)],"id"));return ids;}
+Json actionSelection(){Json ids=arr();for(int at:selectedRows(528,actionRows.size()))ids.items.push_back(field(actionRows[size_t(at)],"id"));return ids;}
 std::vector<Json> stageTargets(){std::vector<Json> result;for(const auto& p:chosen())if(flag(p,"on_shard")||flag(p,"is_friend"))result.push_back(p);return result;}
 std::vector<Json> inviteCandidates(bool org){
     std::vector<Json> result;
@@ -308,7 +315,7 @@ bool showRecipients(const std::vector<Json>& rows,bool report=false,const std::f
     if(resend)*resend=state.resend;if(previewPath.empty()){EnableWindow(owner,TRUE);SetActiveWindow(owner);}return state.result==IDOK;
 }
 void selection(){
-    std::vector<std::string> ids;int at=-1;while((at=ListView_GetNextItem(child(508),at,LVNI_SELECTED))>=0)if(size_t(at)<people.size())ids.push_back(people[size_t(at)].textOr("id"));
+    std::vector<std::string> ids;for(int at:selectedRows(508,people.size()))ids.push_back(people[size_t(at)].textOr("id"));
     const bool changed=ids!=selectedIds;
     if(changed){selectedIds=ids;selected=ids.empty()?"":ids.front();}
     auto rows=actionTargets();std::vector<std::string> editIds;for(const auto& row:rows)editIds.push_back(row.textOr("id"));
@@ -458,9 +465,9 @@ LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM wp,LPARAM lp){
     if(message==WM_SIZE){layout();return 0;}if(message==WM_TIMER){refresh();return 0;}
     if(message==WM_ERASEBKGND)return 1;
     if(message==WM_PAINT||message==WM_PRINTCLIENT){
-        PAINTSTRUCT ps{};HDC dc=message==WM_PAINT?BeginPaint(hwnd,&ps):reinterpret_cast<HDC>(wp);Gdiplus::Graphics g(dc);RECT bounds{};GetClientRect(hwnd,&bounds);backdrop(g,float(bounds.right),float(bounds.bottom));g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+        PAINTSTRUCT ps{};HDC dc=message==WM_PAINT?BeginPaint(hwnd,&ps):reinterpret_cast<HDC>(wp);{Gdiplus::Graphics g(dc);RECT bounds{};GetClientRect(hwnd,&bounds);backdrop(g,float(bounds.right),float(bounds.bottom));g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
         for(int id:{501,510,532,534,536}){auto h=child(id);if(!h)continue;RECT r{};GetWindowRect(h,&r);MapWindowPoints(nullptr,hwnd,reinterpret_cast<POINT*>(&r),2);SynthGlass::panel(g,{float(r.left-2),float(r.top-8),float(r.right-r.left+4),float(r.bottom-r.top+14)},false,GetFocus()==h,9);}
-        if(message==WM_PAINT)EndPaint(hwnd,&ps);return 0;
+        }if(message==WM_PAINT)EndPaint(hwnd,&ps);return 0;
     }
     if(message==WM_CTLCOLORSTATIC||message==WM_CTLCOLOREDIT){SetTextColor((HDC)wp,RGB(234,240,247));SetBkColor((HDC)wp,message==WM_CTLCOLOREDIT?RGB(25,29,36):RGB(14,18,25));return reinterpret_cast<LRESULT>(message==WM_CTLCOLOREDIT?editBackground:background);}
     if(message==WM_CTLCOLORLISTBOX){SetTextColor((HDC)wp,RGB(234,240,247));SetBkColor((HDC)wp,RGB(25,29,36));return reinterpret_cast<LRESULT>(editBackground);}
