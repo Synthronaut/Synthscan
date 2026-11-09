@@ -27,24 +27,36 @@ begin
   for I := 0 to 13 do begin
     CardSelected[I] := WizardIsComponentSelected(CardIds[I]);
     if CardSelected[I] then begin
-      Count := Count+1; Fill := $00372B1C; Border := $0088793D; Ink := $00EBFADE;
-      CardButtons[I].Caption := 'Included';
+      Count := Count+1; Fill := $00553D22; Border := $00F5DB86; Ink := $00FFFFFF;
+      CardButtons[I].Caption := #$2713+' Included';
     end else begin
-      Fill := $00271F18; Border := $00493A2A; Ink := $009EAEA9;
-      CardButtons[I].Caption := 'Add feature';
+      Fill := $001E1C1A; Border := $003B3732; Ink := $00827D76;
+      CardButtons[I].Caption := 'Not installing';
     end;
-    if I=2 then Border := $004F9FCB;
+    if (I=2) and CardSelected[I] then Border := $008DCDEE;
     Cards[I].Color := Fill;
     with CardPaint[I].Bitmap do begin
       Width := CardPaint[I].Width; Height := CardPaint[I].Height;
       Canvas.Brush.Color := $001D1510; Canvas.Pen.Color := $001D1510;
       Canvas.Rectangle(0,0,Width,Height);
       Canvas.Brush.Color := Fill; Canvas.Pen.Color := Border;
+      if CardSelected[I] then Canvas.Pen.Width:=ScaleX(2) else Canvas.Pen.Width:=1;
       Canvas.RoundRect(0,0,Width,Height,ScaleX(22),ScaleY(22));
     end;
     CardTitles[I].Font.Color := Ink;
-    CardIcons[I].Font.Color := $00F2D177;
-    if I=2 then CardIcons[I].Font.Color := $008DCDEE;
+    if CardSelected[I] then begin
+      CardIcons[I].Font.Color := $00FFE59A;
+      CardDescriptions[I].Font.Color := $00F1DAC3;
+      CardBadges[I].Font.Color := $00D1BA9C;
+      if I=2 then begin
+        CardIcons[I].Font.Color := $008DCDEE;
+        CardBadges[I].Font.Color := $008DCDEE;
+      end;
+    end else begin
+      CardIcons[I].Font.Color := $006B6660;
+      CardDescriptions[I].Font.Color := $00736F68;
+      CardBadges[I].Font.Color := $006B6660;
+    end;
     CardPaint[I].Invalidate;
   end;
   for I:=0 to 1 do SelectionLabels[I].Caption := IntToStr(Count)+' features included  /  Core always included';
@@ -54,7 +66,12 @@ procedure SelectCards;
 var I: Integer; Chosen: String;
 begin
   Chosen := 'core';
-  for I:=0 to 13 do if CardSelected[I] then Chosen := Chosen+','+CardIds[I];
+  // WizardSelectComponents leaves unspecified components unchanged. Send an
+  // explicit exclusion for every off card, otherwise refresh reselects it.
+  for I:=0 to 13 do begin
+    if CardSelected[I] then Chosen := Chosen+','+CardIds[I]
+    else Chosen := Chosen+',!'+CardIds[I];
+  end;
   WizardSelectComponents(Chosen); RefreshCards;
 end;
 
@@ -197,16 +214,18 @@ begin
   WizardForm.CancelButton.Top:=WizardForm.NextButton.Top;WizardForm.CancelButton.Height:=ScaleY(36);
   ModulesPage:=CreateCustomPage(wpSelectComponents,'BUILD YOUR TOOLKIT','01 / 02   •   Your everyday essentials');
   ToolsPage:=CreateCustomPage(ModulesPage.ID,'MAKE IT YOURS','02 / 02   •   More ways to play');
-  PageHeading(ModulesPage,'Your verse. Your toolkit.','Everything starts included. Click a card to leave it out.',0);
-  PageHeading(ToolsPage,'Make every session count.','Keep the tools that fit the way you play.',1);
+  PageHeading(ModulesPage,'Your verse. Your toolkit.','Bright cards install. Grey cards do not. Click anywhere on a card to switch it.',0);
+  PageHeading(ToolsPage,'Make every session count.','Your selection carries across both pages. Grey means not installing.',1);
   AddCard(0,ModulesPage,0,'synthstrings','SynthStrings + Reputation','Your reputation and owned blueprints, right in the game text.','IN-GAME TEXT  /  ACCOUNT ACCESS',#$E8D4);
   AddCard(1,ModulesPage,1,'mining_tools','Mining Tools','Plan trips, keep a mining diary and manage refinery records.','PLANNING + LOCAL RECORDS',#$E90F);
-  AddCard(2,ModulesPage,2,'mining_recognition','Live Mining Recognition','Identify signatures, read rock details and estimate what your ore is worth.','!  SCREEN READING (OCR)  /  OPTIONAL',#$E890);
+  AddCard(2,ModulesPage,2,'mining_recognition','Live Mining Recognition','Reads the game screen to identify rocks, composition, quality and ore values.','!  READS YOUR GAME SCREEN  /  OCR',#$E890);
+  CardBadges[2].Font.Size:=11;CardBadges[2].Font.Style:=[fsBold];
+  if GridColumns=4 then begin CardBadges[2].Font.Size:=9;CardBadges[2].Caption:='! SCREEN READER (OCR)';end;
   AddCard(3,ModulesPage,3,'blueprints','Crafting + Blueprints','Your collection, recipes, quality effects and acquisition routes.','LIBRARY + CRAFTING',#$E8F1);
   AddCard(4,ModulesPage,4,'item_finder','Item + Ship Finder','Find equipment, ships, shops and public market information.','SEARCH + PUBLIC PRICES',#$E721);
   AddCard(5,ModulesPage,5,'server_hud','Server HUD','A clear, permanent region and shard ribbon above the action.','BACKGROUND DATA  /  NO OCR',#$E9D9);
   AddCard(6,ModulesPage,6,'server_history','Server History','Remember where you played, and spot repeat shard visits.','YOUR SESSION TIMELINE',#$E81C);
-  AddAssurance(ModulesPage,'Screen reading, without the mystery.','OCR turns game-window text into useful readings. Recognition runs locally: frames are not uploaded, desktop capture is not used, and it pauses on focus loss by default. Leave the reader off and its capture/OCR components stay uninstalled.');
+  AddAssurance(ModulesPage,'Only the amber mining card reads your screen.','Screen reading (OCR) turns game-window text into mining data. It runs on your PC: no image uploads, no desktop capture, and focus-loss pause by default. Switch that card off to keep capture/OCR components uninstalled. All other cards work without screen reading.');
   AddCard(7,ToolsPage,0,'people','People','Tag players, manage relationships and set appearance alerts.','ACCOUNT ACCESS',#$E716);
   AddCard(8,ToolsPage,1,'piracy','Piracy','Keep a wait timer and review available game-log reports.','NO OCR  /  NOT A CATCH DETECTOR',#$E7BA);
   AddCard(9,ToolsPage,2,'missions','Missions + Ledger','Follow contracts, completion times, money and reputation changes.','ACCOUNT ACCESS',#$E9D5);

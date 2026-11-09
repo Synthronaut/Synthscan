@@ -379,4 +379,8 @@ private screenshots are distributed. Open-source notices and licenses remain.
   independent social alerts, profile-aware uninstall and uninstalled tool routes.
   Remove inherited startup news and the redundant upstream update protocol.
 - Keep GitHub download counts only. No usage analytics or consent prompts added.
+- Replace the stock checklist with large feature cards. Included cards are
+  luminous; excluded cards are grey and marked Not installing. Explicitly
+  exclude disabled components, preserve choices across pages and flag the
+  sole screen reader with an amber eye and plain-language explanation.
 

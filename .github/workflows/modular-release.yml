@@ -66,6 +66,8 @@ jobs:
         run: python -B tools/verify_modules.py --payload out/modules --output out/module-validation.json
       - name: Build branded single installer
         run: python -B tools/build_modular_installer.py --payload out/modules --output out/installer
+      - name: Exercise real feature-card click handlers
+        run: python -B tools/verify_installer_cards.py --output out/card-validation.json
       - name: Verify actual installer, reader removal and uninstall
         run: python -B tools/verify_modular_installer.py --installer out/installer/SynthScan-Setup-Windows-x64.exe --output out/installer-validation.json
       - name: Build migration update packages
@@ -96,6 +98,7 @@ jobs:
             out/signed/*.json
             out/module-validation.json
             out/installer-validation.json
+            out/card-validation.json
   publish:
     if: inputs.publish
     needs: assemble

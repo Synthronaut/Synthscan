@@ -50,6 +50,13 @@ independent security audit or a guarantee of compatibility with future patches.
   all without recognition and all features. It imports each selection with
   bundled Python, runs native self-tests and starts the real native host/bridge
   against synthetic game files with account access disabled.
+- A separate, file-free Inno harness exercises the real card event handlers
+  for all 14 features through six targets each (card surface, status button,
+  title, description, badge and icon). It checks inclusion/exclusion, visible
+  dimming, dependency rules, the reader-free preset, page persistence and a
+  Core-only selection. This caught a selection API mistake that silent
+  command-line installation tests did not cover: excluded components require
+  explicit `!name` instructions. Both forms of validation are release gates.
 - The **Unified modular release** workflow repeats builds, regression checks,
   signed package checks, the six selections and the actual production installer
   identity on a fresh Windows runner. Publishing requires all gates to pass.
