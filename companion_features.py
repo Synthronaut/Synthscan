@@ -175,8 +175,7 @@ class CompanionService:
             if not self.session or command.get('session_token')!=self.session:raise ValueError('Session changed. Refresh People before continuing.')
         if action=='stage_people':
             ids=command.get('player_ids');available=self.available_people()
-            active={p['id'] for p in self.roster}|self.friend_ids(now)
-            if not isinstance(ids,list) or not ids or len(ids)>4096 or any(not isinstance(key,str) or key not in available or key not in active for key in ids):raise ValueError('Only current shard members or verified friends can be added to the Action list.')
+            if not isinstance(ids,list) or not ids or len(ids)>4096 or any(not isinstance(key,str) or key not in available for key in ids):raise ValueError('Some selected people could not be found.')
             self.stage([available[key] for key in ids],self.friend_ids(now))
         elif action=='stage_tag':
             if command.get('scope','shard')!='shard':raise ValueError('Add by tag is limited to current shard members.')
@@ -228,7 +227,10 @@ class CompanionService:
             saved=[dict(id=key,handle=value['handle']) for key,value in self.store.data['tags'].items()]
             available=self.available_people()
             active={p['id'] for p in self.roster}|self.friend_ids(now)
-            if any(key not in available or available[key].get('is_self') or key not in active for key in ids):raise ValueError('Selection changed. Actions are limited to current shard members or verified friends.')
+            if action in ('party_many','friend_many'):
+                if any(key not in available or available[key].get('is_self') or key not in active for key in ids):raise ValueError('Social invitations are limited to current shard members or verified friends.')
+            else:
+                if any(key not in available or available[key].get('is_self') for key in ids):raise ValueError('Selection changed. Select one or more verified players.')
             targets=[available[key] for key in ids]
             if action in ('party_many','friend_many'):
                 if command.get('from_actions') is True and not set(ids).issubset({p['id'] for p in self.store.data['actions']}):raise ValueError('Action list changed. Review the recipients again.')

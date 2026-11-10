@@ -1312,7 +1312,7 @@ export class DesktopAppController {
   }
 
   private getStageTargets(): Player[] {
-    return this.getChosenRosterPlayers().filter((p) => p.on_shard !== false || Boolean(p.is_friend));
+    return this.getChosenRosterPlayers();
   }
 
   private getActionTargets(): Player[] {

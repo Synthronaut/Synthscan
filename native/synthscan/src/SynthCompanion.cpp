@@ -6,6 +6,7 @@
 #include "SynthGlass.h"
 #include "SynthHome.h"
 #include "SynthWebView.h"
+#include "AppPaths.h"
 #include <commctrl.h>
 #include <uxtheme.h>
 #include <shellapi.h>
@@ -201,9 +202,17 @@ void column(int id,int index,const wchar_t* title,int width){LVCOLUMNW c{};c.mas
 void cell(int id,int row,int col,const std::string& value){auto wideValue=wide(value);if(col==0){LVITEMW item{};item.mask=LVIF_TEXT;item.iItem=row;item.pszText=wideValue.data();ListView_InsertItem(child(id),&item);}else ListView_SetItemText(child(id),row,col,wideValue.data());}
 std::string age(double stamp){if(stamp<=0)return "not checked";int seconds=int(std::max(0.,now()-stamp));return seconds<60?std::to_string(seconds)+"s ago":std::to_string(seconds/60)+"m ago";}
 COLORREF personColor(const Json& person){return flag(person,"is_self")?RGB(193,157,255):flag(person,"in_party")?RGB(116,183,255):flag(person,"is_friend")?RGB(121,225,158):RGB(234,240,247);}
-bool fresh(){return model.numberOr("owner_pid")==GetCurrentProcessId()&&now()>=model.numberOr("written_at")&&now()-model.numberOr("written_at")<15;}
+bool fresh(){return model.numberOr("owner_pid")==GetCurrentProcessId()&&now()>=model.numberOr("written_at")&&now()-model.numberOr("written_at")<30;}
 void queue(Json command){
-    if(!fresh()){label(590,"Companion services unavailable. Please wait for a fresh update.");return;}
+    if(folder.empty())folder=SCMiner::AppPaths::data();
+    auto companionState=read(folder/L"companion_state.json",8*1024*1024);
+    if(!companionState.members.empty())model=companionState;
+    double writtenAt=model.numberOr("written_at");
+    double diff=now()-writtenAt;
+    if(model.textOr("session_token").empty()||diff<-10||diff>60){
+        label(590,"Companion services unavailable. Please wait for a fresh update.");
+        return;
+    }
     static unsigned sequence=0;char id[90];sprintf_s(id,"%020llu-%010lu-%08u",GetTickCount64(),GetCurrentProcessId(),++sequence);
     command.members.push_back({"id",str(id)});command.members.push_back({"owner_pid",num(GetCurrentProcessId())});command.members.push_back({"at",num(now())});command.members.push_back({"session_token",field(model,"session_token")});
     std::error_code error;std::filesystem::create_directories(folder/L"companion_commands",error);
@@ -563,8 +572,8 @@ LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM wp,LPARAM lp){
 }
 }
 void prewarm(HWND parent,const std::filesystem::path& directory){
-    if(inPreview||page||!SynthWebView::available()||SynthHome::isWebShellMode())return;
     folder=directory;mode="people";
+    if(inPreview||page||!SynthWebView::available()||SynthHome::isWebShellMode())return;
     WNDCLASSW cls{};cls.lpfnWndProc=procedure;cls.hInstance=GetModuleHandleW(nullptr);cls.lpszClassName=L"SynthScanCompanion";cls.hCursor=LoadCursor(nullptr,IDC_ARROW);cls.hbrBackground=background;RegisterClassW(&cls);
     font=CreateFontW(-14,0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH,L"Segoe UI");
     page=CreateWindowExW(WS_EX_CONTROLPARENT,cls.lpszClassName,L"SynthScan companion",WS_CHILD|WS_CLIPCHILDREN|WS_CLIPSIBLINGS,0,0,860,700,parent,nullptr,cls.hInstance,nullptr);
@@ -573,8 +582,8 @@ void prewarm(HWND parent,const std::filesystem::path& directory){
     createControls();
 }
 void show(HWND parent,const std::filesystem::path& directory,const std::string& name){
-    if(SynthHome::isWebShellMode())return;
     folder=directory;bool changed=mode!=name;mode=name;
+    if(SynthHome::isWebShellMode())return;
     if(!page){WNDCLASSW cls{};cls.lpfnWndProc=procedure;cls.hInstance=GetModuleHandleW(nullptr);cls.lpszClassName=L"SynthScanCompanion";cls.hCursor=LoadCursor(nullptr,IDC_ARROW);cls.hbrBackground=background;RegisterClassW(&cls);
         font=CreateFontW(-14,0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH,L"Segoe UI");
         page=CreateWindowExW(WS_EX_CONTROLPARENT,cls.lpszClassName,L"SynthScan companion",WS_CHILD|WS_CLIPCHILDREN|WS_CLIPSIBLINGS,0,0,mode=="people"?860:620,mode=="people"?700:580,parent,nullptr,cls.hInstance,nullptr);changed=true;SetTimer(page,1,1000,nullptr);}
