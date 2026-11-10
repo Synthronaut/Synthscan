@@ -250,7 +250,7 @@ LRESULT CALLBACK shortcutEdit(HWND hwnd,UINT message,WPARAM w,LPARAM l,UINT_PTR,
     return DefSubclassProc(hwnd,message,w,l);
 }
 
-void showHud(bool value){if(value&&availableHudModes().empty())return;if(!value)SynthFinder::sync(false);hudVisible=value;if(mining&&!SynthPages::contains(mining->windowHandle())){if(HudVisibility::shouldShow(value,activityExpanded,SCMiner::ScreenCapture::gameWindow()!=nullptr,manualHudPreview)){if(!mining->isOverlayMode()){auto window=mining->windowHandle();bool hadNoActivate=(GetWindowLongPtrW(window,GWL_EXSTYLE)&WS_EX_NOACTIVATE)!=0;SetWindowLongPtrW(window,GWL_EXSTYLE,GetWindowLongPtrW(window,GWL_EXSTYLE)|WS_EX_NOACTIVATE);mining->toggleOverlayMode(false);if(!hadNoActivate)SetWindowLongPtrW(window,GWL_EXSTYLE,GetWindowLongPtrW(window,GWL_EXSTYLE)&~WS_EX_NOACTIVATE);}ShowWindow(mining->windowHandle(),SW_SHOWNOACTIVATE);mining->keepOverlayAboveGame(true);}else mining->hide();}saveSettings();}
+void showHud(bool value){if(value&&availableHudModes().empty())return;if(!value)SynthFinder::sync(false);hudVisible=value;if(mining&&!SynthPages::contains(mining->windowHandle())){if(HudVisibility::shouldShow(value,activityExpanded,SCMiner::ScreenCapture::gameWindow()!=nullptr,manualHudPreview)){if(!mining->isOverlayMode()){auto window=mining->windowHandle();bool hadNoActivate=(GetWindowLongPtrW(window,GWL_EXSTYLE)&WS_EX_NOACTIVATE)!=0;SetWindowLongPtrW(window,GWL_EXSTYLE,GetWindowLongPtrW(window,GWL_EXSTYLE)|WS_EX_NOACTIVATE);mining->toggleOverlayMode(false);if(!hadNoActivate)SetWindowLongPtrW(window,GWL_EXSTYLE,GetWindowLongPtrW(window,GWL_EXSTYLE)&~WS_EX_NOACTIVATE);}if(mining->isOverlayMode()){ShowWindow(mining->windowHandle(),SW_SHOWNOACTIVATE);mining->keepOverlayAboveGame(true);}else{ShowWindow(mining->windowHandle(),SW_HIDE);}}else mining->hide();}saveSettings();}
 bool popoutExpanded(){return mining&&mining->isOverlayMode()&&!SynthPages::contains(mining->windowHandle())&&IsWindowVisible(mining->windowHandle())&&activityExpanded;}
 void setActivityExpanded(bool value){
     if(value&&availableHudModes().empty())return;
@@ -259,7 +259,7 @@ void setActivityExpanded(bool value){
         if(mining&&SynthPages::contains(mining->windowHandle())){SynthHome::selectPage("home");SynthPages::release(mining->windowHandle());}
     }
     activityExpanded=value;if(!value)SynthFinder::sync(false);
-    if(mining&&!SynthPages::contains(mining->windowHandle())){if(HudVisibility::shouldShow(hudVisible,activityExpanded,SCMiner::ScreenCapture::gameWindow()!=nullptr,manualHudPreview)){if(!mining->isOverlayMode()){auto window=mining->windowHandle();bool hadNoActivate=(GetWindowLongPtrW(window,GWL_EXSTYLE)&WS_EX_NOACTIVATE)!=0;SetWindowLongPtrW(window,GWL_EXSTYLE,GetWindowLongPtrW(window,GWL_EXSTYLE)|WS_EX_NOACTIVATE);mining->toggleOverlayMode(false);if(!hadNoActivate)SetWindowLongPtrW(window,GWL_EXSTYLE,GetWindowLongPtrW(window,GWL_EXSTYLE)&~WS_EX_NOACTIVATE);}ShowWindow(mining->windowHandle(),SW_SHOWNOACTIVATE);mining->keepOverlayAboveGame(true);}else mining->hide();}
+    if(mining&&!SynthPages::contains(mining->windowHandle())){if(HudVisibility::shouldShow(hudVisible,activityExpanded,SCMiner::ScreenCapture::gameWindow()!=nullptr,manualHudPreview)){if(!mining->isOverlayMode()){auto window=mining->windowHandle();bool hadNoActivate=(GetWindowLongPtrW(window,GWL_EXSTYLE)&WS_EX_NOACTIVATE)!=0;SetWindowLongPtrW(window,GWL_EXSTYLE,GetWindowLongPtrW(window,GWL_EXSTYLE)|WS_EX_NOACTIVATE);mining->toggleOverlayMode(false);if(!hadNoActivate)SetWindowLongPtrW(window,GWL_EXSTYLE,GetWindowLongPtrW(window,GWL_EXSTYLE)&~WS_EX_NOACTIVATE);}if(mining->isOverlayMode()){ShowWindow(mining->windowHandle(),SW_SHOWNOACTIVATE);mining->keepOverlayAboveGame(true);}else{ShowWindow(mining->windowHandle(),SW_HIDE);}}else mining->hide();}
     saveSettings();
 }
 void handleHudHotkey(int id,LPARAM packed,bool polled=false){
@@ -295,7 +295,7 @@ void activityControl(){
         }
     }
 }
-void miningDesktop(){if(!mining)return;SynthHome::hide();if(mining->isOverlayMode())mining->toggleOverlayMode();hudVisible=true;activityExpanded=true;mining->show();ShowWindow(mining->windowHandle(),SW_RESTORE);SetForegroundWindow(mining->windowHandle());modeControls();saveSettings();}
+void miningDesktop(){if(!mining)return;SynthHome::show();SynthHome::navigate("mining");modeControls();saveSettings();}
 void desktop(){
     static bool prewarmed=false;
     SynthHome::show();
@@ -924,7 +924,7 @@ LRESULT CALLBACK hostProc(HWND hwnd,UINT message,WPARAM w,LPARAM l){
 LRESULT CALLBACK mainSubclass(HWND hwnd,UINT message,WPARAM w,LPARAM l,UINT_PTR,DWORD_PTR){
     LRESULT menuResult=0;if(SynthMenus::message(message,w,l,menuResult))return menuResult;
     if(message==WM_ACTIVATEAPP)SynthFinder::activationChanged(w!=0);
-    if(message==WM_SYSCOMMAND&&(w&0xfff0)==0xf020){setActivityExpanded(false);return 0;}
+    if(message==WM_SYSCOMMAND&&((w&0xfff0)==0xf020||(w&0xfff0)==0xf060)){setActivityExpanded(false);ShowWindow(hwnd,SW_HIDE);return 0;}
     if(message==WM_COMMAND&&l&&mining&&mining->isOverlayMode()) {
         DWORD foreground=0;GetWindowThreadProcessId(GetForegroundWindow(),&foreground);
         if(foreground!=GetCurrentProcessId()&&!mining->isOverlayButton(reinterpret_cast<HWND>(l)))return 0;
@@ -1051,7 +1051,14 @@ void attach(SCMiner::MinerGUI* gui,std::function<bool(const std::string&)> confi
         LONG_PTR style=GetWindowLongPtrW(gui->windowHandle(),GWL_EXSTYLE);SetWindowLongPtrW(gui->windowHandle(),GWL_EXSTYLE,style|WS_EX_NOACTIVATE);
         if(!gui->isOverlayMode())gui->toggleOverlayMode(false);
         if((scanOnLaunch&&!pirate&&!quest&&!hangars&&!finder)!=(text(GetDlgItem(gui->windowHandle(),1002))==L"Live on"))SendMessageW(gui->windowHandle(),WM_COMMAND,MAKEWPARAM(1002,BN_CLICKED),0);
-        modeControls();ShowWindow(gui->windowHandle(),HudVisibility::shouldShow(hudVisible,activityExpanded,SCMiner::ScreenCapture::gameWindow()!=nullptr,false)?SW_SHOWNOACTIVATE:SW_HIDE);gui->updateClickThrough();gui->keepOverlayAboveGame(true);
+        modeControls();
+        if(gui->isOverlayMode()){
+            ShowWindow(gui->windowHandle(),HudVisibility::shouldShow(hudVisible,activityExpanded,SCMiner::ScreenCapture::gameWindow()!=nullptr,false)?SW_SHOWNOACTIVATE:SW_HIDE);
+            gui->updateClickThrough();
+            gui->keepOverlayAboveGame(true);
+        }else{
+            ShowWindow(gui->windowHandle(),SW_HIDE);
+        }
     }else if(!testing){ShowWindow(gui->windowHandle(),SW_HIDE);desktop();}
 }
 void workspace(int tab){
@@ -1218,6 +1225,7 @@ bool closeToTray(){
     if(userExitRequested)return false;
     if(!testing)write(data/L"native_window_close.json",obj({{"at",num(epoch())},{"pid",num(GetCurrentProcessId())},{"action",str("hidden_to_tray")}}));
     setActivityExpanded(false);
+    if(mining)ShowWindow(mining->windowHandle(),SW_HIDE);
     return true;
 }
 void shutdown(){

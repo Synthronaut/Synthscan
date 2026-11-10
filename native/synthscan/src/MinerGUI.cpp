@@ -1321,6 +1321,7 @@ void MinerGUI::toggleOverlayMode(bool showWindow) {
     } else {
         KillTimer(hwnd_, TIMER_OVERLAY_INPUT);
         bool allowShow = showWindow && SynthPages::contains(hwnd_);
+        if (!allowShow) ShowWindow(hwnd_, SW_HIDE);
         SetWindowLongPtr(hwnd_, GWL_STYLE, WS_OVERLAPPEDWINDOW | (allowShow?WS_VISIBLE:0) | WS_CLIPCHILDREN);
         LONG_PTR ex = GetWindowLongPtr(hwnd_, GWL_EXSTYLE);
         SetWindowLongPtr(hwnd_, GWL_EXSTYLE, ex & ~WS_EX_LAYERED);
@@ -1334,7 +1335,7 @@ void MinerGUI::toggleOverlayMode(bool showWindow) {
                      restoreRect_.left, restoreRect_.top,
                      restoreRect_.right - restoreRect_.left,
                      restoreRect_.bottom - restoreRect_.top,
-                     SWP_FRAMECHANGED | (allowShow?SWP_SHOWWINDOW:0));
+                     SWP_FRAMECHANGED | (allowShow?SWP_SHOWWINDOW:SWP_HIDEWINDOW) | (allowShow?0:SWP_NOACTIVATE));
         if (!allowShow) ShowWindow(hwnd_, SW_HIDE);
     }
 
@@ -1697,6 +1698,7 @@ int MinerGUI::restoreWindowPlace() {
     // closed at back on top of that.
     SetWindowPlacement(hwnd_, &wp);
     SetWindowPlacement(hwnd_, &wp);
+    ShowWindow(hwnd_, SW_HIDE);
     return maximised ? SW_SHOWMAXIMIZED : SW_SHOW;
 }
 
@@ -2440,8 +2442,33 @@ LRESULT CALLBACK MinerGUI::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARA
 
 LRESULT MinerGUI::handleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     switch (uMsg) {
+        case WM_WINDOWPOSCHANGING: {
+            WINDOWPOS* wp = reinterpret_cast<WINDOWPOS*>(lParam);
+            if (wp && !overlayMode_ && !SynthPages::contains(hwnd)) {
+                if (wp->flags & SWP_SHOWWINDOW) {
+                    wp->flags &= ~SWP_SHOWWINDOW;
+                    wp->flags |= SWP_HIDEWINDOW;
+                }
+            }
+            break;
+        }
+        case WM_STYLECHANGING: {
+            if (wParam == GWL_STYLE) {
+                STYLESTRUCT* ss = reinterpret_cast<STYLESTRUCT*>(lParam);
+                if (ss && !overlayMode_ && !SynthPages::contains(hwnd)) {
+                    ss->styleNew &= ~WS_VISIBLE;
+                }
+            }
+            break;
+        }
         case WM_WINDOWPOSCHANGED:
+            HudFeather::sync(hwnd,overlayMode_&&!headless_,scaleF(1)*overlayZoom_);
+            break;
         case WM_SHOWWINDOW:
+            if (wParam && !overlayMode_ && !SynthPages::contains(hwnd)) {
+                ShowWindow(hwnd, SW_HIDE);
+                return 0;
+            }
             HudFeather::sync(hwnd,overlayMode_&&!headless_,scaleF(1)*overlayZoom_);
             break;
         case WM_PAINT: {
@@ -3012,9 +3039,8 @@ LRESULT MinerGUI::handleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         }
 
         case WM_NCLBUTTONDBLCLK:
-            // Double-click on the compact overlay returns to the full window
             if (overlayMode_ && wParam == HTCAPTION) {
-                toggleOverlayMode();
+                SynthHome::show();
                 return 0;
             }
             break;
@@ -3094,7 +3120,10 @@ LRESULT MinerGUI::handleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
         case WM_CLOSE:
             saveWindowPlace();
-            if (SynthScan::closeToTray()) return 0;
+            if (SynthScan::closeToTray()) {
+                ShowWindow(hwnd, SW_HIDE);
+                return 0;
+            }
             isOpen_ = false;
             DestroyWindow(hwnd);
             return 0;
