@@ -8311,40 +8311,6 @@ void MinerGUI::paintCraftingList(Gdiplus::Graphics& g, int cw, int ch) {
     // further left than the button: the heading's line runs there.
     float boxLeft = grindLeft;
     {
-        const wchar_t* label = L"Show them in the game's contracts";
-        Gdiplus::RectF w;
-        g.MeasureString(label, -1, &buttonFont, Gdiplus::PointF(0, 0), &w);
-        const float boxS = scaleF(11), pad = scaleF(10);
-        const float bw = pad + boxS + scaleF(7) + w.Width + pad;
-        const Gdiplus::RectF b(grindLeft - scaleF(10) - bw, (float)scale(14), bw, scaleF(28));
-        const bool hot = isHot(hoverCraft_, b);
-        drawButton(g, b, L"", buttonFont, ButtonKind::Secondary, hot, scaleF(R_CONTROL));
-        const Gdiplus::RectF box(b.X + pad, b.Y + (b.Height - boxS) / 2.0f, boxS, boxS);
-        if (gameTextsOn_) {
-            fillRoundRect(g, box, scaleF(2), COL_ACCENT);
-            Gdiplus::Pen tick(COL_ACCENT_INK, scaleF(1.8f));
-            g.DrawLine(&tick, box.X + scaleF(2.5f), box.Y + scaleF(5.5f), box.X + scaleF(4.5f), box.Y + scaleF(8));
-            g.DrawLine(&tick, box.X + scaleF(4.5f), box.Y + scaleF(8), box.X + scaleF(8.5f), box.Y + scaleF(3));
-        } else {
-            strokeRoundRect(g, box, scaleF(2), hot ? COL_TEXT_DIM : COL_TEXT_FAINT);
-        }
-        Gdiplus::StringFormat middleLeft;
-        middleLeft.SetLineAlignment(Gdiplus::StringAlignmentCenter);
-        Gdiplus::SolidBrush ink(hot ? COL_TEXT : tint(COL_TEXT, 215));
-        g.DrawString(label, -1, &buttonFont,
-                     Gdiplus::RectF(box.GetRight() + scaleF(7), b.Y, w.Width + pad, b.Height), &middleLeft, &ink);
-        craftHits_.push_back({b, 44, 0});
-        boxLeft = b.X;
-        if (gameTextsOn_ && !gameTextsNote_.empty()) {
-            Gdiplus::StringFormat note;
-            note.SetAlignment(Gdiplus::StringAlignmentFar);
-            note.SetTrimming(Gdiplus::StringTrimmingEllipsisCharacter);
-            note.SetFormatFlags(Gdiplus::StringFormatFlagsNoWrap);
-            const Gdiplus::RectF where(b.X, b.GetBottom() + scaleF(2), b.Width, scaleF(14));
-            g.DrawString(toW(gameTextsNote_).c_str(), -1, &subFont, where, &note, &faintBrush);
-        }
-    }
-    {
         std::wstring sub = std::to_wstring(CRAFT_BLUEPRINT_COUNT) +
                            L" recipes  \u00B7  click one for its slots and what quality does to it";
         if (ownedCount() > 0) sub += L"  \u00B7  " + std::to_wstring(ownedCount()) + L" in your library";
