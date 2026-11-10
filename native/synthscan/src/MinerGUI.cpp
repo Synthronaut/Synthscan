@@ -1320,7 +1320,8 @@ void MinerGUI::toggleOverlayMode(bool showWindow) {
         updateClickThrough();
     } else {
         KillTimer(hwnd_, TIMER_OVERLAY_INPUT);
-        SetWindowLongPtr(hwnd_, GWL_STYLE, WS_OVERLAPPEDWINDOW | (showWindow?WS_VISIBLE:0) | WS_CLIPCHILDREN);
+        bool allowShow = showWindow && SynthPages::contains(hwnd_);
+        SetWindowLongPtr(hwnd_, GWL_STYLE, WS_OVERLAPPEDWINDOW | (allowShow?WS_VISIBLE:0) | WS_CLIPCHILDREN);
         LONG_PTR ex = GetWindowLongPtr(hwnd_, GWL_EXSTYLE);
         SetWindowLongPtr(hwnd_, GWL_EXSTYLE, ex & ~WS_EX_LAYERED);
         updateClickThrough();
@@ -1333,7 +1334,8 @@ void MinerGUI::toggleOverlayMode(bool showWindow) {
                      restoreRect_.left, restoreRect_.top,
                      restoreRect_.right - restoreRect_.left,
                      restoreRect_.bottom - restoreRect_.top,
-                     SWP_FRAMECHANGED | (showWindow?SWP_SHOWWINDOW:0));
+                     SWP_FRAMECHANGED | (allowShow?SWP_SHOWWINDOW:0));
+        if (!allowShow) ShowWindow(hwnd_, SW_HIDE);
     }
 
     if (headless_) {
@@ -1577,9 +1579,13 @@ void MinerGUI::show() {
         placeRestored_ = true;
         how = restoreWindowPlace();
     }
-    ShowWindow(hwnd_, how);
-    UpdateWindow(hwnd_);
-    SetFocus(hwnd_);
+    if (overlayMode_ || SynthPages::contains(hwnd_)) {
+        ShowWindow(hwnd_, how);
+        UpdateWindow(hwnd_);
+        SetFocus(hwnd_);
+    } else {
+        ShowWindow(hwnd_, SW_HIDE);
+    }
 }
 
 // Where the window was when it was closed, and back there on the next start.

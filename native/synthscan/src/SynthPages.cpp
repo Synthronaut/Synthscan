@@ -144,8 +144,9 @@ void mount(HWND page,int cropTop){
 void release(HWND page){
     auto found=pages.find(page);if(found==pages.end())return;auto value=found->second;
     ShowWindow(page,SW_HIDE);RemoveWindowSubclass(page,childProc,1);SetParent(page,value.parent);
-    SetWindowLongPtrW(page,GWL_STYLE,value.style);SetWindowLongPtrW(page,GWL_EXSTYLE,value.ex);
+    SetWindowLongPtrW(page,GWL_STYLE,value.style&~WS_VISIBLE);SetWindowLongPtrW(page,GWL_EXSTYLE,value.ex);
     SetWindowPos(page,nullptr,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE|SWP_NOZORDER|SWP_NOACTIVATE|SWP_FRAMECHANGED);
+    ShowWindow(page,SW_HIDE);
     pages.erase(found);if(active==page)active=nullptr;
 }
 void hide(){++revision;if(active)ShowWindow(active,SW_HIDE);active=nullptr;}

@@ -11,6 +11,7 @@
 #include "SynthPrivacy.h"
 #include "SynthCapturePrivacy.h"
 #include "SynthCompanion.h"
+#include "SynthWebView.h"
 #include "SynthPages.h"
 #include "NativeRedraw.h"
 #include "SynthDirectoryCard.h"
@@ -176,7 +177,7 @@ bool spawnPython(const wchar_t* script,const std::vector<std::wstring>& args,HAN
     std::wstring command=quoteArg(py)+L" -B "+quoteArg((root/script).wstring());for(auto& s:args)command+=L" "+quoteArg(s);
     STARTUPINFOW si{sizeof(si)};PROCESS_INFORMATION pi{};
     if(!CreateProcessW(py.c_str(),command.data(),nullptr,nullptr,FALSE,CREATE_NO_WINDOW|BELOW_NORMAL_PRIORITY_CLASS,nullptr,root.c_str(),&si,&pi))return false;
-    CloseHandle(pi.hThread);if(job&&(std::wstring(script)==L"native_bridge.py"||std::wstring(script)==L"daylight_planner.py"))AssignProcessToJobObject(job,pi.hProcess);
+    CloseHandle(pi.hThread);if(job&&(std::wstring(script)==L"native_bridge.py"||std::wstring(script)==L"daylight_planner.py"||std::wstring(script)==L"daylight_service.py"))AssignProcessToJobObject(job,pi.hProcess);
     if(result)*result=pi.hProcess;else CloseHandle(pi.hProcess);return true;
 }
 void saveSettings(){settings=obj({{"scan_on_launch",boolean(scanOnLaunch)},{"show_hud",boolean(hudVisible)},{"session_strip",boolean(showSession)},{"snare_alerts",boolean(snareAlerts)},{"piracy_details",boolean(pirateDetails)},{"hud_mode",str(finder?"finder":hangars?"hangars":quest?"questing":pirate?"piracy":"mining")},{"mining_resume",boolean(miningResume)},{"mission_hud_tab",num(missionTab)},{"hud_locked",boolean(placementLocked)},{"activity_expanded",boolean(activityExpanded)},{"hotkey",num(hotkeyChoice)}});if(!write(data/L"native_settings.json",settings))note="Could not save HUD settings.";}
@@ -249,7 +250,7 @@ LRESULT CALLBACK shortcutEdit(HWND hwnd,UINT message,WPARAM w,LPARAM l,UINT_PTR,
     return DefSubclassProc(hwnd,message,w,l);
 }
 
-void showHud(bool value){if(value&&availableHudModes().empty())return;if(!value)SynthFinder::sync(false);hudVisible=value;if(mining){if(HudVisibility::shouldShow(value,activityExpanded,SCMiner::ScreenCapture::gameWindow()!=nullptr,manualHudPreview)){if(!mining->isOverlayMode()){auto window=mining->windowHandle();bool hadNoActivate=(GetWindowLongPtrW(window,GWL_EXSTYLE)&WS_EX_NOACTIVATE)!=0;SetWindowLongPtrW(window,GWL_EXSTYLE,GetWindowLongPtrW(window,GWL_EXSTYLE)|WS_EX_NOACTIVATE);mining->toggleOverlayMode(false);if(!hadNoActivate)SetWindowLongPtrW(window,GWL_EXSTYLE,GetWindowLongPtrW(window,GWL_EXSTYLE)&~WS_EX_NOACTIVATE);}ShowWindow(mining->windowHandle(),SW_SHOWNOACTIVATE);mining->keepOverlayAboveGame(true);}else mining->hide();}saveSettings();}
+void showHud(bool value){if(value&&availableHudModes().empty())return;if(!value)SynthFinder::sync(false);hudVisible=value;if(mining&&!SynthPages::contains(mining->windowHandle())){if(HudVisibility::shouldShow(value,activityExpanded,SCMiner::ScreenCapture::gameWindow()!=nullptr,manualHudPreview)){if(!mining->isOverlayMode()){auto window=mining->windowHandle();bool hadNoActivate=(GetWindowLongPtrW(window,GWL_EXSTYLE)&WS_EX_NOACTIVATE)!=0;SetWindowLongPtrW(window,GWL_EXSTYLE,GetWindowLongPtrW(window,GWL_EXSTYLE)|WS_EX_NOACTIVATE);mining->toggleOverlayMode(false);if(!hadNoActivate)SetWindowLongPtrW(window,GWL_EXSTYLE,GetWindowLongPtrW(window,GWL_EXSTYLE)&~WS_EX_NOACTIVATE);}ShowWindow(mining->windowHandle(),SW_SHOWNOACTIVATE);mining->keepOverlayAboveGame(true);}else mining->hide();}saveSettings();}
 bool popoutExpanded(){return mining&&mining->isOverlayMode()&&!SynthPages::contains(mining->windowHandle())&&IsWindowVisible(mining->windowHandle())&&activityExpanded;}
 void setActivityExpanded(bool value){
     if(value&&availableHudModes().empty())return;
@@ -258,7 +259,7 @@ void setActivityExpanded(bool value){
         if(mining&&SynthPages::contains(mining->windowHandle())){SynthHome::selectPage("home");SynthPages::release(mining->windowHandle());}
     }
     activityExpanded=value;if(!value)SynthFinder::sync(false);
-    if(mining){if(HudVisibility::shouldShow(hudVisible,activityExpanded,SCMiner::ScreenCapture::gameWindow()!=nullptr,manualHudPreview)){if(!mining->isOverlayMode()){auto window=mining->windowHandle();bool hadNoActivate=(GetWindowLongPtrW(window,GWL_EXSTYLE)&WS_EX_NOACTIVATE)!=0;SetWindowLongPtrW(window,GWL_EXSTYLE,GetWindowLongPtrW(window,GWL_EXSTYLE)|WS_EX_NOACTIVATE);mining->toggleOverlayMode(false);if(!hadNoActivate)SetWindowLongPtrW(window,GWL_EXSTYLE,GetWindowLongPtrW(window,GWL_EXSTYLE)&~WS_EX_NOACTIVATE);}ShowWindow(mining->windowHandle(),SW_SHOWNOACTIVATE);mining->keepOverlayAboveGame(true);}else mining->hide();}
+    if(mining&&!SynthPages::contains(mining->windowHandle())){if(HudVisibility::shouldShow(hudVisible,activityExpanded,SCMiner::ScreenCapture::gameWindow()!=nullptr,manualHudPreview)){if(!mining->isOverlayMode()){auto window=mining->windowHandle();bool hadNoActivate=(GetWindowLongPtrW(window,GWL_EXSTYLE)&WS_EX_NOACTIVATE)!=0;SetWindowLongPtrW(window,GWL_EXSTYLE,GetWindowLongPtrW(window,GWL_EXSTYLE)|WS_EX_NOACTIVATE);mining->toggleOverlayMode(false);if(!hadNoActivate)SetWindowLongPtrW(window,GWL_EXSTYLE,GetWindowLongPtrW(window,GWL_EXSTYLE)&~WS_EX_NOACTIVATE);}ShowWindow(mining->windowHandle(),SW_SHOWNOACTIVATE);mining->keepOverlayAboveGame(true);}else mining->hide();}
     saveSettings();
 }
 void handleHudHotkey(int id,LPARAM packed,bool polled=false){
@@ -303,8 +304,11 @@ void desktop(){
         SynthCompanion::prewarm(SynthHome::pageHost(),data);
         const auto release=read(SCMiner::AppPaths::program().parent_path().parent_path()/L"release.json");
         if(HudModules::actionAvailable(release,"daylight",SynthEdition::screenReading)){
-            write(data/L"daylight_embed_request.json",obj({{"owner_pid",num(GetCurrentProcessId())},{"parent",num(double(reinterpret_cast<UINT_PTR>(SynthHome::pageHost())))},{"generation",num(1)},{"at",num(epoch())}}));
-            spawnPython(L"daylight_planner.py",{L"--embedded",L"--owner",std::to_wstring(GetCurrentProcessId())});
+            spawnPython(L"daylight_service.py",{L"--owner",std::to_wstring(GetCurrentProcessId())});
+            if(!SynthWebView::available()){
+                write(data/L"daylight_embed_request.json",obj({{"owner_pid",num(GetCurrentProcessId())},{"parent",num(double(reinterpret_cast<UINT_PTR>(SynthHome::pageHost())))},{"generation",num(1)},{"at",num(epoch())}}));
+                spawnPython(L"daylight_planner.py",{L"--embedded",L"--owner",std::to_wstring(GetCurrentProcessId())});
+            }
         }
     }
 }
@@ -355,7 +359,9 @@ void homeAction(const std::string& value){
     else if(value=="diary"){SynthScanDiary::open();SynthPages::mount(SynthScanDiary::window());}
     else if(value=="bookmarks"){SynthScanNav::open();SynthPages::mount(SynthScanNav::window());}
     else if(value=="daylight"){
-        if(IsWindow(SynthPages::daylightPage())){
+        if(SynthWebView::available()){
+            SynthCompanion::show(SynthHome::pageHost(),data,value);
+        }else if(IsWindow(SynthPages::daylightPage())){
             SynthPages::mount(SynthPages::daylightPage());
         }else{
             write(data/L"daylight_embed_request.json",obj({{"owner_pid",num(GetCurrentProcessId())},{"parent",num(double(reinterpret_cast<UINT_PTR>(SynthHome::pageHost())))},{"generation",num(SynthPages::generation())},{"at",num(epoch())}}));
@@ -835,9 +841,12 @@ void timer(){
     SynthExecutiveHangar::update(boardHud,hangarDesktop,!boardPending.empty(),boardNote);
     static bool previousGame=false;bool game=SCMiner::ScreenCapture::gameWindow()!=nullptr;
     if(previousGame&&!game)manualHudPreview=false;previousGame=game;
-    if(mining&&mining->isOverlayMode()){
-        bool wanted=HudVisibility::shouldShow(hudVisible,activityExpanded,game,manualHudPreview);
-        if(bool(IsWindowVisible(mining->windowHandle()))!=wanted)ShowWindow(mining->windowHandle(),wanted?SW_SHOWNOACTIVATE:SW_HIDE);
+    if(mining){
+        bool inHost=SynthPages::contains(mining->windowHandle());
+        if(!inHost){
+            bool wanted=mining->isOverlayMode()&&HudVisibility::shouldShow(hudVisible,activityExpanded,game,manualHudPreview);
+            if(bool(IsWindowVisible(mining->windowHandle()))!=wanted)ShowWindow(mining->windowHandle(),wanted?SW_SHOWNOACTIVATE:SW_HIDE);
+        }
     }
     if(panel&&IsWindowVisible(panel)&&currentTab==6)InvalidateRect(panel,nullptr,FALSE);
     if(panel&&IsWindowVisible(panel)&&currentTab==5){
@@ -1037,12 +1046,13 @@ void attach(SCMiner::MinerGUI* gui,std::function<bool(const std::string&)> confi
     // Manual launches must load the saved pop-out origin before the first
     // shortcut opens it, just as automatic launches do.
     gui->restoreOverlayPlacement();
+    ShowWindow(gui->windowHandle(),SW_HIDE);
     if(isAutomatic){
         LONG_PTR style=GetWindowLongPtrW(gui->windowHandle(),GWL_EXSTYLE);SetWindowLongPtrW(gui->windowHandle(),GWL_EXSTYLE,style|WS_EX_NOACTIVATE);
         if(!gui->isOverlayMode())gui->toggleOverlayMode(false);
         if((scanOnLaunch&&!pirate&&!quest&&!hangars&&!finder)!=(text(GetDlgItem(gui->windowHandle(),1002))==L"Live on"))SendMessageW(gui->windowHandle(),WM_COMMAND,MAKEWPARAM(1002,BN_CLICKED),0);
         modeControls();ShowWindow(gui->windowHandle(),HudVisibility::shouldShow(hudVisible,activityExpanded,SCMiner::ScreenCapture::gameWindow()!=nullptr,false)?SW_SHOWNOACTIVATE:SW_HIDE);gui->updateClickThrough();gui->keepOverlayAboveGame(true);
-    }else if(!testing){desktop();}
+    }else if(!testing){ShowWindow(gui->windowHandle(),SW_HIDE);desktop();}
 }
 void workspace(int tab){
     if(!HudModules::workspaceAvailable(read(SCMiner::AppPaths::program().parent_path().parent_path()/L"release.json"),tab,SynthEdition::screenReading))return;
