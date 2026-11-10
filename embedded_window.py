@@ -25,17 +25,22 @@ class EmbeddedWindow:
         api.GetWindowThreadProcessId.argtypes = [w.HWND, ctypes.POINTER(w.DWORD)]
         api.GetClientRect.argtypes = [w.HWND, ctypes.POINTER(w.RECT)]
         api.SetWindowPos.argtypes = [w.HWND, w.HWND, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, w.UINT]
+        api.ShowWindow.argtypes = [w.HWND, ctypes.c_int]; api.ShowWindow.restype = w.BOOL
         api.PostMessageW.argtypes = [w.HWND, w.UINT, w.WPARAM, w.LPARAM]
         request = read_shared_json(directory/'daylight_embed_request.json')
         self.validate(request)
         self.parent = request['parent']
-        root.overrideredirect(True); root.update_idletasks()
+        root.withdraw(); root.geometry('720x640+-32000+-32000'); root.update_idletasks()
         self.hwnd = api.GetAncestor(root.winfo_id(), 2)
         style = api.GetWindowLongPtrW(self.hwnd, -16)
-        api.SetWindowLongPtrW(self.hwnd, -16, (style & ~0x80CF0000) | 0x40000000 | 0x02000000)
+        api.SetWindowLongPtrW(self.hwnd, -16, (style & ~0x90CF0000) | 0x40000000 | 0x02000000)
         api.SetWindowLongPtrW(self.hwnd, -20, api.GetWindowLongPtrW(self.hwnd, -20) & ~0x08040088)
         api.SetParent(self.hwnd, self.parent)
+        rect = w.RECT(); api.GetClientRect(self.parent, ctypes.byref(rect))
+        api.SetWindowPos(self.hwnd, None, 0, 0, max(720, rect.right), max(640, rect.bottom), 0x0094)
         root.deiconify()
+        if request.get('generation') == 1:
+            api.ShowWindow(self.hwnd, 0)
         self.request_show(request)
         self.poll()
 

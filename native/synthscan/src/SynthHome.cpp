@@ -73,9 +73,9 @@ void layout(){
             ((b.id!=213&&b.id!=214)||(available("strings_settings")&&!field(overview,"synthstrings").textOr("title").empty()));
         pending.place(b.hwnd,int(x*scale),int(y*scale),int(w*scale),int(h*scale),b.navigation||(activePage=="home"&&hasNotice));
     }
-    pending.apply();
+    bool changed=pending.apply();
     SynthPages::place(int(218*scale),int(110*scale),int((width-234)*scale),std::max(1,int(r.bottom)-int(124*scale)),activePage!="home");
-    RedrawWindow(window,nullptr,nullptr,RDW_INVALIDATE|RDW_NOERASE|RDW_ALLCHILDREN);
+    if(changed)InvalidateRect(window,nullptr,FALSE);
 }
 // Paint the same surface in parent and child coordinates. A flat child clear
 // leaves visible square corners around translucent rounded buttons.
@@ -243,7 +243,7 @@ LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM w,LPARAM l){
 void create(){
     if(window)return;WNDCLASSW cls{};cls.hInstance=GetModuleHandleW(nullptr);cls.lpszClassName=L"SynthScanHome";cls.lpfnWndProc=procedure;cls.hbrBackground=CreateSolidBrush(RGB(15,16,19));cls.hCursor=LoadCursor(nullptr,IDC_ARROW);cls.hIcon=LoadIconW(cls.hInstance,MAKEINTRESOURCEW(IDI_APPICON));RegisterClassW(&cls);
     MONITORINFO info{sizeof(info)};GetMonitorInfo(MonitorFromWindow(owner,MONITOR_DEFAULTTONEAREST),&info);
-    float dpi=GetDpiForWindow(owner)/96.f;int width=std::min(int(1240*dpi),int(info.rcWork.right-info.rcWork.left)-48),height=std::min(int(840*dpi),int(info.rcWork.bottom-info.rcWork.top)-48);
+    float dpi=GetDpiForWindow(owner)/96.f;int width=std::min(int(1360*dpi),int(info.rcWork.right-info.rcWork.left)-48),height=std::min(int(940*dpi),int(info.rcWork.bottom-info.rcWork.top)-48);
     // The page controls already buffer their own painting. Whole-tree Windows
     // compositing re-enters the custom People controls during layout and can
     // trap this UI thread in a synchronous WM_PAINT loop.
@@ -286,7 +286,28 @@ void update(const SCMiner::JsonValue& incoming,const std::string& label,bool liv
 void show(){create();if(owner&&(GetWindowLongPtrW(owner,GWL_EXSTYLE)&WS_EX_TOPMOST))SetWindowPos(owner,HWND_NOTOPMOST,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE);ShowWindow(window,SW_SHOW);ShowWindow(window,SW_RESTORE);SetForegroundWindow(window);publish();}
 void hide(){if(window){ShowWindow(window,SW_HIDE);publish();}}
 HWND pageHost(){create();return SynthPages::host();}
-void selectPage(const std::string& name){activePage=name;SynthPages::hide();layout();publish();}
+void selectPage(const std::string& name){
+    std::string previousPage=activePage;
+    activePage=name;
+    if(activePage=="home")SynthPages::hide();
+    else SynthPages::advanceGeneration();
+    if(window){
+        for(const auto& b:buttons){
+            if(b.navigation&&(b.action==previousPage||b.action==activePage))
+                InvalidateRect(b.hwnd,nullptr,FALSE);
+        }
+        RECT r{};GetClientRect(window,&r);
+        if((previousPage=="home")!=(activePage=="home")||previousPage.empty()){
+            layout();
+            RECT content{int(200*scale),0,r.right,r.bottom};
+            InvalidateRect(window,&content,FALSE);
+        }else{
+            RECT header{int(200*scale),0,r.right,int(110*scale)};
+            InvalidateRect(window,&header,FALSE);
+        }
+    }
+    publish();
+}
 void navigate(const std::string& name){
     if(!available(name))return;
     // Copy before dispatch: navigation may update the selected action itself.

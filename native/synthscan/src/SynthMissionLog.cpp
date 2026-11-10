@@ -4,6 +4,7 @@
 #include "SynthJson.h"
 #include "SynthPages.h"
 #include "SynthGlass.h"
+#include "NativeRedraw.h"
 #include <commctrl.h>
 #include <commdlg.h>
 #include <uxtheme.h>
@@ -59,11 +60,13 @@ void exportFile(int id){
 }
 void layout(){
     if(!page)return;RECT r{};GetClientRect(page,&r);scale=GetDpiForWindow(page)/96.f;float w=r.right/scale,h=r.bottom/scale;
-    auto put=[&](int id,float x,float y,float width,float height){MoveWindow(control(id),px(x),px(y),std::max(1,px(width)),std::max(1,px(height)),TRUE);};
+    NativeRedraw::Layout pending(page);
+    auto put=[&](int id,float x,float y,float width,float height){pending.place(control(id),px(x),px(y),std::max(1,px(width)),std::max(1,px(height)));};
     put(503,w-280,14,78,30);put(504,w-194,14,78,30);put(505,w-108,14,92,30);
     float filter=(w-64)/5;const int filterIds[]={506,507,508,509,514};for(int i=0;i<5;i++)put(filterIds[i],16+i*(filter+8),83,filter,210);
     put(501,16,121,std::max(120.f,w-302),29);put(502,w-278,121,78,29);put(510,w-192,121,84,29);put(511,w-100,121,84,29);
     put(500,16,182,w-32,std::max(100.f,h-362));put(512,16,std::max(292.f,h-170),w-32,139);
+    pending.apply();
     InvalidateRect(page,nullptr,FALSE);
 }
 void selectDetail(){
@@ -213,7 +216,7 @@ void show(HWND parent,const std::filesystem::path& directory){
         detail=add(L"EDIT",L"Select an activity to inspect its evidence.",ES_MULTILINE|ES_READONLY|ES_AUTOVSCROLL|WS_VSCROLL|WS_BORDER,512);
         SendMessageW(detail,EM_SETLIMITTEXT,100000,0);SetTimer(page,1,1000,nullptr);
     }
-    layout();refresh();request();SynthPages::mount(page);ShowWindow(page,SW_SHOW);
+    refresh();request();SynthPages::mount(page);layout();ShowWindow(page,SW_SHOW);
 }
 void close(){if(page)DestroyWindow(page);page=nullptr;list=nullptr;detail=nullptr;if(font)DeleteObject(font);font=nullptr;lastRows.clear();lastColumns.clear();model={};}
 }
