@@ -73,9 +73,8 @@ void layout(){
             ((b.id!=213&&b.id!=214)||(available("strings_settings")&&!field(overview,"synthstrings").textOr("title").empty()));
         pending.place(b.hwnd,int(x*scale),int(y*scale),int(w*scale),int(h*scale),b.navigation||(activePage=="home"&&hasNotice));
     }
-    bool changed=pending.apply();
+    pending.apply();
     SynthPages::place(int(218*scale),int(110*scale),int((width-234)*scale),std::max(1,int(r.bottom)-int(124*scale)),activePage!="home");
-    if(changed)InvalidateRect(window,nullptr,FALSE);
 }
 // Paint the same surface in parent and child coordinates. A flat child clear
 // leaves visible square corners around translucent rounded buttons.
@@ -217,7 +216,7 @@ void paint(HDC target=nullptr){
 LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM w,LPARAM l){
     if(message==WM_PAINT){paint();return 0;}
     if(message==WM_PRINTCLIENT){paint(reinterpret_cast<HDC>(w));return 0;}
-    if(message==WM_SIZE){layout();return 0;}
+    if(message==WM_SIZE){layout();InvalidateRect(hwnd,nullptr,FALSE);return 0;}
     if(message==WM_ERASEBKGND){RECT r{};GetClientRect(hwnd,&r);static HBRUSH surface=CreateSolidBrush(RGB(15,16,19));FillRect(reinterpret_cast<HDC>(w),&r,surface);return 1;}
     if(message==WM_DRAWITEM){paintButton(*reinterpret_cast<DRAWITEMSTRUCT*>(l));return TRUE;}
     if(message==WM_COMMAND&&HIWORD(w)==BN_CLICKED){
@@ -281,7 +280,17 @@ void update(const SCMiner::JsonValue& incoming,const std::string& label,bool liv
         sessionChosen=true;
     }
     if(window)publish();
-    if(window&&changed){InvalidateRect(window,nullptr,FALSE);for(auto& b:buttons)if(b.id==210||b.id==211)InvalidateRect(b.hwnd,nullptr,FALSE);publish();}
+    if(window&&changed){
+        RECT r{};GetClientRect(window,&r);
+        RECT statusStrip{0,std::max(0,int(r.bottom)-int(105*scale)),int(200*scale),r.bottom};
+        InvalidateRect(window,&statusStrip,FALSE);
+        if(activePage=="home"){
+            RECT content{int(200*scale),0,r.right,r.bottom};
+            InvalidateRect(window,&content,FALSE);
+            for(auto& b:buttons)if(b.id==210||b.id==211)InvalidateRect(b.hwnd,nullptr,FALSE);
+        }
+        publish();
+    }
 }
 void show(){create();if(owner&&(GetWindowLongPtrW(owner,GWL_EXSTYLE)&WS_EX_TOPMOST))SetWindowPos(owner,HWND_NOTOPMOST,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE);ShowWindow(window,SW_SHOW);ShowWindow(window,SW_RESTORE);SetForegroundWindow(window);publish();}
 void hide(){if(window){ShowWindow(window,SW_HIDE);publish();}}
