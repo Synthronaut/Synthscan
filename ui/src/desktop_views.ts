@@ -420,47 +420,55 @@ export class DesktopViewsManager {
       )
       .join('');
 
-    el.innerHTML = `
-      <div class="ss-card ss-fill-pane">
-        <div class="ss-toolbar-row">
-          <input id="dir-search" class="ss-input ss-grow" type="text" placeholder="Search commodities, ships, weapons, armor..." value="${this.directoryQuery}" />
-          <select id="dir-kind" class="ss-select">${kindOptions}</select>
-          <span class="ss-muted-text">${filtered.length} matches</span>
+    const scrollContainer = el.querySelector<HTMLElement>('#dir-table-scroll');
+    if (!scrollContainer) {
+      el.innerHTML = `
+        <div class="ss-card ss-fill-pane">
+          <div class="ss-toolbar-row">
+            <input id="dir-search" class="ss-input ss-grow" type="text" placeholder="Search commodities, ships, weapons, armor..." value="${this.directoryQuery}" />
+            <select id="dir-kind" class="ss-select">${kindOptions}</select>
+            <span class="ss-muted-text" id="dir-match-count">${filtered.length} matches</span>
+          </div>
+          <div class="ss-table-scroll" id="dir-table-scroll">
+            <table class="ss-table">
+              <thead>
+                <tr>
+                  <th>ITEM / SHIP</th>
+                  <th>KIND</th>
+                  <th>CATEGORY</th>
+                  <th>MANUFACTURER</th>
+                  <th>PRICE</th>
+                  <th>LOCATION</th>
+                </tr>
+              </thead>
+              <tbody id="dir-tbody">
+                ${rowsHtml || '<tr><td colspan="6" class="ss-muted-text">No items matching criteria</td></tr>'}
+              </tbody>
+            </table>
+          </div>
         </div>
-        <div class="ss-table-scroll">
-          <table class="ss-table">
-            <thead>
-              <tr>
-                <th>ITEM / SHIP</th>
-                <th>KIND</th>
-                <th>CATEGORY</th>
-                <th>MANUFACTURER</th>
-                <th>PRICE</th>
-                <th>LOCATION</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${rowsHtml || '<tr><td colspan="6" class="ss-muted-text">No items matching criteria</td></tr>'}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    `;
+      `;
 
-    const searchInput = el.querySelector<HTMLInputElement>('#dir-search');
-    if (searchInput) {
-      searchInput.addEventListener('input', () => {
-        this.directoryQuery = searchInput.value;
-        this.renderDirectory();
-      });
-    }
+      const searchInput = el.querySelector<HTMLInputElement>('#dir-search');
+      if (searchInput) {
+        searchInput.addEventListener('input', () => {
+          this.directoryQuery = searchInput.value;
+          this.renderDirectory();
+        });
+      }
 
-    const kindSelect = el.querySelector<HTMLSelectElement>('#dir-kind');
-    if (kindSelect) {
-      kindSelect.addEventListener('change', () => {
-        this.directoryKind = kindSelect.value;
-        this.renderDirectory();
-      });
+      const kindSelect = el.querySelector<HTMLSelectElement>('#dir-kind');
+      if (kindSelect) {
+        kindSelect.addEventListener('change', () => {
+          this.directoryKind = kindSelect.value;
+          this.renderDirectory();
+        });
+      }
+    } else {
+      const matchCount = el.querySelector('#dir-match-count');
+      if (matchCount) matchCount.textContent = `${filtered.length} matches`;
+      const tbody = el.querySelector('#dir-tbody');
+      if (tbody) tbody.innerHTML = rowsHtml || '<tr><td colspan="6" class="ss-muted-text">No items matching criteria</td></tr>';
     }
   }
 
@@ -506,45 +514,57 @@ export class DesktopViewsManager {
       )
       .join('');
 
-    el.innerHTML = `
-      <div class="ss-log-grid">
-        <div class="ss-card">
-          <div class="ss-toolbar-row ss-space-between">
-            <h2 class="ss-section-heading">CONTRACTS &amp; MISSIONS</h2>
-            <div class="ss-toolbar-actions">
-              <button id="ml-export-csv" class="ss-btn ss-btn-sm">Export CSV</button>
-              <button id="ml-export-json" class="ss-btn ss-btn-sm">Export JSON</button>
+    const grid = el.querySelector<HTMLElement>('.ss-log-grid');
+    if (!grid) {
+      el.innerHTML = `
+        <div class="ss-log-grid">
+          <div class="ss-card">
+            <div class="ss-toolbar-row ss-space-between">
+              <h2 class="ss-section-heading">CONTRACTS &amp; MISSIONS</h2>
+              <div class="ss-toolbar-actions">
+                <button id="ml-export-csv" class="ss-btn ss-btn-sm">Export CSV</button>
+                <button id="ml-export-json" class="ss-btn ss-btn-sm">Export JSON</button>
+              </div>
+            </div>
+            <div class="ss-stats-strip">
+              <div class="ss-stat-chip"><strong id="ml-stat-completed">${stats.total_completed}</strong> completed</div>
+              <div class="ss-stat-chip"><strong id="ml-stat-earned">${stats.total_earned.toLocaleString()} aUEC</strong> total earned</div>
+            </div>
+            <div class="ss-table-scroll ss-log-scroll">
+              <table class="ss-table">
+                <thead><tr><th>CONTRACT</th><th>STATUS</th><th>CATEGORY</th><th>SYSTEM</th><th>PAYOUT</th><th>TIME</th></tr></thead>
+                <tbody id="ml-missions-tbody">${missionRows || '<tr><td colspan="6" class="ss-muted-text">No mission logs recorded</td></tr>'}</tbody>
+              </table>
             </div>
           </div>
-          <div class="ss-stats-strip">
-            <div class="ss-stat-chip"><strong>${stats.total_completed}</strong> completed</div>
-            <div class="ss-stat-chip"><strong>${stats.total_earned.toLocaleString()} aUEC</strong> total earned</div>
-          </div>
-          <div class="ss-table-scroll ss-log-scroll">
-            <table class="ss-table">
-              <thead><tr><th>CONTRACT</th><th>STATUS</th><th>CATEGORY</th><th>SYSTEM</th><th>PAYOUT</th><th>TIME</th></tr></thead>
-              <tbody>${missionRows || '<tr><td colspan="6" class="ss-muted-text">No mission logs recorded</td></tr>'}</tbody>
-            </table>
-          </div>
-        </div>
-        <div class="ss-card">
-          <h2 class="ss-section-heading">WALLET TRANSACTIONS</h2>
-          <div class="ss-table-scroll ss-log-scroll">
-            <table class="ss-table">
-              <thead><tr><th>TIME</th><th>AMOUNT</th><th>CATEGORY</th><th>NOTE</th></tr></thead>
-              <tbody>${walletRows || '<tr><td colspan="4" class="ss-muted-text">No balance changes logged</td></tr>'}</tbody>
-            </table>
+          <div class="ss-card">
+            <h2 class="ss-section-heading">WALLET TRANSACTIONS</h2>
+            <div class="ss-table-scroll ss-log-scroll">
+              <table class="ss-table">
+                <thead><tr><th>TIME</th><th>AMOUNT</th><th>CATEGORY</th><th>NOTE</th></tr></thead>
+                <tbody id="ml-wallet-tbody">${walletRows || '<tr><td colspan="4" class="ss-muted-text">No balance changes logged</td></tr>'}</tbody>
+              </table>
+            </div>
           </div>
         </div>
-      </div>
-    `;
+      `;
 
-    el.querySelector('#ml-export-csv')?.addEventListener('click', () => {
-      void this.bridge.sendCommand({ action: 'mission_export', format: 'csv' });
-    });
-    el.querySelector('#ml-export-json')?.addEventListener('click', () => {
-      void this.bridge.sendCommand({ action: 'mission_export', format: 'json' });
-    });
+      el.querySelector('#ml-export-csv')?.addEventListener('click', () => {
+        void this.bridge.sendCommand({ action: 'mission_export', format: 'csv' });
+      });
+      el.querySelector('#ml-export-json')?.addEventListener('click', () => {
+        void this.bridge.sendCommand({ action: 'mission_export', format: 'json' });
+      });
+    } else {
+      const statCompleted = el.querySelector('#ml-stat-completed');
+      if (statCompleted) statCompleted.textContent = String(stats.total_completed);
+      const statEarned = el.querySelector('#ml-stat-earned');
+      if (statEarned) statEarned.textContent = `${stats.total_earned.toLocaleString()} aUEC`;
+      const missionTbody = el.querySelector('#ml-missions-tbody');
+      if (missionTbody) missionTbody.innerHTML = missionRows || '<tr><td colspan="6" class="ss-muted-text">No mission logs recorded</td></tr>';
+      const walletTbody = el.querySelector('#ml-wallet-tbody');
+      if (walletTbody) walletTbody.innerHTML = walletRows || '<tr><td colspan="4" class="ss-muted-text">No balance changes logged</td></tr>';
+    }
   }
 
   // --- Servers View ---
@@ -558,43 +578,55 @@ export class DesktopViewsManager {
 
     const rows = entries
       .map((s) => {
-        const isCurrent = s.shard_id === currentShard;
+        const shardLabel = s.shard_id ?? s.full_shard_id ?? '?';
+        const isCurrent = shardLabel === currentShard;
+        const visits = s.visit ?? (s.shard_recorded_visits ? String(s.shard_recorded_visits) : (s.visit_count ? String(s.visit_count) : '1'));
+        const lastObserved = s.joined_local ?? (s.last_seen ? new Date(s.last_seen * 1000).toLocaleString() : (s.joined_utc ?? '—'));
+        const nameLabel = s.name ?? s.custom_name ?? '—';
+        const notesLabel = s.notes ?? '—';
         return `
         <tr class="${isCurrent ? 'is-selected' : ''}">
-          <td><strong>Shard ${s.shard_id}</strong> ${isCurrent ? '<span class="ss-tag ss-tag-accent">Current</span>' : ''}</td>
-          <td>${s.region}</td>
-          <td>${s.visit_count}</td>
-          <td>${new Date(s.last_seen * 1000).toLocaleString()}</td>
-          <td>${s.custom_name ?? '—'}</td>
-          <td>${s.notes ?? '—'}</td>
+          <td><strong>Shard ${shardLabel}</strong> ${isCurrent ? '<span class="ss-tag ss-tag-accent">Current</span>' : ''}</td>
+          <td>${s.region ?? '—'}</td>
+          <td>${visits}</td>
+          <td>${lastObserved}</td>
+          <td>${nameLabel}</td>
+          <td>${notesLabel}</td>
         </tr>
       `;
       })
       .join('');
 
-    el.innerHTML = `
-      <div class="ss-card ss-fill-pane">
-        <div class="ss-toolbar-row ss-space-between">
-          <div>
-            <h2 class="ss-section-heading">SERVER &amp; SHARD HISTORY</h2>
-            <p class="ss-muted-text">Active connection: <strong>Shard ${currentShard}</strong> · ${currentRegion}</p>
+    const scrollContainer = el.querySelector<HTMLElement>('#server-table-scroll');
+    if (!scrollContainer) {
+      el.innerHTML = `
+        <div class="ss-card ss-fill-pane">
+          <div class="ss-toolbar-row ss-space-between">
+            <div>
+              <h2 class="ss-section-heading">SERVER &amp; SHARD HISTORY</h2>
+              <p class="ss-muted-text" id="server-active-desc">Active connection: <strong>Shard ${currentShard}</strong> · ${currentRegion}</p>
+            </div>
+            <button id="server-refresh-btn" class="ss-btn ss-btn-accent">Refresh shard</button>
           </div>
-          <button id="server-refresh-btn" class="ss-btn ss-btn-accent">Refresh shard</button>
+          <div class="ss-table-scroll" id="server-table-scroll">
+            <table class="ss-table">
+              <thead>
+                <tr><th>SHARD ID</th><th>REGION</th><th>VISITS</th><th>LAST OBSERVED</th><th>LABEL</th><th>NOTES</th></tr>
+              </thead>
+              <tbody id="servers-tbody">${rows || '<tr><td colspan="6" class="ss-muted-text">No server history available</td></tr>'}</tbody>
+            </table>
+          </div>
         </div>
-        <div class="ss-table-scroll">
-          <table class="ss-table">
-            <thead>
-              <tr><th>SHARD ID</th><th>REGION</th><th>VISITS</th><th>LAST OBSERVED</th><th>LABEL</th><th>NOTES</th></tr>
-            </thead>
-            <tbody>${rows || '<tr><td colspan="6" class="ss-muted-text">No server history available</td></tr>'}</tbody>
-          </table>
-        </div>
-      </div>
-    `;
-
-    el.querySelector('#server-refresh-btn')?.addEventListener('click', () => {
-      void this.bridge.sendCommand({ action: 'refresh_people' });
-    });
+      `;
+      el.querySelector('#server-refresh-btn')?.addEventListener('click', () => {
+        void this.bridge.sendCommand({ action: 'refresh_people' });
+      });
+    } else {
+      const desc = el.querySelector('#server-active-desc');
+      if (desc) desc.innerHTML = `Active connection: <strong>Shard ${currentShard}</strong> · ${currentRegion}`;
+      const tbody = el.querySelector('#servers-tbody');
+      if (tbody) tbody.innerHTML = rows || '<tr><td colspan="6" class="ss-muted-text">No server history available</td></tr>';
+    }
   }
 
   // --- Blueprint Library View ---

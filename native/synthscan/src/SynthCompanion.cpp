@@ -219,10 +219,10 @@ void queue(Json command){
     if(!write(folder/L"companion_commands"/(std::wstring(id,id+strlen(id))+L".json"),command))label(590,"Could not save the action. Please try again.");
     else label(590,"Working…");
 }
-}
 void handleWebViewCommand(const Json& command){
     const std::string action=command.textOr("action");
     if(action=="navigate"){SynthHome::navigate(command.textOr("page"));return;}
+    if(action=="strings_settings"||action=="strings_details"){SynthHome::navigate(action);return;}
     if(action=="open_uex_ad"){
         auto url=command.textOr("url");
         if(url.rfind("https://uexcorp.space/marketplace/item/info/",0)==0&&url.find_first_of("\r\n\t ")==std::string::npos)
@@ -231,7 +231,6 @@ void handleWebViewCommand(const Json& command){
     }
     queue(command);
 }
-namespace {
 void layout(){
     if(!page)return;RECT r{};GetClientRect(page,&r);int w=std::max(mode=="people"?860:620,int(r.right)),h=std::max(mode=="people"?700:580,int(r.bottom));
     if(SynthWebView::active())SynthWebView::resize(r.right,r.bottom);
@@ -464,7 +463,9 @@ void refresh(bool force=false){
         if(items.empty())catalog();
         Json marketItems=arr();for(const auto& item:items)marketItems.items.push_back(item);
         Json homeOverview=read(folder/L"home_overview.json",2*1024*1024);
-        SynthWebView::pushSnapshot(mode,model,marketItems,homeOverview);
+        const std::string pageName = SynthHome::selectedPage();
+        const std::string snapMode = (!pageName.empty() && pageName != "home" && pageName != "people" && pageName != "buyer_alerts") ? pageName : mode;
+        SynthWebView::pushSnapshot(snapMode, model, marketItems, homeOverview);
     }
 }
 void createControls(){
@@ -572,8 +573,8 @@ LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM wp,LPARAM lp){
 }
 }
 void prewarm(HWND parent,const std::filesystem::path& directory){
+    if(inPreview||page||!SynthWebView::available())return;
     folder=directory;mode="people";
-    if(inPreview||page||!SynthWebView::available()||SynthHome::isWebShellMode())return;
     WNDCLASSW cls{};cls.lpfnWndProc=procedure;cls.hInstance=GetModuleHandleW(nullptr);cls.lpszClassName=L"SynthScanCompanion";cls.hCursor=LoadCursor(nullptr,IDC_ARROW);cls.hbrBackground=background;RegisterClassW(&cls);
     font=CreateFontW(-14,0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH,L"Segoe UI");
     page=CreateWindowExW(WS_EX_CONTROLPARENT,cls.lpszClassName,L"SynthScan companion",WS_CHILD|WS_CLIPCHILDREN|WS_CLIPSIBLINGS,0,0,860,700,parent,nullptr,cls.hInstance,nullptr);
@@ -583,7 +584,6 @@ void prewarm(HWND parent,const std::filesystem::path& directory){
 }
 void show(HWND parent,const std::filesystem::path& directory,const std::string& name){
     folder=directory;bool changed=mode!=name;mode=name;
-    if(SynthHome::isWebShellMode())return;
     if(!page){WNDCLASSW cls{};cls.lpfnWndProc=procedure;cls.hInstance=GetModuleHandleW(nullptr);cls.lpszClassName=L"SynthScanCompanion";cls.hCursor=LoadCursor(nullptr,IDC_ARROW);cls.hbrBackground=background;RegisterClassW(&cls);
         font=CreateFontW(-14,0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH,L"Segoe UI");
         page=CreateWindowExW(WS_EX_CONTROLPARENT,cls.lpszClassName,L"SynthScan companion",WS_CHILD|WS_CLIPCHILDREN|WS_CLIPSIBLINGS,0,0,mode=="people"?860:620,mode=="people"?700:580,parent,nullptr,cls.hInstance,nullptr);changed=true;SetTimer(page,1,1000,nullptr);}

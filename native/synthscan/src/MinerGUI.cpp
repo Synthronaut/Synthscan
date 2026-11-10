@@ -2445,6 +2445,7 @@ LRESULT MinerGUI::handleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
             EndPaint(hwnd, &ps);
             return 0;
         }
+        case WM_PRINT:
         case WM_PRINTCLIENT:
             onPaint(reinterpret_cast<HDC>(wParam));
             return 0;

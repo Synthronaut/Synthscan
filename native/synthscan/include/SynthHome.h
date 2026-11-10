@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <windows.h>
 #include <filesystem>
 #include <functional>
@@ -13,9 +13,6 @@ void close();
 bool routeMessage(MSG& message);
 bool visible();
 bool active();
-HWND windowHandle();
-void setWebShellMode(bool enabled);
-bool isWebShellMode();
 HWND pageHost();
 void selectPage(const std::string& name);
 void navigate(const std::string& name);

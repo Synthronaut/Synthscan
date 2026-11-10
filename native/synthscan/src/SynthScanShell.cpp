@@ -31,11 +31,6 @@
 #include "AppPaths.h"
 #include "ScreenCapture.h"
 #include "AfkNudge.h"
-#include "SynthWebView.h"
-#include "CraftingData.h"
-#include "MiningLocations.h"
-#include "RefineryData.h"
-#include "RefiningData.h"
 #include "resource.h"
 #include <commctrl.h>
 #include <commdlg.h>
@@ -254,7 +249,7 @@ LRESULT CALLBACK shortcutEdit(HWND hwnd,UINT message,WPARAM w,LPARAM l,UINT_PTR,
     return DefSubclassProc(hwnd,message,w,l);
 }
 
-void showHud(bool value){if(value&&availableHudModes().empty())return;if(!value)SynthFinder::sync(false);manualHudPreview=value&&!SCMiner::ScreenCapture::gameWindow();hudVisible=value;if(mining){if(HudVisibility::shouldShow(value,activityExpanded,SCMiner::ScreenCapture::gameWindow()!=nullptr,manualHudPreview)){ShowWindow(mining->windowHandle(),SW_SHOWNOACTIVATE);mining->keepOverlayAboveGame(true);}else mining->hide();}saveSettings();}
+void showHud(bool value){if(value&&availableHudModes().empty())return;if(!value)SynthFinder::sync(false);hudVisible=value;if(mining){if(HudVisibility::shouldShow(value,activityExpanded,SCMiner::ScreenCapture::gameWindow()!=nullptr,manualHudPreview)){if(!mining->isOverlayMode()){auto window=mining->windowHandle();bool hadNoActivate=(GetWindowLongPtrW(window,GWL_EXSTYLE)&WS_EX_NOACTIVATE)!=0;SetWindowLongPtrW(window,GWL_EXSTYLE,GetWindowLongPtrW(window,GWL_EXSTYLE)|WS_EX_NOACTIVATE);mining->toggleOverlayMode(false);if(!hadNoActivate)SetWindowLongPtrW(window,GWL_EXSTYLE,GetWindowLongPtrW(window,GWL_EXSTYLE)&~WS_EX_NOACTIVATE);}ShowWindow(mining->windowHandle(),SW_SHOWNOACTIVATE);mining->keepOverlayAboveGame(true);}else mining->hide();}saveSettings();}
 bool popoutExpanded(){return mining&&mining->isOverlayMode()&&!SynthPages::contains(mining->windowHandle())&&IsWindowVisible(mining->windowHandle())&&activityExpanded;}
 void setActivityExpanded(bool value){
     if(value&&availableHudModes().empty())return;
@@ -262,9 +257,8 @@ void setActivityExpanded(bool value){
         hudVisible=true;
         if(mining&&SynthPages::contains(mining->windowHandle())){SynthHome::selectPage("home");SynthPages::release(mining->windowHandle());}
     }
-    if(value&&!SCMiner::ScreenCapture::gameWindow())manualHudPreview=true;
     activityExpanded=value;if(!value)SynthFinder::sync(false);
-    if(mining){if(value&&hudVisible){if(!mining->isOverlayMode()){auto window=mining->windowHandle();bool hadNoActivate=(GetWindowLongPtrW(window,GWL_EXSTYLE)&WS_EX_NOACTIVATE)!=0;SetWindowLongPtrW(window,GWL_EXSTYLE,GetWindowLongPtrW(window,GWL_EXSTYLE)|WS_EX_NOACTIVATE);mining->toggleOverlayMode();if(!hadNoActivate)SetWindowLongPtrW(window,GWL_EXSTYLE,GetWindowLongPtrW(window,GWL_EXSTYLE)&~WS_EX_NOACTIVATE);}ShowWindow(mining->windowHandle(),SW_SHOWNOACTIVATE);mining->keepOverlayAboveGame(true);}else mining->hide();}
+    if(mining){if(HudVisibility::shouldShow(hudVisible,activityExpanded,SCMiner::ScreenCapture::gameWindow()!=nullptr,manualHudPreview)){if(!mining->isOverlayMode()){auto window=mining->windowHandle();bool hadNoActivate=(GetWindowLongPtrW(window,GWL_EXSTYLE)&WS_EX_NOACTIVATE)!=0;SetWindowLongPtrW(window,GWL_EXSTYLE,GetWindowLongPtrW(window,GWL_EXSTYLE)|WS_EX_NOACTIVATE);mining->toggleOverlayMode(false);if(!hadNoActivate)SetWindowLongPtrW(window,GWL_EXSTYLE,GetWindowLongPtrW(window,GWL_EXSTYLE)&~WS_EX_NOACTIVATE);}ShowWindow(mining->windowHandle(),SW_SHOWNOACTIVATE);mining->keepOverlayAboveGame(true);}else mining->hide();}
     saveSettings();
 }
 void handleHudHotkey(int id,LPARAM packed,bool polled=false){
@@ -301,348 +295,7 @@ void activityControl(){
     }
 }
 void miningDesktop(){if(!mining)return;SynthHome::hide();if(mining->isOverlayMode())mining->toggleOverlayMode();hudVisible=true;activityExpanded=true;mining->show();ShowWindow(mining->windowHandle(),SW_RESTORE);SetForegroundWindow(mining->windowHandle());modeControls();saveSettings();}
-void command(Json value);
-void handleWebDesktopCommand(const Json& cmd);
-void buildAndPushWebCatalog() {
-    static bool catalogBuilt = false;
-    static Json catalog;
-    if (!catalogBuilt) {
-        Json dirRows = field(library, "rows");
-        Json bpArr = arr();
-        for (int i = 0; i < 1616; ++i) {
-            const auto& bp = SCMiner::CRAFT_BLUEPRINTS[i];
-            Json slots = arr();
-            for (int s = 0; s < bp.count; ++s) {
-                const auto& slot = SCMiner::CRAFT_SLOTS[bp.first + s];
-                const char* matName = (slot.material < 37) ? SCMiner::CRAFT_MATERIALS[slot.material].name : "";
-                slots.items.push_back(obj({
-                    {"material_name", str(matName)},
-                    {"scu", num(slot.scu)},
-                    {"units", num(slot.units)},
-                    {"min_quality", num(slot.minQuality)}
-                }));
-            }
-            char gradeStr[2] = { bp.grade ? bp.grade : ' ', 0 };
-            const char* typeName = (bp.type < sizeof(SCMiner::CRAFT_TYPES)/sizeof(SCMiner::CRAFT_TYPES[0])) ? SCMiner::CRAFT_TYPES[bp.type] : "";
-            bpArr.items.push_back(obj({
-                {"id", num(i)},
-                {"name", str(bp.name)},
-                {"type", str(typeName)},
-                {"grade", str(gradeStr)},
-                {"size", num(bp.size)},
-                {"item_class", num(bp.itemClass)},
-                {"seconds", num(bp.seconds)},
-                {"known_from_start", boolean(bp.knownFromStart)},
-                {"missions", num(bp.missions)},
-                {"slots", slots}
-            }));
-        }
-
-        Json bpTypes = arr();
-        for (const auto* t : SCMiner::CRAFT_TYPES) bpTypes.items.push_back(str(t));
-
-        Json minLocs = arr();
-        for (const auto& loc : SCMiner::ORE_LOCATIONS) {
-            minLocs.items.push_back(obj({
-                {"mineral", str(loc.mineral)},
-                {"family", str(loc.family == SCMiner::MiningFamily::Ship ? "Ship" : loc.family == SCMiner::MiningFamily::ROC ? "ROC" : "FPS")},
-                {"location", str(loc.location)},
-                {"system", str(loc.system)},
-                {"kind", str(loc.kind)},
-                {"note", str(loc.note)},
-                {"chance", num(loc.chance)}
-            }));
-        }
-
-        Json refLocs = arr();
-        for (int i = 0; i < SCMiner::REFINERY_COUNT; ++i) {
-            refLocs.items.push_back(obj({
-                {"name", str(SCMiner::REFINERIES[i].name)},
-                {"system", str(SCMiner::REFINERIES[i].system)},
-                {"profile", num(SCMiner::REFINERIES[i].profile)}
-            }));
-        }
-
-        Json refMats = arr();
-        for (int i = 0; i < SCMiner::REFINERY_MATERIAL_COUNT; ++i) {
-            refMats.items.push_back(str(SCMiner::REFINERY_MATERIALS[i]));
-        }
-
-        Json refMethods = arr();
-        for (int i = 0; i < SCMiner::REFINING_METHOD_COUNT; ++i) {
-            const auto& m = SCMiner::REFINING_METHODS[i];
-            refMethods.items.push_back(obj({
-                {"key", str(m.key)},
-                {"name", str(m.name)},
-                {"rating", str(m.rating)},
-                {"yield", num(m.yield)},
-                {"time", num(m.time)},
-                {"cost", num(m.cost)}
-            }));
-        }
-
-        Json daylightCat = read(root / L"data/daylight_catalogue.json", 16*1024*1024);
-        if (daylightCat.kind != Json::Kind::Object) {
-            daylightCat = read(data / L"daylight_catalogue.json", 16*1024*1024);
-        }
-
-        const auto release = read(SCMiner::AppPaths::program().parent_path().parent_path() / L"release.json");
-        std::vector<std::string> actionKeys = {
-            "home", "directory", "people", "mission_log", "servers", "blueprints",
-            "planner", "diary", "refinery", "executive_hangar", "hud_piracy", "daylight",
-            "acceptance", "settings", "hud_mining", "hud_finder", "hud_missions", "hud_hangars",
-            "modules", "strings_settings"
-        };
-        Json avail = obj({});
-        for (const auto& k : actionKeys) {
-            avail.members.push_back({k, boolean(HudModules::actionAvailable(release, k, SynthEdition::screenReading))});
-        }
-
-        catalog = obj({
-            {"revision", num(1)},
-            {"directory_rows", dirRows},
-            {"blueprints", bpArr},
-            {"blueprint_types", bpTypes},
-            {"mining_locations", minLocs},
-            {"refineries", refLocs},
-            {"refinery_materials", refMats},
-            {"refining_methods", refMethods},
-            {"daylight", daylightCat},
-            {"available_actions", avail}
-        });
-        catalogBuilt = true;
-    }
-    SynthWebView::setCatalog(catalog);
-}
-
-void buildAndPushWebDesktopState() {
-    std::string identityStr = state.textOr("identity");
-    std::string shardId;
-    std::string regionStr;
-    auto shardPos = identityStr.find("SHARD ");
-    if (shardPos != std::string::npos) {
-        shardId = identityStr.substr(shardPos + 6);
-        auto spacePos = shardId.find(' ');
-        if (spacePos != std::string::npos) shardId = shardId.substr(0, spacePos);
-    }
-    auto regPos = identityStr.find("· ");
-    if (regPos != std::string::npos) {
-        regionStr = identityStr.substr(regPos + 2);
-    }
-
-    bool paused = CapturePrivacy::policy().paused;
-    HWND gameWnd = SCMiner::ScreenCapture::gameWindow();
-    std::string capStatus = paused ? "paused" : (gameWnd ? "reading" : "idle");
-
-    Json ownedArr = arr();
-    if (mining) {
-        for (const auto& o : mining->ownedBlueprints()) {
-            if (!o.empty()) ownedArr.items.push_back(str(o));
-        }
-    }
-
-    Json refOrders = arr();
-    if (mining) {
-        for (const auto& ord : mining->refineryOrders()) {
-            Json parts = arr();
-            for (const auto& p : ord.parts) {
-                parts.items.push_back(obj({
-                    {"material", str(p.material)},
-                    {"quality", num(p.quality)},
-                    {"yield", num(p.yield)},
-                    {"quantity", num(p.quantity)}
-                }));
-            }
-            refOrders.items.push_back(obj({
-                {"order_id", num(ord.number)},
-                {"number", num(ord.number)},
-                {"station", str(ord.station)},
-                {"method", str(ord.method)},
-                {"cost", num(ord.cost)},
-                {"placed", num(double(ord.placed))},
-                {"due", num(double(ord.due))},
-                {"completed", num(double(ord.completed))},
-                {"collected", num(double(ord.collected))},
-                {"parts", parts}
-            }));
-        }
-    }
-
-    Json hangarState = obj({
-        {"available", boolean(HudModules::actionAvailable(read(SCMiner::AppPaths::program().parent_path().parent_path()/L"release.json"), "executive_hangar", SynthEdition::screenReading))},
-        {"timer_seconds", num(boardHud.numberOr("timer", 0))}
-    });
-
-    Json piracyState = obj({
-        {"wait_active", boolean(piracyMode() && pirateDetails)},
-        {"snare_alerts", boolean(snareAlerts)}
-    });
-
-    Json settingsState = obj({
-        {"scan_on_launch", boolean(scanOnLaunch)},
-        {"show_hud", boolean(hudVisible)},
-        {"session_strip", boolean(showSession)},
-        {"snare_alerts", boolean(snareAlerts)},
-        {"privacy_paused", boolean(paused)},
-        {"pause_unfocused", boolean(CapturePrivacy::policy().pauseUnfocused)},
-        {"account_access", boolean(flag(read(data/L"capture_privacy.json"), "account_access", false))}
-    });
-
-    Json diaryState = obj({
-        {"entries", field(state, "diary_entries")},
-        {"auto_log", boolean(true)}
-    });
-
-    Json navState = obj({
-        {"bookmarks", field(state, "bookmarks")}
-    });
-
-    Json missionLogState = obj({
-        {"missions", field(state, "missions")},
-        {"wallet_changes", field(state, "wallet_changes")}
-    });
-
-    Json serversState = obj({
-        {"entries", field(state, "session_rows")},
-        {"current_shard", str(shardId)},
-        {"region", str(regionStr)}
-    });
-
-    Json desktopObj = obj({
-        {"active_page", str(SynthHome::selectedPage())},
-        {"game_running", boolean(gameWnd != nullptr)},
-        {"capture_status", str(capStatus)},
-        {"server", obj({
-            {"shard_id", str(shardId)},
-            {"region", str(regionStr)},
-            {"display", str(identityStr)}
-        })},
-        {"hud_active", obj({
-            {"mining", boolean(!pirate && !quest && !hangars && !finder)},
-            {"finder", boolean(finder)},
-            {"missions", boolean(quest)},
-            {"hangars", boolean(hangars)}
-        })},
-        {"blueprints", obj({
-            {"owned", ownedArr},
-            {"note", str(mining ? mining->ownedBlueprintsNote() : "")}
-        })},
-        {"refinery", obj({
-            {"orders", refOrders}
-        })},
-        {"executive_hangar", hangarState},
-        {"piracy", piracyState},
-        {"settings", settingsState},
-        {"diary", diaryState},
-        {"navigation", navState},
-        {"mission_log", missionLogState},
-        {"servers", serversState}
-    });
-
-    SynthWebView::setDesktopState(desktopObj);
-}
-
-void handleWebDesktopCommand(const Json& cmd) {
-    auto actionName = cmd.textOr("action");
-    if (actionName == "navigate") {
-        auto target = cmd.textOr("target");
-        if (!target.empty()) SynthHome::navigate(target);
-        return;
-    }
-    if (actionName == "hud_mode") {
-        auto target = cmd.textOr("target");
-        if (target == "hud_mining") setMode(0);
-        else if (target == "hud_piracy") setMode(1);
-        else if (target == "hud_missions") setMode(2);
-        else if (target == "hud_hangars") setMode(3);
-        else if (target == "hud_finder") setMode(4);
-        if (mining && !mining->isOverlayMode()) mining->toggleOverlayMode();
-        setActivityExpanded(true);
-        showHud(true);
-        modeControls();
-        return;
-    }
-    if (actionName == "open_dialog") {
-        auto target = cmd.textOr("target");
-        if (target == "modules") {
-            if (!testing) spawnPython(L"module_ui.py", {});
-        } else if (target == "strings_settings") {
-            if (!testing) spawnPython(L"strings_settings.py", {L"--native", (SCMiner::AppPaths::program()/L"SynthScan.exe").wstring(), L"--profile", data.wstring()});
-        } else if (target == "exit") {
-            markUserExit();
-            if (mining) PostMessageW(mining->windowHandle(), WM_CLOSE, 0, 0);
-        }
-        return;
-    }
-    if (actionName == "dismiss_refinery") {
-        command(obj({{"action", str("dismiss_refinery_notices")}}));
-        return;
-    }
-    if (actionName == "toggle_blueprint_owned") {
-        int idx = int(cmd.numberOr("blueprint_index", -1));
-        if (mining && idx >= 0) {
-            mining->toggleBlueprintOwnedByIndex(idx);
-            buildAndPushWebDesktopState();
-        }
-        return;
-    }
-    if (actionName == "refinery_collected") {
-        size_t idx = size_t(cmd.numberOr("order_index", 0));
-        if (mining) {
-            mining->collectRefineryOrderByIndex(idx);
-            buildAndPushWebDesktopState();
-        }
-        return;
-    }
-    if (actionName == "piracy_action") {
-        auto sub = cmd.textOr("sub_action");
-        if (sub == "snare_alerts") {
-            snareAlerts = flag(cmd, "enabled", true);
-            saveSettings();
-        } else {
-            write(data/L"piracy_command.json", obj({{"action", str(sub)}, {"owner_pid", num(GetCurrentProcessId())}, {"at", num(epoch())}}));
-        }
-        buildAndPushWebDesktopState();
-        return;
-    }
-    if (actionName == "save_acceptance") {
-        write(data/L"acceptance_settings.json", cmd);
-        command(cmd);
-        return;
-    }
-    if (actionName == "save_settings") {
-        if (cmd.members.size() > 1) {
-            scanOnLaunch = flag(cmd, "scan_on_launch", scanOnLaunch);
-            hudVisible = flag(cmd, "show_hud", hudVisible);
-            showSession = flag(cmd, "session_strip", showSession);
-            snareAlerts = flag(cmd, "snare_alerts", snareAlerts);
-            saveSettings();
-            buildAndPushWebDesktopState();
-        }
-        return;
-    }
-    if (actionName == "mission_export") {
-        command(cmd);
-        return;
-    }
-    if (actionName == "diary_auto_log" || actionName == "diary_save" || actionName == "diary_delete" || actionName == "diary_share") {
-        command(cmd);
-        return;
-    }
-    SynthCompanion::handleWebViewCommand(cmd);
-}
-
 void desktop(){
-    if(!testing&&SynthWebView::available()){
-        SynthHome::setWebShellMode(true);
-        SynthHome::show();
-        if(!SynthWebView::active()){
-            SynthWebView::attach(SynthHome::windowHandle(),data,SynthHome::selectedPage(),handleWebDesktopCommand);
-            buildAndPushWebCatalog();
-            buildAndPushWebDesktopState();
-        }
-        return;
-    }
     static bool prewarmed=false;
     SynthHome::show();
     if(!testing&&!prewarmed){
@@ -671,17 +324,6 @@ void homeAction(const std::string& value){
         return;
     }
     if(value=="exit"){markUserExit();PostMessageW(mining->windowHandle(),WM_CLOSE,0,0);return;}
-    if(SynthHome::isWebShellMode()){
-        if(value=="dismiss_refinery")command(obj({{"action",str("dismiss_refinery_notices")}}));
-        else if(value.rfind("hud_",0)==0){
-            SynthPages::release(mining->windowHandle());
-            setMode(value=="hud_finder"?4:value=="hud_missions"?2:value=="hud_hangars"?3:0);
-            if(!mining->isOverlayMode())mining->toggleOverlayMode();
-            setActivityExpanded(true);showHud(true);modeControls();
-        }
-        buildAndPushWebDesktopState();
-        return;
-    }
     SynthHome::pageHost();
     if(value=="mining"){
         ShowWindow(mining->windowHandle(),SW_HIDE);
@@ -1256,12 +898,6 @@ void timer(){
         }
         if(readyHandle&&state.numberOr("owner_pid")==GetCurrentProcessId())SetEvent(readyHandle);
     }else if(summary!="Session service unavailable"){SynthHome::update(field(state,"home"),"",false);summary="Session service unavailable";SynthScanNav::update(obj({{"message",str("Session service unavailable; capture and navigation paused.")},{"guidance",obj({{"unavailable",str("No fresh service state")}})}}));if(mining)InvalidateRect(mining->windowHandle(),nullptr,FALSE);}
-    if(SynthHome::visible()&&SynthWebView::active()){
-        buildAndPushWebDesktopState();
-        auto companionState=read(data/L"companion_state.json",2*1024*1024);
-        auto marketCatalog=read(data/L"market_catalog.json",1024*1024);
-        SynthWebView::pushSnapshot(SynthHome::selectedPage(),companionState,marketCatalog,field(state,"home"));
-    }
     if(controlProcess){DWORD code=STILL_ACTIVE;GetExitCodeProcess(controlProcess,&code);if(code!=STILL_ACTIVE){CloseHandle(controlProcess);controlProcess=nullptr;note=code==0?controlCompleted:read(data/L"control_status.json").textOr("error","Helper action failed. See native_control.log in your data folder.");if(status)SetWindowTextW(status,wide(note).c_str());}}
     tickAfk();applyHotkey();
     publishNativeStatus();
@@ -1578,7 +1214,7 @@ void shutdown(){
     if(foregroundHook){UnhookWinEvent(foregroundHook);foregroundHook=nullptr;}
     if(host)KillTimer(host,AFK_PULSE_TIMER);afkPulse.cancel();afk=AfkNudge{};
     hangarImage.reset();icon.reset();
-    SynthExecutiveHangar::close();SynthPrivacy::close();SynthMissionLog::close();SynthCompanion::close();SynthWebView::detach();SynthHome::close();SynthFinder::close();SynthScanDiary::close();SynthScanNav::close();
+    SynthExecutiveHangar::close();SynthPrivacy::close();SynthMissionLog::close();SynthCompanion::close();SynthHome::close();SynthFinder::close();SynthScanDiary::close();SynthScanNav::close();
     if(attached&&!testing){Json exit=obj({{"at",num(epoch())},{"pid",num(GetCurrentProcessId())},{"reason",str(userExitRequested?"user":"shutdown")},{"game_pids",field(state,"game_pids")}});write(data/L"native_exit.json",exit);}
     if(host){KillTimer(host,1);KillTimer(host,HUD_KEY_TIMER);UnregisterHotKey(host,HOTKEY);UnregisterHotKey(host,HOTKEY_CYCLE);Shell_NotifyIconW(NIM_DELETE,&tray);}
     if(bridgeProcess){write(data/L"bridge_stop.json",obj({{"owner_pid",num(GetCurrentProcessId())}}));WaitForSingleObject(bridgeProcess,2000);}

@@ -1,4 +1,4 @@
-#define UNICODE
+﻿#define UNICODE
 #define _UNICODE
 #define PSAPI_VERSION 2
 #include "SynthWebView.h"
@@ -222,19 +222,15 @@ std::wstring findWebView2Dll() {
 std::filesystem::path findUiDistFolder() {
     std::error_code ec;
     auto prog = SCMiner::AppPaths::program();
-    auto dir = prog.has_filename() ? prog.parent_path() : prog;
     std::vector<std::filesystem::path> candidates = {
-        dir / L"ui" / L"dist",
-        dir.parent_path() / L"ui" / L"dist",
-        dir.parent_path().parent_path() / L"ui" / L"dist",
-        dir.parent_path().parent_path().parent_path() / L"ui" / L"dist",
-        dir.parent_path().parent_path().parent_path() / L"release" / L"public-source-v3" / L"ui" / L"dist",
+        prog.parent_path().parent_path() / L"ui" / L"dist",
+        prog.parent_path() / L"ui" / L"dist",
+        prog / L"ui" / L"dist",
     };
-    Json runtime = read(dir / L"native_runtime.json");
+    Json runtime = read(prog / L"native_runtime.json");
     auto ws = runtime.textOr("workspace");
     if (!ws.empty()) {
         candidates.push_back(std::filesystem::u8path(ws) / L"ui" / L"dist");
-        candidates.push_back(std::filesystem::u8path(ws) / L"release" / L"public-source-v3" / L"ui" / L"dist");
     }
     for (const auto& c : candidates) {
         if (std::filesystem::exists(c / L"index.html", ec)) {
@@ -262,15 +258,7 @@ bool allowedAction(const std::string& action) {
         "friend", "friend_many", "party", "party_many",
         "pause_invites", "resume_invites", "cancel_invites",
         "add_watch", "toggle_watch", "remove_watch", "dismiss_notices",
-        "open_uex_ad", "navigate",
-        "hud_mode", "open_dialog", "dismiss_refinery", "directory_select", "toggle_favorite",
-        "mission_view", "classify_wallet", "mission_export",
-        "session_view", "session_note", "shard_name", "shard_cooldown", "session_export",
-        "toggle_blueprint_owned", "plan_mining",
-        "diary_view", "diary_save", "diary_delete", "diary_merge", "diary_share", "diary_auto_log",
-        "nav_select", "nav_arm", "nav_cancel", "nav_delete", "nav_export", "nav_import",
-        "refinery_collected", "hangar_action", "piracy_action", "daylight_prefs",
-        "save_acceptance", "save_settings", "save_hotkeys", "save_privacy", "helper_permission"
+        "open_uex_ad", "navigate"
     };
     return allowed.count(action) > 0;
 }
@@ -313,31 +301,20 @@ std::string g_pendingMode = "people";
 Json g_pendingState;
 Json g_pendingMarketItems;
 Json g_pendingHome;
-Json g_pendingCatalog;
-Json g_pendingDesktop;
-double g_pendingCatalogRevision = 0;
-double g_sentCatalogRevision = 0;
 Json g_suiteResult;
 bool g_hasSuiteResult = false;
 std::wstring g_initialUrl = L"https://synthscan.local/index.html";
 
 void sendSnapshotMessage() {
     if (!g_webview || !g_uiReady) return;
-    Json envelope;
-    envelope.kind = Json::Kind::Object;
-    envelope.members = {
+    Json envelope = obj({
         {"kind", str("snapshot")},
         {"bridge_token", str(g_bridgeToken)},
         {"mode", str(g_pendingMode)},
         {"state", g_pendingState},
         {"market_items", g_pendingMarketItems},
-        {"home", g_pendingHome},
-        {"desktop", g_pendingDesktop}
-    };
-    if (g_sentCatalogRevision != g_pendingCatalogRevision && g_pendingCatalog.kind == Json::Kind::Object) {
-        envelope.members.push_back({"catalog", g_pendingCatalog});
-        g_sentCatalogRevision = g_pendingCatalogRevision;
-    }
+        {"home", g_pendingHome}
+    });
     auto payload = wide(encode(envelope));
     g_webview->PostWebMessageAsJson(payload.c_str());
 }
@@ -533,7 +510,6 @@ bool active() {
 
 bool attach(HWND parent, const std::filesystem::path& dataFolder, const std::string& mode, std::function<void(const Json&)> onCommand) {
     if (!parent || !IsWindow(parent)) return false;
-    CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     g_pendingMode = mode;
     g_onCommand = std::move(onCommand);
     if (g_parent == parent && (g_controller || g_initializing)) {
@@ -573,17 +549,6 @@ bool attach(HWND parent, const std::filesystem::path& dataFolder, const std::str
         return false;
     }
     return true;
-}
-
-void setCatalog(const Json& catalog) {
-    g_pendingCatalog = catalog;
-    g_pendingCatalogRevision = catalog.numberOr("revision", 1);
-    sendSnapshotMessage();
-}
-
-void setDesktopState(const Json& desktop) {
-    g_pendingDesktop = desktop;
-    sendSnapshotMessage();
 }
 
 void pushSnapshot(const std::string& mode, const Json& state, const Json& marketItems, const Json& homeOverview) {

@@ -10,7 +10,6 @@ import {
   normalizePlayer,
 } from './bridge';
 import { personColor, splitTags, tagColor } from './colors';
-import { DesktopViewsManager } from './desktop_views';
 
 export const ROW_HEIGHT_PX = 40;
 
@@ -25,10 +24,9 @@ export class DesktopAppController {
   private readonly root: HTMLElement;
   private readonly bridge: DesktopBridge;
   private unsubscribe: (() => void) | null = null;
-  private desktopViews: DesktopViewsManager | null = null;
 
   private snapshot: PeopleSnapshot | null = null;
-  private activeMode: PeopleSnapshot['mode'] = 'people';
+  private activeMode: 'people' | 'buyer_alerts' | 'home' | 'settings' = 'people';
   private sourceIndex = 0; // 0: Shard, 1: Search, 2: Tagged, 3: Friends
   private taggedOnly = false;
   private searchQuery = '';
@@ -125,16 +123,6 @@ export class DesktopAppController {
   private modalPauseBtn!: HTMLButtonElement;
   private modalStopQueueBtn!: HTMLButtonElement;
 
-  // Org Importer modal DOM elements
-  private openOrgImportBtn!: HTMLButtonElement;
-  private orgModalBackdropEl!: HTMLElement;
-  private orgImportSymbolInput!: HTMLInputElement;
-  private orgImportTagSelect!: HTMLSelectElement;
-  private orgImportAlertCheckbox!: HTMLInputElement;
-  private orgImportStatusEl!: HTMLElement;
-  private orgImportSubmitBtn!: HTMLButtonElement;
-  private orgImportCancelBtn!: HTMLButtonElement;
-
   // Buyer alerts DOM elements
   private marketSearchInputEl!: HTMLInputElement;
   private marketItemSelectEl!: HTMLSelectElement;
@@ -156,10 +144,6 @@ export class DesktopAppController {
   }
 
   public destroy(): void {
-    if (this.desktopViews) {
-      this.desktopViews.destroy();
-      this.desktopViews = null;
-    }
     if (this.unsubscribe) {
       this.unsubscribe();
       this.unsubscribe = null;
@@ -221,27 +205,24 @@ export class DesktopAppController {
 
   private buildShell(): void {
     this.root.innerHTML = `
-      <div class="ss-app-layout">
-        <aside class="ss-app-sidebar" id="ss-app-sidebar"></aside>
-        <main class="ss-app-main" id="ss-app-main">
-          <div class="ss-shell">
-            <header class="ss-topbar">
-              <div class="ss-brand">
-                <span class="ss-brand-badge" aria-hidden="true">◆</span>
-                <div>
-                  <h1 class="ss-page-title" id="ss-page-title">People</h1>
-                  <p class="ss-page-subtitle" id="ss-page-subtitle">A familiar face in a very large universe.</p>
-                </div>
-              </div>
-              <nav class="ss-mode-tabs" role="tablist" aria-label="Workspace views">
-                <button type="button" class="ss-tab is-active" data-mode="people" role="tab" aria-selected="true">Shard &amp; Friends</button>
-                <button type="button" class="ss-tab" data-mode="buyer_alerts" role="tab" aria-selected="false">Buyer Alerts</button>
-                <button type="button" class="ss-tab ss-tab-hosted-hidden" data-mode="home" role="tab" aria-selected="false">Session Recap</button>
-                <button type="button" class="ss-tab ss-tab-hosted-hidden" data-mode="settings" role="tab" aria-selected="false">Settings &amp; Modules</button>
-              </nav>
-            </header>
+      <div class="ss-shell">
+        <header class="ss-topbar">
+          <div class="ss-brand">
+            <span class="ss-brand-badge" aria-hidden="true">◆</span>
+            <div>
+              <h1 class="ss-page-title" id="ss-page-title">People</h1>
+              <p class="ss-page-subtitle" id="ss-page-subtitle">A familiar face in a very large universe.</p>
+            </div>
+          </div>
+          <nav class="ss-mode-tabs" role="tablist" aria-label="Workspace views">
+            <button type="button" class="ss-tab is-active" data-mode="people" role="tab" aria-selected="true">Shard &amp; Friends</button>
+            <button type="button" class="ss-tab" data-mode="buyer_alerts" role="tab" aria-selected="false">Buyer Alerts</button>
+            <button type="button" class="ss-tab ss-tab-hosted-hidden" data-mode="home" role="tab" aria-selected="false">Session Recap</button>
+            <button type="button" class="ss-tab ss-tab-hosted-hidden" data-mode="settings" role="tab" aria-selected="false">Settings &amp; Modules</button>
+          </nav>
+        </header>
 
-            <section id="ss-view-people" class="ss-view">
+        <section id="ss-view-people" class="ss-view">
           <div class="ss-people-grid">
             <!-- Left Column: Roster -->
             <div class="ss-card ss-roster-pane">
@@ -302,7 +283,6 @@ export class DesktopAppController {
                   <button id="stage-by-tag-btn" type="button" class="ss-btn">Add by tag</button>
                   <button id="stage-friends-btn" type="button" class="ss-btn">Add friends →</button>
                   <button id="stage-org-btn" type="button" class="ss-btn">Add org →</button>
-                  <button id="open-org-import-btn" type="button" class="ss-btn ss-btn-accent" title="Import organization roster from RSI">Import Org…</button>
                 </div>
                 <div class="ss-pane-meta">
                   <span id="people-action-header" class="ss-status-line">Action list · 0 / 50</span>
@@ -498,42 +478,6 @@ export class DesktopAppController {
             </div>
           </div>
         </div>
-
-        <!-- RSI Org Importer Modal -->
-        <div id="ss-org-modal-backdrop" class="ss-modal-backdrop" hidden role="dialog" aria-modal="true" aria-labelledby="ss-org-modal-title">
-          <div class="ss-modal ss-org-modal" style="max-width: 480px;">
-            <h2 id="ss-org-modal-title" class="ss-modal-title">Import Organization Roster from RSI</h2>
-            <p id="ss-org-modal-summary" class="ss-modal-summary">
-              Query public members for an RSI organization by Org Symbol / SID (e.g. <code>TEST</code>).
-              Members are automatically tagged and will trigger the in-game HUD shutter notification upon joining your shard.
-            </p>
-            <div class="ss-org-modal-fields" style="display:flex; flex-direction:column; gap:8px;">
-              <label class="ss-field-label" for="org-import-symbol-input">Org Symbol / SID</label>
-              <input id="org-import-symbol-input" class="ss-input" type="text" maxlength="20" placeholder="e.g. TEST, PIRATES, ANVIL" autocomplete="off" />
-              
-              <label class="ss-field-label" for="org-import-tag-select" style="margin-top: 8px;">Tag Members As</label>
-              <select id="org-import-tag-select" class="ss-select">
-                <option value="Enemy Org">Enemy Org (Crimson Hostile)</option>
-                <option value="Org">Org (Allied / Member)</option>
-                <option value="Friendly">Friendly</option>
-              </select>
-
-              <label class="ss-checkbox-label" style="margin-top: 8px;">
-                <input id="org-import-alert-checkbox" type="checkbox" checked />
-                <span>Alert on shard arrival (10-second flip-down shutter HUD)</span>
-              </label>
-
-              <div id="org-import-status-text" class="ss-status-line" style="margin-top: 8px; min-height: 20px;"></div>
-            </div>
-            <div class="ss-modal-actions" style="margin-top: 18px;">
-              <button id="ss-org-import-submit-btn" type="button" class="ss-btn ss-btn-accent">Import Roster</button>
-              <button id="ss-org-import-cancel-btn" type="button" class="ss-btn ss-btn-default">Cancel</button>
-            </div>
-          </div>
-        </div>
-      </div>
-          </div>
-        </main>
       </div>
     `;
 
@@ -585,15 +529,6 @@ export class DesktopAppController {
     this.modalPauseBtn = this.root.querySelector('#ss-modal-pause-btn')!;
     this.modalStopQueueBtn = this.root.querySelector('#ss-modal-stop-btn')!;
 
-    this.openOrgImportBtn = this.root.querySelector('#open-org-import-btn')!;
-    this.orgModalBackdropEl = this.root.querySelector('#ss-org-modal-backdrop')!;
-    this.orgImportSymbolInput = this.root.querySelector('#org-import-symbol-input')!;
-    this.orgImportTagSelect = this.root.querySelector('#org-import-tag-select')!;
-    this.orgImportAlertCheckbox = this.root.querySelector('#org-import-alert-checkbox')!;
-    this.orgImportStatusEl = this.root.querySelector('#org-import-status-text')!;
-    this.orgImportSubmitBtn = this.root.querySelector('#ss-org-import-submit-btn')!;
-    this.orgImportCancelBtn = this.root.querySelector('#ss-org-import-cancel-btn')!;
-
     this.marketSearchInputEl = this.root.querySelector('#market-search-input')!;
     this.marketItemSelectEl = this.root.querySelector('#market-item-select')!;
     this.marketQualityInputEl = this.root.querySelector('#market-quality-input')!;
@@ -605,17 +540,6 @@ export class DesktopAppController {
     this.marketShowMatchesBtn = this.root.querySelector('#market-show-matches-btn')!;
 
     this.bindEvents();
-
-    const sidebarEl = this.root.querySelector<HTMLElement>('#ss-app-sidebar');
-    const mainEl = this.root.querySelector<HTMLElement>('#ss-app-main .ss-shell');
-    if (sidebarEl && mainEl) {
-      this.desktopViews = new DesktopViewsManager(
-        this.bridge,
-        sidebarEl,
-        mainEl,
-        (page) => this.setMode(page as PeopleSnapshot['mode']),
-      );
-    }
   }
 
   private bindEvents(): void {
@@ -886,45 +810,6 @@ export class DesktopAppController {
       });
     });
 
-    // Org Importer modal events
-    this.openOrgImportBtn.addEventListener('click', () => {
-      this.openOrgImportModal();
-    });
-    this.orgImportCancelBtn.addEventListener('click', () => {
-      this.closeOrgImportModal();
-    });
-    this.orgModalBackdropEl.addEventListener('click', (e) => {
-      if (e.target === this.orgModalBackdropEl) {
-        this.closeOrgImportModal();
-      }
-    });
-    this.orgImportSubmitBtn.addEventListener('click', () => {
-      const symbol = this.orgImportSymbolInput.value.trim().toUpperCase();
-      if (!symbol) {
-        this.orgImportStatusEl.textContent = 'Please enter an Org Symbol / SID (e.g. TEST).';
-        this.orgImportStatusEl.style.color = '#ff6666';
-        return;
-      }
-      const tagLabel = this.orgImportTagSelect.value;
-      const alert = this.orgImportAlertCheckbox.checked;
-      this.orgImportStatusEl.textContent = 'Contacting RSI API for ' + symbol + ' members…';
-      this.orgImportStatusEl.style.color = '#62ccff';
-      this.orgImportSubmitBtn.disabled = true;
-
-      void this.bridge.sendCommand({
-        action: 'import_org',
-        symbol,
-        tag_label: tagLabel,
-        alert,
-        confirmed: true,
-      });
-
-      setTimeout(() => {
-        this.closeOrgImportModal();
-        this.footerStatusEl.textContent = 'Importing ' + symbol + ' from RSI…';
-      }, 500);
-    });
-
     // Buyer alerts events
     this.marketSearchInputEl.addEventListener('input', () => {
       this.marketSearch = this.marketSearchInputEl.value;
@@ -987,13 +872,18 @@ export class DesktopAppController {
     });
   }
 
-  public setMode(mode: PeopleSnapshot['mode']): void {
-    if (!mode) mode = 'people';
+  public setMode(mode: 'people' | 'buyer_alerts' | 'home' | 'settings'): void {
     this.activeMode = mode;
     this.peopleSectionEl.hidden = mode !== 'people';
     this.marketSectionEl.hidden = mode !== 'buyer_alerts';
     this.homeSectionEl.hidden = mode !== 'home';
     this.settingsSectionEl.hidden = mode !== 'settings';
+
+    const modeTabsEl = this.root.querySelector<HTMLElement>('.ss-mode-tabs');
+    if (modeTabsEl) {
+      modeTabsEl.hidden = mode !== 'people' && mode !== 'buyer_alerts';
+      modeTabsEl.style.display = (mode === 'people' || mode === 'buyer_alerts') ? 'flex' : 'none';
+    }
 
     this.root.querySelectorAll<HTMLButtonElement>('.ss-tab').forEach((btn) => {
       const active = btn.dataset.mode === mode;
@@ -1001,47 +891,30 @@ export class DesktopAppController {
       btn.setAttribute('aria-selected', active ? 'true' : 'false');
     });
 
-    const modeTabsEl = this.root.querySelector<HTMLElement>('.ss-mode-tabs');
-    if (modeTabsEl) {
-      modeTabsEl.hidden = mode !== 'people' && mode !== 'buyer_alerts';
-    }
-
-    if (this.desktopViews) {
-      this.desktopViews.setActivePage(mode === 'buyer_alerts' ? 'people' : mode);
-    }
-
     const titleEl = this.root.querySelector('#ss-page-title')!;
     const subEl = this.root.querySelector('#ss-page-subtitle')!;
-    const titles: Record<string, [string, string]> = {
-      home: ['Home', "Find your next upgrade. See what you've accomplished."],
-      directory: ['Item & Ship Finder', 'Search Star Citizen commodities, ships, weapons, components, and armor.'],
-      people: ['People', 'A familiar face in a very large universe.'],
-      buyer_alerts: ['Buyer Alerts', 'Watch UEX buy orders for your best mining and crafting hauls.'],
-      mission_log: ['Mission & Wallet Log', 'Track mission objectives, payouts, reputations, and balance changes.'],
-      servers: ['Server History', 'Track shard visits, cooldowns, regional latencies, and player sessions.'],
-      blueprints: ['Blueprint Library', 'Crafting blueprints, material costs, and collection progress.'],
-      planner: ['Mining Planner', 'Ore compositions, optimal locations, rock density, and refinery yields.'],
-      diary: ['Mining Diary', 'Log your mining runs, rock signatures, locations, and ore hauls.'],
-      refinery: ['Refinery', 'Track active jobs, yields, completion timers, and order collections.'],
-      executive_hangar: ['Executive Hangar', 'Automated ship recall, docking bay status, and departure sequencing.'],
-      hud_piracy: ['Piracy', 'Interdiction traps, quantum snare timers, and ship cargo surveillance.'],
-      daylight: ['Day/Night Forecast', 'Plan surface approaches with real-time solar illumination and terminator lines.'],
-      acceptance: ['Automatic Acceptance', 'Hands-free party invitations, trade requests, and mission sharing.'],
-      settings: ['Settings & Modules', 'Customize HUD behavior, shortcuts, privacy, and installed modules.'],
-    };
-    const pair = titles[mode] ?? ['SynthScan', 'YOUR VERSE, CONNECTED'];
-    titleEl.textContent = pair[0];
-    subEl.textContent = pair[1];
+    if (mode === 'people') {
+      titleEl.textContent = 'People';
+      subEl.textContent = 'A familiar face in a very large universe.';
+    } else if (mode === 'buyer_alerts') {
+      titleEl.textContent = 'Buyer Alerts';
+      subEl.textContent = 'Watch UEX buy orders for your best mining and crafting hauls.';
+    } else if (mode === 'home') {
+      titleEl.textContent = 'Home';
+      subEl.textContent = "Find your next upgrade. See what you've accomplished.";
+    } else {
+      titleEl.textContent = 'Settings & Modules';
+      subEl.textContent = 'Customize HUD behavior, shortcuts, privacy, and installed modules.';
+    }
   }
 
   private onSnapshot(snap: PeopleSnapshot): void {
     const modeChanged = snap.mode && snap.mode !== this.activeMode;
     this.snapshot = snap;
-    if (this.desktopViews) {
-      this.desktopViews.updateState(snap);
-    }
-    if (modeChanged && snap.mode) {
-      this.setMode(snap.mode);
+    if (modeChanged && snap.mode && (snap.mode === 'people' || snap.mode === 'buyer_alerts' || snap.mode === 'home' || snap.mode === 'settings')) {
+      if (!(snap.mode === 'people' && (this.activeMode === 'home' || this.activeMode === 'settings' || this.activeMode === 'buyer_alerts'))) {
+        this.setMode(snap.mode);
+      }
     }
     this.renderPeople();
     this.renderMarketCatalog();
@@ -1404,7 +1277,7 @@ export class DesktopAppController {
   }
 
   private getStageTargets(): Player[] {
-    return this.getChosenRosterPlayers();
+    return this.getChosenRosterPlayers().filter((p) => p.on_shard !== false || Boolean(p.is_friend));
   }
 
   private getActionTargets(): Player[] {
@@ -1625,18 +1498,6 @@ export class DesktopAppController {
     this.modalBackdropEl.hidden = true;
   }
 
-  public openOrgImportModal(): void {
-    this.orgImportSymbolInput.value = '';
-    this.orgImportStatusEl.textContent = '';
-    this.orgImportSubmitBtn.disabled = false;
-    this.orgModalBackdropEl.hidden = false;
-    this.orgImportSymbolInput.focus();
-  }
-
-  public closeOrgImportModal(): void {
-    this.orgModalBackdropEl.hidden = true;
-  }
-
   private renderMarketCatalog(): void {
     const items: MarketCatalogItem[] = this.snapshot?.market_items ?? [];
     const filter = this.marketSearch.trim().toLowerCase();
@@ -1776,10 +1637,27 @@ export class DesktopAppController {
     const strings = home?.synthstrings;
     const patchEl = this.root.querySelector('#home-patch-banner')!;
     if (strings?.title) {
+      const summaryText = strings.summary ? ` · ${strings.summary}` : '';
       patchEl.innerHTML = `
-        <strong>${this.escapeHtml(strings.patch_label ?? 'Star Citizen')}</strong>
-        <span>${this.escapeHtml(strings.status_label ?? 'Game text unchanged — No action needed')} · ${this.escapeHtml(strings.summary ?? '')}</span>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;width:100%;">
+          <div>
+            <strong>${this.escapeHtml(strings.patch_label ?? 'Star Citizen')}</strong>
+            <div style="font-size:11.5px;color:var(--ss-muted);margin-top:2px;">
+              ${this.escapeHtml(strings.status_label ?? 'Game text unchanged')} ${this.escapeHtml(summaryText)}
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;flex-shrink:0;">
+            <button type="button" class="ss-btn ss-btn-accent" id="home-strings-settings-btn">Text settings</button>
+            <button type="button" class="ss-btn" id="home-strings-patch-btn">Patch status</button>
+          </div>
+        </div>
       `;
+      patchEl.querySelector('#home-strings-settings-btn')?.addEventListener('click', () => {
+        void this.bridge.sendCommand({ action: 'strings_settings' });
+      });
+      patchEl.querySelector('#home-strings-patch-btn')?.addEventListener('click', () => {
+        void this.bridge.sendCommand({ action: 'strings_details' });
+      });
     } else {
       patchEl.innerHTML = `
         <strong>${this.escapeHtml(home?.identity || 'No live shard observation')}</strong>

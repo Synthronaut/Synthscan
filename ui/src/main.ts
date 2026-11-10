@@ -1,4 +1,4 @@
-import './style.css';
+﻿import './style.css';
 import { InMemoryDesktopBridge, WebViewDesktopBridge } from './bridge';
 import { DesktopAppController } from './people_controller';
 import { runPeopleRosterRegressionSuite } from './roster_suite';
