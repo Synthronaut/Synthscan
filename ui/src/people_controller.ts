@@ -125,6 +125,16 @@ export class DesktopAppController {
   private modalPauseBtn!: HTMLButtonElement;
   private modalStopQueueBtn!: HTMLButtonElement;
 
+  // Org Importer modal DOM elements
+  private openOrgImportBtn!: HTMLButtonElement;
+  private orgModalBackdropEl!: HTMLElement;
+  private orgImportSymbolInput!: HTMLInputElement;
+  private orgImportTagSelect!: HTMLSelectElement;
+  private orgImportAlertCheckbox!: HTMLInputElement;
+  private orgImportStatusEl!: HTMLElement;
+  private orgImportSubmitBtn!: HTMLButtonElement;
+  private orgImportCancelBtn!: HTMLButtonElement;
+
   // Buyer alerts DOM elements
   private marketSearchInputEl!: HTMLInputElement;
   private marketItemSelectEl!: HTMLSelectElement;
@@ -292,6 +302,7 @@ export class DesktopAppController {
                   <button id="stage-by-tag-btn" type="button" class="ss-btn">Add by tag</button>
                   <button id="stage-friends-btn" type="button" class="ss-btn">Add friends →</button>
                   <button id="stage-org-btn" type="button" class="ss-btn">Add org →</button>
+                  <button id="open-org-import-btn" type="button" class="ss-btn ss-btn-accent" title="Import organization roster from RSI">Import Org…</button>
                 </div>
                 <div class="ss-pane-meta">
                   <span id="people-action-header" class="ss-status-line">Action list · 0 / 50</span>
@@ -487,6 +498,39 @@ export class DesktopAppController {
             </div>
           </div>
         </div>
+
+        <!-- RSI Org Importer Modal -->
+        <div id="ss-org-modal-backdrop" class="ss-modal-backdrop" hidden role="dialog" aria-modal="true" aria-labelledby="ss-org-modal-title">
+          <div class="ss-modal ss-org-modal" style="max-width: 480px;">
+            <h2 id="ss-org-modal-title" class="ss-modal-title">Import Organization Roster from RSI</h2>
+            <p id="ss-org-modal-summary" class="ss-modal-summary">
+              Query public members for an RSI organization by Org Symbol / SID (e.g. <code>TEST</code>).
+              Members are automatically tagged and will trigger the in-game HUD shutter notification upon joining your shard.
+            </p>
+            <div class="ss-org-modal-fields" style="display:flex; flex-direction:column; gap:8px;">
+              <label class="ss-field-label" for="org-import-symbol-input">Org Symbol / SID</label>
+              <input id="org-import-symbol-input" class="ss-input" type="text" maxlength="20" placeholder="e.g. TEST, PIRATES, ANVIL" autocomplete="off" />
+              
+              <label class="ss-field-label" for="org-import-tag-select" style="margin-top: 8px;">Tag Members As</label>
+              <select id="org-import-tag-select" class="ss-select">
+                <option value="Enemy Org">Enemy Org (Crimson Hostile)</option>
+                <option value="Org">Org (Allied / Member)</option>
+                <option value="Friendly">Friendly</option>
+              </select>
+
+              <label class="ss-checkbox-label" style="margin-top: 8px;">
+                <input id="org-import-alert-checkbox" type="checkbox" checked />
+                <span>Alert on shard arrival (10-second flip-down shutter HUD)</span>
+              </label>
+
+              <div id="org-import-status-text" class="ss-status-line" style="margin-top: 8px; min-height: 20px;"></div>
+            </div>
+            <div class="ss-modal-actions" style="margin-top: 18px;">
+              <button id="ss-org-import-submit-btn" type="button" class="ss-btn ss-btn-accent">Import Roster</button>
+              <button id="ss-org-import-cancel-btn" type="button" class="ss-btn ss-btn-default">Cancel</button>
+            </div>
+          </div>
+        </div>
       </div>
           </div>
         </main>
@@ -540,6 +584,15 @@ export class DesktopAppController {
     this.modalCancelBtn = this.root.querySelector('#ss-modal-cancel-btn')!;
     this.modalPauseBtn = this.root.querySelector('#ss-modal-pause-btn')!;
     this.modalStopQueueBtn = this.root.querySelector('#ss-modal-stop-btn')!;
+
+    this.openOrgImportBtn = this.root.querySelector('#open-org-import-btn')!;
+    this.orgModalBackdropEl = this.root.querySelector('#ss-org-modal-backdrop')!;
+    this.orgImportSymbolInput = this.root.querySelector('#org-import-symbol-input')!;
+    this.orgImportTagSelect = this.root.querySelector('#org-import-tag-select')!;
+    this.orgImportAlertCheckbox = this.root.querySelector('#org-import-alert-checkbox')!;
+    this.orgImportStatusEl = this.root.querySelector('#org-import-status-text')!;
+    this.orgImportSubmitBtn = this.root.querySelector('#ss-org-import-submit-btn')!;
+    this.orgImportCancelBtn = this.root.querySelector('#ss-org-import-cancel-btn')!;
 
     this.marketSearchInputEl = this.root.querySelector('#market-search-input')!;
     this.marketItemSelectEl = this.root.querySelector('#market-item-select')!;
@@ -831,6 +884,45 @@ export class DesktopAppController {
         action: 'cancel_invites',
         queue_id: q.id,
       });
+    });
+
+    // Org Importer modal events
+    this.openOrgImportBtn.addEventListener('click', () => {
+      this.openOrgImportModal();
+    });
+    this.orgImportCancelBtn.addEventListener('click', () => {
+      this.closeOrgImportModal();
+    });
+    this.orgModalBackdropEl.addEventListener('click', (e) => {
+      if (e.target === this.orgModalBackdropEl) {
+        this.closeOrgImportModal();
+      }
+    });
+    this.orgImportSubmitBtn.addEventListener('click', () => {
+      const symbol = this.orgImportSymbolInput.value.trim().toUpperCase();
+      if (!symbol) {
+        this.orgImportStatusEl.textContent = 'Please enter an Org Symbol / SID (e.g. TEST).';
+        this.orgImportStatusEl.style.color = '#ff6666';
+        return;
+      }
+      const tagLabel = this.orgImportTagSelect.value;
+      const alert = this.orgImportAlertCheckbox.checked;
+      this.orgImportStatusEl.textContent = 'Contacting RSI API for ' + symbol + ' members…';
+      this.orgImportStatusEl.style.color = '#62ccff';
+      this.orgImportSubmitBtn.disabled = true;
+
+      void this.bridge.sendCommand({
+        action: 'import_org',
+        symbol,
+        tag_label: tagLabel,
+        alert,
+        confirmed: true,
+      });
+
+      setTimeout(() => {
+        this.closeOrgImportModal();
+        this.footerStatusEl.textContent = 'Importing ' + symbol + ' from RSI…';
+      }, 500);
     });
 
     // Buyer alerts events
@@ -1531,6 +1623,18 @@ export class DesktopAppController {
   public closeModal(): void {
     this.modalOpen = false;
     this.modalBackdropEl.hidden = true;
+  }
+
+  public openOrgImportModal(): void {
+    this.orgImportSymbolInput.value = '';
+    this.orgImportStatusEl.textContent = '';
+    this.orgImportSubmitBtn.disabled = false;
+    this.orgModalBackdropEl.hidden = false;
+    this.orgImportSymbolInput.focus();
+  }
+
+  public closeOrgImportModal(): void {
+    this.orgModalBackdropEl.hidden = true;
   }
 
   private renderMarketCatalog(): void {

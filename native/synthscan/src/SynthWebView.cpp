@@ -222,15 +222,19 @@ std::wstring findWebView2Dll() {
 std::filesystem::path findUiDistFolder() {
     std::error_code ec;
     auto prog = SCMiner::AppPaths::program();
+    auto dir = prog.has_filename() ? prog.parent_path() : prog;
     std::vector<std::filesystem::path> candidates = {
-        prog.parent_path().parent_path() / L"ui" / L"dist",
-        prog.parent_path() / L"ui" / L"dist",
-        prog / L"ui" / L"dist",
+        dir / L"ui" / L"dist",
+        dir.parent_path() / L"ui" / L"dist",
+        dir.parent_path().parent_path() / L"ui" / L"dist",
+        dir.parent_path().parent_path().parent_path() / L"ui" / L"dist",
+        dir.parent_path().parent_path().parent_path() / L"release" / L"public-source-v3" / L"ui" / L"dist",
     };
-    Json runtime = read(prog / L"native_runtime.json");
+    Json runtime = read(dir / L"native_runtime.json");
     auto ws = runtime.textOr("workspace");
     if (!ws.empty()) {
         candidates.push_back(std::filesystem::u8path(ws) / L"ui" / L"dist");
+        candidates.push_back(std::filesystem::u8path(ws) / L"release" / L"public-source-v3" / L"ui" / L"dist");
     }
     for (const auto& c : candidates) {
         if (std::filesystem::exists(c / L"index.html", ec)) {

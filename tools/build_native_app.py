@@ -108,6 +108,12 @@ def main():
         shutil.copy2(OPENCV/'LICENSE',OUT/'LICENSE-OpenCV')
         shutil.copy2(ROOT/'LICENSES.md',OUT/'LICENSES.md')
         (OUT/'native_runtime.json').write_text(json.dumps(dict(workspace=str(ROOT),pythonw=str(Path(sys.executable).with_name('pythonw.exe'))),indent=2))
+        ui_src = ROOT/'ui/dist'
+        if ui_src.exists():
+            ui_dst = OUT.parent/'ui/dist'
+            ui_dst.mkdir(parents=True, exist_ok=True)
+            for f in ui_src.glob('*'):
+                if f.is_file(): safe_copy(f, ui_dst)
         shutil.copy2(ZSTD_SOURCE.parent/'LICENSE',OUT/'LICENSE-zstd')
         manifest=dict(edition=edition,screen_reading=edition=='full',upstream=json.loads((ROOT/'native/synthscan-upstream.json').read_text())['commit'],
                       source_files={p.relative_to(SOURCE).as_posix():digest(p) for p in files+list((SOURCE/'include').glob('*.h'))+[SOURCE/'resources/bedrock.rc',SOURCE/'resources/synthscan.ico']},

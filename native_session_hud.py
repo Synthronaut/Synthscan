@@ -213,7 +213,7 @@ def main():
             except (OSError,ValueError):companion_snapshot={}
             companion_enabled=bool(settings.get('show_hud',True) and game_window_rect())
             companion_events=companion_gate.consume(companion_snapshot,args.owner,ribbon.state.get('session_token'),companion_enabled,now)
-            companion_toast.update(companion_events,companion_enabled,now,ribbon.state.get('session_token'))
+            companion_toast.update(companion_events,companion_enabled,now,ribbon.state.get('session_token'),anchor_geometry=ribbon._last_geometry if ribbon._visible else None)
             # The HUD body stays passive; the region dropdown and compact
             # controls accept bounded clicks without activating the app.
             protected=protect_input()

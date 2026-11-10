@@ -37,6 +37,42 @@ def load(path,default):
     except FileNotFoundError:return default
 
 
+def fetch_rsi_org_members(symbol,max_members=1000):
+    import urllib.request
+    import re
+    symbol=str(symbol).strip().upper()
+    if not symbol:return dict(symbol=symbol,handles=[],total_rows=0,error='Enter an RSI Org symbol.')
+    url='https://robertsspaceindustries.com/api/orgs/getOrgMembers'
+    headers={'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36','Content-Type':'application/json','Accept':'application/json, text/javascript, */*; q=0.01'}
+    handles=[];seen=set();page=1;total_rows=0;pagesize=32
+    while len(handles)<max_members:
+        payload=json.dumps({'symbol':symbol,'search':'','pagesize':pagesize,'page':page}).encode('utf-8')
+        req=urllib.request.Request(url,data=payload,headers=headers)
+        try:
+            with urllib.request.urlopen(req,timeout=12) as resp:data=json.loads(resp.read().decode('utf-8'))
+        except Exception as e:
+            if not handles:return dict(symbol=symbol,handles=[],total_rows=0,error=f'RSI request failed: {e}')
+            break
+        data_obj=data.get('data') or {}
+        total_rows=data_obj.get('totalrows') or total_rows
+        html=data_obj.get('html','')
+        if not html:break
+        items=html.split('class="member-item')
+        if len(items)<=1:break
+        page_added=0
+        for item in items[1:]:
+            if 'org-visibility-R' in item:continue
+            nick_match=re.search(r'class="[^"]*nick[^"]*">([^<]+)<',item)
+            if nick_match:
+                handle=nick_match.group(1).strip()
+                if handle and handle.casefold() not in seen:
+                    seen.add(handle.casefold());handles.append(handle);page_added+=1
+        if page_added==0 or len(handles)>=total_rows or page*pagesize>=total_rows:break
+        page+=1
+        time.sleep(0.12)
+    return dict(symbol=symbol,handles=handles,total_rows=total_rows,error='' if handles else f'No public members found for {symbol}.')
+
+
 class PresenceChanges:
     def __init__(self):self.reset()
     def reset(self):self.members=None;self.absent={};self.at=0
@@ -56,7 +92,7 @@ class PresenceChanges:
 class CompanionStore:
     def __init__(self,directory):
         self.path=Path(directory)/'companion_private.json';self.read_only=False
-        self.data=dict(schema=1,watches=[],tags={},notifications=[],commands=[],actions=[])
+        self.data=dict(schema=1,watches=[],tags={},notifications=[],commands=[],actions=[],org_rosters={},org_handles={})
         try:
             value=load(self.path,None)
             if value is not None:
@@ -67,13 +103,15 @@ class CompanionStore:
                     if not isinstance(tag,dict) or not isinstance(tag.get('handle'),str) or not isinstance(tag.get('label'),str):raise ValueError('Invalid saved player tag')
                 actions=value.setdefault('actions',[])
                 if not isinstance(actions,list) or len(actions)>4096 or any(not isinstance(p,dict) or not isinstance(p.get('id'),str) or not isinstance(p.get('handle'),str) for p in actions):raise ValueError('Invalid action list')
+                value.setdefault('org_rosters',{})
+                value.setdefault('org_handles',{})
                 self.data=value
         except (OSError,ValueError,TypeError):self.read_only=True
     def save(self):
         if self.read_only or not publish_json(self.path,self.data):raise ValueError('Saved data is unavailable; original records were preserved.')
-    def notice(self,kind,title,detail,url='',session_token=None,now=None):
+    def notice(self,kind,title,detail,url='',session_token=None,now=None,category=''):
         now=time.time() if now is None else now
-        event=dict(id=uuid.uuid4().hex,kind=kind,title=title,detail=detail,url=url,at=now,session_token=session_token)
+        event=dict(id=uuid.uuid4().hex,kind=kind,title=title,detail=detail,url=url,category=category,at=now,session_token=session_token)
         self.data['notifications']=(self.data['notifications']+[event])[-100:]
         return event
     def watch(self,item,quality,price=0,unit=''):
@@ -129,6 +167,11 @@ class CompanionService:
         self.started_at=time.time();self.revision=0;self.notice_revision=0;self.market_last_request=0
         self.command_dir=self.directory/'companion_commands';self.command_dir.mkdir(exist_ok=True)
     def changed(self):self.revision+=1;self.next_publish=0
+    def fetch_org_members(self,symbol,tag_label,alert):
+        res=fetch_rsi_org_members(symbol)
+        res['tag_label']=tag_label
+        res['alert']=alert
+        return res
     def start_party_queue(self,targets,command,operation='party'):
         if command.get('confirmed') is not True:raise ValueError('Confirm the selected recipients first.')
         # Reject the entire batch before recording or submitting any work.
@@ -267,6 +310,14 @@ class CompanionService:
             if now-self.market_last_request<10:raise ValueError('Please wait a few seconds before refreshing again.')
             for watch in self.store.data['watches']:watch['due_at']=0
             self.market_last_request=now
+        elif action=='import_org':
+            symbol=str(command.get('symbol','')).strip().upper()
+            tag_label=str(command.get('tag_label','Org')).strip() or 'Org'
+            alert=command.get('alert',True) is True
+            if not symbol or len(symbol)>20:raise ValueError('Enter a valid RSI Org Symbol / SID (e.g. TEST).')
+            if 'import_org' in self.jobs:raise ValueError('An org import is already running.')
+            self.action_status=f'Importing {symbol} members from RSI…'
+            self.jobs['import_org']=(self.pool.submit(self.fetch_org_members,symbol,tag_label,alert),dict(symbol=symbol,tag_label=tag_label,alert=alert))
         elif action=='dismiss_notices':self.store.data['notifications']=[]
         else:raise ValueError('Unknown companion action')
         if identifier not in self.store.data['commands']:self.store.data['commands']=(self.store.data['commands']+[identifier])[-1000:]
@@ -294,6 +345,24 @@ class CompanionService:
                 result=job.result()
                 if kind.startswith('market:'):
                     identifier=int(kind.split(':')[1]);self.store.market_result(identifier,result[0],now,limited=result[1])
+                elif kind=='import_org':
+                    symbol=scope['symbol'];tag_label=scope['tag_label'];alert=scope['alert']
+                    if result.get('error'):
+                        self.action_status=f'Org import failed: {result["error"]}'
+                    else:
+                        handles=result.get('handles',[]);total_rows=result.get('total_rows',len(handles))
+                        self.store.data.setdefault('org_rosters',{})[symbol]=dict(symbol=symbol,tag=tag_label,alert=alert,total=total_rows,count=len(handles),handles=handles,updated_at=now)
+                        org_handles=self.store.data.setdefault('org_handles',{})
+                        for h in handles:org_handles[h.casefold()]=dict(handle=h,org=symbol,tag=tag_label,alert=alert)
+                        tagged_count=0
+                        for person in self.roster:
+                            if person['handle'].casefold() in org_handles:
+                                old_tag=self.store.data['tags'].get(person['id'],{})
+                                merged=tag_labels(old_tag.get('label','')+ ', ' + tag_label)
+                                self.store.data['tags'][person['id']]=dict(handle=person['handle'],label=', '.join(merged),labels=merged,alert=old_tag.get('alert',alert),org=symbol)
+                                tagged_count+=1
+                        self.store.save()
+                        self.action_status=f'Imported {len(handles)} members for {symbol} ({tag_label}).'+(f' {tagged_count} on shard tagged!' if tagged_count else '')
                 elif scope.get('session_token')!=self.session:
                     if kind=='action':self.action_status='Session changed while sending. Check in-game before retrying.'
                     continue
@@ -304,11 +373,37 @@ class CompanionService:
                     if old!=len(self.store.data['actions']):self.store.save()
                     arrivals=self.gate.observe(self.roster,now)
                     notified=False
+                    friends=self.friend_ids(now)
+                    org_handles=self.store.data.get('org_handles',{})
                     for person in self.roster:
+                        h_lower=person['handle'].casefold()
+                        if h_lower in org_handles:
+                            org_info=org_handles[h_lower]
+                            old_tag=self.store.data['tags'].get(person['id'],{})
+                            if org_info['tag'] not in tag_labels(old_tag.get('label','')):
+                                merged=tag_labels(old_tag.get('label','')+ ', ' + org_info['tag'])
+                                self.store.data['tags'][person['id']]=dict(handle=person['handle'],label=', '.join(merged),labels=merged,alert=old_tag.get('alert',org_info['alert']),org=org_info['org'])
+                                notified=True
+
                         tag=self.store.data['tags'].get(person['id'])
-                        if person['id'] in arrivals and tag and tag.get('alert'):
-                            self.store.notice('player_join','TAGGED PLAYER ON SHARD',person['handle']+' · '+tag['label']+' · Appeared in the latest list update',session_token=self.session,now=now)
-                            notified=True
+                        labels=tag.get('labels',[]) if tag else []
+                        is_friend=person['id'] in friends or 'Friend' in labels
+                        is_enemy='Enemy Org' in labels
+                        is_org_member='Org' in labels
+
+                        if person['id'] in arrivals:
+                            if is_enemy:
+                                self.store.notice('player_join','Enemy Org joined: '+person['handle'],'Enemy Org member joined your shard · '+(tag.get('org') or 'Enemy Org'),category='enemy_org',session_token=self.session,now=now)
+                                notified=True
+                            elif is_friend:
+                                self.store.notice('player_join','Friend joined: '+person['handle'],'Friend joined your shard',category='friend',session_token=self.session,now=now)
+                                notified=True
+                            elif is_org_member:
+                                self.store.notice('player_join','Org member joined: '+person['handle'],'Org member joined your shard · '+(tag.get('org') or 'Org'),category='org',session_token=self.session,now=now)
+                                notified=True
+                            elif tag and tag.get('alert'):
+                                self.store.notice('player_join',tag['label']+' joined: '+person['handle'],'Tagged player joined your shard · '+tag['label'],category='tagged',session_token=self.session,now=now)
+                                notified=True
                     if notified:self.store.save()
                 elif kind=='search':self.search=result['rows'];self.search_limited=result['limited'];self.action_status=f"{len(self.search)} search result(s). Select the exact handle."
                 elif kind=='relationships':
@@ -395,6 +490,7 @@ class CompanionService:
             search_query=self.search_query,search_limited=self.search_limited,roster_at=self.roster_at,roster_error=self.roster_error,
             roster_loading='roster' in self.jobs,status=self.action_status,read_only=self.store.read_only,
             watches=watches,tags=tagged,notifications=list(reversed(notices[-40:])),market_interval=MARKET_INTERVAL,
+            org_rosters=self.store.data.get('org_rosters',{}),
             friends_known=friends_known,party_known=party_known,friend_people=[decorate(p) for p in sorted(available.values(),key=lambda p:p['handle'].casefold()) if p['id'] in friends],friend_names_error=relations.get('friend_names_error',''),
             social_busy='action' in self.jobs,search_busy='search' in self.jobs,batch_results=self.batch_results,invite_queue=queue,
             action_people=[decorate(dict(available.get(p['id'],p))) for p in self.store.data['actions'] if p['id'] in eligible],tag_options=sorted({label for t in tags.values() for label in tag_labels(t['label'])}|set(TAG_PRESETS),key=lambda label:(0 if label=='Org' else 1 if label=='Friend' else 2 if label=='Friendly' else 3,label.casefold())))

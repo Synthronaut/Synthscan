@@ -473,6 +473,7 @@ export type DesktopCommandAction =
   | 'pause_invites'
   | 'resume_invites'
   | 'cancel_invites'
+  | 'import_org'
   | 'add_watch'
   | 'toggle_watch'
   | 'remove_watch'
@@ -518,6 +519,8 @@ export type DesktopCommandAction =
 
 export interface DesktopCommand {
   action: DesktopCommandAction;
+  symbol?: string;
+  tag_label?: string;
   query?: string;
   player_id?: string;
   player_ids?: string[];
