@@ -76,6 +76,7 @@ Name: "missions"; Description: "Missions & Ledger - contracts, durations, wallet
 Name: "hangars"; Description: "Hangars & Compboards - five-light schedule and local board inventory (no OCR)"; Types: complete
 Name: "daylight"; Description: "Day/Night Forecast - plan daylight at your destination"; Types: complete
 Name: "acceptance"; Description: "Automatic Acceptance [AUTOMATED INPUT] - optional helper, off until enabled"; Types: complete
+Name: "patch_prep"; Description: "Patch Preparation & Staging - pre-load test builds, swap RC to LIVE, preserve keybinds and character appearance"; Types: complete
 
 [Tasks]
 #ifdef ValidationBuild

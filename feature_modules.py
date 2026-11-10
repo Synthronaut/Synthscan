@@ -35,6 +35,8 @@ FEATURES = {
         'Plan daylight at a selected system, body and destination.'),
     'acceptance': ('Automatic Acceptance', (), ('automated_input',),
         'Opt-in notification helper. Sends the configured accept key to the focused game.'),
+    'patch_prep': ('Patch Preparation & Staging', (), (),
+        'Pre-load upcoming PTU patch builds, stage Release Candidates to LIVE, and preserve keybinds and character appearance.'),
 }
 RETIRED = {'notes'}  # Accept old saved selections without reinstalling retired features.
 DEFAULTS = tuple(FEATURES)  # One installer, everything checked; the player opts out.

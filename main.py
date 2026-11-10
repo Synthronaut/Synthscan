@@ -2525,8 +2525,11 @@ class SynthScanApp:
     # PAGE 05: MULTI-MONITOR ROUTING, HUD OVERLAY & VOICE COMMS
     # =========================================================================
     def _build_page_system(self, parent):
+        scroll_sys = ctk.CTkScrollableFrame(parent, fg_color="transparent", corner_radius=0)
+        scroll_sys.pack(fill="both", expand=True)
+
         # 1. MULTI-MONITOR ROUTING MATRIX
-        mon_card = ctk.CTkFrame(parent, fg_color=SC_BG_CARD, corner_radius=4, border_width=1, border_color=SC_BORDER_DIM)
+        mon_card = ctk.CTkFrame(scroll_sys, fg_color=SC_BG_CARD, corner_radius=4, border_width=1, border_color=SC_BORDER_DIM)
         mon_card.pack(fill="x", pady=(0, 10))
 
         ctk.CTkLabel(
@@ -2605,8 +2608,8 @@ class SynthScanApp:
         self._draw_monitor_diagram()
 
         # 2. BOTTOM SPLIT: IN-GAME HUD OVERLAY & VOICE COMMS
-        bottom_split = ctk.CTkFrame(parent, fg_color="transparent")
-        bottom_split.pack(fill="both", expand=True)
+        bottom_split = ctk.CTkFrame(scroll_sys, fg_color="transparent")
+        bottom_split.pack(fill="x", pady=(0, 10))
 
         # Left: Click-Through HUD Overlay Config
         hud_card = ctk.CTkFrame(bottom_split, fg_color=SC_BG_CARD, corner_radius=4, border_width=1, border_color=SC_BORDER_DIM)
@@ -2739,6 +2742,12 @@ class SynthScanApp:
             width=170,
             height=32
         ).pack(side="right")
+
+        # 3. PATCH PREPARATION & RELEASE CANDIDATE STAGING
+        from feature_modules import enabled
+        if enabled('patch_prep'):
+            from patch_prep_ui import PatchPrepCard
+            self.patch_prep_card = PatchPrepCard(scroll_sys)
 
     def _draw_monitor_diagram(self):
         if not hasattr(self, "mon_diagram_canvas"):
