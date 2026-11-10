@@ -1,4 +1,4 @@
-﻿#define UNICODE
+#define UNICODE
 #define _UNICODE
 #define PSAPI_VERSION 2
 #include "SynthWebView.h"
@@ -258,7 +258,8 @@ bool allowedAction(const std::string& action) {
         "friend", "friend_many", "party", "party_many",
         "pause_invites", "resume_invites", "cancel_invites",
         "add_watch", "toggle_watch", "remove_watch", "dismiss_notices",
-        "open_uex_ad", "navigate"
+        "open_uex_ad", "navigate",
+        "daylight_preferences", "daylight_observe", "daylight_refresh"
     };
     return allowed.count(action) > 0;
 }
@@ -301,6 +302,7 @@ std::string g_pendingMode = "people";
 Json g_pendingState;
 Json g_pendingMarketItems;
 Json g_pendingHome;
+Json g_pendingDaylight;
 Json g_suiteResult;
 bool g_hasSuiteResult = false;
 std::wstring g_initialUrl = L"https://synthscan.local/index.html";
@@ -313,7 +315,8 @@ void sendSnapshotMessage() {
         {"mode", str(g_pendingMode)},
         {"state", g_pendingState},
         {"market_items", g_pendingMarketItems},
-        {"home", g_pendingHome}
+        {"home", g_pendingHome},
+        {"daylight", g_pendingDaylight}
     });
     auto payload = wide(encode(envelope));
     g_webview->PostWebMessageAsJson(payload.c_str());
@@ -427,7 +430,8 @@ public:
         RECT bounds{};
         GetClientRect(target, &bounds);
         g_controller->put_Bounds(bounds);
-        g_controller->put_IsVisible(TRUE);
+        bool visible = IsWindowVisible(target) != 0;
+        g_controller->put_IsVisible(visible ? TRUE : FALSE);
 
         if (SUCCEEDED(g_controller->get_CoreWebView2(&g_webview)) && g_webview) {
             ICoreWebView2Settings* settings = nullptr;
@@ -551,11 +555,12 @@ bool attach(HWND parent, const std::filesystem::path& dataFolder, const std::str
     return true;
 }
 
-void pushSnapshot(const std::string& mode, const Json& state, const Json& marketItems, const Json& homeOverview) {
+void pushSnapshot(const std::string& mode, const Json& state, const Json& marketItems, const Json& homeOverview, const Json& daylight) {
     g_pendingMode = mode;
     g_pendingState = state;
     g_pendingMarketItems = marketItems;
     g_pendingHome = homeOverview;
+    g_pendingDaylight = daylight;
     sendSnapshotMessage();
 }
 
@@ -563,6 +568,10 @@ void resize(int width, int height) {
     if (!g_controller) return;
     RECT bounds{0, 0, std::max(1, width), std::max(1, height)};
     g_controller->put_Bounds(bounds);
+    if (g_parent) {
+        bool visible = IsWindowVisible(g_parent) != 0;
+        g_controller->put_IsVisible(visible ? TRUE : FALSE);
+    }
 }
 
 void detach() {
@@ -592,6 +601,7 @@ int preview(const std::filesystem::path& directory) {
         WS_EX_NOACTIVATE, L"STATIC", L"SynthScan WebView2 Preview", WS_POPUP,
         -32000, -32000, 1240, 840, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr);
     if (!hostWindow) return 2;
+    ShowWindow(hostWindow, SW_SHOWNOACTIVATE);
 
     auto t0 = std::chrono::steady_clock::now();
     g_hasSuiteResult = false;

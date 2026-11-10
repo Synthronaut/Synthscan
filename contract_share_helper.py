@@ -30,7 +30,7 @@ def main():
     class Input(ctypes.Structure):_fields_=[('type',w.DWORD),('payload',Payload)]
     api.SendInput.argtypes=[w.UINT,ctypes.POINTER(Input),ctypes.c_int];api.SendInput.restype=w.UINT
     api.MapVirtualKeyW.argtypes=[w.UINT,w.UINT];api.MapVirtualKeyW.restype=w.UINT
-    root=tk.Tk();window_icon(root);root.withdraw();root.title('SynthScan — Automatic acceptance');root.geometry('560x410')
+    root=tk.Tk();root.withdraw();window_icon(root);root.title('SynthScan — Automatic acceptance');root.geometry('560x410')
     try:preferences=read_shared_json(DATA/'contract_share_preferences.json')
     except (OSError,ValueError):preferences={}
     settings=acceptance_settings(preferences)

@@ -77,6 +77,7 @@ class TopTelemetryHUD:
 
     def _init_windows(self):
         self.bar_win = tk.Toplevel(self.master)
+        self.bar_win.withdraw()
         self.bar_win.title("SynthScan Top Telemetry HUD")
         self.bar_win.overrideredirect(True)
         self.bar_win.wm_attributes("-topmost", True)

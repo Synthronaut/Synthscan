@@ -195,7 +195,7 @@ def inspect_channel(game, profile=PROFILE, now=None, pids=None, settled=False):
                 observed=entry.get('observed_source')
                 if not observed:
                     entry['observed_source']=source;manager.store(state)
-                changed=bool(observed and observed['fingerprint']!=source['fingerprint'])
+                changed=bool(observed and observed.get('build') and source.get('build') and observed['build']!=source['build'])
                 record(manager,'attention' if changed else 'external',
                        'Your existing language pack may need updating' if changed else 'Using your existing language pack',
                        'The game build changed since this pack was recorded. SynthScan did not generate the full pack, so it has left it untouched. Text settings lets you back it up and switch to freshly generated SynthStrings.' if changed else
@@ -309,8 +309,12 @@ def patch_presentation(value):
         label += ' · ' + channel
     state, reason = value.get('state'), value.get('reason')
     current_build = str(metadata.get('BuildId') or metadata.get('RequestedP4ChangeNum') or '')
-    changed = bool(current_build and value.get('build') and current_build != value['build']) or bool(
-        manifest_sha256 and value.get('manifest_sha256') and manifest_sha256 != value['manifest_sha256'])
+    changed = bool(current_build and value.get('build') and current_build != value['build'])
+    if not changed and current_build and value.get('build') and current_build == value['build']:
+        if reason == 'pack_build_changed':
+            reason = 'existing_pack'
+            if state == 'attention':
+                state = 'external' 
     choices = {
         'ready': ('ready', 'SynthStrings ready', 'Game-text enhancements are prepared for this installed patch.'),
         'adapted': ('ready', 'SynthStrings ready', 'Game-text enhancements have been updated for this installed patch.'),
@@ -334,7 +338,7 @@ def patch_presentation(value):
         kind, status, summary = 'unknown', 'Installed patch not checked', 'The installed game version could not be read. Open Text settings to check again.'
     if value.get('restart_required') and kind == 'ready':
         kind, status, summary = 'attention', 'Restart Star Citizen', 'SynthStrings is updated. Restart Star Citizen once to load the new game text.'
-    return dict(patch=patch, patch_label=label, status_kind=kind, status_label=status, summary=summary,
+    return dict(state=state, reason=reason, patch=patch, patch_label=label, status_kind=kind, status_label=status, summary=summary,
                 installed_build=str(metadata.get('RequestedP4ChangeNum', '')),
                 installed_build_date=str(metadata.get('BuildDateStamp', '')))
 
@@ -386,7 +390,7 @@ def view(profile=PROFILE, pids=()):
         else:
             result['title'] = 'Restart Star Citizen to refresh SynthStrings'
             result['detail'] += ' Restart Star Citizen once to load the prepared text. Text already loaded by the running game cannot be replaced.'
-    result['warning'] = result['restart_required'] or result['state'] in ('attention', 'fallback')
+    result['warning'] = result.get('status_kind') == 'attention' or result.get('restart_required', False)
     if len(values) > 1:
         result['title'] = result['channel'] + ': ' + result['title']
     return result

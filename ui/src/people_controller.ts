@@ -1635,34 +1635,35 @@ export class DesktopAppController {
             .join('');
 
     const strings = home?.synthstrings;
-    const patchEl = this.root.querySelector('#home-patch-banner')!;
-    if (strings?.title) {
-      const summaryText = strings.summary ? ` · ${strings.summary}` : '';
-      patchEl.innerHTML = `
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;width:100%;">
-          <div>
-            <strong>${this.escapeHtml(strings.patch_label ?? 'Star Citizen')}</strong>
-            <div style="font-size:11.5px;color:var(--ss-muted);margin-top:2px;">
-              ${this.escapeHtml(strings.status_label ?? 'Game text unchanged')} ${this.escapeHtml(summaryText)}
+    const patchEl = this.root.querySelector('#home-patch-banner') as HTMLElement | null;
+    if (patchEl) {
+      if (strings?.title && strings.status_kind === 'attention') {
+        patchEl.style.display = 'flex';
+        const summaryText = strings.summary ? ` · ${strings.summary}` : '';
+        patchEl.innerHTML = `
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;width:100%;">
+            <div>
+              <strong>${this.escapeHtml(strings.patch_label ?? 'Star Citizen')}</strong>
+              <div style="font-size:11.5px;color:var(--ss-muted);margin-top:2px;">
+                ${this.escapeHtml(strings.status_label ?? 'Game text unchanged')} ${this.escapeHtml(summaryText)}
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;flex-shrink:0;">
+              <button type="button" class="ss-btn ss-btn-accent" id="home-strings-settings-btn">Text settings</button>
+              <button type="button" class="ss-btn" id="home-strings-patch-btn">Patch status</button>
             </div>
           </div>
-          <div style="display:flex;gap:8px;flex-shrink:0;">
-            <button type="button" class="ss-btn ss-btn-accent" id="home-strings-settings-btn">Text settings</button>
-            <button type="button" class="ss-btn" id="home-strings-patch-btn">Patch status</button>
-          </div>
-        </div>
-      `;
-      patchEl.querySelector('#home-strings-settings-btn')?.addEventListener('click', () => {
-        void this.bridge.sendCommand({ action: 'strings_settings' });
-      });
-      patchEl.querySelector('#home-strings-patch-btn')?.addEventListener('click', () => {
-        void this.bridge.sendCommand({ action: 'strings_details' });
-      });
-    } else {
-      patchEl.innerHTML = `
-        <strong>${this.escapeHtml(home?.identity || 'No live shard observation')}</strong>
-        <span>Game text unchanged — No action needed</span>
-      `;
+        `;
+        patchEl.querySelector('#home-strings-settings-btn')?.addEventListener('click', () => {
+          void this.bridge.sendCommand({ action: 'strings_settings' });
+        });
+        patchEl.querySelector('#home-strings-patch-btn')?.addEventListener('click', () => {
+          void this.bridge.sendCommand({ action: 'strings_details' });
+        });
+      } else {
+        patchEl.style.display = 'none';
+        patchEl.innerHTML = '';
+      }
     }
   }
 
