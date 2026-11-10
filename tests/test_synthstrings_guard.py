@@ -438,5 +438,58 @@ class RenderValidationTests(unittest.TestCase):
                 guard.validate_render(BASE, candidate)
 
 
+class PatchPresentationTests(PatchFixture, unittest.TestCase):
+    def manifest_data(self, **extra):
+        data=dict(BuildId='build-a',Branch='sc-alpha-4.10.2',Version='4.10.197.2878',RequestedP4ChangeNum='12913470')
+        data.update(extra);self.manifest.write_text(json.dumps(dict(Data=data)))
+    def ready(self):
+        self.manifest_data();self.install();guard.inspect_channel(self.game,self.profile,self.now,[])
+        return guard.view(self.profile)
+    def test_public_patch_comes_from_branch_instead_of_internal_version(self):
+        result=self.ready()
+        self.assertEqual(result['patch_label'],'Star Citizen 4.10.2 · LIVE')
+        self.assertEqual(result['status_kind'],'ready')
+        self.assertNotIn('4.10.197.2878',result['patch_label'])
+        self.assertIn('Game-text',result['summary'])
+    def test_new_manifest_invalidates_green_status_before_next_guard_check(self):
+        self.ready();self.manifest_data(Branch='sc-alpha-4.10.3')
+        result=guard.view(self.profile)
+        self.assertEqual(result['patch_label'],'Star Citizen 4.10.3 · LIVE')
+        self.assertEqual(result['status_kind'],'attention')
+        self.assertIn('Check now',result['summary'])
+    def test_missing_manifest_cannot_reuse_old_green_check(self):
+        self.ready();self.manifest.unlink();result=guard.view(self.profile)
+        self.assertEqual(result['status_kind'],'unknown')
+        self.assertEqual(result['patch'],'')
+    def test_internal_version_is_not_guessed_to_be_public_patch(self):
+        result=self.ready();self.manifest_data(Branch='unknown')
+        result=guard.view(self.profile)
+        self.assertEqual(result['patch'],'')
+        self.assertIn('unavailable',result['patch_label'])
+    def test_existing_text_without_patch_metadata_is_informational_not_an_alert(self):
+        self.manifest_data();self.manager.write(INI,BASE+b'extra=custom\n')
+        guard.inspect_channel(self.game,self.profile,self.now,[])
+        before=self.ini.read_bytes();result=guard.view(self.profile)
+        self.assertEqual(result['status_kind'],'info')
+        self.assertEqual(result['status_label'],'Game text unchanged')
+        self.assertFalse(result['warning'])
+        self.assertEqual(result['summary'],'No action needed.')
+        self.assertNotIn('compatibility',result['summary'])
+        self.assertEqual(self.ini.read_bytes(),before)
+    def test_configured_live_installation_takes_priority_over_old_ptu_warning(self):
+        self.ready();other=self.root/'PTU';other.mkdir()
+        guard.save(self.profile/'installation.json',dict(game_dir=str(self.game)))
+        manager=Manager(other,self.profile)
+        guard.record(manager,'attention','Old PTU warning','Old warning',now=self.now+100)
+        result=guard.view(self.profile)
+        self.assertEqual(result['channel'],'LIVE');self.assertEqual(result['status_kind'],'ready')
+        self.assertEqual(len(result['channels']),2)
+    def test_ready_but_loaded_old_text_requires_restart_indicator(self):
+        self.ready();value=load(self.manager.folder/'guard_status.json');value['affected_game_pids']=[7]
+        save(self.manager.folder/'guard_status.json',value)
+        result=guard.view(self.profile,[7])
+        self.assertEqual(result['status_label'],'Restart Star Citizen');self.assertEqual(result['status_kind'],'attention')
+
+
 if __name__ == '__main__':
     unittest.main()

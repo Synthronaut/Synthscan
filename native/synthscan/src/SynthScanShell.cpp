@@ -554,6 +554,7 @@ void rebuild(int tab){
         if(activity)control(L"BUTTON",L"HUD keyboard / mouse shortcuts…",BS_PUSHBUTTON,28,y,390,28,340);
         control(L"BUTTON",L"Privacy & capture…",BS_PUSHBUTTON,activity?432:28,y,396,28,341);y+=40;
         control(L"BUTTON",L"Save startup & HUD settings",BS_PUSHBUTTON,28,y,300,34,306);
+        control(L"BUTTON",L"Feature modules…",BS_PUSHBUTTON|WS_TABSTOP,344,y,300,34,342);
         y+=46;
         if(feature("server_hud")){
             control(L"BUTTON",L"Enable player FPS · Windows permission",BS_PUSHBUTTON,28,y,390,30,309);
@@ -630,6 +631,7 @@ void saveOptions(){
 }
 void handleAction(int id){
     if(!SynthEdition::screenReading&&id==214){note="Screen reading is not installed in Standard.";return;}
+    if(currentTab==4&&id==342){if(testing)command(obj({{"action",str("modules")}}));else spawnPython(L"module_ui.py",{});return;}
     if(id==341){SynthPrivacy::show(SynthHome::pageHost(),data);return;}
     if(id==340){rebuild(7);return;}
     if(currentTab==7&&id==356){rebuild(4);return;}
@@ -1261,11 +1263,17 @@ int workspacePreview(const std::filesystem::path& directory){
         }
         SynthPages::hide();
     }
+    workspace(4);SynthPages::place(0,0,px(1000),px(720),true);
+    auto settingsFailures=checkBounds(panel,px(100));bool modulesInSettings=GetDlgItem(panel,342)!=nullptr;
+    SendMessageW(panel,WM_COMMAND,MAKEWPARAM(342,BN_CLICKED),reinterpret_cast<LPARAM>(GetDlgItem(panel,342)));
+    bool modulesRouted=read(data/L"workspace_command.json").textOr("action")=="modules";
+    render(panel,"settings_modules",px(100));
+    pages.items.push_back(obj({{"page",str("settings")},{"clipped_controls",settingsFailures},{"image",str("settings_modules.png")}}));
     bool foreground=GetForegroundWindow()==before;
-    write(directory/L"layout_validation.json",obj({{"rendered",boolean(saved)},{"controls_fit",boolean(fit)},{"main_content_grows",boolean(grown)},{"unsaved_text_preserved",boolean(preserved)},{"selection_preserved",boolean(selectionPreserved)},{"foreground_unchanged",boolean(foreground)},{"game_capture_calls",num(0)},{"game_input_events",num(0)},{"pages",pages}}));
+    write(directory/L"layout_validation.json",obj({{"feature_modules_in_settings",boolean(modulesInSettings)},{"feature_modules_button_routes",boolean(modulesRouted)},{"rendered",boolean(saved)},{"controls_fit",boolean(fit)},{"main_content_grows",boolean(grown)},{"unsaved_text_preserved",boolean(preserved)},{"selection_preserved",boolean(selectionPreserved)},{"foreground_unchanged",boolean(foreground)},{"game_capture_calls",num(0)},{"game_input_events",num(0)},{"pages",pages}}));
     SynthScanDiary::close();SynthScanNav::close();SynthPages::close();if(panel)DestroyWindow(panel);panel=nullptr;DestroyWindow(fixture);
     DeleteObject(font);DeleteObject(titleFont);DeleteObject(background);DeleteObject(card);font=titleFont=nullptr;background=card=nullptr;Gdiplus::GdiplusShutdown(token);
-    return saved&&fit&&grown&&preserved&&selectionPreserved&&foreground?0:3;
+    return modulesInSettings&&modulesRouted&&saved&&fit&&grown&&preserved&&selectionPreserved&&foreground?0:3;
 }
 int uiTest(const std::string& directory){
     testing=true;SCMiner::AppPaths::useDataFolder(std::filesystem::u8path(directory)/"data");
@@ -1308,12 +1316,12 @@ int uiTest(const std::string& directory){
         SynthHome::update(obj({{"synthstrings",obj({{"title",str("Removed module stale warning")}})},{"refinery_notice",str("Removed module stale refinery reminder")}}),"Synthetic module check",false);
         HWND home=GetAncestor(SynthHome::pageHost(),GA_ROOT);SynthHome::selectPage("home");
         SetWindowPos(home,nullptr,-32000,-32000,1240,840,SWP_NOZORDER|SWP_NOACTIVATE);
-        require("home_module_controls",bool(GetDlgItem(home,117))&&bool(GetDlgItem(home,200))==(feature("mining_tools")&&feature("mining_recognition"))&&bool(GetDlgItem(home,213))==feature("synthstrings")&&!GetDlgItem(home,113)&&!GetDlgItem(home,115));
+        require("home_module_controls",!GetDlgItem(home,116)&&bool(GetDlgItem(home,117))&&bool(GetDlgItem(home,200))==(feature("mining_tools")&&feature("mining_recognition"))&&bool(GetDlgItem(home,213))==feature("synthstrings")&&!GetDlgItem(home,113)&&!GetDlgItem(home,115));
         require("stale_strings_hidden",feature("synthstrings")||field(read(data/L"home_status.json"),"synthstrings").textOr("title").empty());
         bool routes=true;for(const auto& row:field(moduleModel,"absent_actions").items){SynthHome::navigate(row.text);routes&=SynthHome::selectedPage()=="home";}
         require("absent_routes_ignored",routes);require("home_rendered",render(home,"home"));
         workspace(4);
-        bool controls=bool(scanCheck)==(feature("mining_recognition")&&feature("mining_tools"))&&bool(hudCheck)==!expected.empty()&&bool(sessionCheck)==feature("server_hud")&&bool(GetDlgItem(panel,311))==feature("piracy")&&!GetDlgItem(panel,312)&&bool(GetDlgItem(panel,341))&&bool(GetDlgItem(panel,340))==!expected.empty();
+        bool controls=bool(scanCheck)==(feature("mining_recognition")&&feature("mining_tools"))&&bool(hudCheck)==!expected.empty()&&bool(sessionCheck)==feature("server_hud")&&bool(GetDlgItem(panel,311))==feature("piracy")&&!GetDlgItem(panel,312)&&bool(GetDlgItem(panel,341))&&bool(GetDlgItem(panel,342))&&bool(GetDlgItem(panel,340))==!expected.empty();
         bool bounds=true;RECT client{};GetClientRect(panel,&client);
         for(HWND c=GetWindow(panel,GW_CHILD);c;c=GetWindow(c,GW_HWNDNEXT))if(present(c)){RECT r{};GetWindowRect(c,&r);MapWindowPoints(nullptr,panel,reinterpret_cast<POINT*>(&r),2);bounds&=r.left>=0&&r.top>=0&&r.right<=client.right&&r.bottom<=client.bottom;}
         require("settings_module_controls",controls);require("settings_controls_fit",bounds);require("settings_rendered",render(panel,"settings"));

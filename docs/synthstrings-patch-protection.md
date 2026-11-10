@@ -71,14 +71,29 @@ not reinstalled by later cleanup. user.cfg and unrelated settings are retained.
 
 ## Player feedback
 
-Home displays persistent adaptation, fallback and specific failure results, with
-Text settings and Patch details buttons. No action requires the tray menu.
-Text settings provides Check now and an explicit Use generated SynthStrings
-choice, which archives the selected existing pack before replacing it. The exact
-file hash is checked again before removal; a concurrent edit cancels replacement.
-Removing generated SynthStrings later does not reinstall that older full pack.
-History records explanations, not just repeated generic "needs attention" titles;
-old entries that never recorded a reason are omitted from the presentation.
+Home shows the installed **Star Citizen patch and channel**, with a green check for
+prepared SynthStrings, an amber alert for text that needs checking, an updating
+indicator or an off state. The public patch comes from the local manifest's
+Branch, not its internal four-part Version. This is game-text status, not an
+app-wide compatibility certification. A newer installed manifest invalidates an
+old ready display before the next event-driven check. The configured game
+installation takes priority over warnings saved for other channels.
+
+**Patch status** shows that patch number, a concise explanation and the last text
+check time. It does not show internal fingerprints or dump recovery history.
+The manifest's build date is not presented as the date the patch went live.
+An existing game-text file without generated-pack metadata is neutral: **Game
+text unchanged · No action needed.** Missing bookkeeping is not an actionable
+problem and does not receive an amber icon. A detected game update, failed text
+update or required restart still has its own specific result and next action.
+
+**Text settings** provides Check now and an explicit **Use SynthStrings** choice,
+which archives the selected existing pack before replacing it. Check now detects
+patch changes; it does not certify an arbitrary custom pack. The exact file hash
+is checked again before removal; a concurrent edit cancels replacement. Removing
+SynthStrings later does not reinstall an older full pack. Recovery history remains
+available in local status files for diagnosis, rather than the player's popup.
+
 Windows tray notifications
 announce success or a problem without activating a modal window, respect quiet
 time and are deduplicated across app restarts. Clicking the notification opens Home.

@@ -33,18 +33,19 @@ class StringsWindow:
         self.pool=ThreadPoolExecutor(max_workers=1,thread_name_prefix='strings-settings')
         from app_lifecycle import Signal
         self.show=Signal('strings-settings-show')
-        window_icon(window);window.title('SynthScan — Text settings');window.geometry('740x470');window.minsize(680,440)
+        window_icon(window);window.title('SynthScan — Text settings');window.geometry('780x560');window.minsize(720,540)
         window.configure(bg='#101820');style=ttk.Style(window);style.theme_use('clam')
         style.configure('.',background='#101820',foreground='#e5edf3',font=('Segoe UI',10))
         style.configure('TButton',background='#243947',padding=(12,7))
         outer=ttk.Frame(window,padding=26);outer.pack(fill='both',expand=True)
-        ttk.Label(outer,text='SynthStrings',font=('Segoe UI',21,'bold')).pack(anchor='w')
+        ttk.Label(outer,text='Game-text enhancements',font=('Segoe UI',21,'bold')).pack(anchor='w')
+        self.patch=ttk.Label(outer,font=('Segoe UI',11,'bold'));self.patch.pack(anchor='w',pady=(8,0))
         self.title=ttk.Label(outer,font=('Segoe UI',13,'bold'),wraplength=650);self.title.pack(anchor='w',pady=(18,8))
         self.detail=ttk.Label(outer,wraplength=650,justify='left');self.detail.pack(anchor='w')
-        ttk.Label(outer,text='Use generated SynthStrings replaces the pack with current CIG text plus blueprint and reputation labels. Your existing pack is backed up first. Generated packs support automatic text rebuilding after launcher updates.',wraplength=650,justify='left').pack(anchor='w',pady=(18,12))
+        ttk.Label(outer,text='SynthStrings adds blueprint and reputation information to in-game text. Use SynthStrings saves a backup of your current text, then prepares these additions for your installed patch. Future launcher updates trigger a text update automatically.',wraplength=650,justify='left').pack(anchor='w',pady=(18,12))
         actions=ttk.Frame(outer);actions.pack(fill='x')
         self.check=ttk.Button(actions,text='Check now',command=self.check_now);self.check.pack(side='left')
-        self.replace=ttk.Button(actions,text='Use generated SynthStrings',command=self.use_generated);self.replace.pack(side='left',padx=8)
+        self.replace=ttk.Button(actions,text='Use SynthStrings',command=self.use_generated);self.replace.pack(side='left',padx=8)
         self.allow=ttk.Button(outer,text='Allow game-text access',command=self.permission)
         self.allow.pack(anchor='w',pady=(14,0))
         self.allow.pack_forget()
@@ -53,8 +54,11 @@ class StringsWindow:
 
     def refresh(self):
         result=view(PROFILE,current_pids())
-        self.title.config(text=result.get('title','Check SynthStrings compatibility'))
-        self.detail.config(text=result.get('detail','Choose Check now to compare the installed text with this game build. Automatic checks run when RSI Launcher opens or a launcher patch finishes.'))
+        self.patch.config(text=result.get('patch_label','Star Citizen · patch number unavailable'))
+        self.title.config(text=result.get('status_label','Check game-text enhancements'))
+        detail=result.get('summary','Choose Check now to read the installed patch and check SynthStrings.')
+        if result.get('state')=='external':detail+=' You can leave this as it is. Use SynthStrings is optional; choose it if you want SynthScan to manage game-text updates.'
+        self.detail.config(text=detail)
 
     def start(self,action):
         if self.future:return

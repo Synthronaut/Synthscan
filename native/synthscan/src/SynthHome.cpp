@@ -77,10 +77,37 @@ void layout(){
     SynthPages::place(int(218*scale),int(110*scale),int((width-234)*scale),std::max(1,int(r.bottom)-int(124*scale)),activePage!="home");
     RedrawWindow(window,nullptr,nullptr,RDW_INVALIDATE|RDW_NOERASE|RDW_ALLCHILDREN);
 }
+// Paint the same surface in parent and child coordinates. A flat child clear
+// leaves visible square corners around translucent rounded buttons.
+void paintSurface(Gdiplus::Graphics& g,int widthPixels,int heightPixels){
+    g.Clear(BG);SynthGlass::ambient(g,{0,0,float(widthPixels),float(heightPixels)});
+    float width=widthPixels/scale,height=heightPixels/scale,main=width-248,col=(main-16)/2;
+    Gdiplus::SolidBrush side(SIDE);g.FillRectangle(&side,0.f,0.f,200*scale,float(heightPixels));
+    SynthGlass::panel(g,{12*scale,14*scale,188*scale,float(heightPixels)-28*scale},false,false,18*scale);
+    if(activePage!="home")return;
+    for(int i=0;i<3;i++)rounded(g,{(224+i*(main+12)/3)*scale,282*scale,(main-24)/3*scale,72*scale},CARD);
+    rounded(g,{224*scale,371*scale,col*scale,220*scale},CARD);
+    rounded(g,{(240+col)*scale,371*scale,col*scale,220*scale},CARD);
+    if(available("refinery")&&!overview.textOr("refinery_notice").empty())rounded(g,{224*scale,609*scale,main*scale,59*scale},CARD);
+    if(available("strings_settings")&&!field(overview,"synthstrings").textOr("title").empty())
+        rounded(g,{224*scale,678*scale,main*scale,std::max(70.f,height-696.f)*scale},CARD);
+}
+void buttonSurface(Gdiplus::Graphics& g,HWND child){
+    RECT at{},root{};GetWindowRect(child,&at);MapWindowPoints(nullptr,window,reinterpret_cast<POINT*>(&at),2);GetClientRect(window,&root);
+    auto saved=g.Save();g.TranslateTransform(-float(at.left),-float(at.top));paintSurface(g,root.right,root.bottom);g.Restore(saved);
+}
+std::wstring patchDetails(){
+    const auto& strings=field(overview,"synthstrings");
+    std::string text=strings.textOr("patch_label","Star Citizen · patch number unavailable")+"\n\n"+
+        strings.textOr("status_label","Text status unavailable")+"\n"+strings.textOr("summary")+
+        "\n\nSynthStrings adds blueprint and reputation information to in-game text.";
+    if(strings.numberOr("at")>0){std::time_t t=static_cast<std::time_t>(strings.numberOr("at"));std::tm local{};localtime_s(&local,&t);wchar_t label[80]{};wcsftime(label,80,L"%d %b %Y, %H:%M",&local);text+="\nLast text check: "+utf8(label);}
+    return wide(text);
+}
 LRESULT CALLBACK navigationHover(HWND hwnd,UINT m,WPARAM w,LPARAM l,UINT_PTR,DWORD_PTR){
     // BUTTON's default erase uses the system button-face brush, which is light
     // even though WM_DRAWITEM later paints a dark tile.
-    if(m==WM_ERASEBKGND){RECT r{};GetClientRect(hwnd,&r);static HBRUSH dark=CreateSolidBrush(RGB(15,16,19));FillRect(reinterpret_cast<HDC>(w),&r,dark);return 1;}
+    if(m==WM_ERASEBKGND){Gdiplus::Graphics g(reinterpret_cast<HDC>(w));g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);buttonSurface(g,hwnd);return 1;}
     if(m==WM_MOUSEMOVE&&!GetPropW(hwnd,L"SynthGlass.Hot")){SetPropW(hwnd,L"SynthGlass.Hot",HANDLE(1));TRACKMOUSEEVENT track{sizeof(track),TME_LEAVE,hwnd,0};TrackMouseEvent(&track);InvalidateRect(hwnd,nullptr,FALSE);}
     if(m==WM_MOUSELEAVE){RemovePropW(hwnd,L"SynthGlass.Hot");InvalidateRect(hwnd,nullptr,FALSE);}
     if(m==WM_NCDESTROY){RemovePropW(hwnd,L"SynthGlass.Hot");RemoveWindowSubclass(hwnd,navigationHover,1);}
@@ -100,8 +127,7 @@ void paintButton(const DRAWITEMSTRUCT& item){
     Gdiplus::Bitmap frame(width,height,PixelFormat32bppPARGB);
     {Gdiplus::Graphics g(&frame);g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);g.SetTextRenderingHint(Gdiplus::TextRenderingHintClearTypeGridFit);
     bool selected=(b.navigation&&b.action==activePage)||(b.id==210&&!previous)||(b.id==211&&previous);
-    g.Clear(b.navigation?SIDE:BG);
-    if(b.navigation){RECT at{},root{};GetWindowRect(item.hwndItem,&at);MapWindowPoints(nullptr,window,reinterpret_cast<POINT*>(&at),2);GetClientRect(window,&root);Gdiplus::LinearGradientBrush rail(Gdiplus::PointF(0,14*scale-at.top),Gdiplus::PointF(0,float(root.bottom)-14*scale-at.top),Gdiplus::Color(255,28,35,47),Gdiplus::Color(255,19,25,35));g.FillRectangle(&rail,0,0,item.rcItem.right,item.rcItem.bottom);}
+    buttonSurface(g,item.hwndItem);
     Gdiplus::RectF r(0,0,float(item.rcItem.right),float(item.rcItem.bottom));
     bool hot=(item.itemState&ODS_HOTLIGHT)!=0||GetPropW(item.hwndItem,L"SynthGlass.Hot")!=nullptr;
     if(!b.navigation||selected||hot)SynthGlass::panel(g,{1,1,r.Width-2,r.Height-2},selected,hot||bool(item.itemState&ODS_SELECTED),9*scale);
@@ -120,10 +146,10 @@ void paintButton(const DRAWITEMSTRUCT& item){
 void paint(HDC target=nullptr){
     PAINTSTRUCT ps{};HDC dc=target?target:BeginPaint(window,&ps);RECT r{};GetClientRect(window,&r);
     if(r.right>0&&r.bottom>0){
-        Gdiplus::Bitmap bitmap(r.right,r.bottom,PixelFormat32bppPARGB);Gdiplus::Graphics g(&bitmap);g.Clear(BG);SynthGlass::ambient(g,{0,0,float(r.right),float(r.bottom)});
+        Gdiplus::Bitmap bitmap(r.right,r.bottom,PixelFormat32bppPARGB);Gdiplus::Graphics g(&bitmap);
         g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);g.SetTextRenderingHint(Gdiplus::TextRenderingHintClearTypeGridFit);
         float width=r.right/scale,height=r.bottom/scale,main=width-248,col=(main-16)/2;
-        Gdiplus::SolidBrush side(SIDE);g.FillRectangle(&side,0.f,0.f,200*scale,float(r.bottom));SynthGlass::panel(g,{12*scale,14*scale,188*scale,float(r.bottom)-28*scale},false,false,18*scale);
+        paintSurface(g,r.right,r.bottom);
         static HICON logo=LoadIconW(GetModuleHandleW(nullptr),MAKEINTRESOURCEW(IDI_APPICON));
         HDC iconDC=g.GetHDC();DrawIconEx(iconDC,int(24*scale),int(29*scale),logo,int(32*scale),int(32*scale),0,nullptr,DI_NORMAL);g.ReleaseHDC(iconDC);
         words(g,L"SynthScan",66,29,130,31,20,INK,true);
@@ -142,13 +168,10 @@ void paint(HDC target=nullptr){
         const auto& blueprints=field(session,"blueprints").items;const auto& rep=field(session,"reputation").items;
         for(int i=0;i<3;i++){
             float x=224+i*(main+12)/3,w=(main-24)/3;
-            rounded(g,{x*scale,282*scale,w*scale,72*scale},CARD);
             auto count=i==0?number(double(blueprints.size())):i==1?number(session.numberOr("contracts_completed")):number(double(rep.size()));
             words(g,count,x+15,290,w-30,33,25,INK,true);
             words(g,i==0?L"Blueprints received":i==1?L"Contracts completed":L"Reputation changes",x+15,327,w-30,20,11,MUTED);
         }
-        rounded(g,{224*scale,371*scale,col*scale,220*scale},CARD);
-        rounded(g,{(240+col)*scale,371*scale,col*scale,220*scale},CARD);
         words(g,L"Blueprints received",240,387,col-32,26,14,INK,true);
         words(g,L"Reputation balance changes",256+col,387,col-32,26,14,INK,true);
         auto baseline=clockLabel(session.numberOr("rep_baseline_at"));
@@ -169,19 +192,20 @@ void paint(HDC target=nullptr){
         }
         auto notice=overview.textOr("refinery_notice");
         if(available("refinery")&&!notice.empty()){
-            rounded(g,{224*scale,609*scale,main*scale,59*scale},CARD);
             words(g,wide(notice),240,621,main-200,23,13,ACCENT,true);
             words(g,L"Confirmed game notification · dismiss after reviewing your orders",240,645,main-200,19,10,MUTED);
         }
         const auto& strings=field(overview,"synthstrings");
         if(available("strings_settings")&&!strings.textOr("title").empty()){
-            const auto color=flag(strings,"warning")?Gdiplus::Color(255,255,195,105):ACCENT;
+            const auto kind=strings.textOr("status_kind");
+            const auto color=kind=="ready"?Gdiplus::Color(255,118,217,163):(kind=="off"||kind=="info")?MUTED:kind=="updating"?ACCENT:Gdiplus::Color(255,255,195,105);
             float cardHeight=std::max(70.f,height-696.f);
-            rounded(g,{224*scale,678*scale,main*scale,cardHeight*scale},CARD);
-            words(g,wide(strings.textOr("title")),240,688,main-324,24,13,color,true);
-            std::string detail=strings.textOr("summary",strings.textOr("detail"));
-            if(flag(strings,"restart_required")&&strings.textOr("state")!="attention")detail="Restart Star Citizen once to load the prepared text. Open details for the adaptation result and recovery information.";
-            words(g,wide(detail),240,716,main-32,cardHeight-42,11,MUTED);
+            if(kind=="ready")SynthGlass::icon(g,"check",{240*scale,690*scale,17*scale,17*scale},color);
+            else if(kind=="off"||kind=="updating")SynthGlass::icon(g,kind=="updating"?"refresh":"clear",{240*scale,690*scale,17*scale,17*scale},color);
+            else if(kind!="info") {Gdiplus::Pen pen(color,1.5f*scale);Gdiplus::PointF points[]={{248.5f*scale,690*scale},{240*scale,706*scale},{257*scale,706*scale},{248.5f*scale,690*scale}};g.DrawLines(&pen,points,4);g.DrawLine(&pen,248.5f*scale,695*scale,248.5f*scale,700*scale);g.DrawLine(&pen,248.5f*scale,702.5f*scale,248.5f*scale,703*scale);}
+            words(g,wide(strings.textOr("patch_label","Star Citizen · patch number unavailable")),kind=="info"?240:263,688,kind=="info"?main-324:main-347,24,13,INK,true);
+            std::string detail=strings.textOr("status_label","Text status unavailable")+" · "+strings.textOr("summary");
+            words(g,wide(detail),240,716,main-32,cardHeight-42,11,color);
         }else{
             words(g,connected?wide(identity):L"No live shard observation",224,690,main,22,11,connected?INK:MUTED);
             words(g,flag(overview,"history_warning")?L"Saved recap could not be read. The original file has been preserved.":L"Reputation is net balance change between reads; activity before the baseline is not included.",224,716,main,28,10,MUTED);
@@ -199,18 +223,8 @@ LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM w,LPARAM l){
     if(message==WM_COMMAND&&HIWORD(w)==BN_CLICKED){
         int id=LOWORD(w);
         if(id==213){
-            const auto& strings=field(overview,"synthstrings");std::string text;
-            for(const auto& channel:field(strings,"channels").items){
-                text+=channel.textOr("channel")+": "+channel.textOr("title")+"\n"+channel.textOr("detail")+"\n";
-                if(flag(channel,"restart_required"))text+=channel.textOr("state")=="attention"?"Resolve the recovery issue in Setup before restarting Star Citizen.\n":"Restart Star Citizen once to load the prepared text.\n";
-                const auto& history=field(channel,"history").items;
-                if(!history.empty())text+="\nRecent results:\n";
-                for(size_t i=history.size()>5?history.size()-5:0;i<history.size();++i){
-                    auto at=clockLabel(history[i].numberOr("at"));text+=SynthScan::utf8(at)+"  "+history[i].textOr("title")+"\n"+history[i].textOr("detail")+"\n";
-                }
-                text+="\n";
-            }
-            MessageBoxW(hwnd,wide(text).c_str(),L"SynthStrings patch status",MB_OK|(flag(strings,"warning")?MB_ICONWARNING:MB_ICONINFORMATION));return 0;
+            const auto kind=field(overview,"synthstrings").textOr("status_kind");
+            MessageBoxW(hwnd,patchDetails().c_str(),L"Star Citizen patch status",MB_OK|((kind=="attention"||kind=="unknown")?MB_ICONWARNING:MB_ICONINFORMATION));return 0;
         }
         if(id==210||id==211){previous=id==211;sessionChosen=true;InvalidateRect(hwnd,nullptr,FALSE);for(auto& b:buttons)InvalidateRect(b.hwnd,nullptr,FALSE);publish();return 0;}
         auto found=std::find_if(buttons.begin(),buttons.end(),[&](const auto& b){return b.id==id;});
@@ -243,9 +257,8 @@ void create(){
     add(200,L"Mining HUD\nAutomatic scan reading","hud_mining",false);add(201,L"Finder HUD\nShops & player market","hud_finder",false);
     add(202,L"Missions HUD\nContracts & reputation","hud_missions",false);add(203,L"Hangars HUD\nContested-zone timing","hud_hangars",false);
     add(210,L"This session","this",false);add(211,L"Previous session","previous",false);add(212,L"Dismiss notices","dismiss_refinery",false);
-    add(213,L"Patch details","strings_details",false);
+    add(213,L"Patch status","strings_details",false);
     add(214,L"Text settings","strings_settings",false);
-    add(116,L"Feature modules","modules",true);
     add(117,L"Exit SynthScan","exit",true);
     layout();
 }
@@ -308,22 +321,56 @@ int paintCheck(const std::filesystem::path& output){
     SetWindowPos(window,nullptr,-32000,-32000,1240,840,SWP_NOZORDER|SWP_NOACTIVATE);
     BITMAPINFO info{};info.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);info.bmiHeader.biWidth=2048;info.bmiHeader.biHeight=-1024;info.bmiHeader.biPlanes=1;info.bmiHeader.biBitCount=32;info.bmiHeader.biCompression=BI_RGB;
     HDC dc=CreateCompatibleDC(nullptr);void* pixels=nullptr;HBITMAP bitmap=CreateDIBSection(dc,&info,DIB_RGB_COLORS,&pixels,nullptr,0);HGDIOBJ old=SelectObject(dc,bitmap);
-    RECT all{0,0,2048,1024};HBRUSH sentinel=CreateSolidBrush(RGB(241,12,219));bool eraseDark=true,bounded=true,painted=true;
+    RECT all{0,0,2048,1024};HBRUSH sentinel=CreateSolidBrush(RGB(241,12,219));bool eraseDark=true,bounded=true,painted=true,cornersMatch=true;
+    HDC referenceDC=CreateCompatibleDC(nullptr);void* referencePixels=nullptr;HBITMAP referenceBitmap=CreateDIBSection(referenceDC,&info,DIB_RGB_COLORS,&referencePixels,nullptr,0);auto referenceOld=SelectObject(referenceDC,referenceBitmap);
+    overview=obj({{"synthstrings",obj({{"title",str("Fixture")},{"patch_label",str("Star Citizen 4.10.2 · LIVE")},{"status_kind",str("info")},{"status_label",str("Game text unchanged")},{"summary",str("No action needed.")}})}});layout();
+    auto sameColor=[](COLORREF a,COLORREF b){return std::abs(int(GetRValue(a))-int(GetRValue(b)))<=1&&std::abs(int(GetGValue(a))-int(GetGValue(b)))<=1&&std::abs(int(GetBValue(a))-int(GetBValue(b)))<=1;};
     int cases=0;LARGE_INTEGER start{},finish{},frequency{};QueryPerformanceFrequency(&frequency);QueryPerformanceCounter(&start);
     for(int cycle=0;cycle<12;cycle++){
         SetWindowPos(window,nullptr,0,0,cycle%2?1000:1400,cycle%2?780:980,SWP_NOMOVE|SWP_NOZORDER|SWP_NOACTIVATE);
+        RECT root{};GetClientRect(window,&root);{Gdiplus::Graphics g(referenceDC);g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);paintSurface(g,root.right,root.bottom);}GdiFlush();
         for(const auto& button:buttons){
+            RECT at{};GetWindowRect(button.hwnd,&at);MapWindowPoints(nullptr,window,reinterpret_cast<POINT*>(&at),2);
             RECT r{};GetClientRect(button.hwnd,&r);FillRect(dc,&all,sentinel);IntersectClipRect(dc,0,0,r.right,r.bottom);
             SendMessageW(button.hwnd,WM_ERASEBKGND,reinterpret_cast<WPARAM>(dc),0);
-            GdiFlush();eraseDark&=GetPixel(dc,2,2)==RGB(15,16,19);
+            GdiFlush();auto erased=GetPixel(dc,2,2);eraseDark&=GetRValue(erased)<100&&GetGValue(erased)<100&&GetBValue(erased)<100;
+            cornersMatch&=sameColor(GetPixel(dc,0,0),GetPixel(referenceDC,at.left,at.top));
             SelectClipRgn(dc,nullptr);bounded&=GetPixel(dc,r.right+2,2)==RGB(241,12,219);
             FillRect(dc,&all,sentinel);IntersectClipRect(dc,0,0,r.right,r.bottom);
             DRAWITEMSTRUCT item{};item.CtlType=ODT_BUTTON;item.CtlID=button.id;item.itemAction=ODA_DRAWENTIRE;item.hwndItem=button.hwnd;item.hDC=dc;item.rcItem=r;
             SendMessageW(window,WM_DRAWITEM,button.id,reinterpret_cast<LPARAM>(&item));
             GdiFlush();SelectClipRgn(dc,nullptr);
             auto corner=GetPixel(dc,2,2);painted&=GetRValue(corner)<100&&GetGValue(corner)<100&&GetBValue(corner)<100;
-            bounded&=GetPixel(dc,r.right+2,2)==RGB(241,12,219);++cases;
+            bounded&=GetPixel(dc,r.right+2,2)==RGB(241,12,219);
+            for(POINT corner: {POINT{0,0},POINT{r.right-1,0},POINT{0,r.bottom-1},POINT{r.right-1,r.bottom-1}})
+                cornersMatch&=sameColor(GetPixel(dc,corner.x,corner.y),GetPixel(referenceDC,at.left+corner.x,at.top+corner.y));
+            ++cases;
         }
+    }
+    // Render hidden, synthetic Home fixtures through the actual parent and
+    // owner-draw procedures. No game capture, focus changes or game file writes.
+    bool sidebarClean=GetDlgItem(window,116)==nullptr;
+    bool screenshots=true,patchShown=patchDetails().find(L"4.10.2")!=std::wstring::npos;
+    auto models=read(output/L"home_test_model.json");
+    auto samples=field(models,"cases").items;
+    if(samples.empty())samples.push_back(field(overview,"synthstrings"));
+    const CLSID png={0x557cf406,0x1a04,0x11d3,{0x9a,0x73,0x00,0x00,0xf8,0x1e,0xf3,0x2e}};
+    for(const auto& sample:samples)for(int width:{1000,1400}){
+        overview=obj({{"synthstrings",sample}});
+        SetWindowPos(window,nullptr,0,0,width,width==1000?780:980,SWP_NOMOVE|SWP_NOZORDER|SWP_NOACTIVATE);layout();
+        RECT root{};GetClientRect(window,&root);paint(dc);
+        for(const auto& button:buttons){
+            if(!IsWindowVisible(button.hwnd)&&!((GetWindowLongPtrW(button.hwnd,GWL_STYLE)&WS_VISIBLE)!=0))continue;
+            RECT at{},r{};GetWindowRect(button.hwnd,&at);MapWindowPoints(nullptr,window,reinterpret_cast<POINT*>(&at),2);GetClientRect(button.hwnd,&r);
+            POINT origin{};SetViewportOrgEx(dc,at.left,at.top,&origin);
+            DRAWITEMSTRUCT item{};item.CtlType=ODT_BUTTON;item.CtlID=button.id;item.itemAction=ODA_DRAWENTIRE;item.hwndItem=button.hwnd;item.hDC=dc;item.rcItem=r;
+            paintButton(item);SetViewportOrgEx(dc,origin.x,origin.y,nullptr);
+        }
+        GdiFlush();Gdiplus::Bitmap frame(2048,1024,2048*4,PixelFormat32bppRGB,static_cast<BYTE*>(pixels));
+        std::unique_ptr<Gdiplus::Bitmap> cropped(frame.Clone(0,0,root.right,root.bottom,PixelFormat32bppRGB));
+        auto path=output/(L"home_"+wide(sample.textOr("status_kind","unknown"))+L"_"+std::to_wstring(width)+L".png");
+        screenshots&=cropped&&cropped->Save(path.c_str(),&png,nullptr)==Gdiplus::Ok;
+        write(output/(L"patch_dialog_"+wide(sample.textOr("status_kind","unknown"))+L".json"),obj({{"text",str(utf8(patchDetails()))}}));
     }
     // Repeating an unchanged layout must not send another WINDOWPOSCHANGED to
     // every control. Count actual native notifications, not requested positions.
@@ -335,8 +382,9 @@ int paintCheck(const std::filesystem::path& output){
     SendMessageW(window,WM_COMMAND,MAKEWPARAM(117,BN_CLICKED),0);
     bool composited=(GetWindowLongPtrW(window,GWL_EXSTYLE)&WS_EX_COMPOSITED)!=0;
     QueryPerformanceCounter(&finish);bool focus=foreground==GetForegroundWindow();
-    write(output/L"paint_validation.json",obj({{"erase_stays_dark",SynthScan::boolean(eraseDark)},{"owner_draw_stays_in_bounds",SynthScan::boolean(bounded)},{"buttons_painted",SynthScan::boolean(painted)},{"descendants_composited",SynthScan::boolean(composited)},{"unchanged_layout_notifications",num(notifications)},{"foreground_unchanged",SynthScan::boolean(focus)},{"button_paint_cases",num(cases)},{"elapsed_ms",num((finish.QuadPart-start.QuadPart)*1000./frequency.QuadPart)}}));
+    write(output/L"paint_validation.json",obj({{"feature_modules_removed_from_sidebar",SynthScan::boolean(sidebarClean)},{"button_corners_match_parent",SynthScan::boolean(cornersMatch)},{"patch_dialog_has_installed_patch",SynthScan::boolean(patchShown)},{"home_screenshots_saved",SynthScan::boolean(screenshots)},{"erase_stays_dark",SynthScan::boolean(eraseDark)},{"owner_draw_stays_in_bounds",SynthScan::boolean(bounded)},{"buttons_painted",SynthScan::boolean(painted)},{"descendants_composited",SynthScan::boolean(composited)},{"unchanged_layout_notifications",num(notifications)},{"foreground_unchanged",SynthScan::boolean(focus)},{"button_paint_cases",num(cases)},{"elapsed_ms",num((finish.QuadPart-start.QuadPart)*1000./frequency.QuadPart)}}));
+    SelectObject(referenceDC,referenceOld);DeleteObject(referenceBitmap);DeleteDC(referenceDC);
     SelectObject(dc,old);DeleteObject(bitmap);DeleteObject(sentinel);DeleteDC(dc);close();DestroyWindow(fixture);Gdiplus::GdiplusShutdown(token);
-    return eraseDark&&bounded&&painted&&!composited&&focus&&notifications==0&&exitRouted?0:3;
+    return sidebarClean&&cornersMatch&&screenshots&&patchShown&&eraseDark&&bounded&&painted&&!composited&&focus&&notifications==0&&exitRouted?0:3;
 }
 }

@@ -120,6 +120,7 @@ def record(manager, state, title, detail, source=None, affected=(), now=None, re
     value = dict(schema=1, game=str(manager.game), channel=manager.game.name,
                  state=state, title=title, detail=detail, fingerprint=fingerprint,reason=reason,
                  build=(source or {}).get('build', ''), version=(source or {}).get('version', ''),
+                 manifest_sha256=(source or {}).get('facts', {}).get('manifest', ''),
                  event_id=event, at=old.get('at', now) if same else now,
                  affected_game_pids=sorted(set(old.get('affected_game_pids', [])) | set(affected) | set(suspended_pids)),
                  history=history)
@@ -279,8 +280,68 @@ def process_jobs(jobs, profile=PROFILE, native=None, cancel=None):
                         'The text update could not complete. The existing file was preserved; open Text settings for recovery options. ') + str(error), source,reason='rebuild_failed')
 
 
+def patch_presentation(value):
+    """Describe the installed patch and text status without claiming app-wide testing.
+
+    Branch is the public patch number; Version can be an internal four-part
+    version. Read only the small local manifest, never the game archive here.
+    Historical checks cannot give a new installation a green ready indicator.
+    """
+    metadata = {}; manifest_sha256 = ''
+    try:
+        game = Path(value.get('game', ''))
+        if game.is_absolute():
+            raw = (game / 'build_manifest.id').read_bytes()
+            if len(raw) <= 1024 * 1024:
+                metadata = json.loads(raw.decode('utf-8-sig'))['Data']
+                if not isinstance(metadata, dict):
+                    metadata = {}
+                manifest_sha256 = digest(raw)
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    branch = str(metadata.get('Branch', ''))
+    match = re.fullmatch(r'sc-(?:alpha|beta)-([0-9]+\.[0-9]+\.[0-9]+[a-z]?)', branch, re.I)
+    version = str(metadata.get('Version', ''))
+    patch = match.group(1) if match else version if re.fullmatch(r'\d+\.\d+\.\d+[a-z]?', version, re.I) else ''
+    channel = value.get('channel') or (Path(value['game']).name if value.get('game') else '')
+    label = 'Star Citizen ' + patch if patch else 'Star Citizen · patch number unavailable'
+    if channel:
+        label += ' · ' + channel
+    state, reason = value.get('state'), value.get('reason')
+    current_build = str(metadata.get('BuildId') or metadata.get('RequestedP4ChangeNum') or '')
+    changed = bool(current_build and value.get('build') and current_build != value['build']) or bool(
+        manifest_sha256 and value.get('manifest_sha256') and manifest_sha256 != value['manifest_sha256'])
+    choices = {
+        'ready': ('ready', 'SynthStrings ready', 'Game-text enhancements are prepared for this installed patch.'),
+        'adapted': ('ready', 'SynthStrings ready', 'Game-text enhancements have been updated for this installed patch.'),
+        'external': ('info', 'Game text unchanged', 'No action needed.'),
+        'disabled': ('off', 'SynthStrings off', 'Optional game-text enhancements are off.'),
+        'updating': ('updating', 'Updating SynthStrings', 'Preparing game-text enhancements for this patch. The game uses its normal text in the meantime.'),
+        'fallback': ('attention', 'SynthStrings not ready', 'The game will use its normal text. Open Text settings to check for an update.'),
+        'attention': ('attention', 'Text needs attention', 'The game-text update could not finish. Open Text settings to review it; your saved text has been kept.'),
+    }
+    kind, status, summary = choices.get(state, ('unknown', 'Text status unavailable', 'Open Text settings to check game-text enhancements.'))
+    if reason == 'pack_build_changed' or changed:
+        if state == 'external' or reason == 'pack_build_changed':
+            kind, status, summary = 'attention', 'Custom text needs updating', 'Your custom game text predates this patch. Update that pack, or use Text settings to switch to SynthStrings with a backup.'
+        else:
+            kind, status, summary = 'attention', 'New patch · text needs checking', 'Star Citizen has changed since the last text check. Open Text settings and choose Check now.'
+    elif reason == 'external_edit':
+        kind, status, summary = 'attention', 'Custom text changed', 'Your game text was edited outside SynthScan. It has been kept; Text settings lets you review your options.'
+    elif reason == 'cleanup_conflict':
+        kind, status, summary = 'attention', 'Text needs attention', 'Earlier text changes could not be fully removed. Open Text settings to review them.'
+    elif state in ('ready', 'adapted') and not (current_build and value.get('build')):
+        kind, status, summary = 'unknown', 'Installed patch not checked', 'The installed game version could not be read. Open Text settings to check again.'
+    if value.get('restart_required') and kind == 'ready':
+        kind, status, summary = 'attention', 'Restart Star Citizen', 'SynthStrings is updated. Restart Star Citizen once to load the new game text.'
+    return dict(patch=patch, patch_label=label, status_kind=kind, status_label=status, summary=summary,
+                installed_build=str(metadata.get('RequestedP4ChangeNum', '')),
+                installed_build_date=str(metadata.get('BuildDateStamp', '')))
+
+
 def view(profile=PROFILE, pids=()):
     """Persistent home-screen result; a new game process clears restart advice."""
+    configured = load(Path(profile) / 'installation.json').get('game_dir', '')
     values = []
     for path in (Path(profile) / 'game_text').glob('*/guard_status.json'):
         try:
@@ -304,13 +365,20 @@ def view(profile=PROFILE, pids=()):
                 value['detail']=detail.replace('Open Setup','Open Text settings') if detail else 'The earlier version did not record a cause. Choose Check now in Text settings to get a specific result.'
             value['restart_required'] = bool(set(pids) & set(value.get('affected_game_pids', [])))
             value['history']=[event for event in value.get('history',[]) if event.get('detail')]
+            value.update(patch_presentation(value))
             values.append(value)
         except (OSError, ValueError, TypeError):
             continue
     if not values:
-        return {}
+        if not configured:
+            return {}
+        value = dict(game=configured,channel=Path(configured).name,state='disabled',title='SynthStrings off',
+                     detail='Optional game-text enhancements are off.',restart_required=False,warning=False,at=0,channels=[])
+        value.update(patch_presentation(value))
+        return value
     priority = dict(attention=5, fallback=4, updating=3, adapted=2, ready=1, disabled=0)
-    values.sort(key=lambda v: (v['restart_required'], priority.get(v.get('state'), 0), v.get('at', 0)), reverse=True)
+    values.sort(key=lambda v: (bool(configured) and os.path.normcase(v.get('game', '')) == os.path.normcase(configured),
+                              v['restart_required'], priority.get(v.get('state'), 0), v.get('at', 0)), reverse=True)
     result = dict(values[0], channels=values)
     if result['restart_required']:
         if result['state'] == 'attention':
@@ -319,15 +387,6 @@ def view(profile=PROFILE, pids=()):
             result['title'] = 'Restart Star Citizen to refresh SynthStrings'
             result['detail'] += ' Restart Star Citizen once to load the prepared text. Text already loaded by the running game cannot be replaced.'
     result['warning'] = result['restart_required'] or result['state'] in ('attention', 'fallback')
-    result['summary'] = {
-        'adapted': 'Current game text is prepared. Enhancements will load the next time you start Star Citizen.',
-        'ready': 'SynthStrings is prepared for the installed game build.',
-        'fallback': 'Game defaults are prepared. The next launcher or patch-completion event will check again; Text settings also has Check now.',
-        'updating': 'Game defaults are in place while SynthStrings checks the new patch.',
-        'attention': result.get('detail','The last check could not finish. Open Text settings for the exact result.'),
-        'external': result['detail'] if result.get('reason')=='existing_pack_unverified' else 'Using your existing text pack. Automatic rebuilding is not enabled for this pack. Text settings lets you keep it or switch to generated SynthStrings.',
-        'disabled': 'SynthStrings is off. You can enable it again in Setup.',
-    }.get(result['state'], '')
     if len(values) > 1:
         result['title'] = result['channel'] + ': ' + result['title']
     return result
