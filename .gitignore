@@ -61,3 +61,6 @@ mission_capture_status.json
 /module_selection.json
 /module_install_error.json
 /module_text_cleanup.json
+
+/ui/node_modules/
+/ui/dist/
