@@ -20,7 +20,8 @@ def public_error(error):
             'ALREADY_EXISTS':'A friendship or pending request already exists.',
             'RESOURCE_EXHAUSTED':'The game service is busy or a social limit was reached.',
             'DEADLINE_EXCEEDED':'No confirmation received. Check in-game before trying again.',
-            'INVALID_ARGUMENT':'The game service rejected this recipient or party state.'}.get(code,'Social service unavailable. Try refreshing.' )
+            'NOT_FOUND':'This player could not be found by the social service.',
+            'INVALID_ARGUMENT':'The game service rejected this recipient or party state.'}.get(code,'The social request failed ('+code+'). No confirmation was received.' )
 
 
 class PlayerClient:
@@ -229,7 +230,12 @@ class PlayerClient:
                 except PlayerLeftShard as error:row.update(outcome='Skipped',detail=str(error))
                 except Exception as error:
                     message=str(error)[:240] if isinstance(error,ValueError) else public_error(error)
-                    row.update(outcome='Check in game',detail=message+' Batch stopped; check in-game before retrying.');stopped=True
+                    try:code=error.code().name
+                    except Exception:code=''
+                    if code in ('ALREADY_EXISTS','NOT_FOUND','INVALID_ARGUMENT'):
+                        row.update(outcome='Skipped',detail=message+' Continuing with the next player; this request will not be retried.')
+                    else:
+                        row.update(outcome='Check in game',detail=message+' Queue stopped because delivery or service availability is uncertain. Check in-game before retrying.');stopped=True
             results.append(row);control.update(row)
         skipped=sum(r['outcome']=='Skipped' for r in results)
         unsent=sum(r['outcome']=='Not sent' for r in results)

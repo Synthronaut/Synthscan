@@ -311,6 +311,18 @@ class WorkerTests(unittest.TestCase):
             self.assertFalse(thread.is_alive());self.assertEqual(c.send.call_count,2)
             self.assertEqual(results[0]['results'][1]['outcome'],'Skipped')
         finally:q.cancel();release.set();thread.join(2)
+    def test_recipient_rejection_continues_but_connection_failure_stops(self):
+        class RpcFailure(Exception):
+            def __init__(self,name):self.name=name
+            def code(self):
+                from types import SimpleNamespace
+                return SimpleNamespace(name=self.name)
+        for code in ('ALREADY_EXISTS','NOT_FOUND','INVALID_ARGUMENT','UNAVAILABLE','UNAUTHENTICATED','RESOURCE_EXHAUSTED'):
+            c=self.client();c.send.side_effect=[RpcFailure(code),'Receipt','Receipt']
+            q=PartyInviteQueue(PEOPLE,interval=0);result=c.invite_many(PEOPLE,CONTEXT,True,control=q)
+            continuing=code in ('ALREADY_EXISTS','NOT_FOUND','INVALID_ARGUMENT')
+            self.assertEqual(c.send.call_count,3 if continuing else 1,code)
+            self.assertEqual(result['results'][0]['outcome'],'Skipped' if continuing else 'Check in game',code)
     def test_leaving_shard_is_skipped_without_stopping_other_requests(self):
         c=self.client();c.send.side_effect=['Receipt',PlayerLeftShard('Left the shard'),'Receipt'];q=PartyInviteQueue(PEOPLE,interval=0)
         result=c.invite_many(PEOPLE,CONTEXT,True,control=q)
