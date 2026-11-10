@@ -140,6 +140,9 @@ def main():
         def update(self,*args,**kwargs):pass
         def consume(self,*args,**kwargs):return []
     root=tk.Tk();root.withdraw();ribbon=Ribbon(root);gate=AlertGate(started_at);alert=SilentVisual();activity=ActivityButton(root,DATA,args.owner);collapse=ActivityQuickControls(root,DATA,args.owner);ribbon.activity_button=activity
+    from memory_recovery_hud import MemoryRecoveryButton
+    memory_recovery=MemoryRecoveryButton(root,DATA,args.owner)
+    ribbon.memory_recovery=memory_recovery
     if feature_enabled('piracy'):
         from snare_alert_ui import SnareAlertWindow
         alert=SnareAlertWindow(root,game_window_rect)
@@ -170,7 +173,7 @@ def main():
         api.GetParent.argtypes=[w.HWND];api.GetParent.restype=w.HWND
         bar_hwnd=api.GetParent(ribbon.bar_win.winfo_id()) or ribbon.bar_win.winfo_id()
         set_passthrough(bar_hwnd,protected)
-        for hwnd in ((history.hwnd,history.popup_hwnd) if history else ())+(activity.hwnd,collapse.hwnd):set_passthrough(hwnd,False)
+        for hwnd in ((history.hwnd,history.popup_hwnd) if history else ())+(activity.hwnd,collapse.hwnd,memory_recovery.hwnd):set_passthrough(hwnd,False)
         return protected
     def poll():
         nonlocal last_feed_status
@@ -205,6 +208,7 @@ def main():
             except (OSError,ValueError):native={}
             activity.sync(ribbon,native,game_window_rect() or get_monitor_by_id(ribbon.game_monitor))
             collapse.sync(ribbon,native,game_window_rect() or get_monitor_by_id(ribbon.game_monitor))
+            memory_recovery.sync(ribbon,game_window_rect() or get_monitor_by_id(ribbon.game_monitor))
             if history:history.follow(ribbon,game_window_rect() or get_monitor_by_id(ribbon.game_monitor))
             enabled=feature_enabled('piracy') and piracy_alerts_enabled(settings,bool(game_window_rect()))
             notices=gate.consume(snapshot,args.owner,time.time(),enabled)
