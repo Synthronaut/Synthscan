@@ -57,7 +57,8 @@ def main():
     def release_key():
         nonlocal down,disabled_reason
         if down is None:return
-        event=Input();event.type=1;event.payload.key=Key(0,down,0x0008|0x0002,0,0)
+        vk,scan=down if isinstance(down,tuple) else (0,down)
+        event=Input();event.type=1;event.payload.key=Key(vk,scan,0x0008|0x0002,0,0)
         if api.SendInput(1,ctypes.byref(event),ctypes.sizeof(Input))!=1:
             disarm();disabled_reason='Windows could not release the automation key; release it manually'
         down=None
@@ -120,9 +121,9 @@ def main():
                     for record in latest:q.feed(record)
                     # Final focus check after reading the current binding.
                     if not blockers and api.GetForegroundWindow()==foreground and q.attempted_once(candidate,time.time()):
-                        event=Input();event.type=1;event.payload.key=Key(0,scan,0x0008,0,0)
+                        event=Input();event.type=1;event.payload.key=Key(accept_vk,scan,0x0008,0,0)
                         if api.SendInput(1,ctypes.byref(event),ctypes.sizeof(Input))==1:
-                            down=scan;root.after(60,release_key)
+                            down=(accept_vk,scan);root.after(120,release_key)
                             logging.info('Accept input sent: queue=%s key=%s attempt=%s',candidate['queue_id'],key,q.inputs[q.prompt_key(candidate)][0])
                         else:
                             disarm();disabled_reason='Windows rejected the accept key; automation disabled'
@@ -140,9 +141,9 @@ def main():
                 if token and api.GetForegroundWindow()==foreground and chat.attempted_once(token):
                     # F12 is a toggle: one attempt only, sharing the same input
                     # lane as acceptance so key holds cannot overlap.
-                    event=Input();event.type=1;event.payload.key=Key(0,0x58,0x0008,0,0)
+                    event=Input();event.type=1;event.payload.key=Key(0x7B,0x58,0x0008,0,0)
                     if api.SendInput(1,ctypes.byref(event),ctypes.sizeof(Input))==1:
-                        down=0x58;root.after(60,release_key)
+                        down=(0x7B,0x58);root.after(120,release_key)
                         logging.info('Global chat F12 input sent: session=%s',token)
                     else:
                         disarm();disabled_reason='Windows rejected F12; automation disabled'

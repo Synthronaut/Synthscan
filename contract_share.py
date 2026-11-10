@@ -41,14 +41,16 @@ class GlobalChatOnJoin:
     a previous manual or automatic toggle. Old log completions are ignored.
     Focus loss and stale snapshots only pause; neither rearms a sent join.
     """
-    SETTLE_SECONDS=2
+    SETTLE_SECONDS=8
+    FOCUS_SETTLE_SECONDS=1.0
     def __init__(self,now,enabled=False):
         self.enabled=enabled;self.armed_at=now;self.attempted=set();self.processes={}
+        self.focused_at=None
         self.message='Waiting for the next game join' if enabled else 'Off'
 
     def set_enabled(self,enabled,now):
         if enabled!=self.enabled:
-            self.enabled=enabled;self.armed_at=now
+            self.enabled=enabled;self.armed_at=now;self.focused_at=None
             self.message='Waiting for the next game join' if enabled else 'Off'
 
     def candidate(self,snapshot,owner,now,foreground_pid,held=()):
@@ -68,6 +70,9 @@ class GlobalChatOnJoin:
         if not pids:return None
         self.processes.setdefault(join,pids)
         if self.processes[join]!=pids:return None
+        is_focused=bool(foreground_pid and foreground_pid in pids)
+        if not is_focused:self.focused_at=None
+        elif self.focused_at is None:self.focused_at=now
         if (snapshot.get('is_loading_screen') is not False
                 or snapshot.get('connection_status')!='connected'):return None
         if join in self.attempted:
@@ -76,9 +81,13 @@ class GlobalChatOnJoin:
         if not self.number(ready) or not joined<=ready<=now:return None
         if ready<self.armed_at:
             self.message='Waiting for the next game join';return None
-        if now-ready<self.SETTLE_SECONDS:return None
+        if now-ready<self.SETTLE_SECONDS:
+            self.message='Waiting for game world and HUD to settle'
+            return None
         self.message='Waiting for Star Citizen to be focused'
-        if not foreground_pid or foreground_pid not in snapshot.get('game_pids',[]):return None
+        if not is_focused:return None
+        if now-self.focused_at<self.FOCUS_SETTLE_SECONDS:
+            self.message='Waiting for Star Citizen focus to stabilize';return None
         self.message='Waiting for modifier/F12 key release'
         if accept_blockers(held,0x7b):return None
         self.message='Ready to hide global chat'
