@@ -309,12 +309,8 @@ def patch_presentation(value):
         label += ' · ' + channel
     state, reason = value.get('state'), value.get('reason')
     current_build = str(metadata.get('BuildId') or metadata.get('RequestedP4ChangeNum') or '')
-    changed = bool(current_build and value.get('build') and current_build != value['build'])
-    if not changed and current_build and value.get('build') and current_build == value['build']:
-        if reason == 'pack_build_changed':
-            reason = 'existing_pack'
-            if state == 'attention':
-                state = 'external' 
+    changed = bool(current_build and value.get('build') and current_build != value['build']) or bool(
+        manifest_sha256 and value.get('manifest_sha256') and manifest_sha256 != value['manifest_sha256'])
     choices = {
         'ready': ('ready', 'SynthStrings ready', 'Game-text enhancements are prepared for this installed patch.'),
         'adapted': ('ready', 'SynthStrings ready', 'Game-text enhancements have been updated for this installed patch.'),
@@ -338,7 +334,7 @@ def patch_presentation(value):
         kind, status, summary = 'unknown', 'Installed patch not checked', 'The installed game version could not be read. Open Text settings to check again.'
     if value.get('restart_required') and kind == 'ready':
         kind, status, summary = 'attention', 'Restart Star Citizen', 'SynthStrings is updated. Restart Star Citizen once to load the new game text.'
-    return dict(state=state, reason=reason, patch=patch, patch_label=label, status_kind=kind, status_label=status, summary=summary,
+    return dict(patch=patch, patch_label=label, status_kind=kind, status_label=status, summary=summary,
                 installed_build=str(metadata.get('RequestedP4ChangeNum', '')),
                 installed_build_date=str(metadata.get('BuildDateStamp', '')))
 
