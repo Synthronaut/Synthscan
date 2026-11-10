@@ -23,6 +23,15 @@ jobs:
         with:
           python-version: '3.14'
           architecture: x64
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: ui/package-lock.json
+      - run: |
+          npm --prefix ui ci
+          npm --prefix ui test
+          npm --prefix ui run build
       - run: python -m pip install --require-hashes -r requirements-release.lock
       - name: Preflight installer layout on runner fonts
         if: matrix.edition == 'standard'
@@ -69,6 +78,15 @@ jobs:
         with:
           python-version: '3.14'
           architecture: x64
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: ui/package-lock.json
+      - run: |
+          npm --prefix ui ci
+          npm --prefix ui test
+          npm --prefix ui run build
       - run: python -m pip install --require-hashes -r requirements-release.lock
       - uses: actions/download-artifact@v4
         with:

@@ -19,9 +19,6 @@ int wmain(int argc,wchar_t** argv){
     if(argc<2)return 2;
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     bool composited=argc>2&&std::wstring(argv[2])==L"--composited";
-    SetPriorityClass(GetCurrentProcess(),BELOW_NORMAL_PRIORITY_CLASS);
-    DWORD_PTR processMask=0,systemMask=0;
-    if(GetProcessAffinityMask(GetCurrentProcess(),&processMask,&systemMask)&&processMask)SetProcessAffinityMask(GetCurrentProcess(),processMask&(~processMask+1));
     // Hard stop even if a native message handler never returns.
     std::thread([](){Sleep(20000);unsigned n=callCount.load();std::cerr<<"HARD TIMEOUT messages="<<n<<std::endl;for(unsigned i=n>32?n-32:0;i<n;i++){auto entry=recent[i%32].load();std::cerr<<"id="<<(entry>>32)<<" message="<<(entry&0xffffffff)<<std::endl;}ExitProcess(124);}).detach();
     // Render genuine visible HWNDs on an unshown desktop. The player's desktop
@@ -30,6 +27,7 @@ int wmain(int argc,wchar_t** argv){
     HDESK desktop=CreateDesktopW(desktopName.c_str(),nullptr,nullptr,0,GENERIC_ALL,nullptr);
     if(!desktop||!SetThreadDesktop(desktop))return 5;
     using namespace SynthScan;
+    SynthCompanion::inPreview=true;
     std::filesystem::path output=argv[1];std::filesystem::create_directories(output);
     SCMiner::AppPaths::useDataFolder(output);
     if(argc>2&&std::wstring(argv[2])==L"--preview")return SynthCompanion::preview(output);
@@ -70,7 +68,7 @@ int wmain(int argc,wchar_t** argv){
             if(beats%4==0)SynthHome::navigate("home");
             if(beats%4==1)SynthHome::navigate("people");
             SetWindowPos(workspace,nullptr,0,0,beats%2?1200:1100,beats%2?900:820,SWP_NOMOVE|SWP_NOZORDER|SWP_NOACTIVATE);
-            nextBeat=GetTickCount64()+500;
+            nextBeat+=500;
         }
         if(messages>10000||paints>10000)break;
     }

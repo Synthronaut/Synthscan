@@ -5,6 +5,7 @@ Never copies the development profile, research, screenshots or extracted game ca
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -13,7 +14,7 @@ import zipfile
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
-VERSION='0.1.0-alpha.11'
+VERSION=os.environ.get('SYNTHSCAN_VERSION','0.1.0-alpha.11')
 PRIVATE={'quantum_timer_status.json','quantum_timer_status.json.tmp','quantum_timer_command.json','quantum_timer_command.json.tmp','contract_share_preferences.json','contract_share_preferences.json.tmp','contract_share_status.json','contract_share_status.json.tmp','daylight_preferences.json.tmp','daylight_calibration.json.tmp','daylight_preferences.json','daylight_calibration.json','daylight_catalogue.json.tmp','loginData.json','inventory.json','config.json','region_config.txt','owned_blueprints.txt',
     'blueprints_library.json','blueprints_favorites.json','reputation_snapshot.json','reputation_localization_state.json',
     'server_log.json','shard_history.json','uex_token.dat','uex_key.dat','portable.txt',
@@ -25,7 +26,7 @@ PRIVATE={'quantum_timer_status.json','quantum_timer_status.json.tmp','quantum_ti
     'compboard_inventory.sqlite3','compboard_inventory.sqlite3-journal',
     'compboard_inventory.sqlite3-wal','compboard_inventory.sqlite3-shm',
     'native_status.json','top_hud_status.json','session_state.json','credentials.json','.env'}
-IGNORED={'debug','recordings','.git','__pycache__','.venv','node_modules','synthscan-build','build'}
+IGNORED={'debug','recordings','.git','__pycache__','.venv','node_modules','synthscan-build','build','dist-test','webview2_cache'}
 PRIVATE.update({'directory_vehicles.json','item_directory_request.json','item_directory_detail.json','item_directory_catalog.json','data_update_status.json','data_update_command.json','hangar_update_status.json',
     'hangar_update_command.json','hangar_reset_sync.json','catalogue_current.json'})
 PRIVATE.update({'update_preferences.json','app_update_status.json','reference_source_status.json','reference_source_current.json',
@@ -107,6 +108,8 @@ def stage_source(destination,edition="full"):
     shutil.copy2(ROOT/'docs/hud-screen-sharing.md',destination/'docs/hud-screen-sharing.md')
     shutil.copy2(ROOT/'docs/modules.md',destination/'docs/modules.md')
     shutil.copy2(ROOT/'docs/deployment-readiness-2026-11-09.md',destination/'docs/deployment-readiness-2026-11-09.md')
+    if (ROOT/'docs/GEMINI-HANDOFF.md').exists():shutil.copy2(ROOT/'docs/GEMINI-HANDOFF.md',destination/'docs/GEMINI-HANDOFF.md')
+    if (ROOT/'ui').exists():copy_tree(ROOT/'ui',destination/'ui')
     shutil.copy2(ROOT/'assets/snare_watch.wav',destination/'assets/snare_watch.wav')
     copy_tree(ROOT/'assets/branding',destination/'assets/branding')
     if (ROOT/'.github').exists():copy_tree(ROOT/'.github',destination/'.github')
@@ -125,7 +128,7 @@ def audit(destination):
         relative=file.relative_to(destination)
         if relative.parts[0] in ('research','backups','release-validation','voice_cache'):
             raise ValueError('Development data included: '+str(relative))
-        if file.suffix.lower() in ('.py','.json','.md','.txt','.yml','.yaml','.ini','.cfg'):
+        if file.suffix.lower() in ('.py','.json','.md','.txt','.yml','.yaml','.ini','.cfg','.ts','.js','.css','.html'):
             text=file.read_text(encoding='utf-8',errors='replace')
             if re.search(r'\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,}|eyJ[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,})',text):
                 raise ValueError('Potential credential in '+str(relative))
@@ -137,12 +140,13 @@ def archive_package(destination):
     audit(destination)
     integrity=destination/'release_integrity.json'
     from edition_payload import forbidden_standard_path
-    if json.loads((destination/'release.json').read_text(encoding='utf-8')).get('edition','full')=='standard':
+    release_meta=json.loads((destination/'release.json').read_text(encoding='utf-8'))
+    if release_meta.get('edition','full')=='standard':
         banned=[p.relative_to(destination).as_posix() for p in destination.rglob('*') if p.is_file() and forbidden_standard_path(p.relative_to(destination).as_posix())]
         if banned:raise ValueError('Capture components in Standard payload: '+str(banned))
     manifest={p.relative_to(destination).as_posix():hashlib.sha256(p.read_bytes()).hexdigest()
               for p in sorted(destination.rglob('*')) if p.is_file() and p!=integrity}
-    integrity.write_text(json.dumps(dict(version=VERSION,files=manifest),indent=2),encoding='utf-8')
+    integrity.write_text(json.dumps(dict(version=release_meta.get('version',VERSION),files=manifest),indent=2),encoding='utf-8')
     zip_path=destination.with_suffix('.zip')
     with zipfile.ZipFile(zip_path,'w',zipfile.ZIP_DEFLATED,compresslevel=6) as archive:
         for file in sorted(destination.rglob('*')):

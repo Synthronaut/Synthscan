@@ -49,7 +49,8 @@ def production_file(relative):
     if relative=='tools/release_downloads.py':return False # Publisher-only public counter report.
     if relative in RETIRED or parts[0] in ('tests','.github','installer'):return False
     if relative.startswith(('native/synthscan/','native/mining_worker/','third_party/build_tools/')):return False
-    if relative in ('native/launcher.cpp','native/launcher.rc'):return False
+    if relative.startswith('ui/') and not relative.startswith('ui/dist/'):return False
+    if relative in ('native/launcher.cpp','native/launcher.rc','docs/GEMINI-HANDOFF.md'):return False
     # Public source is published separately. Runtime reference/extraction tools
     # are retained; developer capture probes and benchmarks are not shipped.
     if parts[0]=='tools' and (any(s in Path(relative).stem.lower() for s in ('probe','benchmark','test_','build_','package_','sign_','configure_','verify_','fetch_','trace_'))):return False
@@ -112,7 +113,8 @@ def build(standard,full,output,url_base,key_file=None,sequence=None):
         path.write_text(json.dumps(dict(schema=1,id=name,retired=True)),encoding='utf-8')
     packages={name:write_component(folder,name,version,output,url_base) for name,folder in destinations.items()}
     trust=config(standard);now=time.time()
-    payload=dict(schema=1,kind='modules',platform='windows-x64',version=version,sequence=sequence or time.time_ns()//1000000,
+    seq=sequence or int(os.environ.get('SYNTHSCAN_SEQUENCE','0')) or time.time_ns()//1000000
+    payload=dict(schema=1,kind='modules',platform='windows-x64',version=version,sequence=seq,
         minimum_manager=1,issued_at=now,expires_at=now+365*86400,packages=packages)
     private=base64.b64decode(os.environ['SYNTHSCAN_SIGNING_PRIVATE_B64'],validate=True) if os.environ.get('SYNTHSCAN_SIGNING_PRIVATE_B64') else private_key(key_file or Path(os.environ['LOCALAPPDATA'])/'SynthScanRelease/signing-key.dpapi')
     public=None

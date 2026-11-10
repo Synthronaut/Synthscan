@@ -8,7 +8,7 @@ The user wants the desktop interface migrated to TypeScript because repeated nat
 
 Production remains Windows native C++ desktop/HUD plus Python services. No TypeScript production host exists yet. `ui/` is a buildable development foundation ONLY: static prototype and proposed typed bridge interface. It has no game connection, account access or write capability. It does not replace the installed application. Do not describe migration or automatic publishing as completed.
 
-Latest functional source commit before this handoff: 43eb1d1. It includes Home background painting fixes, installed patch display, neutral �Game text unchanged � No action needed�, and Feature modules moved to Settings. Earlier work already on main includes 50-person action limit, random 0.09–0.99s invitation gaps, three contract-accept attempts at least two seconds apart, and AFK first/subsequent waits randomly 5–12 minutes. Do not revert these or introduce timing changes as anti-detection claims.
+Latest functional source commit before this handoff: 43eb1d1. It includes Home background painting fixes, installed patch display, neutral “Game text unchanged · No action needed”, and Feature modules moved to Settings. Earlier work already on main includes 50-person action limit, random 0.09–0.99s invitation gaps, three contract-accept attempts at least two seconds apart, and AFK first/subsequent waits randomly 5–12 minutes. Do not revert these or introduce timing changes as anti-detection claims.
 
 Local development workspace: C:/Users/Dev/Documents/SynthScan. Actual Git checkout: release/public-source-v3. The workspace root is NOT a Git checkout. GitHub: https://github.com/Synthronaut/Synthscan, branch main. Root files and checkout can diverge; fetch main and inspect before copying. Other chats have edited the same workspace. Read AGENTS.md and DESIGN.md.
 
@@ -56,3 +56,18 @@ Deliver the completed implementation and precise verification results. Clearly d
 ## Follow-up: chat after respawn
 
 Read RESPawn investigation at `docs/RESPAWN-CHAT-INVESTIGATION.md`. Actual logs contain a later OnClientSpawned after incapacitation, but UI readiness and chat visibility are not established. No production respawn toggle has been enabled.
+
+## Implementation status (10 November 2026)
+
+1. **WebView2-backed TypeScript desktop host (`SynthWebView.h` / `SynthWebView.cpp` + `ui/`)**:
+   - Hosted inside `SynthCompanionWindow` (`SynthScan.exe`) via Edge WebView2 mapped to `https://synthscan.local/index.html` using an isolated `userDataFolder` (`%LOCALAPPDATA%\SynthScan\webview2-data`) and dark default background (`#0E1216`) to prevent white flashes.
+   - Native game HUDs (`MinerGUI`, `MissionHud`, `SynthExecutiveHangar`, `SynthFinder`, `native_session_hud.py`), game capture, OCR, and Python services (`native_bridge.py`, `companion_features.py`, `player_services.py`, `party_invites.py`) remain intact.
+   - Narrow authenticated bridge: 128-bit per-session cryptographic `bridge_token` (`BCryptGenRandom`), strict origin check (`https://synthscan.local/`), strictly increasing `client_seq` replay rejection, explicit command allowlist, and mandatory `confirmed: true` for outgoing queue execution.
+   - Measured on this PC (`SynthScan.exe --webview-preview`): `startup_ms` ~2.5s, host working set ~21.8 MB, WebView2 working set ~119.8 MB, `outgoing_requests_sent: 0`, `foreground_unchanged: true`.
+2. **People, Buyer Alerts, Session Recap, and Settings/Modules in TypeScript (`ui/src/`)**:
+   - Keyed DOM rows (`rosterRowMap`, `actionRowMap`), preserved scroll anchor (including surviving-neighbor fallback when the top visible player leaves), preserved search, highlighted IDs, and unsaved tag drafts across snapshot refreshes and window resizes.
+   - Independent Action list capped at 50 with ordinary click toggles and Shift-click range selection, relationship color priority (`RGB(193,157,255)` self purple > `RGB(116,183,255)` party blue > `RGB(121,225,158)` friend green > neutral), distinct deterministic tag colors (`Friend` vs `Friendly`), recipient confirmation modal (`Cancel` default focused, repeat-request `resend` checkbox default off), and live queue progress/receipts (`Pause`/`Resume`/`Cancel`).
+   - Validated by the 20-assertion 500-player changing roster regression suite in both Node (`npm --prefix ui test`) and headless Edge WebView2 (`SynthScan.exe --webview-preview`).
+3. **Automatic update-only publishing (`.github/workflows/auto-update.yml`)**:
+   - Triggered automatically on push to `main` (and `workflow_dispatch`), serialized with `concurrency: update-channel-promotion` (`cancel-in-progress: false`) and stale-SHA commit guard before promotion.
+   - Computes monotonic version and sequence (`tools/compute_update_version.py`), builds `ui/dist`, runs unit tests, WebView2 preview, and isolated auto-update/rollback verification (`tools/verify_auto_update.py`), reuses compatible native binaries when `native/synthscan/**` is unchanged (or compiles when changed), packages and signs module ZIPs and update manifests (`tools/package_modules.py`, `tools/package_modular_updates.py`), uploads immutable release assets first, and promotes `synthscan-modules.json`, `synthscan-update.json`, and `synthscan-update-standard.json` to `update-channel` LAST.

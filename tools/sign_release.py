@@ -19,8 +19,9 @@ def sign_release(archive,url,output,key_file=None,sequence=None):
     with zipfile.ZipFile(archive) as stream:
         release=json.loads(stream.read('SynthScan/release.json'))
         unpacked=sum(member.file_size for member in stream.infolist() if not member.is_dir())
-    now=time.time();value=dict(schema=1,kind='application',platform='windows-x64',version=release['version'],
-        sequence=sequence or time.time_ns()//1000000,issued_at=now,expires_at=now+365*86400,
+    now=time.time();seq=sequence or int(os.environ.get('SYNTHSCAN_SEQUENCE','0')) or time.time_ns()//1000000
+    value=dict(schema=1,kind='application',platform='windows-x64',version=release['version'],
+        sequence=seq,issued_at=now,expires_at=now+365*86400,
         edition=release.get('edition','full'),minimum_updater=1,size=archive.stat().st_size,unpacked_size=unpacked,sha256=hashlib.sha256(archive.read_bytes()).hexdigest(),url=url)
     inspect_archive(archive,value)
     if os.environ.get('SYNTHSCAN_SIGNING_PRIVATE_B64'):

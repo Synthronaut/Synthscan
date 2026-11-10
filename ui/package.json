@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit && vite build",
+    "test": "vite build --ssr src/node_test.ts --outDir dist-test && node dist-test/assets/app.js && node -e \"require('fs').rmSync('dist-test',{recursive:true,force:true})\"",
     "preview": "vite preview --host 127.0.0.1"
   },
   "devDependencies": {

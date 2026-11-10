@@ -4,6 +4,8 @@
 #include "SynthJson.h"
 #include "SynthPages.h"
 #include "SynthGlass.h"
+#include "SynthHome.h"
+#include "SynthWebView.h"
 #include <commctrl.h>
 #include <uxtheme.h>
 #include <shellapi.h>
@@ -30,6 +32,7 @@ std::vector<std::string> selectedIds;
 std::vector<std::string> actionEditorIds;std::string tagOptions;
 std::string peopleView;
 bool showMatches=false;
+bool inPreview=false;
 HBRUSH background=CreateSolidBrush(RGB(14,18,25)),editBackground=CreateSolidBrush(RGB(25,29,36));
 double now(){return std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count();}
 HWND child(int id){return GetDlgItem(page,id);}
@@ -207,8 +210,20 @@ void queue(Json command){
     if(!write(folder/L"companion_commands"/(std::wstring(id,id+strlen(id))+L".json"),command))label(590,"Could not save the action. Please try again.");
     else label(590,"Working…");
 }
+void handleWebViewCommand(const Json& command){
+    const std::string action=command.textOr("action");
+    if(action=="navigate"){SynthHome::navigate(command.textOr("page"));return;}
+    if(action=="open_uex_ad"){
+        auto url=command.textOr("url");
+        if(url.rfind("https://uexcorp.space/marketplace/item/info/",0)==0&&url.find_first_of("\r\n\t ")==std::string::npos)
+            ShellExecuteW(page,L"open",wide(url).c_str(),nullptr,nullptr,SW_SHOWNORMAL);
+        return;
+    }
+    queue(command);
+}
 void layout(){
     if(!page)return;RECT r{};GetClientRect(page,&r);int w=std::max(mode=="people"?860:620,int(r.right)),h=std::max(mode=="people"?700:580,int(r.bottom));
+    if(SynthWebView::active())SynthWebView::resize(r.right,r.bottom);
     struct Placement{HWND window;int x,y,w,h;};std::vector<Placement> placements;
     auto place=[&](int id,int x,int y,int width,int height=34){
         HWND h=child(id);if(!h)return;wchar_t cls[30]{};GetClassNameW(h,cls,30);if(std::wstring(cls)==L"Edit"){x+=2;y+=8;width-=4;height-=14;}
@@ -434,10 +449,16 @@ void refresh(bool force=false){
     model=next;lastState=serialized;
     if(mode=="people"){if(changed||force)renderPeople();else selection();}
     else if(changed||force){renderMarket();if(force||items.empty())catalog();}
+    if(SynthWebView::active()&&(changed||force)){
+        if(items.empty())catalog();
+        Json marketItems=arr();for(const auto& item:items)marketItems.items.push_back(item);
+        Json homeOverview=read(folder/L"home_overview.json",2*1024*1024);
+        SynthWebView::pushSnapshot(mode,model,marketItems,homeOverview);
+    }
 }
 void createControls(){
     filling=true;
-    for(HWND h=GetWindow(page,GW_CHILD);h;){HWND next=GetWindow(h,GW_HWNDNEXT);DestroyWindow(h);h=next;}
+    for(HWND h=GetWindow(page,GW_CHILD);h;){HWND next=GetWindow(h,GW_HWNDNEXT);if(!SynthWebView::active()||(GetDlgCtrlID(h)>=500&&GetDlgCtrlID(h)<=599))DestroyWindow(h);h=next;}
     selected.clear();selectedIds.clear();actionEditorIds.clear();selectedWatch.clear();tagOptions.clear();
     people.clear();actionRows.clear();peopleView.clear();
     control(L"EDIT",501,L"",WS_TABSTOP|ES_AUTOHSCROLL);SendMessageW(child(501),EM_SETCUEBANNER,TRUE,reinterpret_cast<LPARAM>(mode=="people"?L"Filter names/tags or enter an RSI handle":L"Search UEX materials or items"));
@@ -467,7 +488,13 @@ void createControls(){
         control(L"BUTTON",546,L"Show matches",WS_TABSTOP);
         control(L"STATIC",542,L"Recent HUD notices — buyer matches and tagged-player appearances");control(WC_LISTVIEWW,543,L"",WS_TABSTOP|LVS_REPORT|LVS_SINGLESEL|LVS_SHOWSELALWAYS);column(543,0,L"Notification",500);column(543,1,L"Observed",140);
         control(L"BUTTON",544,L"Open selected UEX ad",WS_TABSTOP);control(L"BUTTON",545,L"Dismiss notices",WS_TABSTOP);
-    }control(L"STATIC",590,L"Loading…");filling=false;layout();for(HWND h=GetWindow(page,GW_CHILD);h;h=GetWindow(h,GW_HWNDNEXT))if(GetDlgCtrlID(h)!=519)ShowWindow(h,SW_SHOWNOACTIVATE);refresh(true);
+    }control(L"STATIC",590,L"Loading…");filling=false;layout();
+    if(!SynthWebView::active()){
+        for(HWND h=GetWindow(page,GW_CHILD);h;h=GetWindow(h,GW_HWNDNEXT))if(GetDlgCtrlID(h)!=519)ShowWindow(h,SW_SHOWNOACTIVATE);
+    }else{
+        for(HWND h=GetWindow(page,GW_CHILD);h;h=GetWindow(h,GW_HWNDNEXT)){int cid=GetDlgCtrlID(h);if(cid>=500&&cid<=599)ShowWindow(h,SW_HIDE);}
+    }
+    refresh(true);
 }
 LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM wp,LPARAM lp){
     if(message==WM_SIZE){layout();return 0;}if(message==WM_TIMER){refresh();return 0;}
@@ -532,9 +559,19 @@ void show(HWND parent,const std::filesystem::path& directory,const std::string& 
     if(!page){WNDCLASSW cls{};cls.lpfnWndProc=procedure;cls.hInstance=GetModuleHandleW(nullptr);cls.lpszClassName=L"SynthScanCompanion";cls.hCursor=LoadCursor(nullptr,IDC_ARROW);cls.hbrBackground=background;RegisterClassW(&cls);
         font=CreateFontW(-14,0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH,L"Segoe UI");
         page=CreateWindowExW(WS_EX_CONTROLPARENT,cls.lpszClassName,L"SynthScan companion",WS_CHILD|WS_CLIPCHILDREN|WS_CLIPSIBLINGS,0,0,mode=="people"?860:620,mode=="people"?700:580,parent,nullptr,cls.hInstance,nullptr);changed=true;SetTimer(page,1,1000,nullptr);}
-    if(changed)createControls();SynthPages::mount(page);ShowWindow(page,SW_SHOW);
+    if(changed)createControls();
+    if(!inPreview&&SynthWebView::available()){
+        if(SynthWebView::attach(page,directory,name,handleWebViewCommand)){
+            for(HWND h=GetWindow(page,GW_CHILD);h;h=GetWindow(h,GW_HWNDNEXT)){
+                int cid=GetDlgCtrlID(h);
+                if(cid>=500&&cid<=599)ShowWindow(h,SW_HIDE);
+            }
+            refresh(true);
+        }
+    }
+    SynthPages::mount(page);ShowWindow(page,SW_SHOW);
 }
-void close(){if(page){KillTimer(page,1);DestroyWindow(page);}page=nullptr;if(font)DeleteObject(font);font=nullptr;}
+void close(){SynthWebView::detach();if(page){KillTimer(page,1);DestroyWindow(page);}page=nullptr;if(font)DeleteObject(font);font=nullptr;}
 int stylePreview(const std::filesystem::path& output){
     Gdiplus::GdiplusStartupInput input;ULONG_PTR token=0;if(Gdiplus::GdiplusStartup(&token,&input,nullptr)!=Gdiplus::Ok)return 2;
     int result=2;{
@@ -560,6 +597,7 @@ int stylePreview(const std::filesystem::path& output){
     }Gdiplus::GdiplusShutdown(token);return result;
 }
 int preview(const std::filesystem::path& directory){
+    struct PreviewScope {PreviewScope(){inPreview=true;}~PreviewScope(){inPreview=false;}} previewScope;
     std::filesystem::create_directories(directory);
     if(std::filesystem::exists(directory/L"companion_private.json"))return 2;
     auto at=now();Json rows=arr();

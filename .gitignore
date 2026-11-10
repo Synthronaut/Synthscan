@@ -63,4 +63,5 @@ mission_capture_status.json
 /module_text_cleanup.json
 
 /ui/node_modules/
-/ui/dist/
+/ui/dist-test/
+/webview2_cache/

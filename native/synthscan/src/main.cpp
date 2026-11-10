@@ -35,6 +35,7 @@
 #include "SynthExecutiveHangar.h"
 namespace SynthScan {int workspacePreview(const std::filesystem::path& directory);}
 #include "SynthCompanion.h"
+#include "SynthWebView.h"
 #include "Updater.h"
 #include "resource.h"
 #include "MiningLocations.h"
@@ -4168,6 +4169,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     }
     for(int i=1;i+1<__argc;i++)if(std::string(__argv[i])=="--companion-preview") {
         setupConsole(true);return SynthCompanion::preview(std::filesystem::u8path(__argv[i+1]));
+    }
+    for(int i=1;i+1<__argc;i++)if(std::string(__argv[i])=="--webview-preview") {
+        setupConsole(true);return SynthWebView::preview(std::filesystem::u8path(__argv[i+1]));
     }
     for(int i=1;i+1<__argc;i++)if(std::string(__argv[i])=="--workspace-preview") {
         // Synthetic controls under a hidden parent; no game capture or input.
