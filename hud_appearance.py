@@ -7,6 +7,7 @@ module neither acquires metrics nor substitutes estimates for missing readings.
 """
 from telemetry_labels import translate_region
 from hud_layout import shard_display_name
+import time
 
 
 def render_original_bar(self):
@@ -34,6 +35,9 @@ def render_original_bar(self):
     reg_raw = s.get("region_raw", "")
     loc_display = s.get("location_display", "--") if is_connected else "MAIN MENU"
 
+    mem_rec = getattr(self, "memory_recovery", None) or getattr(self, "memory_hud", None)
+    mem_state = mem_rec.cache_state() if mem_rec else None
+
     cache_key = (
         game_running, is_connected, sfps, cfps, ping, packet_ping, rst, ent,
         shard_pop, srv_pop, shard_id, srv_id, srv_name, callsign,
@@ -41,6 +45,7 @@ def render_original_bar(self):
         s.get("hop_status"), s.get("region_shards_seen"), s.get("health", {}).get("label"),
         (s.get('shard_observation') or {}).get('history_label'), s.get('feed_status'),
         hasattr(self, 'region_history'), bool(getattr(self, 'activity_button', None)),
+        mem_state,
     )
     if getattr(self, "_last_rendered_key", None) == cache_key:
         return
@@ -185,6 +190,75 @@ def render_original_bar(self):
             c.create_line(x, 5, x, h - 6, fill="#1e293b", width=1)
             x += sep_gap
         has_segment = True
+
+    # Dedicated real-time memory gauge & protected session recovery pill
+    if mem_rec:
+        mem_info = mem_rec.get_memory_info()
+        status_text = mem_rec.status_text
+        confirm_rem = max(0, int(mem_rec.confirm_until - time.time())) if mem_rec.confirm_until > time.time() else 0
+
+        if status_text:
+            badge_txt = status_text
+            badge_col = "#62ccff"
+            badge_bg = "#0c2134"
+            badge_bdr = "#0284c7"
+            has_meter = False
+        elif confirm_rem > 0:
+            badge_txt = f"CONFIRM RESTART? ({confirm_rem}s)"
+            badge_col = "#f59e0b"
+            badge_bg = "#261805"
+            badge_bdr = "#d97706"
+            has_meter = False
+        elif mem_info:
+            commit = mem_info["commit_gb"]
+            if commit >= 36.0:
+                badge_col = "#ff2e55"
+                badge_bg = "#26080e"
+                badge_bdr = "#dc2626"
+                badge_txt = f"RAM: {commit:.0f}G [CRIT]"
+            elif commit >= 28.0:
+                badge_col = "#f59e0b"
+                badge_bg = "#261805"
+                badge_bdr = "#d97706"
+                badge_txt = f"RAM: {commit:.0f}G [WARN]"
+            else:
+                badge_col = "#22c55e"
+                badge_bg = "#042312"
+                badge_bdr = "#16a34a"
+                badge_txt = f"RAM: {commit:.0f}G"
+            has_meter = True
+        else:
+            badge_col = "#64748b"
+            badge_bg = "#070a0f"
+            badge_bdr = "#1e293b"
+            badge_txt = "RAM: --"
+            has_meter = False
+
+        _begin_segment()
+        seg_start = x
+        tmp_id = c.create_text(0, 0, text=badge_txt, font=font_std)
+        tb = c.bbox(tmp_id)
+        c.delete(tmp_id)
+        text_w = (tb[2] - tb[0]) if tb else (len(badge_txt) * 7)
+        gauge_space = 22 if has_meter else 10
+        pill_w = gauge_space + text_w + 10
+
+        c.create_rectangle(x, 3, x + pill_w, h - 4, fill=badge_bg, outline=badge_bdr, width=1)
+
+        if has_meter and mem_info:
+            gx = x + 6
+            gw = 12
+            gh = 6
+            gy = cy - 3
+            fill_pct = min(1.0, max(0.05, commit / 32.0))
+            fw = int(gw * fill_pct)
+            c.create_rectangle(gx, gy, gx + gw, gy + gh, fill="#0f172a", outline="#334155", width=1)
+            if fw > 0:
+                c.create_rectangle(gx + 1, gy + 1, gx + fw, gy + gh - 1, fill=badge_col, outline="")
+
+        c.create_text(x + gauge_space, cy, text=badge_txt, anchor="w", fill=badge_col, font=font_std)
+        self.memory_hit = dict(left=seg_start, right=x + pill_w)
+        x += pill_w
 
     # Missing telemetry occupies no space and never becomes a green health claim.
     if sfps is not None:

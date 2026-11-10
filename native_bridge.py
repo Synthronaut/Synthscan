@@ -282,6 +282,10 @@ def run(data_dir,owner,native=None):
             try:
                 if json.loads((directory/'bridge_stop.json').read_text()).get('owner_pid')==owner:break
             except (OSError,ValueError):pass
+            if any(enabled(name) for name in ('server_hud','people','piracy')):
+                if top_hud is None or top_hud.poll() is not None:
+                    top_hud=subprocess.Popen([str(Path(sys.executable).with_name('pythonw.exe')),'-B',str(ROOT/top_script),'--owner',str(owner)],
+                                             cwd=ROOT,creationflags=subprocess.CREATE_NO_WINDOW,stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
             games=game_process_ids()
             service.game_pids=sorted(games)
             try:
