@@ -10,7 +10,9 @@ void close();
 bool contains(HWND page);
 HWND host();
 HWND current();
+HWND daylightPage();
 unsigned generation();
+void advanceGeneration();
 void beginTransition();
 void endTransition();
 }

@@ -271,7 +271,7 @@ def main():
     lock = SingleInstance(name)
     if not lock.acquired:send_signal(name+'-show');return
     show = Signal(name+'-show')
-    root = tk.Tk();window_icon(root);root.withdraw()
+    root = tk.Tk();root.withdraw();root.geometry('1x1+-32000+-32000');window_icon(root)
     try:
         DaylightPlanner(root,DATA)
         embedded=None

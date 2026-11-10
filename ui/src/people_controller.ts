@@ -215,10 +215,10 @@ export class DesktopAppController {
             </div>
           </div>
           <nav class="ss-mode-tabs" role="tablist" aria-label="Workspace views">
-            <button type="button" class="ss-tab is-active" data-mode="people" role="tab" aria-selected="true">People</button>
+            <button type="button" class="ss-tab is-active" data-mode="people" role="tab" aria-selected="true">Shard &amp; Friends</button>
             <button type="button" class="ss-tab" data-mode="buyer_alerts" role="tab" aria-selected="false">Buyer Alerts</button>
-            <button type="button" class="ss-tab" data-mode="home" role="tab" aria-selected="false">Session Recap</button>
-            <button type="button" class="ss-tab" data-mode="settings" role="tab" aria-selected="false">Settings &amp; Modules</button>
+            <button type="button" class="ss-tab ss-tab-hosted-hidden" data-mode="home" role="tab" aria-selected="false">Session Recap</button>
+            <button type="button" class="ss-tab ss-tab-hosted-hidden" data-mode="settings" role="tab" aria-selected="false">Settings &amp; Modules</button>
           </nav>
         </header>
 

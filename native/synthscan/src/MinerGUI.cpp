@@ -7087,7 +7087,7 @@ bool MinerGUI::createCrafting() {
     const DWORD style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_CLIPCHILDREN;
     AdjustWindowRectExForDpi(&desired, style, FALSE, 0, dpi_);
     crafting_ = CreateWindowExW(0, L"SCMinerCrafting", L"SynthScan \u00B7 Blueprints",
-                                style, CW_USEDEFAULT, CW_USEDEFAULT,
+                                style, -32000, -32000,
                                 desired.right - desired.left, desired.bottom - desired.top,
                                 hwnd_, nullptr, hInstance_, nullptr);
     if (!crafting_) {
@@ -7101,6 +7101,7 @@ bool MinerGUI::createCrafting() {
 }
 
 void MinerGUI::placeCrafting() {
+    if (SynthPages::contains(crafting_) || SynthHome::visible()) return;
     if (headless_) {
         SetWindowPos(crafting_, HWND_BOTTOM, -32000, -31000, 0, 0,
                      SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
@@ -7142,9 +7143,13 @@ void MinerGUI::toggleCrafting() {
         craftOpen_ = -1;
         caretOn_ = true;
         SetTimer(crafting_, TIMER_CARET, GetCaretBlinkTime(), nullptr);
-        placeCrafting();
-        ShowWindow(crafting_, headless_ ? SW_SHOWNOACTIVATE : SW_SHOW);
-        InvalidateRect(crafting_, nullptr, TRUE);
+        if (SynthHome::visible() && !headless_) {
+            SynthPages::mount(crafting_);
+        } else {
+            placeCrafting();
+            ShowWindow(crafting_, headless_ ? SW_SHOWNOACTIVATE : SW_SHOW);
+        }
+        InvalidateRect(crafting_, nullptr, FALSE);
     } else {
         ShowWindow(crafting_, SW_HIDE);
     }
@@ -12327,7 +12332,7 @@ bool MinerGUI::createPlanner() {
     AdjustWindowRectExForDpi(&desired, style, FALSE, 0, dpi_);
     // Owned by the main window: it stays in front of it and minimises with it
     planner_ = CreateWindowExW(0, L"SCMinerPlanner", L"SynthScan \u00B7 Ore Finder",
-                               style, CW_USEDEFAULT, CW_USEDEFAULT,
+                               style, -32000, -32000,
                                desired.right - desired.left, desired.bottom - desired.top,
                                hwnd_, nullptr, hInstance_, nullptr);
     if (!planner_) {
@@ -12342,6 +12347,7 @@ bool MinerGUI::createPlanner() {
 
 // Left of the main window when the screen has room there, else to its right
 void MinerGUI::placePlanner() {
+    if (SynthPages::contains(planner_) || SynthHome::visible()) return;
     if (headless_) {
         SetWindowPos(planner_, HWND_BOTTOM, -32000, -31000, 0, 0,
                      SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
@@ -12371,9 +12377,13 @@ void MinerGUI::togglePlanner() {
     if (!planner_ && !createPlanner()) return;
     plannerVisible_ = !plannerVisible_;
     if (plannerVisible_) {
-        placePlanner();
-        ShowWindow(planner_, headless_ ? SW_SHOWNOACTIVATE : SW_SHOW);
-        InvalidateRect(planner_, nullptr, TRUE);
+        if (SynthHome::visible() && !headless_) {
+            SynthPages::mount(planner_);
+        } else {
+            placePlanner();
+            ShowWindow(planner_, headless_ ? SW_SHOWNOACTIVATE : SW_SHOW);
+        }
+        InvalidateRect(planner_, nullptr, FALSE);
     } else {
         ShowWindow(planner_, SW_HIDE);
     }
@@ -16011,7 +16021,7 @@ bool MinerGUI::createRefinery() {
     const DWORD style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_CLIPCHILDREN;
     AdjustWindowRectExForDpi(&desired, style, FALSE, 0, dpi_);
     refinery_ = CreateWindowExW(0, L"SynthScanRefinery", L"SynthScan · Refinery",
-                                style, CW_USEDEFAULT, CW_USEDEFAULT,
+                                style, -32000, -32000,
                                 desired.right - desired.left, desired.bottom - desired.top,
                                 hwnd_, nullptr, hInstance_, nullptr);
     if (!refinery_) {
@@ -16026,6 +16036,7 @@ bool MinerGUI::createRefinery() {
 
 // To the right of the main window when the screen has room, else to its left
 void MinerGUI::placeRefinery() {
+    if (SynthPages::contains(refinery_) || SynthHome::visible()) return;
     if (headless_) {
         SetWindowPos(refinery_, HWND_BOTTOM, -32000, -30000, 0, 0,
                      SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
@@ -16191,9 +16202,13 @@ void MinerGUI::toggleRefinery() {
     if (!refinery_ && !createRefinery()) return;
     refineryVisible_ = !refineryVisible_;
     if (refineryVisible_) {
-        placeRefinery();
-        ShowWindow(refinery_, headless_ ? SW_SHOWNOACTIVATE : SW_SHOW);
-        InvalidateRect(refinery_, nullptr, TRUE);
+        if (SynthHome::visible() && !headless_) {
+            SynthPages::mount(refinery_);
+        } else {
+            placeRefinery();
+            ShowWindow(refinery_, headless_ ? SW_SHOWNOACTIVATE : SW_SHOW);
+        }
+        InvalidateRect(refinery_, nullptr, FALSE);
     } else {
         refineryMethodOpen_ = false;
         ShowWindow(refinery_, SW_HIDE);

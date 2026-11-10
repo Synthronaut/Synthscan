@@ -531,9 +531,9 @@ public:
     void keepOverlayAboveGame(bool force=false);
     bool isOverlayMode() const { return overlayMode_; }
     int displayedSignature() const { return currentSignature_; }
-    void openBlueprintLibrary(){if(!craftingVisible_)toggleCrafting();if(crafting_)SetForegroundWindow(crafting_);}
-    void openRefineryOrders(){if(!refineryVisible_)toggleRefinery();if(refinery_)SetForegroundWindow(refinery_);}
-    void openMiningPlanner(){if(!plannerVisible_)togglePlanner();if(planner_)SetForegroundWindow(planner_);}
+    void openBlueprintLibrary(){if(!craftingVisible_)toggleCrafting();if(crafting_&&!(GetWindowLongPtrW(crafting_,GWL_STYLE)&WS_CHILD))SetForegroundWindow(crafting_);}
+    void openRefineryOrders(){if(!refineryVisible_)toggleRefinery();if(refinery_&&!(GetWindowLongPtrW(refinery_,GWL_STYLE)&WS_CHILD))SetForegroundWindow(refinery_);}
+    void openMiningPlanner(){if(!plannerVisible_)togglePlanner();if(planner_&&!(GetWindowLongPtrW(planner_,GWL_STYLE)&WS_CHILD))SetForegroundWindow(planner_);}
     void setCaptureFailed(bool failed);
     // The overlay out of screen captures while live mode is on, in them otherwise
     void keepOutOfCaptures();

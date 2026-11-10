@@ -12,6 +12,7 @@
 #include "SynthCapturePrivacy.h"
 #include "SynthCompanion.h"
 #include "SynthPages.h"
+#include "NativeRedraw.h"
 #include "SynthDirectoryCard.h"
 #include "FinderLayout.h"
 #include "WorkspaceLayout.h"
@@ -175,7 +176,7 @@ bool spawnPython(const wchar_t* script,const std::vector<std::wstring>& args,HAN
     std::wstring command=quoteArg(py)+L" -B "+quoteArg((root/script).wstring());for(auto& s:args)command+=L" "+quoteArg(s);
     STARTUPINFOW si{sizeof(si)};PROCESS_INFORMATION pi{};
     if(!CreateProcessW(py.c_str(),command.data(),nullptr,nullptr,FALSE,CREATE_NO_WINDOW|BELOW_NORMAL_PRIORITY_CLASS,nullptr,root.c_str(),&si,&pi))return false;
-    CloseHandle(pi.hThread);if(job&&std::wstring(script)==L"native_bridge.py")AssignProcessToJobObject(job,pi.hProcess);
+    CloseHandle(pi.hThread);if(job&&(std::wstring(script)==L"native_bridge.py"||std::wstring(script)==L"daylight_planner.py"))AssignProcessToJobObject(job,pi.hProcess);
     if(result)*result=pi.hProcess;else CloseHandle(pi.hProcess);return true;
 }
 void saveSettings(){settings=obj({{"scan_on_launch",boolean(scanOnLaunch)},{"show_hud",boolean(hudVisible)},{"session_strip",boolean(showSession)},{"snare_alerts",boolean(snareAlerts)},{"piracy_details",boolean(pirateDetails)},{"hud_mode",str(finder?"finder":hangars?"hangars":quest?"questing":pirate?"piracy":"mining")},{"mining_resume",boolean(miningResume)},{"mission_hud_tab",num(missionTab)},{"hud_locked",boolean(placementLocked)},{"activity_expanded",boolean(activityExpanded)},{"hotkey",num(hotkeyChoice)}});if(!write(data/L"native_settings.json",settings))note="Could not save HUD settings.";}
@@ -295,7 +296,19 @@ void activityControl(){
     }
 }
 void miningDesktop(){if(!mining)return;SynthHome::hide();if(mining->isOverlayMode())mining->toggleOverlayMode();hudVisible=true;activityExpanded=true;mining->show();ShowWindow(mining->windowHandle(),SW_RESTORE);SetForegroundWindow(mining->windowHandle());modeControls();saveSettings();}
-void desktop(){SynthHome::show();}
+void desktop(){
+    static bool prewarmed=false;
+    SynthHome::show();
+    if(!testing&&!prewarmed){
+        prewarmed=true;
+        SynthCompanion::prewarm(SynthHome::pageHost(),data);
+        const auto release=read(SCMiner::AppPaths::program().parent_path().parent_path()/L"release.json");
+        if(HudModules::actionAvailable(release,"daylight",SynthEdition::screenReading)){
+            write(data/L"daylight_embed_request.json",obj({{"owner_pid",num(GetCurrentProcessId())},{"parent",num(double(reinterpret_cast<UINT_PTR>(SynthHome::pageHost())))},{"generation",num(1)},{"at",num(epoch())}}));
+            spawnPython(L"daylight_planner.py",{L"--embedded",L"--owner",std::to_wstring(GetCurrentProcessId())});
+        }
+    }
+}
 void command(Json value){
     static unsigned sequence=0;char id[80];sprintf_s(id,"%020llu-%010u-%010u",GetTickCount64(),GetCurrentProcessId(),++sequence);
     value.members.push_back({"id",str(id)});value.members.push_back({"session_token",field(state,"session_token")});
@@ -343,8 +356,12 @@ void homeAction(const std::string& value){
     else if(value=="diary"){SynthScanDiary::open();SynthPages::mount(SynthScanDiary::window());}
     else if(value=="bookmarks"){SynthScanNav::open();SynthPages::mount(SynthScanNav::window());}
     else if(value=="daylight"){
-        write(data/L"daylight_embed_request.json",obj({{"owner_pid",num(GetCurrentProcessId())},{"parent",num(double(reinterpret_cast<UINT_PTR>(SynthHome::pageHost())))},{"generation",num(SynthPages::generation())},{"at",num(epoch())}}));
-        spawnPython(L"daylight_planner.py",{L"--embedded",L"--owner",std::to_wstring(GetCurrentProcessId())});
+        if(IsWindow(SynthPages::daylightPage())){
+            SynthPages::mount(SynthPages::daylightPage());
+        }else{
+            write(data/L"daylight_embed_request.json",obj({{"owner_pid",num(GetCurrentProcessId())},{"parent",num(double(reinterpret_cast<UINT_PTR>(SynthHome::pageHost())))},{"generation",num(SynthPages::generation())},{"at",num(epoch())}}));
+            spawnPython(L"daylight_planner.py",{L"--embedded",L"--owner",std::to_wstring(GetCurrentProcessId())});
+        }
     }else if(value=="hud_piracy"){workspace(6);SynthPages::mount(panel,px(100));}
     else if(value=="dismiss_refinery")command(obj({{"action",str("dismiss_refinery_notices")}}));
     else if(value.rfind("hud_",0)==0){
@@ -476,13 +493,15 @@ LRESULT CALLBACK headerPaint(HWND hwnd,UINT message,WPARAM w,LPARAM l,UINT_PTR,D
 void layoutDirectory(){
     if(!panel||!listing||!detail||!search||!kind||!category)return;
     RECT rect{};GetClientRect(panel,&rect);float scale=GetDpiForWindow(panel)/96.f;
+    NativeRedraw::Layout pending(panel);
     if(currentTab==2){
         auto layout=WorkspaceLayout::history(int(rect.right/scale),int(rect.bottom/scale));
-        auto move=[&](int id,const WorkspaceLayout::Box& b){MoveWindow(GetDlgItem(panel,id),int(b.x*scale),int(b.y*scale),int(b.width*scale),int(b.height*scale),TRUE);};
+        auto move=[&](int id,const WorkspaceLayout::Box& b){if(HWND h=GetDlgItem(panel,id))pending.place(h,int(b.x*scale),int(b.y*scale),int(b.width*scale),int(b.height*scale));};
         int filters[]{201,202,203,221,222};for(int i=0;i<5;i++){move(filters[i],layout.filters[i]);move(228+i,layout.labels[i]);}
         move(204,layout.results);move(225,layout.previous);move(226,layout.next);move(227,layout.count);move(205,layout.detail);
         move(223,layout.csv);move(224,layout.json);move(233,layout.timezone);move(220,layout.notes);move(219,layout.saveNote);
         move(215,layout.name);move(216,layout.nameButton);move(217,layout.minutes);move(218,layout.cooldown);move(200,layout.status);
+        pending.apply();
         int base[]{160,160,85,65,140,90,150},weights[]{18,18,10,6,22,10,16};int total=0;for(int w:base)total+=w;
         int extra=std::max(0,int(layout.results.width*scale)-GetSystemMetrics(SM_CXVSCROLL)-int(total*scale));
         for(int i=0;i<7;i++)ListView_SetColumnWidth(listing,i,int(base[i]*scale)+extra*weights[i]/100);
@@ -490,7 +509,7 @@ void layoutDirectory(){
     }
     if(currentTab!=0&&currentTab!=1&&currentTab!=3)return;
     auto layout=FinderLayout::calculate(int(rect.right/scale),int(rect.bottom/scale));
-    auto move=[&](HWND child,const FinderLayout::Box& box){MoveWindow(child,int(box.x*scale),int(box.y*scale),int(box.width*scale),int(box.height*scale),TRUE);};
+    auto move=[&](HWND child,const FinderLayout::Box& box){if(child)pending.place(child,int(box.x*scale),int(box.y*scale),int(box.width*scale),int(box.height*scale));};
     move(search,layout.query);move(kind,layout.type);move(category,layout.category);move(listing,layout.results);move(detail,layout.details);
     int available=int(layout.results.width*scale)-GetSystemMetrics(SM_CXVSCROLL);
     ListView_SetColumnWidth(listing,0,available*54/100);ListView_SetColumnWidth(listing,1,available*18/100);ListView_SetColumnWidth(listing,2,available*28/100);
@@ -498,12 +517,18 @@ void layoutDirectory(){
     move(GetDlgItem(panel,212),{20,layout.actions,260,32});
     move(GetDlgItem(panel,213),{20,layout.actions,300,32});move(GetDlgItem(panel,214),{340,layout.actions,250,32});
     move(status,{20,layout.footer,int(rect.right/scale)-40,22});
+    pending.apply();
 }
 void rebuild(int tab){
     const auto release=read(SCMiner::AppPaths::program().parent_path().parent_path()/L"release.json");
     if(!HudModules::workspaceAvailable(release,tab,SynthEdition::screenReading))return;
+    struct RedrawScope {
+        HWND hwnd;bool active;
+        RedrawScope(HWND h):hwnd(h),active(h&&IsWindowVisible(h)){if(active)SendMessageW(hwnd,WM_SETREDRAW,FALSE,0);}
+        ~RedrawScope(){if(active){SendMessageW(hwnd,WM_SETREDRAW,TRUE,0);RedrawWindow(hwnd,nullptr,nullptr,RDW_INVALIDATE|RDW_NOERASE|RDW_ALLCHILDREN);}}
+    } redrawScope(panel);
     currentTab=tab;selected=-1;icon.reset();relatedItemId.clear();
-    HWND child=GetWindow(panel,GW_CHILD);while(child){HWND next=GetWindow(child,GW_HWNDNEXT);DestroyWindow(child);child=next;}
+    HWND child=GetWindow(panel,GW_CHILD);while(child){HWND next=GetWindow(child,GW_HWNDNEXT);SetWindowLongPtrW(child,GWL_STYLE,GetWindowLongPtrW(child,GWL_STYLE)&~WS_VISIBLE);DestroyWindow(child);child=next;}
     if(directoryIcons){ImageList_Destroy(directoryIcons);directoryIcons=nullptr;}
     listing=detail=search=kind=category=nullptr;keyEditing=false;applyHotkey();
     const wchar_t* names[]={L"Item directory",L"Material picker",L"Server log",L"Review & imports",L"Startup & HUD"};
@@ -709,6 +734,7 @@ LRESULT CALLBACK panelProc(HWND hwnd,UINT message,WPARAM w,LPARAM l){
         if(item->itemState&ODS_FOCUS){InflateRect(&rc,-4,-4);DrawFocusRect(dc,&rc);}return TRUE;
     }
     case WM_CTLCOLORBTN:case WM_CTLCOLORLISTBOX:case WM_CTLCOLORSTATIC:case WM_CTLCOLOREDIT:{HDC dc=reinterpret_cast<HDC>(w);SetTextColor(dc,TEXT);SetBkColor(dc,message==WM_CTLCOLOREDIT?CARD:BG);return reinterpret_cast<LRESULT>(message==WM_CTLCOLOREDIT?card:background);}
+    case WM_ERASEBKGND:return 1;
     case WM_PAINT:{PAINTSTRUCT ps;HDC dc=BeginPaint(hwnd,&ps);paintPanel(hwnd,dc);EndPaint(hwnd,&ps);return 0;}
     case WM_PRINTCLIENT:paintPanel(hwnd,reinterpret_cast<HDC>(w));return 0;
     }
@@ -1021,9 +1047,10 @@ void attach(SCMiner::MinerGUI* gui,std::function<bool(const std::string&)> confi
 }
 void workspace(int tab){
     if(!HudModules::workspaceAvailable(read(SCMiner::AppPaths::program().parent_path().parent_path()/L"release.json"),tab,SynthEdition::screenReading))return;
-    if(!panel||!IsWindow(panel)){WNDCLASSW wc{};wc.hInstance=GetModuleHandleW(nullptr);wc.lpfnWndProc=panelProc;wc.hCursor=LoadCursor(nullptr,IDC_ARROW);wc.hbrBackground=background;wc.lpszClassName=L"SynthScanWorkspace";RegisterClassW(&wc);panel=CreateWindowExW(0,wc.lpszClassName,L"SynthScan workspace",WS_OVERLAPPED|WS_CAPTION|WS_SYSMENU|WS_MINIMIZEBOX,CW_USEDEFAULT,CW_USEDEFAULT,px(884),px(695),mining?mining->windowHandle():nullptr,nullptr,wc.hInstance,nullptr);SetWindowDisplayAffinity(panel,WDA_EXCLUDEFROMCAPTURE);BOOL dark=TRUE;DwmSetWindowAttribute(panel,20,&dark,sizeof(dark));}
-    rebuild(tab);
-    if(testing){SetWindowPos(panel,HWND_BOTTOM,-32000,-32000,0,0,SWP_NOSIZE|SWP_NOACTIVATE);ShowWindow(panel,SW_SHOWNOACTIVATE);}else{ShowWindow(panel,SW_SHOW);SetForegroundWindow(panel);}
+    if(!panel||!IsWindow(panel)){WNDCLASSW wc{};wc.hInstance=GetModuleHandleW(nullptr);wc.lpfnWndProc=panelProc;wc.hCursor=LoadCursor(nullptr,IDC_ARROW);wc.hbrBackground=background;wc.lpszClassName=L"SynthScanWorkspace";RegisterClassW(&wc);panel=CreateWindowExW(0,wc.lpszClassName,L"SynthScan workspace",WS_OVERLAPPED|WS_CAPTION|WS_SYSMENU|WS_MINIMIZEBOX|WS_CLIPCHILDREN,-32000,-32000,px(884),px(695),mining?mining->windowHandle():nullptr,nullptr,wc.hInstance,nullptr);SetWindowDisplayAffinity(panel,WDA_EXCLUDEFROMCAPTURE);BOOL dark=TRUE;DwmSetWindowAttribute(panel,20,&dark,sizeof(dark));}
+    if(testing){rebuild(tab);SetWindowPos(panel,HWND_BOTTOM,-32000,-32000,0,0,SWP_NOSIZE|SWP_NOACTIVATE);ShowWindow(panel,SW_SHOWNOACTIVATE);}
+    else if(SynthHome::visible()){rebuild(tab);SynthPages::mount(panel,px(100));}
+    else{rebuild(tab);ShowWindow(panel,SW_SHOW);SetForegroundWindow(panel);}
 }
 std::string refineryNotice(){return !activityMode()&&HudModules::installed(read(SCMiner::AppPaths::program().parent_path().parent_path()/L"release.json"),"mining_tools",SynthEdition::screenReading)?field(state,"home").textOr("refinery_notice"):"";}
 bool sessionStatsVisible(){return false;}

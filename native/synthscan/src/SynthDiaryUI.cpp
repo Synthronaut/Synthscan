@@ -3,6 +3,7 @@
 #define _UNICODE
 #include "SynthDiaryUI.h"
 #include "SynthHome.h"
+#include "SynthPages.h"
 #include "NativePageLayout.h"
 #include <commctrl.h>
 #include <commdlg.h>
@@ -148,8 +149,8 @@ void open(){
         scale=GetDpiForWindow(parent)/96.0;bg=CreateSolidBrush(BG);card=CreateSolidBrush(CARD);
         body=CreateFontW(-px(14),0,0,0,FW_NORMAL,0,0,0,DEFAULT_CHARSET,0,0,CLEARTYPE_QUALITY,0,L"Segoe UI");heading=CreateFontW(-px(25),0,0,0,FW_SEMIBOLD,0,0,0,DEFAULT_CHARSET,0,0,CLEARTYPE_QUALITY,0,L"Segoe UI");
         WNDCLASSW c{};c.lpfnWndProc=proc;c.hInstance=GetModuleHandleW(nullptr);c.lpszClassName=L"SynthScanMiningDiary";c.hCursor=LoadCursor(nullptr,IDC_ARROW);RegisterClassW(&c);
-        RECT r{0,0,px(1100),px(810)};DWORD style=WS_OVERLAPPED|WS_CAPTION|WS_SYSMENU|WS_MINIMIZEBOX;AdjustWindowRectEx(&r,style,FALSE,0);
-        win=CreateWindowW(c.lpszClassName,L"SynthScan · Mining diary",style,testing?-32000:CW_USEDEFAULT,testing?-32000:CW_USEDEFAULT,r.right-r.left,r.bottom-r.top,parent,nullptr,c.hInstance,nullptr);
+        RECT r{0,0,px(1100),px(810)};DWORD style=WS_OVERLAPPED|WS_CAPTION|WS_SYSMENU|WS_MINIMIZEBOX|WS_CLIPCHILDREN;AdjustWindowRectEx(&r,style,FALSE,0);
+        win=CreateWindowW(c.lpszClassName,L"SynthScan · Mining diary",style,-32000,-32000,r.right-r.left,r.bottom-r.top,parent,nullptr,c.hInstance,nullptr);
         BOOL dark=TRUE;DwmSetWindowAttribute(win,20,&dark,sizeof(dark));SetWindowDisplayAffinity(win,WDA_EXCLUDEFROMCAPTURE);
         ctl(L"STATIC",L"Your discoveries, journeys and confirmed hauls. Share a memory, not a mandatory competition.",SS_LEFT,20,55,800,20,0);
         ctl(L"BUTTON",L"Rock bookmarks",BS_PUSHBUTTON,610,24,190,28,460);
@@ -184,7 +185,9 @@ void open(){
         controls.capture(win,scale);layout();fill(obj());
     }
     lastRows.clear();lastOptions.clear();update(model,obj(),"");
-    if(testing)ShowWindow(win,SW_SHOWNOACTIVATE);else{ShowWindow(win,SW_SHOW);SetForegroundWindow(win);filters();}
+    if(testing)ShowWindow(win,SW_SHOWNOACTIVATE);
+    else if(SynthHome::visible()){SynthPages::mount(win);filters();}
+    else{ShowWindow(win,SW_SHOW);SetForegroundWindow(win);filters();}
 }
 void update(const Json& value,const Json& result,const std::string& note){
     model=value;if(!win)return;

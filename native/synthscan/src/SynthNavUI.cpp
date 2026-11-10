@@ -3,6 +3,7 @@
 #define _UNICODE
 #include "SynthNavUI.h"
 #include "SynthHome.h"
+#include "SynthPages.h"
 #include "NativePageLayout.h"
 #include <commdlg.h>
 #include <dwmapi.h>
@@ -53,8 +54,8 @@ void initialize(HWND owner,bool test,std::function<void(Json)> callback){parent=
 HWND window(){return win;}
 void open(){
  if(!win){scale=GetDpiForWindow(parent)/96.;bg=CreateSolidBrush(BG);input=CreateSolidBrush(CARD);font=CreateFontW(-px(14),0,0,0,FW_NORMAL,0,0,0,DEFAULT_CHARSET,0,0,CLEARTYPE_QUALITY,0,L"Segoe UI");title=CreateFontW(-px(25),0,0,0,FW_SEMIBOLD,0,0,0,DEFAULT_CHARSET,0,0,CLEARTYPE_QUALITY,0,L"Segoe UI");
- WNDCLASSW c{};c.lpfnWndProc=proc;c.hInstance=GetModuleHandleW(nullptr);c.lpszClassName=L"SynthScanRockNavigation";c.hCursor=LoadCursor(nullptr,IDC_ARROW);RegisterClassW(&c);DWORD style=WS_OVERLAPPED|WS_CAPTION|WS_SYSMENU|WS_MINIMIZEBOX;RECT r{0,0,px(900),px(660)};AdjustWindowRect(&r,style,FALSE);
- win=CreateWindowW(c.lpszClassName,L"SynthScan · Rock bookmarks",style,testing?-32000:CW_USEDEFAULT,testing?-32000:CW_USEDEFAULT,r.right-r.left,r.bottom-r.top,parent,nullptr,c.hInstance,nullptr);BOOL dark=TRUE;DwmSetWindowAttribute(win,20,&dark,sizeof(dark));SetWindowDisplayAffinity(win,WDA_EXCLUDEFROMCAPTURE);
+ WNDCLASSW c{};c.lpfnWndProc=proc;c.hInstance=GetModuleHandleW(nullptr);c.lpszClassName=L"SynthScanRockNavigation";c.hCursor=LoadCursor(nullptr,IDC_ARROW);RegisterClassW(&c);DWORD style=WS_OVERLAPPED|WS_CAPTION|WS_SYSMENU|WS_MINIMIZEBOX|WS_CLIPCHILDREN;RECT r{0,0,px(900),px(660)};AdjustWindowRect(&r,style,FALSE);
+ win=CreateWindowW(c.lpszClassName,L"SynthScan · Rock bookmarks",style,-32000,-32000,r.right-r.left,r.bottom-r.top,parent,nullptr,c.hInstance,nullptr);BOOL dark=TRUE;DwmSetWindowAttribute(win,20,&dark,sizeof(dark));SetWindowDisplayAffinity(win,WDA_EXCLUDEFROMCAPTURE);
  ctl(L"STATIC",L"Save where you are parked. The saved point is your ship, not the scanned rock.",0,20,57,850,23,0);
  ctl(L"STATIC",L"Body / coordinate model",0,20,95,370,20,0);ctl(L"COMBOBOX",L"",CBS_DROPDOWNLIST|WS_VSCROLL,20,119,400,350,701);
  ctl(L"STATIC",L"Bookmark name",0,440,95,300,20,0);ctl(L"EDIT",L"Rock / station test",ES_AUTOHSCROLL,440,119,440,28,702);SendDlgItemMessageW(win,702,EM_SETLIMITTEXT,200,0);
@@ -68,7 +69,10 @@ void open(){
  ctl(L"STATIC",L"",0,20,579,860,65,706);
  controls.capture(win,scale);controls.apply(win,scale,WorkspaceLayout::bookmarks);
  }
- bodyKey.clear();markKey.clear();update(model);ShowWindow(win,testing?SW_SHOWNOACTIVATE:SW_SHOW);if(!testing)SetForegroundWindow(win);
+ bodyKey.clear();markKey.clear();update(model);
+ if(testing)ShowWindow(win,SW_SHOWNOACTIVATE);
+ else if(SynthHome::visible())SynthPages::mount(win);
+ else{ShowWindow(win,SW_SHOW);SetForegroundWindow(win);}
 }
 void update(const Json& value){model=value;if(!win)return;busy=true;
  auto key=encode(field(model,"bodies"));if(key!=bodyKey){bodyKey=key;auto prior=text(701);SendDlgItemMessageW(win,701,CB_RESETCONTENT,0,0);int selected=0,i=0;for(auto& b:field(model,"bodies").items){auto s=b.textOr("system")+" · "+b.textOr("name");SendDlgItemMessageW(win,701,CB_ADDSTRING,0,(LPARAM)wide(s).c_str());if(s==prior)selected=i;i++;}SendDlgItemMessageW(win,701,CB_SETCURSEL,selected,0);}

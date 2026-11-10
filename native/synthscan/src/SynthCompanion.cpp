@@ -500,9 +500,15 @@ LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM wp,LPARAM lp){
     if(message==WM_SIZE){layout();return 0;}if(message==WM_TIMER){refresh();return 0;}
     if(message==WM_ERASEBKGND)return 1;
     if(message==WM_PAINT||message==WM_PRINTCLIENT){
-        PAINTSTRUCT ps{};HDC dc=message==WM_PAINT?BeginPaint(hwnd,&ps):reinterpret_cast<HDC>(wp);{Gdiplus::Graphics g(dc);RECT bounds{};GetClientRect(hwnd,&bounds);backdrop(g,float(bounds.right),float(bounds.bottom));g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
-        for(int id:{501,510,532,534,536}){auto h=child(id);if(!h)continue;RECT r{};GetWindowRect(h,&r);MapWindowPoints(nullptr,hwnd,reinterpret_cast<POINT*>(&r),2);SynthGlass::panel(g,{float(r.left-2),float(r.top-8),float(r.right-r.left+4),float(r.bottom-r.top+14)},false,GetFocus()==h,9);}
-        }if(message==WM_PAINT)EndPaint(hwnd,&ps);return 0;
+        PAINTSTRUCT ps{};HDC dc=message==WM_PAINT?BeginPaint(hwnd,&ps):reinterpret_cast<HDC>(wp);
+        RECT bounds{};GetClientRect(hwnd,&bounds);
+        if(!inPreview&&SynthWebView::active()){
+            FillRect(dc,&bounds,background);
+        }else{
+            Gdiplus::Graphics g(dc);backdrop(g,float(bounds.right),float(bounds.bottom));g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+            for(int id:{501,510,532,534,536}){auto h=child(id);if(!h)continue;RECT r{};GetWindowRect(h,&r);MapWindowPoints(nullptr,hwnd,reinterpret_cast<POINT*>(&r),2);SynthGlass::panel(g,{float(r.left-2),float(r.top-8),float(r.right-r.left+4),float(r.bottom-r.top+14)},false,GetFocus()==h,9);}
+        }
+        if(message==WM_PAINT)EndPaint(hwnd,&ps);return 0;
     }
     if(message==WM_CTLCOLORSTATIC||message==WM_CTLCOLOREDIT){SetTextColor((HDC)wp,RGB(234,240,247));SetBkColor((HDC)wp,message==WM_CTLCOLOREDIT?RGB(25,29,36):RGB(14,18,25));return reinterpret_cast<LRESULT>(message==WM_CTLCOLOREDIT?editBackground:background);}
     if(message==WM_CTLCOLORLISTBOX){SetTextColor((HDC)wp,RGB(234,240,247));SetBkColor((HDC)wp,RGB(25,29,36));return reinterpret_cast<LRESULT>(editBackground);}
@@ -554,12 +560,21 @@ LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM wp,LPARAM lp){
     }return DefWindowProcW(hwnd,message,wp,lp);
 }
 }
+void prewarm(HWND parent,const std::filesystem::path& directory){
+    if(inPreview||page||!SynthWebView::available())return;
+    folder=directory;mode="people";
+    WNDCLASSW cls{};cls.lpfnWndProc=procedure;cls.hInstance=GetModuleHandleW(nullptr);cls.lpszClassName=L"SynthScanCompanion";cls.hCursor=LoadCursor(nullptr,IDC_ARROW);cls.hbrBackground=background;RegisterClassW(&cls);
+    font=CreateFontW(-14,0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH,L"Segoe UI");
+    page=CreateWindowExW(WS_EX_CONTROLPARENT,cls.lpszClassName,L"SynthScan companion",WS_CHILD|WS_CLIPCHILDREN|WS_CLIPSIBLINGS,0,0,860,700,parent,nullptr,cls.hInstance,nullptr);
+    SetTimer(page,1,1000,nullptr);
+    if(SynthWebView::attach(page,directory,"people",handleWebViewCommand))refresh(true);
+    createControls();
+}
 void show(HWND parent,const std::filesystem::path& directory,const std::string& name){
     folder=directory;bool changed=mode!=name;mode=name;
     if(!page){WNDCLASSW cls{};cls.lpfnWndProc=procedure;cls.hInstance=GetModuleHandleW(nullptr);cls.lpszClassName=L"SynthScanCompanion";cls.hCursor=LoadCursor(nullptr,IDC_ARROW);cls.hbrBackground=background;RegisterClassW(&cls);
         font=CreateFontW(-14,0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH,L"Segoe UI");
         page=CreateWindowExW(WS_EX_CONTROLPARENT,cls.lpszClassName,L"SynthScan companion",WS_CHILD|WS_CLIPCHILDREN|WS_CLIPSIBLINGS,0,0,mode=="people"?860:620,mode=="people"?700:580,parent,nullptr,cls.hInstance,nullptr);changed=true;SetTimer(page,1,1000,nullptr);}
-    if(changed)createControls();
     if(!inPreview&&SynthWebView::available()){
         if(SynthWebView::attach(page,directory,name,handleWebViewCommand)){
             for(HWND h=GetWindow(page,GW_CHILD);h;h=GetWindow(h,GW_HWNDNEXT)){
@@ -569,6 +584,7 @@ void show(HWND parent,const std::filesystem::path& directory,const std::string& 
             refresh(true);
         }
     }
+    if(changed)createControls();
     SynthPages::mount(page);ShowWindow(page,SW_SHOW);
 }
 void close(){SynthWebView::detach();if(page){KillTimer(page,1);DestroyWindow(page);}page=nullptr;if(font)DeleteObject(font);font=nullptr;}
