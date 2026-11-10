@@ -131,6 +131,16 @@ public:
     void setRefineryOrderDoneCallback(std::function<void(const RefineryOrder&)> done) {
         onRefineryOrderDone_ = std::move(done);
     }
+    const std::vector<std::string>& ownedBlueprints() const { return owned_; }
+    const std::string& ownedBlueprintsNote() const { return ownedNote_; }
+    void toggleBlueprintOwnedByIndex(int index) { toggleBlueprintOwned(index); }
+    const std::vector<RefineryOrder>& refineryOrders() const { return refineryOrders_; }
+    const std::vector<RefineryOrder>& refineryCollections() const { return refineryCollections_; }
+    void collectRefineryOrderByIndex(size_t index) {
+        if (index < refineryOrders_.size() && onRefineryOrderDone_) {
+            onRefineryOrderDone_(refineryOrders_[index]);
+        }
+    }
     // UEX's prices for the Ore Finder (UexPrices): whether it is asked at all
     // (uex= in region_config.txt), what it said, when the price list was
     // fetched (Unix seconds), and what went wrong the last time it was asked

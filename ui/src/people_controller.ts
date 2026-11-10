@@ -10,6 +10,7 @@ import {
   normalizePlayer,
 } from './bridge';
 import { personColor, splitTags, tagColor } from './colors';
+import { DesktopViewsManager } from './desktop_views';
 
 export const ROW_HEIGHT_PX = 40;
 
@@ -24,9 +25,10 @@ export class DesktopAppController {
   private readonly root: HTMLElement;
   private readonly bridge: DesktopBridge;
   private unsubscribe: (() => void) | null = null;
+  private desktopViews: DesktopViewsManager | null = null;
 
   private snapshot: PeopleSnapshot | null = null;
-  private activeMode: 'people' | 'buyer_alerts' | 'home' | 'settings' = 'people';
+  private activeMode: PeopleSnapshot['mode'] = 'people';
   private sourceIndex = 0; // 0: Shard, 1: Search, 2: Tagged, 3: Friends
   private taggedOnly = false;
   private searchQuery = '';
@@ -144,6 +146,10 @@ export class DesktopAppController {
   }
 
   public destroy(): void {
+    if (this.desktopViews) {
+      this.desktopViews.destroy();
+      this.desktopViews = null;
+    }
     if (this.unsubscribe) {
       this.unsubscribe();
       this.unsubscribe = null;
@@ -205,24 +211,27 @@ export class DesktopAppController {
 
   private buildShell(): void {
     this.root.innerHTML = `
-      <div class="ss-shell">
-        <header class="ss-topbar">
-          <div class="ss-brand">
-            <span class="ss-brand-badge" aria-hidden="true">◆</span>
-            <div>
-              <h1 class="ss-page-title" id="ss-page-title">People</h1>
-              <p class="ss-page-subtitle" id="ss-page-subtitle">A familiar face in a very large universe.</p>
-            </div>
-          </div>
-          <nav class="ss-mode-tabs" role="tablist" aria-label="Workspace views">
-            <button type="button" class="ss-tab is-active" data-mode="people" role="tab" aria-selected="true">Shard &amp; Friends</button>
-            <button type="button" class="ss-tab" data-mode="buyer_alerts" role="tab" aria-selected="false">Buyer Alerts</button>
-            <button type="button" class="ss-tab ss-tab-hosted-hidden" data-mode="home" role="tab" aria-selected="false">Session Recap</button>
-            <button type="button" class="ss-tab ss-tab-hosted-hidden" data-mode="settings" role="tab" aria-selected="false">Settings &amp; Modules</button>
-          </nav>
-        </header>
+      <div class="ss-app-layout">
+        <aside class="ss-app-sidebar" id="ss-app-sidebar"></aside>
+        <main class="ss-app-main" id="ss-app-main">
+          <div class="ss-shell">
+            <header class="ss-topbar">
+              <div class="ss-brand">
+                <span class="ss-brand-badge" aria-hidden="true">◆</span>
+                <div>
+                  <h1 class="ss-page-title" id="ss-page-title">People</h1>
+                  <p class="ss-page-subtitle" id="ss-page-subtitle">A familiar face in a very large universe.</p>
+                </div>
+              </div>
+              <nav class="ss-mode-tabs" role="tablist" aria-label="Workspace views">
+                <button type="button" class="ss-tab is-active" data-mode="people" role="tab" aria-selected="true">Shard &amp; Friends</button>
+                <button type="button" class="ss-tab" data-mode="buyer_alerts" role="tab" aria-selected="false">Buyer Alerts</button>
+                <button type="button" class="ss-tab ss-tab-hosted-hidden" data-mode="home" role="tab" aria-selected="false">Session Recap</button>
+                <button type="button" class="ss-tab ss-tab-hosted-hidden" data-mode="settings" role="tab" aria-selected="false">Settings &amp; Modules</button>
+              </nav>
+            </header>
 
-        <section id="ss-view-people" class="ss-view">
+            <section id="ss-view-people" class="ss-view">
           <div class="ss-people-grid">
             <!-- Left Column: Roster -->
             <div class="ss-card ss-roster-pane">
@@ -479,6 +488,9 @@ export class DesktopAppController {
           </div>
         </div>
       </div>
+          </div>
+        </main>
+      </div>
     `;
 
     this.rosterScrollEl = this.root.querySelector('#people-roster-scroll')!;
@@ -540,6 +552,17 @@ export class DesktopAppController {
     this.marketShowMatchesBtn = this.root.querySelector('#market-show-matches-btn')!;
 
     this.bindEvents();
+
+    const sidebarEl = this.root.querySelector<HTMLElement>('#ss-app-sidebar');
+    const mainEl = this.root.querySelector<HTMLElement>('#ss-app-main .ss-shell');
+    if (sidebarEl && mainEl) {
+      this.desktopViews = new DesktopViewsManager(
+        this.bridge,
+        sidebarEl,
+        mainEl,
+        (page) => this.setMode(page as PeopleSnapshot['mode']),
+      );
+    }
   }
 
   private bindEvents(): void {
@@ -872,7 +895,8 @@ export class DesktopAppController {
     });
   }
 
-  public setMode(mode: 'people' | 'buyer_alerts' | 'home' | 'settings'): void {
+  public setMode(mode: PeopleSnapshot['mode']): void {
+    if (!mode) mode = 'people';
     this.activeMode = mode;
     this.peopleSectionEl.hidden = mode !== 'people';
     this.marketSectionEl.hidden = mode !== 'buyer_alerts';
@@ -885,26 +909,45 @@ export class DesktopAppController {
       btn.setAttribute('aria-selected', active ? 'true' : 'false');
     });
 
+    const modeTabsEl = this.root.querySelector<HTMLElement>('.ss-mode-tabs');
+    if (modeTabsEl) {
+      modeTabsEl.hidden = mode !== 'people' && mode !== 'buyer_alerts';
+    }
+
+    if (this.desktopViews) {
+      this.desktopViews.setActivePage(mode === 'buyer_alerts' ? 'people' : mode);
+    }
+
     const titleEl = this.root.querySelector('#ss-page-title')!;
     const subEl = this.root.querySelector('#ss-page-subtitle')!;
-    if (mode === 'people') {
-      titleEl.textContent = 'People';
-      subEl.textContent = 'A familiar face in a very large universe.';
-    } else if (mode === 'buyer_alerts') {
-      titleEl.textContent = 'Buyer Alerts';
-      subEl.textContent = 'Watch UEX buy orders for your best mining and crafting hauls.';
-    } else if (mode === 'home') {
-      titleEl.textContent = 'Home';
-      subEl.textContent = "Find your next upgrade. See what you've accomplished.";
-    } else {
-      titleEl.textContent = 'Settings & Modules';
-      subEl.textContent = 'Customize HUD behavior, shortcuts, privacy, and installed modules.';
-    }
+    const titles: Record<string, [string, string]> = {
+      home: ['Home', "Find your next upgrade. See what you've accomplished."],
+      directory: ['Item & Ship Finder', 'Search Star Citizen commodities, ships, weapons, components, and armor.'],
+      people: ['People', 'A familiar face in a very large universe.'],
+      buyer_alerts: ['Buyer Alerts', 'Watch UEX buy orders for your best mining and crafting hauls.'],
+      mission_log: ['Mission & Wallet Log', 'Track mission objectives, payouts, reputations, and balance changes.'],
+      servers: ['Server History', 'Track shard visits, cooldowns, regional latencies, and player sessions.'],
+      blueprints: ['Blueprint Library', 'Crafting blueprints, material costs, and collection progress.'],
+      planner: ['Mining Planner', 'Ore compositions, optimal locations, rock density, and refinery yields.'],
+      diary: ['Mining Diary', 'Log your mining runs, rock signatures, locations, and ore hauls.'],
+      refinery: ['Refinery', 'Track active jobs, yields, completion timers, and order collections.'],
+      executive_hangar: ['Executive Hangar', 'Automated ship recall, docking bay status, and departure sequencing.'],
+      hud_piracy: ['Piracy', 'Interdiction traps, quantum snare timers, and ship cargo surveillance.'],
+      daylight: ['Day/Night Forecast', 'Plan surface approaches with real-time solar illumination and terminator lines.'],
+      acceptance: ['Automatic Acceptance', 'Hands-free party invitations, trade requests, and mission sharing.'],
+      settings: ['Settings & Modules', 'Customize HUD behavior, shortcuts, privacy, and installed modules.'],
+    };
+    const pair = titles[mode] ?? ['SynthScan', 'YOUR VERSE, CONNECTED'];
+    titleEl.textContent = pair[0];
+    subEl.textContent = pair[1];
   }
 
   private onSnapshot(snap: PeopleSnapshot): void {
     const modeChanged = snap.mode && snap.mode !== this.activeMode;
     this.snapshot = snap;
+    if (this.desktopViews) {
+      this.desktopViews.updateState(snap);
+    }
     if (modeChanged && snap.mode) {
       this.setMode(snap.mode);
     }

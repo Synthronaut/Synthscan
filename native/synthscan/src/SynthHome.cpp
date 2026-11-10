@@ -6,6 +6,7 @@
 #include "NativeRedraw.h"
 #include "HudModules.h"
 #include "AppPaths.h"
+#include "SynthWebView.h"
 #include <commctrl.h>
 #include "SynthCapturePrivacy.h"
 #include <gdiplus.h>
@@ -24,6 +25,7 @@ HWND window=nullptr,owner=nullptr;std::filesystem::path directory;
 std::function<void(const std::string&)> action;
 Json overview;std::string identity,lastAction;bool connected=false,previous=false,sessionChosen=false;
 std::string activePage="home";
+bool webShellMode=false;
 float scale=1;
 const Gdiplus::Color BG(255,15,16,19),SIDE(255,19,21,25),CARD(255,24,26,30),BORDER(255,44,47,54),INK(255,238,239,241),MUTED(255,160,166,176),ACCENT(255,98,204,255);
 struct Button {HWND hwnd;int id;std::wstring label;std::string action;bool navigation;};
@@ -55,6 +57,12 @@ void publish(){
 }
 void layout(){
     if(!window)return;RECT r{};GetClientRect(window,&r);
+    if(webShellMode){
+        for(auto& b:buttons)ShowWindow(b.hwnd,SW_HIDE);
+        SynthPages::place(0,0,1,1,false);
+        SynthWebView::resize(r.right,r.bottom);
+        return;
+    }
     scale=std::max(.7f,std::min(float(GetDpiForWindow(window))/96.f,std::min(r.right/900.f,r.bottom/760.f)));
     int tiles=int(std::count_if(buttons.begin(),buttons.end(),[](const auto& b){return b.id>=200&&b.id<=203;})),tileAt=0;
     float width=r.right/scale,main=width-248,gap=12,tile=(main-std::max(0,tiles-1)*gap)/std::max(1,tiles);
@@ -79,7 +87,9 @@ void layout(){
 // Paint the same surface in parent and child coordinates. A flat child clear
 // leaves visible square corners around translucent rounded buttons.
 void paintSurface(Gdiplus::Graphics& g,int widthPixels,int heightPixels){
-    g.Clear(BG);SynthGlass::ambient(g,{0,0,float(widthPixels),float(heightPixels)});
+    g.Clear(BG);
+    if(webShellMode)return;
+    SynthGlass::ambient(g,{0,0,float(widthPixels),float(heightPixels)});
     float width=widthPixels/scale,height=heightPixels/scale,main=width-248,col=(main-16)/2;
     Gdiplus::SolidBrush side(SIDE);g.FillRectangle(&side,0.f,0.f,200*scale,float(heightPixels));
     SynthGlass::panel(g,{12*scale,14*scale,188*scale,float(heightPixels)-28*scale},false,false,18*scale);
@@ -295,9 +305,17 @@ void update(const SCMiner::JsonValue& incoming,const std::string& label,bool liv
 void show(){create();if(owner&&(GetWindowLongPtrW(owner,GWL_EXSTYLE)&WS_EX_TOPMOST))SetWindowPos(owner,HWND_NOTOPMOST,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE);ShowWindow(window,SW_SHOW);ShowWindow(window,SW_RESTORE);SetForegroundWindow(window);publish();}
 void hide(){if(window){ShowWindow(window,SW_HIDE);publish();}}
 HWND pageHost(){create();return SynthPages::host();}
+HWND windowHandle(){create();return window;}
+void setWebShellMode(bool enabled){webShellMode=enabled;if(window)layout();}
+bool isWebShellMode(){return webShellMode;}
 void selectPage(const std::string& name){
     std::string previousPage=activePage;
     activePage=name;
+    if(webShellMode){
+        lastAction=name;
+        publish();
+        return;
+    }
     if(activePage=="home")SynthPages::hide();
     else SynthPages::advanceGeneration();
     if(window){
@@ -321,6 +339,12 @@ void navigate(const std::string& name){
     if(!available(name))return;
     // Copy before dispatch: navigation may update the selected action itself.
     const std::string destination=name;lastAction=destination;
+    if(webShellMode){
+        activePage=(destination=="bookmarks"?"diary":destination);
+        if(action)action(destination);
+        publish();
+        return;
+    }
     SynthPages::beginTransition();selectPage(destination=="bookmarks"?"diary":destination);
     if(destination!="home"&&action)action(destination);
     SynthPages::endTransition();publish();
@@ -337,7 +361,7 @@ bool routeMessage(MSG& message){
     }
     return window&&(message.hwnd==window||IsChild(window,message.hwnd))&&IsDialogMessage(window,&message);
 }
-void close(){SynthPages::close();if(window)DestroyWindow(window);window=nullptr;buttons.clear();}
+void close(){SynthWebView::detach();SynthPages::close();if(window)DestroyWindow(window);window=nullptr;buttons.clear();}
 int paintCheck(const std::filesystem::path& output){
     // Exercise the actual Home BUTTON procedures, including the erase phase
     // that a final-frame WM_PRINT screenshot cannot reveal. All HWNDs stay hidden.

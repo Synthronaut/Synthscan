@@ -123,13 +123,310 @@ export interface HomeOverviewState {
   };
 }
 
+export interface DirectoryItemData {
+  id: string;
+  name: string;
+  kind?: string;
+  category?: string;
+  size?: number | string;
+  grade?: string;
+  manufacturer?: string;
+  price_buy?: number;
+  price_sell?: number;
+  location?: string;
+  stock?: number;
+}
+
+export interface BlueprintSlotData {
+  slot_name: string;
+  material_name: string;
+  scu: number;
+  units: number;
+  min_quality: number;
+}
+
+export interface BlueprintDefinitionData {
+  id: number;
+  name: string;
+  type: string;
+  grade: string;
+  size: number;
+  item_class: number;
+  seconds: number;
+  known_from_start: boolean;
+  missions: number;
+  slots: BlueprintSlotData[];
+}
+
+export interface MiningLocationData {
+  mineral: string;
+  family: 'Ship' | 'ROC' | 'FPS' | string;
+  location: string;
+  system: string;
+  kind: string;
+  note: string;
+  chance: number;
+}
+
+export interface RefineryLocationData {
+  name: string;
+  system: string;
+  profile: number;
+}
+
+export interface RefiningMethodData {
+  key: string;
+  name: string;
+  rating: string;
+  yield: number;
+  time: number;
+  cost: number;
+}
+
+export interface DaylightSiteData {
+  name: string;
+  coordinates: [number, number, number];
+}
+
+export interface DaylightBodyData {
+  name: string;
+  radius_km: number;
+  period_seconds: number;
+  quaternion: [number, number, number, number];
+  center_km: [number, number, number];
+  star_km: [number, number, number];
+  star_radius_km: number;
+  correction_degrees: number;
+  sites: DaylightSiteData[];
+}
+
+export interface DaylightCatalogueData {
+  epoch?: number;
+  systems?: Record<string, { bodies: DaylightBodyData[] }>;
+}
+
+export interface RefineryOrderPartData {
+  material: string;
+  quality: number;
+  yield: number;
+  quantity: number;
+}
+
+export interface RefineryOrderData {
+  order_id: string | number;
+  number: number;
+  station: string;
+  method: string;
+  cost: number;
+  placed: number;
+  due: number;
+  completed: number;
+  collected: number;
+  parts: RefineryOrderPartData[];
+}
+
+export interface MissionRecordData {
+  id: string;
+  title: string;
+  category: string;
+  system: string;
+  payout: number;
+  accepted_at?: number;
+  completed_at?: number;
+  status: 'active' | 'completed' | 'abandoned' | 'failed' | string;
+  reputation_delta?: number;
+}
+
+export interface WalletChangeData {
+  id: string;
+  amount: number;
+  at: number;
+  category: string;
+  note?: string;
+  balance_after?: number;
+}
+
+export interface MissionStatsData {
+  total_completed: number;
+  total_earned: number;
+  current_balance: number;
+}
+
+export interface ServerRecordData {
+  shard_id: string;
+  region: string;
+  first_seen: number;
+  last_seen: number;
+  visit_count: number;
+  cooldown_until?: number;
+  custom_name?: string;
+  notes?: string;
+}
+
+export interface ServerStatsData {
+  total_shards: number;
+  current_shard?: string;
+  region?: string;
+}
+
+export interface DiaryEntryData {
+  id: string;
+  system: string;
+  body: string;
+  method: string;
+  ship: string;
+  timestamp: number;
+  ores: { name: string; scu: number; percent?: number; value_uec?: number }[];
+  total_value: number;
+  notes?: string;
+}
+
+export interface NavBookmarkData {
+  id: string;
+  name: string;
+  body: string;
+  role: string;
+  coordinates?: [number, number, number];
+  stand_off_m?: number;
+}
+
+export interface ExecutiveHangarState {
+  available?: boolean;
+  counts?: Record<string, number>;
+  set_counts?: Record<string, number>;
+  revision?: number;
+  timer_seconds?: number;
+  ships?: { name: string; bay: string; ready: boolean; recall_seconds?: number }[];
+}
+
+export interface PiracyState {
+  wait_active?: boolean;
+  wait_seconds?: number;
+  snare_alerts?: boolean;
+  interdictions?: { target: string; ship: string; cargo_scu?: number; value?: number; at: number }[];
+}
+
+export interface DaylightState {
+  selected_system?: string;
+  selected_body?: string;
+  selected_site?: string;
+}
+
+export interface AcceptanceSettingsData {
+  enabled?: boolean;
+  party_enabled?: boolean;
+  friend_enabled?: boolean;
+  hide_global_chat?: boolean;
+}
+
+export interface DesktopSettingsData {
+  open_with_launcher?: boolean;
+  scan_on_launch?: boolean;
+  show_hud?: boolean;
+  session_strip?: boolean;
+  snare_alerts?: boolean;
+  hotkeys_enabled?: boolean;
+  game_only_hotkeys?: boolean;
+  toggle_key?: string;
+  toggle_mods?: number;
+  cycle_key?: string;
+  cycle_mods?: number;
+  privacy_paused?: boolean;
+  pause_unfocused?: boolean;
+  account_access?: boolean;
+  fps_granted?: boolean;
+  network_granted?: boolean;
+}
+
+export interface DesktopCatalog {
+  revision: number;
+  directory_rows?: DirectoryItemData[];
+  blueprints?: BlueprintDefinitionData[];
+  blueprint_types?: string[];
+  blueprint_materials?: string[];
+  blueprint_slots?: string[];
+  mining_locations?: MiningLocationData[];
+  refineries?: RefineryLocationData[];
+  refinery_materials?: string[];
+  refinery_yields?: number[][];
+  refining_methods?: RefiningMethodData[];
+  daylight?: DaylightCatalogueData;
+  available_actions?: Record<string, boolean>;
+}
+
+export interface DesktopState {
+  active_page?: string;
+  game_running?: boolean;
+  game_focused?: boolean;
+  capture_status?: 'reading' | 'idle' | 'paused';
+  hud_active?: {
+    mining?: boolean;
+    finder?: boolean;
+    missions?: boolean;
+    hangars?: boolean;
+  };
+  server?: {
+    shard_id?: string;
+    region?: string;
+    display?: string;
+    history_count?: number;
+    last_location?: string;
+    notes?: string;
+  };
+  executive_hangar?: ExecutiveHangarState;
+  refinery?: {
+    orders?: RefineryOrderData[];
+    collections?: RefineryOrderData[];
+  };
+  blueprints?: {
+    owned?: string[];
+    note?: string;
+  };
+  mission_log?: {
+    missions?: MissionRecordData[];
+    wallet_changes?: WalletChangeData[];
+    stats?: MissionStatsData;
+  };
+  servers?: {
+    entries?: ServerRecordData[];
+    stats?: ServerStatsData;
+  };
+  diary?: {
+    entries?: DiaryEntryData[];
+    auto_log?: boolean;
+  };
+  navigation?: {
+    bookmarks?: NavBookmarkData[];
+    active_target?: string;
+  };
+  piracy?: PiracyState;
+  daylight?: DaylightState;
+  acceptance?: AcceptanceSettingsData;
+  settings?: DesktopSettingsData;
+}
+
 export interface PeopleSnapshot {
   revision: number;
   owner_pid?: number;
   written_at?: number;
   session: string;
   session_token?: string;
-  mode?: 'people' | 'buyer_alerts' | 'home' | 'settings';
+  mode?:
+    | 'people'
+    | 'buyer_alerts'
+    | 'home'
+    | 'directory'
+    | 'mission_log'
+    | 'servers'
+    | 'blueprints'
+    | 'planner'
+    | 'diary'
+    | 'refinery'
+    | 'executive_hangar'
+    | 'hud_piracy'
+    | 'daylight'
+    | 'acceptance'
+    | 'settings';
   players: Player[];
   rows?: Player[];
   action_people?: Player[];
@@ -155,6 +452,8 @@ export interface PeopleSnapshot {
   notifications?: CompanionNotice[];
   market_items?: MarketCatalogItem[];
   home?: HomeOverviewState;
+  catalog?: DesktopCatalog;
+  desktop?: DesktopState;
 }
 
 export type DesktopCommandAction =
@@ -179,7 +478,43 @@ export type DesktopCommandAction =
   | 'remove_watch'
   | 'dismiss_notices'
   | 'open_uex_ad'
-  | 'navigate';
+  | 'navigate'
+  | 'hud_mode'
+  | 'open_dialog'
+  | 'dismiss_refinery'
+  | 'directory_select'
+  | 'toggle_favorite'
+  | 'mission_view'
+  | 'classify_wallet'
+  | 'mission_export'
+  | 'session_view'
+  | 'session_note'
+  | 'shard_name'
+  | 'shard_cooldown'
+  | 'session_export'
+  | 'toggle_blueprint_owned'
+  | 'plan_mining'
+  | 'diary_view'
+  | 'diary_save'
+  | 'diary_delete'
+  | 'diary_merge'
+  | 'diary_share'
+  | 'diary_auto_log'
+  | 'nav_select'
+  | 'nav_arm'
+  | 'nav_cancel'
+  | 'nav_delete'
+  | 'nav_export'
+  | 'nav_import'
+  | 'refinery_collected'
+  | 'hangar_action'
+  | 'piracy_action'
+  | 'daylight_prefs'
+  | 'save_acceptance'
+  | 'save_settings'
+  | 'save_hotkeys'
+  | 'save_privacy'
+  | 'helper_permission';
 
 export interface DesktopCommand {
   action: DesktopCommandAction;
@@ -202,6 +537,58 @@ export interface DesktopCommand {
   watch_id?: string;
   url?: string;
   target?: string;
+  row_id?: string;
+  mode?: string;
+  outcome?: string;
+  direction?: string;
+  category?: string;
+  current_session?: boolean;
+  offset?: number;
+  change_id?: string;
+  format?: string;
+  region?: string;
+  date_from?: string;
+  date_to?: string;
+  session_id?: string;
+  text?: string;
+  name?: string;
+  minutes?: number;
+  blueprint_index?: number;
+  targets?: string[];
+  family?: string;
+  system?: string;
+  body?: string;
+  site?: string;
+  entry_id?: string;
+  entry_ids?: string[];
+  options?: Record<string, unknown>;
+  entry?: Record<string, unknown>;
+  auto_log?: boolean;
+  bookmark_id?: string;
+  body_id?: string;
+  role?: string;
+  stand_off_m?: number;
+  order_index?: number;
+  sub_action?: string;
+  counts?: Record<string, number>;
+  revision?: number;
+  enabled?: boolean;
+  party_enabled?: boolean;
+  friend_enabled?: boolean;
+  hide_global_chat?: boolean;
+  open_with_launcher?: boolean;
+  scan_on_launch?: boolean;
+  show_hud?: boolean;
+  session_strip?: boolean;
+  snare_alerts?: boolean;
+  game_only?: boolean;
+  toggle_key?: string;
+  toggle_mods?: number;
+  cycle_key?: string;
+  cycle_mods?: number;
+  paused?: boolean;
+  pause_unfocused?: boolean;
+  account_access?: boolean;
 }
 
 export interface DesktopBridge {
@@ -486,6 +873,13 @@ export class WebViewDesktopBridge implements DesktopBridge {
               (record.market_items as MarketCatalogItem[] | undefined) ??
               stateObj.market_items,
             home: (record.home as HomeOverviewState | undefined) ?? stateObj.home,
+            catalog:
+              (record.catalog as DesktopCatalog | undefined) ??
+              this.snapshot?.catalog ??
+              stateObj.catalog,
+            desktop:
+              (record.desktop as DesktopState | undefined) ??
+              stateObj.desktop,
           });
           for (const listener of this.listeners) {
             listener(this.snapshot);

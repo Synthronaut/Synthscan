@@ -210,6 +210,7 @@ void queue(Json command){
     if(!write(folder/L"companion_commands"/(std::wstring(id,id+strlen(id))+L".json"),command))label(590,"Could not save the action. Please try again.");
     else label(590,"Working…");
 }
+}
 void handleWebViewCommand(const Json& command){
     const std::string action=command.textOr("action");
     if(action=="navigate"){SynthHome::navigate(command.textOr("page"));return;}
@@ -221,6 +222,7 @@ void handleWebViewCommand(const Json& command){
     }
     queue(command);
 }
+namespace {
 void layout(){
     if(!page)return;RECT r{};GetClientRect(page,&r);int w=std::max(mode=="people"?860:620,int(r.right)),h=std::max(mode=="people"?700:580,int(r.bottom));
     if(SynthWebView::active())SynthWebView::resize(r.right,r.bottom);

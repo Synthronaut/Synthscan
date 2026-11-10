@@ -258,7 +258,15 @@ bool allowedAction(const std::string& action) {
         "friend", "friend_many", "party", "party_many",
         "pause_invites", "resume_invites", "cancel_invites",
         "add_watch", "toggle_watch", "remove_watch", "dismiss_notices",
-        "open_uex_ad", "navigate"
+        "open_uex_ad", "navigate",
+        "hud_mode", "open_dialog", "dismiss_refinery", "directory_select", "toggle_favorite",
+        "mission_view", "classify_wallet", "mission_export",
+        "session_view", "session_note", "shard_name", "shard_cooldown", "session_export",
+        "toggle_blueprint_owned", "plan_mining",
+        "diary_view", "diary_save", "diary_delete", "diary_merge", "diary_share", "diary_auto_log",
+        "nav_select", "nav_arm", "nav_cancel", "nav_delete", "nav_export", "nav_import",
+        "refinery_collected", "hangar_action", "piracy_action", "daylight_prefs",
+        "save_acceptance", "save_settings", "save_hotkeys", "save_privacy", "helper_permission"
     };
     return allowed.count(action) > 0;
 }
@@ -301,20 +309,31 @@ std::string g_pendingMode = "people";
 Json g_pendingState;
 Json g_pendingMarketItems;
 Json g_pendingHome;
+Json g_pendingCatalog;
+Json g_pendingDesktop;
+double g_pendingCatalogRevision = 0;
+double g_sentCatalogRevision = 0;
 Json g_suiteResult;
 bool g_hasSuiteResult = false;
 std::wstring g_initialUrl = L"https://synthscan.local/index.html";
 
 void sendSnapshotMessage() {
     if (!g_webview || !g_uiReady) return;
-    Json envelope = obj({
+    Json envelope;
+    envelope.kind = Json::Kind::Object;
+    envelope.members = {
         {"kind", str("snapshot")},
         {"bridge_token", str(g_bridgeToken)},
         {"mode", str(g_pendingMode)},
         {"state", g_pendingState},
         {"market_items", g_pendingMarketItems},
-        {"home", g_pendingHome}
-    });
+        {"home", g_pendingHome},
+        {"desktop", g_pendingDesktop}
+    };
+    if (g_sentCatalogRevision != g_pendingCatalogRevision && g_pendingCatalog.kind == Json::Kind::Object) {
+        envelope.members.push_back({"catalog", g_pendingCatalog});
+        g_sentCatalogRevision = g_pendingCatalogRevision;
+    }
     auto payload = wide(encode(envelope));
     g_webview->PostWebMessageAsJson(payload.c_str());
 }
@@ -549,6 +568,17 @@ bool attach(HWND parent, const std::filesystem::path& dataFolder, const std::str
         return false;
     }
     return true;
+}
+
+void setCatalog(const Json& catalog) {
+    g_pendingCatalog = catalog;
+    g_pendingCatalogRevision = catalog.numberOr("revision", 1);
+    sendSnapshotMessage();
+}
+
+void setDesktopState(const Json& desktop) {
+    g_pendingDesktop = desktop;
+    sendSnapshotMessage();
 }
 
 void pushSnapshot(const std::string& mode, const Json& state, const Json& marketItems, const Json& homeOverview) {
