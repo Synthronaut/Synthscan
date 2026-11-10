@@ -32,6 +32,7 @@ export function personColor(person: PersonRelationshipFlags): RgbColor {
 
 const PRESET_TAG_COLORS: Record<string, [number, number, number]> = {
   org: [255, 145, 40],
+  'enemy org': [255, 68, 68],
   friend: [45, 225, 122],
   friendly: [166, 231, 190],
   aggressive: [255, 105, 112],

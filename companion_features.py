@@ -12,7 +12,7 @@ from party_invites import InviteHistory,PartyInviteQueue,validate_batch_size,MAX
 
 MARKET_INTERVAL=1800
 ROSTER_INTERVAL=30
-TAG_PRESETS=('Org','Friend','Friendly','Aggressive','Trader','Org Affiliate','Crew','Buyer','Avoid')
+TAG_PRESETS=('Org','Enemy Org','Friend','Friendly','Aggressive','Trader','Org Affiliate','Crew','Buyer','Avoid')
 
 
 def tag_labels(value):

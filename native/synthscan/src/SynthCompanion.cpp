@@ -47,7 +47,7 @@ std::vector<std::wstring> splitTags(const std::wstring& value){
 }
 Gdiplus::Color tagColor(std::wstring tag){
     for(auto& c:tag)c=wchar_t(std::towlower(c));
-    static std::map<std::wstring,COLORREF> colors={{L"org",RGB(255,145,40)},{L"friend",RGB(45,225,122)},{L"friendly",RGB(166,231,190)},{L"aggressive",RGB(255,105,112)},{L"trader",RGB(75,207,232)},
+    static std::map<std::wstring,COLORREF> colors={{L"org",RGB(255,145,40)},{L"enemy org",RGB(255,68,68)},{L"friend",RGB(45,225,122)},{L"friendly",RGB(166,231,190)},{L"aggressive",RGB(255,105,112)},{L"trader",RGB(75,207,232)},
         {L"org affiliate",RGB(231,204,80)},{L"crew",RGB(184,150,255)},{L"buyer",RGB(106,163,255)},{L"avoid",RGB(237,125,207)}};
     auto found=colors.find(tag);
     if(found==colors.end()){
