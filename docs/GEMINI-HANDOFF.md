@@ -1,4 +1,4 @@
-# SynthScan migration handoff — 10 November 2026
+# SynthScan migration handoff â€” 10 November 2026
 
 ## User mandate
 
@@ -8,7 +8,7 @@ The user wants the desktop interface migrated to TypeScript because repeated nat
 
 Production remains Windows native C++ desktop/HUD plus Python services. No TypeScript production host exists yet. `ui/` is a buildable development foundation ONLY: static prototype and proposed typed bridge interface. It has no game connection, account access or write capability. It does not replace the installed application. Do not describe migration or automatic publishing as completed.
 
-Latest functional source commit before this handoff: 43eb1d1. It includes Home background painting fixes, installed patch display, neutral “Game text unchanged · No action needed”, and Feature modules moved to Settings. Earlier work already on main includes 50-person action limit, random 0.09–0.99s invitation gaps, three contract-accept attempts at least two seconds apart, and AFK first/subsequent waits randomly 5–12 minutes. Do not revert these or introduce timing changes as anti-detection claims.
+Latest functional source commit before this handoff: 43eb1d1. It includes Home background painting fixes, installed patch display, neutral “Game text unchanged · No action needed”, and Feature modules moved to Settings. Earlier work already on main includes 50-person action limit, random 0.09â€“0.99s invitation gaps, three contract-accept attempts at least two seconds apart, and AFK first/subsequent waits randomly 5â€“12 minutes. Do not revert these or introduce timing changes as anti-detection claims.
 
 Local development workspace: C:/Users/Dev/Documents/SynthScan. Actual Git checkout: release/public-source-v3. The workspace root is NOT a Git checkout. GitHub: https://github.com/Synthronaut/Synthscan, branch main. Root files and checkout can diverge; fetch main and inspect before copying. Other chats have edited the same workspace. Read AGENTS.md and DESIGN.md.
 
@@ -52,3 +52,7 @@ No surprise profile resets, no real invitations or input during tests, no new OC
 Local evidence: research/quiet_text_status_20261110 and research/home_patch_status_20261110. These contain build manifests, checks, isolated renders and installation records; they are not published binaries. Installed local application is dist/native/SynthScan.exe and uses native_runtime.json to locate Python sources. Avoid rebuilding directly over a running binary; stage privately and verify source stability.
 
 Deliver the completed implementation and precise verification results. Clearly distinguish source push, signed update promotion, installer publication and successful client activation.
+
+## Follow-up: chat after respawn
+
+Read RESPawn investigation at `docs/RESPAWN-CHAT-INVESTIGATION.md`. Actual logs contain a later OnClientSpawned after incapacitation, but UI readiness and chat visibility are not established. No production respawn toggle has been enabled.
