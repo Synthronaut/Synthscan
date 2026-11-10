@@ -35,7 +35,7 @@ const ReadyResult* recentResult(const std::vector<ReadyResult>& cache,const std:
     for(const auto& entry:cache)if(entry.key==key&&now-entry.at<60000)return &entry;
     return nullptr;
 }
-bool qualityDropdown=false;int qualityHighlight=0;
+bool qualityDropdown=false;int qualityHighlight=0,qualityOffset=0;
 struct MarketLink {Gdiplus::RectF rect;std::string url;};std::vector<MarketLink> linkHits;
 float ui=1,scroll=0,contentHeight=0,viewHeight=0,dragStart=0,scrollStart=0;
 int lastWidth=0,lastHeight=0;
@@ -105,7 +105,7 @@ std::vector<int> qualityChoices(){
     return values;
 }
 void releaseInput(){
-    dropdown=false;qualityDropdown=false;repaint();
+    dropdown=false;qualityDropdown=false;qualityOffset=0;repaint();
     if(!window)return;
     DWORD pid=0;GetWindowThreadProcessId(GetForegroundWindow(),&pid);
     HWND previous=previousForeground;previousForeground=nullptr;
@@ -157,11 +157,11 @@ void suggestions(){
 void choose(int match){
     if(match<0||match>=int(matches.size())||!shown)return;
     selected=matches[match];const auto& row=(*shown)[selected].value;
-    qualityMinimum=0;qualityDropdown=false;
+    qualityMinimum=0;qualityDropdown=false;qualityOffset=0;
     if(row.textOr("kind")=="Market item")playerMarket=true;
     pendingSearch=false;KillTimer(window,1);updating=true;
     SetWindowTextW(search,wide(row.textOr("name")).c_str());SendMessageW(search,EM_SETSEL,0,-1);updating=false;
-    dropdown=false;scroll=0;requestPrices(row);render();SetFocus(search);repaint();
+    dropdown=false;scroll=0;requestPrices(row);render();SetFocus(window);repaint();
 }
 void rounded(Gdiplus::Graphics& g,Gdiplus::RectF r,float radius,Gdiplus::Color color){
     Gdiplus::GraphicsPath path;float d=radius*2;
@@ -174,6 +174,7 @@ float words(Gdiplus::Graphics& g,const std::wstring& value,float x,float y,float
     Gdiplus::SolidBrush brush(color);g.DrawString(value.c_str(),-1,&f,Gdiplus::RectF(x,y,width,extent.Height+2),&format,&brush);return extent.Height;
 }
 int listRows(){RECT r{};GetClientRect(window,&r);return std::max(1,std::min(7,int((r.bottom-79*ui)/(44*ui))));}
+int qualityRows(){RECT r{};GetClientRect(window,&r);return std::max(1,int((r.bottom-136*ui)/(25*ui)));}
 void paint(HWND hwnd){
     PAINTSTRUCT ps{};HDC dc=BeginPaint(hwnd,&ps);RECT r{};GetClientRect(hwnd,&r);
     if(r.right>0&&r.bottom>0){
@@ -208,9 +209,21 @@ void paint(HWND hwnd){
                 words(g,wide(value.textOr("kind")),pad+12*ui,y+23*ui,w-pad*2-24*ui,10,at==highlighted?ACCENT:MUTED);
             }
         }else if(qualityDropdown){
-            auto choices=qualityChoices();for(size_t i=0;i<choices.size();i++){
-                float y=(130+25*i)*ui;if(int(i)==qualityHighlight)rounded(g,{pad,y,w-pad*2,24*ui},5*ui,Gdiplus::Color(255,46,50,58));
-                words(g,choices[i]?L"Q"+std::to_wstring(choices[i]):L"Any quality",pad+12*ui,y+3*ui,w-pad*2-24*ui,12,int(i)==qualityHighlight?ACCENT:INK);
+            auto choices=qualityChoices();
+            int rows=qualityRows();
+            int maxOffset=std::max(0,int(choices.size())-rows);
+            qualityOffset=std::clamp(qualityOffset,0,maxOffset);
+            for(int row=0;row<rows&&row+qualityOffset<int(choices.size());row++){
+                int at=row+qualityOffset;
+                float y=(130+25*row)*ui;
+                rounded(g,{pad,y,w-pad*2,24*ui},5*ui,at==qualityHighlight?Gdiplus::Color(255,46,50,58):CARD);
+                words(g,choices[at]?L"Q"+std::to_wstring(choices[at]):L"Any quality",pad+12*ui,y+3*ui,w-pad*2-24*ui,12,at==qualityHighlight?ACCENT:INK);
+            }
+            if(maxOffset>0){
+                float totalTrack=float(rows*25)*ui;
+                float bar=std::max(18*ui,totalTrack*float(rows)/float(choices.size()));
+                float thumbY=130*ui+(totalTrack-bar)*float(qualityOffset)/float(maxOffset);
+                rounded(g,{w-pad-4*ui,thumbY,3*ui,bar},1.5f*ui,MUTED);
             }
         }else if(shown&&selected<shown->size()){
             auto state=g.Save();g.SetClip(Gdiplus::RectF(pad,contentTop,w-pad*2,h-contentTop-6*ui));
@@ -262,7 +275,7 @@ void openMarketPage(const std::string& url){
     ShellExecuteW(owner,L"open",wide(url).c_str(),nullptr,nullptr,SW_SHOWNORMAL);
 }
 void updateMarketChoice(){
-    qualityDropdown=false;scroll=0;rendered.clear();if(shown&&selected<shown->size()){requestPrices((*shown)[selected].value);render();}repaint();
+    qualityDropdown=false;qualityOffset=0;scroll=0;rendered.clear();if(shown&&selected<shown->size()){requestPrices((*shown)[selected].value);render();}repaint();
 }
 LRESULT CALLBACK editProcedure(HWND hwnd,UINT message,WPARAM w,LPARAM l,UINT_PTR,DWORD_PTR){
     if(message==WM_MOUSEWHEEL)return SendMessageW(window,message,w,l);
@@ -283,19 +296,75 @@ LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM w,LPARAM l){
     if(message==WM_LBUTTONDOWN){
         float x=GET_X_LPARAM(l)/ui,y=GET_Y_LPARAM(l)/ui;RECT r{};GetClientRect(hwnd,&r);
         if(y<51){SetFocus(search);suggestions();return 0;}
+        SetFocus(hwnd);
         if(dropdown){int at=listOffset+int((y-79)/44);if(y>=79&&at>=0&&at<int(matches.size()))choose(at);return 0;}
         if(y>=58&&y<=87){
             if(x>=r.right/ui-85){openMarketPage("https://uexcorp.space/marketplace/");return 0;}
             bool next=x>=117;if(x>=12&&x<=275&&next!=playerMarket){playerMarket=next;updateMarketChoice();}return 0;
         }
-        if(playerMarket&&y>=96&&y<=123){auto choices=qualityChoices();qualityDropdown=choices.size()>1&&!qualityDropdown;qualityHighlight=int(std::find(choices.begin(),choices.end(),qualityMinimum)-choices.begin());repaint();return 0;}
-        if(qualityDropdown){auto choices=qualityChoices();int at=int((y-130)/25);if(y>=130&&at>=0&&at<int(choices.size())){qualityMinimum=choices[at];updateMarketChoice();}else{qualityDropdown=false;repaint();}return 0;}
+        if(playerMarket&&y>=96&&y<=123){
+            auto choices=qualityChoices();
+            qualityDropdown=choices.size()>1&&!qualityDropdown;
+            if(qualityDropdown){
+                auto it=std::find(choices.begin(),choices.end(),qualityMinimum);
+                qualityHighlight=int(it!=choices.end()?it-choices.begin():0);
+                int rows=qualityRows();
+                if(qualityHighlight<qualityOffset)qualityOffset=qualityHighlight;
+                if(qualityHighlight>=qualityOffset+rows)qualityOffset=qualityHighlight-rows+1;
+                qualityOffset=std::clamp(qualityOffset,0,std::max(0,int(choices.size())-rows));
+            }
+            repaint();
+            return 0;
+        }
+        if(qualityDropdown){
+            auto choices=qualityChoices();
+            int rows=qualityRows();
+            int clickedRow=int((y-130)/25);
+            int at=qualityOffset+clickedRow;
+            if(y>=130&&clickedRow<rows&&at>=0&&at<int(choices.size())){
+                qualityMinimum=choices[at];
+                updateMarketChoice();
+            }else{
+                qualityDropdown=false;
+                repaint();
+            }
+            return 0;
+        }
         for(const auto& hit:linkHits)if(hit.rect.Contains(float(GET_X_LPARAM(l)),float(GET_Y_LPARAM(l)))){openMarketPage(hit.url);return 0;}
         if(x>r.right/ui-15&&contentHeight>viewHeight){dragScroll=true;dragStart=float(GET_Y_LPARAM(l));scrollStart=scroll;SetCapture(hwnd);return 0;}
     }
-    if(message==WM_MOUSEMOVE&&dragScroll){scroll=std::clamp(scrollStart+(GET_Y_LPARAM(l)-dragStart)*contentHeight/std::max(1.f,viewHeight),0.f,std::max(0.f,contentHeight-viewHeight));repaint();return 0;}
+    if(message==WM_MOUSEMOVE){
+        if(dragScroll){
+            scroll=std::clamp(scrollStart+(GET_Y_LPARAM(l)-dragStart)*contentHeight/std::max(1.f,viewHeight),0.f,std::max(0.f,contentHeight-viewHeight));
+            repaint();
+            return 0;
+        }
+        if(qualityDropdown){
+            float y=GET_Y_LPARAM(l)/ui;
+            int rows=qualityRows();
+            int hoveredRow=int((y-130)/25);
+            int at=qualityOffset+hoveredRow;
+            auto choices=qualityChoices();
+            if(y>=130&&hoveredRow<rows&&at>=0&&at<int(choices.size())&&at!=qualityHighlight){
+                qualityHighlight=at;
+                repaint();
+            }
+        }
+    }
     if(message==WM_LBUTTONUP&&dragScroll){dragScroll=false;ReleaseCapture();return 0;}
-    if(message==WM_MOUSEWHEEL){int steps=GET_WHEEL_DELTA_WPARAM(w)/WHEEL_DELTA;if(dropdown)listOffset=std::clamp(listOffset-steps*3,0,std::max(0,int(matches.size())-listRows()));else scroll=std::clamp(scroll-steps*64*ui,0.f,std::max(0.f,contentHeight-viewHeight));repaint();return 0;}
+    if(message==WM_MOUSEWHEEL){
+        int steps=GET_WHEEL_DELTA_WPARAM(w)/WHEEL_DELTA;
+        if(qualityDropdown){
+            auto choices=qualityChoices();
+            qualityOffset=std::clamp(qualityOffset-steps*2,0,std::max(0,int(choices.size())-qualityRows()));
+        }else if(dropdown){
+            listOffset=std::clamp(listOffset-steps*3,0,std::max(0,int(matches.size())-listRows()));
+        }else{
+            scroll=std::clamp(scroll-steps*64*ui,0.f,std::max(0.f,contentHeight-viewHeight));
+        }
+        repaint();
+        return 0;
+    }
     if(message==WM_CLOSE){releaseInput();return 0;}
     return DefWindowProcW(hwnd,message,w,l);
 }
@@ -350,24 +419,118 @@ void sync(bool show){
 }
 void activationChanged(bool active){
     if(!window||!visible)return;
-    if(!active){dropdown=false;qualityDropdown=false;KillTimer(window,1);pendingSearch=false;}
+    if(!active){dropdown=false;qualityDropdown=false;qualityOffset=0;KillTimer(window,1);pendingSearch=false;}
     RedrawWindow(window,nullptr,nullptr,RDW_INVALIDATE|RDW_ALLCHILDREN);
 }
-bool owns(HWND target){return visible&&window&&(target==window||IsChild(window,target));}
+bool owns(HWND target){return visible&&window&&(target==window||target==owner||IsChild(window,target));}
 bool key(UINT message,WPARAM value,HWND target){
     if(!owns(target)||message!=WM_KEYDOWN)return false;
-    if(value==VK_ESCAPE){if(qualityDropdown){qualityDropdown=false;repaint();}else releaseInput();return true;}
-    if(qualityDropdown&&(value==VK_UP||value==VK_DOWN||value==VK_RETURN)){
-        auto choices=qualityChoices();if(value==VK_RETURN){qualityMinimum=choices[std::clamp(qualityHighlight,0,int(choices.size())-1)];updateMarketChoice();}
-        else{qualityHighlight=std::clamp(qualityHighlight+(value==VK_DOWN?1:-1),0,int(choices.size())-1);repaint();}return true;
+    if(value==VK_ESCAPE){
+        if(qualityDropdown){qualityDropdown=false;repaint();return true;}
+        if(dropdown){dropdown=false;repaint();return true;}
+        releaseInput();
+        return true;
     }
     if(value=='A'&&(GetKeyState(VK_CONTROL)&0x8000)){SendMessageW(search,EM_SETSEL,0,-1);return true;}
-    if(value==VK_DOWN||value==VK_UP){
-        if(pendingSearch||!dropdown)suggestions();else highlighted=std::clamp(highlighted+(value==VK_DOWN?1:-1),0,std::max(0,int(matches.size())-1));
-        if(highlighted<listOffset)listOffset=highlighted;if(highlighted>=listOffset+listRows())listOffset=highlighted-listRows()+1;repaint();return true;
+    if(qualityDropdown){
+        auto choices=qualityChoices();
+        int rows=qualityRows();
+        if(value==VK_RETURN){
+            qualityMinimum=choices[std::clamp(qualityHighlight,0,int(choices.size())-1)];
+            updateMarketChoice();
+            return true;
+        }
+        if(value==VK_UP||value==VK_DOWN||value==VK_LEFT||value==VK_RIGHT){
+            int delta=(value==VK_DOWN||value==VK_RIGHT)?1:-1;
+            qualityHighlight=std::clamp(qualityHighlight+delta,0,int(choices.size())-1);
+            if(qualityHighlight<qualityOffset)qualityOffset=qualityHighlight;
+            if(qualityHighlight>=qualityOffset+rows)qualityOffset=qualityHighlight-rows+1;
+            repaint();
+            return true;
+        }
+        if(value==VK_PRIOR||value==VK_NEXT){
+            int delta=(value==VK_NEXT)?rows:-rows;
+            qualityHighlight=std::clamp(qualityHighlight+delta,0,int(choices.size())-1);
+            if(qualityHighlight<qualityOffset)qualityOffset=qualityHighlight;
+            if(qualityHighlight>=qualityOffset+rows)qualityOffset=qualityHighlight-rows+1;
+            repaint();
+            return true;
+        }
+        return true;
     }
-    if(value==VK_RETURN){if(pendingSearch)suggestions();if(dropdown)choose(highlighted);return true;}
-    if(value==VK_TAB){if(dropdown)choose(highlighted);else SetFocus(search);return true;}
+    if(dropdown){
+        if(value==VK_UP||value==VK_DOWN){
+            highlighted=std::clamp(highlighted+(value==VK_DOWN?1:-1),0,std::max(0,int(matches.size())-1));
+            if(highlighted<listOffset)listOffset=highlighted;
+            if(highlighted>=listOffset+listRows())listOffset=highlighted-listRows()+1;
+            repaint();
+            return true;
+        }
+        if(value==VK_RETURN||value==VK_TAB){choose(highlighted);return true;}
+        return false;
+    }
+    if(value==VK_LEFT){
+        if(target!=search){
+            if(playerMarket){playerMarket=false;updateMarketChoice();return true;}
+        }
+    }
+    if(value==VK_RIGHT){
+        if(target!=search){
+            if(!playerMarket){playerMarket=true;updateMarketChoice();return true;}
+            else if(qualityChoices().size()>1&&!qualityDropdown){
+                auto choices=qualityChoices();
+                qualityDropdown=true;
+                auto it=std::find(choices.begin(),choices.end(),qualityMinimum);
+                qualityHighlight=int(it!=choices.end()?it-choices.begin():0);
+                int rows=qualityRows();
+                if(qualityHighlight<qualityOffset)qualityOffset=qualityHighlight;
+                if(qualityHighlight>=qualityOffset+rows)qualityOffset=qualityHighlight-rows+1;
+                qualityOffset=std::clamp(qualityOffset,0,std::max(0,int(choices.size())-rows));
+                repaint();
+                return true;
+            }
+        }
+    }
+    if((value==VK_RETURN||value==VK_SPACE)&&target!=search&&playerMarket&&qualityChoices().size()>1){
+        auto choices=qualityChoices();
+        qualityDropdown=true;
+        auto it=std::find(choices.begin(),choices.end(),qualityMinimum);
+        qualityHighlight=int(it!=choices.end()?it-choices.begin():0);
+        int rows=qualityRows();
+        if(qualityHighlight<qualityOffset)qualityOffset=qualityHighlight;
+        if(qualityHighlight>=qualityOffset+rows)qualityOffset=qualityHighlight-rows+1;
+        qualityOffset=std::clamp(qualityOffset,0,std::max(0,int(choices.size())-rows));
+        repaint();
+        return true;
+    }
+    if(value==VK_DOWN||value==VK_UP){
+        if(pendingSearch){suggestions();return true;}
+        if(target==search&&text(search).empty()){suggestions();return true;}
+        if(shown&&selected<shown->size()){
+            float delta=(value==VK_DOWN?32.f*ui:-32.f*ui);
+            scroll=std::clamp(scroll+delta,0.f,std::max(0.f,contentHeight-viewHeight));
+            repaint();
+            return true;
+        }
+        if(!dropdown){suggestions();return true;}
+    }
+    if((value==VK_PRIOR||value==VK_NEXT)&&shown&&selected<shown->size()){
+        float delta=(value==VK_NEXT?std::max(40.f,viewHeight*0.8f):-std::max(40.f,viewHeight*0.8f));
+        scroll=std::clamp(scroll+delta,0.f,std::max(0.f,contentHeight-viewHeight));
+        repaint();
+        return true;
+    }
+    if(value==VK_HOME&&target!=search){scroll=0;repaint();return true;}
+    if(value==VK_END&&target!=search){scroll=std::max(0.f,contentHeight-viewHeight);repaint();return true;}
+    if(value==VK_TAB){
+        if(target==search&&window)SetFocus(window);
+        else if(search)SetFocus(search);
+        return true;
+    }
+    if(value==VK_RETURN){
+        if(pendingSearch){suggestions();return true;}
+        if(dropdown){choose(highlighted);return true;}
+    }
     return false;
 }
 void close(){if(window)DestroyWindow(window);window=nullptr;search=nullptr;visible=false;if(font)DeleteObject(font);font=nullptr;if(fieldBrush)DeleteObject(fieldBrush);fieldBrush=nullptr;}
@@ -392,7 +555,15 @@ bool selfTest(){
     auto result=obj({{"owner_pid",num(42)},{"request_id",str("new")},{"row_id",str("selected")},{"item_id",str("item")},{"quality_min",num(975)},{"quality_exact",SynthScan::boolean(true)},{"loading",SynthScan::boolean(true)}});
     if(acceptsResult(result,42,"new",selectedRow,true,975))return false; // intermediate content stays hidden
     for(auto& member:result.members)if(member.first=="loading")member.second=SynthScan::boolean(false);
-    return acceptsResult(result,42,"new",selectedRow,true,975)&&!acceptsResult(result,42,"old",selectedRow,true,975)&&
-        !acceptsResult(result,42,"new",selectedRow,true,916)&&!acceptsResult(result,43,"new",selectedRow,true,975);
+    if(!acceptsResult(result,42,"new",selectedRow,true,975)||acceptsResult(result,42,"old",selectedRow,true,975)||
+        acceptsResult(result,42,"new",selectedRow,true,916)||acceptsResult(result,43,"new",selectedRow,true,975))return false;
+    Row ironRow;ironRow.name=normalize(L"Iron");ironRow.hay=ironRow.name;
+    auto ironQualities=arr();for(int q:{325,521,664,710,874,907,970,1000})ironQualities.items.push_back(num(q));
+    ironRow.value=obj({{"name",str("Iron")},{"kind",str("Market item")},{"quality_values",ironQualities}});
+    auto testIndex=std::make_shared<Index>();testIndex->push_back(ironRow);
+    shown=testIndex;selected=0;
+    auto qc=qualityChoices();
+    if(qc.size()!=9||qc[0]!=0||qc[1]!=325||qc[8]!=1000)return false;
+    return true;
 }
 }
