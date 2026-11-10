@@ -154,6 +154,10 @@ void paintButton(const DRAWITEMSTRUCT& item){
 }
 void paint(HDC target=nullptr){
     PAINTSTRUCT ps{};HDC dc=target?target:BeginPaint(window,&ps);RECT r{};GetClientRect(window,&r);
+    if(webShellMode){
+        if(!target)EndPaint(window,&ps);
+        return;
+    }
     if(r.right>0&&r.bottom>0){
         Gdiplus::Bitmap bitmap(r.right,r.bottom,PixelFormat32bppPARGB);Gdiplus::Graphics g(&bitmap);
         g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);g.SetTextRenderingHint(Gdiplus::TextRenderingHintClearTypeGridFit);
@@ -227,7 +231,7 @@ LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM w,LPARAM l){
     if(message==WM_PAINT){paint();return 0;}
     if(message==WM_PRINTCLIENT){paint(reinterpret_cast<HDC>(w));return 0;}
     if(message==WM_SIZE){layout();InvalidateRect(hwnd,nullptr,FALSE);return 0;}
-    if(message==WM_ERASEBKGND){RECT r{};GetClientRect(hwnd,&r);static HBRUSH surface=CreateSolidBrush(RGB(15,16,19));FillRect(reinterpret_cast<HDC>(w),&r,surface);return 1;}
+    if(message==WM_ERASEBKGND){if(webShellMode)return 1;RECT r{};GetClientRect(hwnd,&r);static HBRUSH surface=CreateSolidBrush(RGB(15,16,19));FillRect(reinterpret_cast<HDC>(w),&r,surface);return 1;}
     if(message==WM_DRAWITEM){paintButton(*reinterpret_cast<DRAWITEMSTRUCT*>(l));return TRUE;}
     if(message==WM_COMMAND&&HIWORD(w)==BN_CLICKED){
         int id=LOWORD(w);
@@ -353,6 +357,7 @@ std::string selectedPage(){return activePage;}
 bool visible(){return window&&IsWindowVisible(window);}
 bool active(){return visible()&&GetAncestor(GetForegroundWindow(),GA_ROOT)==window;}
 bool routeMessage(MSG& message){
+    if(webShellMode)return false;
     if(window&&message.message==WM_MOUSEWHEEL&&activePage=="blueprints"){
         HWND page=SynthPages::current();POINT at{GET_X_LPARAM(message.lParam),GET_Y_LPARAM(message.lParam)};
         // Wheel ownership follows the hovered recipe, not the last focused

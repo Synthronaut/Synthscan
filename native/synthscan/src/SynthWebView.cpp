@@ -529,6 +529,7 @@ bool active() {
 
 bool attach(HWND parent, const std::filesystem::path& dataFolder, const std::string& mode, std::function<void(const Json&)> onCommand) {
     if (!parent || !IsWindow(parent)) return false;
+    CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     g_pendingMode = mode;
     g_onCommand = std::move(onCommand);
     if (g_parent == parent && (g_controller || g_initializing)) {

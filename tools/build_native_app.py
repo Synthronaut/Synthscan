@@ -24,6 +24,17 @@ ZSTD_SOURCE=ROOT/'third_party/build_tools/zstd-1.5.7/lib'
 
 def digest(path):return hashlib.sha256(path.read_bytes()).hexdigest()
 
+def safe_copy(src, dst):
+    target = dst / src.name if dst.is_dir() else dst
+    if target.exists():
+        temp_old = target.with_name(target.name + '.old')
+        if temp_old.exists():
+            try: temp_old.unlink()
+            except Exception: pass
+        try: target.rename(temp_old)
+        except Exception: pass
+    shutil.copy2(src, target)
+
 def main():
     edition=os.environ.get('SYNTHSCAN_EDITION','full')
     if edition not in ('standard','full'):raise ValueError('Unknown edition')
@@ -90,10 +101,10 @@ def main():
              OPENCV/'x64/vc16/lib/opencv_world4120.lib',*zstd_objects,
              'gdi32.lib','gdiplus.lib','user32.lib','comctl32.lib','dwmapi.lib','d3d11.lib','dxgi.lib',
              'windowsapp.lib','runtimeobject.lib','comdlg32.lib','shell32.lib','ole32.lib','winhttp.lib','bcrypt.lib','advapi32.lib'])
-        shutil.copy2(binary,OUT/binary.name)
-        shutil.copy2(OPENCV/'x64/vc16/bin/opencv_world4120.dll',OUT)
+        safe_copy(binary, OUT)
+        safe_copy(OPENCV/'x64/vc16/bin/opencv_world4120.dll', OUT)
         for name in ['LICENSE','NOTICE.txt','THIRD-PARTY-NOTICES.txt']:
-            shutil.copy2(SOURCE/name,OUT/name)
+            safe_copy(SOURCE/name, OUT)
         shutil.copy2(OPENCV/'LICENSE',OUT/'LICENSE-OpenCV')
         shutil.copy2(ROOT/'LICENSES.md',OUT/'LICENSES.md')
         (OUT/'native_runtime.json').write_text(json.dumps(dict(workspace=str(ROOT),pythonw=str(Path(sys.executable).with_name('pythonw.exe'))),indent=2))

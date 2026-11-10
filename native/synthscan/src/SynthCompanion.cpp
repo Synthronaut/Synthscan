@@ -563,7 +563,7 @@ LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM wp,LPARAM lp){
 }
 }
 void prewarm(HWND parent,const std::filesystem::path& directory){
-    if(inPreview||page||!SynthWebView::available())return;
+    if(inPreview||page||!SynthWebView::available()||SynthHome::isWebShellMode())return;
     folder=directory;mode="people";
     WNDCLASSW cls{};cls.lpfnWndProc=procedure;cls.hInstance=GetModuleHandleW(nullptr);cls.lpszClassName=L"SynthScanCompanion";cls.hCursor=LoadCursor(nullptr,IDC_ARROW);cls.hbrBackground=background;RegisterClassW(&cls);
     font=CreateFontW(-14,0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH,L"Segoe UI");
@@ -573,6 +573,7 @@ void prewarm(HWND parent,const std::filesystem::path& directory){
     createControls();
 }
 void show(HWND parent,const std::filesystem::path& directory,const std::string& name){
+    if(SynthHome::isWebShellMode())return;
     folder=directory;bool changed=mode!=name;mode=name;
     if(!page){WNDCLASSW cls{};cls.lpfnWndProc=procedure;cls.hInstance=GetModuleHandleW(nullptr);cls.lpszClassName=L"SynthScanCompanion";cls.hCursor=LoadCursor(nullptr,IDC_ARROW);cls.hbrBackground=background;RegisterClassW(&cls);
         font=CreateFontW(-14,0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH,L"Segoe UI");

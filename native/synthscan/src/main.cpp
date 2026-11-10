@@ -4193,6 +4193,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
     // Crisp rendering on high-DPI displays (per-monitor aware)
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+    CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
 
     // Set the working directory to the exe folder so that tessdata,
     // region_config.txt and debug output resolve consistently
