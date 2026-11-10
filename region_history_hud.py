@@ -180,9 +180,7 @@ class RegionHistory:
             if self.open:self.position_popup()
         key=(hit['label'],hit['text'],hit['color'],geometry[2:])
         if key!=getattr(self,'paint_key',None):
-            self.paint_key=key;self.canvas.delete('all');cy=ribbon.BAR_HEIGHT//2
-            self.canvas.create_text(0,cy,anchor='w',text=hit['label'],fill='#64748b',font=('Consolas',8,'bold'))
-            self.canvas.create_text(hit['value_x'],cy,anchor='w',text=hit['text'],fill=hit['color'],font=('Consolas',8,'bold'),tags='region_value')
+            self.paint_key=key;self.canvas.delete('all')
         if getattr(self,'opacity',None)!=ribbon.opacity:
-            self.window.attributes('-alpha',ribbon.opacity);self.opacity=ribbon.opacity
+            self.window.attributes('-alpha',0.01);self.opacity=ribbon.opacity
         self.visible=True

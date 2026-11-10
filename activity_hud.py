@@ -109,8 +109,13 @@ class ActivityButton:
         key=(label,ready,self.height)
         if getattr(self,'paint_key',None)==key:return
         self.paint_key=key;self.canvas.delete('all')
-        self.canvas.create_rectangle(0,0,self.WIDTH-1,self.height-1,fill='#101722',outline='#334155')
-        self.canvas.create_text(self.WIDTH//2,self.height//2,text=label,fill='#cbd5e1' if ready else '#64748b',font=('Consolas',9,'bold'))
+        w,h=self.WIDTH,self.height;chamfer=0 if self.collapse_only else 5
+        pts=[0,0,w-1,0,w-1,h-1-chamfer,w-1-chamfer,h-1,0,h-1]
+        self.canvas.create_polygon(pts,fill='#070a0f',outline='#1e293b',width=1)
+        self.canvas.create_line(0,h-1,w-1-chamfer,h-1,fill='#1e293b',width=1)
+        if not self.collapse_only and w>=36:
+            self.canvas.create_line(10,h-1,w-12,h-1,fill='#334155',width=1)
+        self.canvas.create_text(w//2,h//2,text=label,fill='#cbd5e1' if ready else '#64748b',font=('Consolas',8,'bold'))
         self.window.title('Collapse mining HUD' if self.collapse_only else ('Collapse activity HUD' if expanded else 'Expand activity HUD'))
     def follow(self,ribbon,bounds):
         import ctypes
@@ -128,7 +133,7 @@ class ActivityButton:
                 api=ctypes.windll.user32
                 api.SetWindowPos.argtypes=[w.HWND,w.HWND,ctypes.c_int,ctypes.c_int,ctypes.c_int,ctypes.c_int,w.UINT]
                 api.SetWindowPos(self.hwnd,None,x,y,width,height,0x14);self.geometry=geometry
-            if getattr(self,'opacity',None)!=ribbon.opacity:
+            if showing or getattr(self,'opacity',None)!=ribbon.opacity:
                 self.window.attributes('-alpha',ribbon.opacity);self.opacity=ribbon.opacity
         elif self.visible:self.window.withdraw()
         self.visible=visible
