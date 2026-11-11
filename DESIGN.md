@@ -37,3 +37,7 @@ app, not a generic Windows utility. These rules apply to future UI work.
   grey action buttons. Reserve the filled amber banner for screen reading.
 - Exercise the full feature picker at 2240×1222, 1680×945 and 1152×648. Use
   additional pages on small displays instead of clipping or unreadable text.
+- Zero unpainted surfaces or rogue desktop windows. Windows classes and WM_ERASEBKGND
+  must use the deep navy background brush (`RGB(15, 16, 19)`). Tool views (such as
+  `SCMinerGUI`) must never manifest as independent overlapped desktop windows; they
+  belong solely inside the `SynthScan — Home` page host or as in-game HUD popouts.

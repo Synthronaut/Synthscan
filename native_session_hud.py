@@ -149,7 +149,7 @@ def main():
     companion_gate=companion_toast=SilentVisual()
     if feature_enabled('people'):
         from companion_toasts import NoticeGate,CompanionToast
-        companion_gate=NoticeGate(started_at);companion_toast=CompanionToast(root,game_window_rect)
+        companion_gate=NoticeGate(started_at);companion_toast=CompanionToast(root,lambda: game_window_rect() or get_monitor_by_id(getattr(ribbon,'game_monitor',0)))
     session_view=RibbonSessionState();cached_settings={};last_feed_status=None
     def callback_error(kind,value,traceback):
         logging.error('HUD input callback failed',exc_info=(kind,value,traceback))
@@ -215,7 +215,7 @@ def main():
             alert.update(notices,ribbon.state.get('session_token'),enabled)
             try:companion_snapshot=read_shared_json(DATA/'companion_alerts.json',limit=65536)
             except (OSError,ValueError):companion_snapshot={}
-            companion_enabled=bool(settings.get('show_hud',True) and game_window_rect())
+            companion_enabled=bool(settings.get('show_hud',True) and (game_window_rect() or ribbon._visible))
             companion_events=companion_gate.consume(companion_snapshot,args.owner,ribbon.state.get('session_token'),companion_enabled,now)
             companion_toast.update(companion_events,companion_enabled,now,ribbon.state.get('session_token'),anchor_geometry=ribbon._last_geometry if ribbon._visible else None)
             # The HUD body stays passive; the region dropdown and compact

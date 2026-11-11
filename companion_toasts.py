@@ -15,7 +15,7 @@ class NoticeGate:
         self.seen = set()
 
     def consume(self, snapshot, owner, session_token, enabled, now):
-        if snapshot.get('owner_pid') != owner or not 0 <= now - snapshot.get('written_at', 0) < 10:
+        if snapshot.get('owner_pid') != owner or not 0 <= now - snapshot.get('written_at', 0) < 60:
             return []
         result = []
         for event in snapshot.get('events', []):
@@ -24,7 +24,7 @@ class NoticeGate:
             if not identifier or identifier in self.seen:
                 continue
             self.seen.add(identifier)
-            if not enabled or not isinstance(at, (float, int)) or not math.isfinite(at) or at < self.started_at or not 0 <= now - at < 10:
+            if not enabled or not isinstance(at, (float, int)) or not math.isfinite(at) or at < self.started_at or not 0 <= now - at < 60:
                 continue
             if event.get('kind') == 'player_join' and (not session_token or event.get('session_token') != session_token):
                 continue
@@ -176,15 +176,17 @@ class CompanionToast:
 
     def _apply_geometry(self, height, anchor_geometry=None):
         rect = self.bounds() if callable(self.bounds) else None
+        if not rect and anchor_geometry and len(anchor_geometry) >= 4:
+            rect = {'left': anchor_geometry[0], 'top': anchor_geometry[1], 'width': anchor_geometry[2], 'height': anchor_geometry[3]}
         if not rect:
             return False
 
         width = min(SHUTTER_WIDTH, max(260, rect.get('width', 1920) - 48))
-        left = rect['left'] + (rect['width'] - width) // 2
-
-        if anchor_geometry and len(anchor_geometry) >= 4 and anchor_geometry[3] > 0:
+        if anchor_geometry and len(anchor_geometry) >= 4 and anchor_geometry[2] > 0:
+            left = anchor_geometry[0] + (anchor_geometry[2] - width) // 2
             top = anchor_geometry[1] + anchor_geometry[3] + 1
         else:
+            left = rect['left'] + (rect.get('width', 1920) - width) // 2
             top = rect['top'] + 36
 
         self.win.geometry(f'{width}x{height}')

@@ -28,7 +28,7 @@ void layout(){
     label(0,L"Only the verified StarCitizen.exe window is captured. OCR stays on this PC.\r\nDesktop capture fallback and automatic image saving are disabled.",24,104,width-48,52);
     button(1,L"Pause capture",24,170,180);button(3,L"Preview game capture",218,170,220);button(5,L"Clear preview",452,170,150);
     button(2,L"Pause when I leave the game",24,220,width-48,BS_AUTOCHECKBOX);SendDlgItemMessageW(window,2,BM_SETCHECK,CapturePrivacy::policy().pauseUnfocused?BST_CHECKED:BST_UNCHECKED,0);
-    button(6,L"Allow game-account features: missions, reputation and People",24,264,width-48,BS_AUTOCHECKBOX);SendDlgItemMessageW(window,6,BM_SETCHECK,accountAllowed()?BST_CHECKED:BST_UNCHECKED,0);
+    button(6,L"Allow game-account features: missions, reputation and Citizens",24,264,width-48,BS_AUTOCHECKBOX);SendDlgItemMessageW(window,6,BM_SETCHECK,accountAllowed()?BST_CHECKED:BST_UNCHECKED,0);
     label(0,L"Account features use the game's existing session credential directly with CIG.\r\nThis permission is separate from screen reading. No password is requested.",24,306,width-48,52);
     label(11,L"",24,365,width-48,44);button(4,L"Save this preview as PNG…",24,414,260);EnableWindow(GetDlgItem(window,4),!preview.empty());
     label(0,L"Preview is kept in memory only and cleared when you leave this page.\r\nOnly Save writes an image. No automatic screenshot upload is provided.",24,462,width-48,50);

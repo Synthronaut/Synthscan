@@ -69,26 +69,59 @@ def read_game_memory(pids=None):
     return None
 
 def terminate_sc_and_eac():
-    """Cleanly and decisively terminate Star Citizen and lingering EAC instances."""
-    LOG.info("Terminating Star Citizen and EasyAntiCheat processes...")
-    for proc_name in TARGET_PROCESSES:
-        subprocess.run(
-            ["taskkill", "/F", "/T", "/IM", proc_name],
-            capture_output=True,
-            text=True
-        )
+    """Cleanly and decisively terminate Star Citizen and lingering EAC instances.
 
-    # Allow Windows up to 3 seconds to release kernel handles
-    for _ in range(15):
-        from app_lifecycle import game_process_ids
+    Requests graceful shutdown first via WM_CLOSE so Star Citizen can save its
+    in-memory Vulkan pipeline/shader cache and exit cleanly with code 0.
+    This prevents RSI Launcher from displaying 'Star Citizen has stopped running unexpectedly'
+    and prevents lost shader caches. Falls back to forceful termination if hung.
+    """
+    LOG.info("Initiating graceful Star Citizen shutdown...")
+    from app_lifecycle import game_process_ids
+    user32 = ctypes.windll.user32
+
+    # Step 1: Request graceful shutdown via WM_CLOSE to game window
+    sc_hwnd = user32.FindWindowW("CryENGINE", None) or user32.FindWindowW(None, "Star Citizen ")
+    if sc_hwnd:
+        LOG.info(f"Posting WM_CLOSE to Star Citizen window {sc_hwnd:#x}")
+        user32.PostMessageW(sc_hwnd, 0x0010, 0, 0)  # WM_CLOSE
+
+    # Also send graceful taskkill (without /F) which broadcasts WM_CLOSE to process windows
+    subprocess.run(["taskkill", "/IM", "starcitizen.exe"], capture_output=True, text=True)
+
+    # Allow up to 3.5 seconds for clean exit and shader cache flush
+    for _ in range(18):
+        if not game_process_ids():
+            LOG.info("Star Citizen exited gracefully.")
+            break
+        time.sleep(0.2)
+
+    # Step 2: If still running (hung/frozen), terminate forcefully
+    pids = game_process_ids()
+    if pids:
+        LOG.warning("Star Citizen did not exit within grace period, terminating forcefully...")
+        subprocess.run(["taskkill", "/F", "/T", "/IM", "starcitizen.exe"], capture_output=True, text=True)
+
+    # Sweep lingering EAC helper processes
+    for proc_name in ["easyanticheat_eos.exe", "easyanticheat.exe", "easyanticheat_eos_setup.exe", "starcitizen_launcher.exe"]:
+        subprocess.run(["taskkill", "/F", "/T", "/IM", proc_name], capture_output=True, text=True)
+
+    # Allow Windows up to 2 seconds to release kernel handles
+    for _ in range(10):
         if not game_process_ids():
             break
         time.sleep(0.2)
 
 def focus_rsi_launcher():
-    """Restore and bring RSI Launcher to the foreground for authenticated relaunch."""
+    """Restore and bring RSI Launcher to the foreground for authenticated relaunch,
+    and dismiss any unexpected crash dialog.
+    """
     user32 = ctypes.windll.user32
+    kernel32 = ctypes.windll.kernel32
+
     hdesk = user32.OpenInputDesktop(0, False, 0x01FF)
+    if hdesk:
+        user32.SetThreadDesktop(hdesk)
 
     found = []
     def cb(hwnd, lp):
@@ -96,21 +129,63 @@ def focus_rsi_launcher():
         user32.GetWindowTextW(hwnd, buf, 256)
         if buf.value == 'RSI Launcher':
             found.append(hwnd)
-            user32.ShowWindow(hwnd, 9)  # SW_RESTORE
-            user32.SetForegroundWindow(hwnd)
         return 1
 
     WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p)
     if hdesk:
         user32.EnumDesktopWindows(hdesk, WNDENUMPROC(cb), 0)
 
-    if not found:
+    target_hwnd = found[0] if found else None
+
+    if not target_hwnd:
         # If minimized/hidden or not found on desktop enum, run RSI Launcher to trigger second-instance
         rsi_launcher = Path(r"C:\Program Files\Roberts Space Industries\RSI Launcher\RSI Launcher.exe")
         if rsi_launcher.is_file():
             LOG.info("Focusing RSI Launcher via executable...")
             subprocess.Popen([str(rsi_launcher)], cwd=str(rsi_launcher.parent))
-    return True
+            time.sleep(1.0)
+            if hdesk:
+                user32.EnumDesktopWindows(hdesk, WNDENUMPROC(cb), 0)
+            target_hwnd = found[0] if found else None
+
+    if target_hwnd:
+        my_tid = kernel32.GetCurrentThreadId()
+        fg_hwnd = user32.GetForegroundWindow()
+        fg_tid = user32.GetWindowThreadProcessId(fg_hwnd, None) if fg_hwnd else 0
+        target_tid = user32.GetWindowThreadProcessId(target_hwnd, None)
+
+        if fg_tid and fg_tid != my_tid:
+            user32.AttachThreadInput(my_tid, fg_tid, True)
+        if target_tid and target_tid != my_tid:
+            user32.AttachThreadInput(my_tid, target_tid, True)
+
+        try:
+            user32.ShowWindow(target_hwnd, 9)  # SW_RESTORE
+            user32.BringWindowToTop(target_hwnd)
+            user32.SetForegroundWindow(target_hwnd)
+        finally:
+            if fg_tid and fg_tid != my_tid:
+                user32.AttachThreadInput(my_tid, fg_tid, False)
+            if target_tid and target_tid != my_tid:
+                user32.AttachThreadInput(my_tid, target_tid, False)
+
+        # Wait briefly for window focus to take effect
+        time.sleep(0.3)
+
+        # DISMISS ERROR MODAL:
+        # If 'Star Citizen has stopped running unexpectedly' modal is active,
+        # Escape dismisses the modal (calling Cancel / onOpenChange(false))
+        # without triggering the Verify button.
+        LOG.info("Dismissing any crash error modal in RSI Launcher...")
+        user32.keybd_event(0x1B, 0, 0, 0)  # VK_ESCAPE down
+        time.sleep(0.05)
+        user32.keybd_event(0x1B, 0, 2, 0)  # VK_ESCAPE up
+        time.sleep(0.2)
+        user32.keybd_event(0x1B, 0, 0, 0)
+        time.sleep(0.05)
+        user32.keybd_event(0x1B, 0, 2, 0)
+
+    return bool(target_hwnd)
 
 def relaunch_game(game_dir=None):
     """Brings RSI Launcher to the foreground so the authenticated game token flow is preserved."""
@@ -183,12 +258,14 @@ def execute_recovery_async(callback=None):
     def worker():
         try:
             if callback:
-                callback("CLEANING EAC...")
+                callback("CLOSING GAME...")
             terminate_sc_and_eac()
-            time.sleep(1.0)
+            time.sleep(0.5)
+            if callback:
+                callback("RESTORING LAUNCHER...")
+            focus_rsi_launcher()
             if callback:
                 callback("CLICK LAUNCH IN RSI")
-            focus_rsi_launcher()
             auto_rejoin_watcher(callback=callback)
             if callback:
                 callback(None)  # Reset to idle

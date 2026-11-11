@@ -229,11 +229,26 @@ void handleWebViewCommand(const Json& command){
             ShellExecuteW(page,L"open",wide(url).c_str(),nullptr,nullptr,SW_SHOWNORMAL);
         return;
     }
+    if(action.rfind("daylight_",0)==0){
+        if(folder.empty())folder=SCMiner::AppPaths::data();
+        static unsigned sequence=0;char id[90];sprintf_s(id,"%020llu-%010lu-%08u",GetTickCount64(),GetCurrentProcessId(),++sequence);
+        Json cmd=command;
+        cmd.members.push_back({"request_id",str(id)});
+        cmd.members.push_back({"owner_pid",num(GetCurrentProcessId())});
+        cmd.members.push_back({"at",num(now())});
+        std::error_code error;std::filesystem::create_directories(folder/L"daylight_commands",error);
+        write(folder/L"daylight_commands"/(std::wstring(id,id+strlen(id))+L".json"),cmd);
+        return;
+    }
     queue(command);
 }
 void layout(){
-    if(!page)return;RECT r{};GetClientRect(page,&r);int w=std::max(mode=="people"?860:620,int(r.right)),h=std::max(mode=="people"?700:580,int(r.bottom));
-    if(SynthWebView::active())SynthWebView::resize(r.right,r.bottom);
+    if(!page)return;RECT r{};GetClientRect(page,&r);
+    if(SynthWebView::active()){
+        SynthWebView::resize(r.right,r.bottom);
+        return;
+    }
+    int w=std::max(mode=="people"?860:620,int(r.right)),h=std::max(mode=="people"?700:580,int(r.bottom));
     struct Placement{HWND window;int x,y,w,h;};std::vector<Placement> placements;
     auto place=[&](int id,int x,int y,int width,int height=34){
         HWND h=child(id);if(!h)return;wchar_t cls[30]{};GetClassNameW(h,cls,30);if(std::wstring(cls)==L"Edit"){x+=2;y+=8;width-=4;height-=14;}
@@ -463,9 +478,10 @@ void refresh(bool force=false){
         if(items.empty())catalog();
         Json marketItems=arr();for(const auto& item:items)marketItems.items.push_back(item);
         Json homeOverview=read(folder/L"home_overview.json",2*1024*1024);
+        Json daylightState=read(folder/L"daylight_state.json",4*1024*1024);
         const std::string pageName = SynthHome::selectedPage();
         const std::string snapMode = (!pageName.empty() && pageName != "home" && pageName != "people" && pageName != "buyer_alerts") ? pageName : mode;
-        SynthWebView::pushSnapshot(snapMode, model, marketItems, homeOverview);
+        SynthWebView::pushSnapshot(snapMode, model, marketItems, homeOverview, daylightState);
     }
 }
 void createControls(){
@@ -598,6 +614,7 @@ void show(HWND parent,const std::filesystem::path& directory,const std::string& 
     }
     if(changed)createControls();
     SynthPages::mount(page);ShowWindow(page,SW_SHOW);
+    layout();
 }
 void close(){SynthWebView::detach();if(page){KillTimer(page,1);DestroyWindow(page);}page=nullptr;if(font)DeleteObject(font);font=nullptr;}
 int stylePreview(const std::filesystem::path& output){
@@ -607,14 +624,14 @@ int stylePreview(const std::filesystem::path& output){
         SynthGlass::panel(g,{14,14,196,812},false,false,18);
         SynthGlass::rounded(g,{31,33,36,36},Gdiplus::Color(255,35,52,64),11);SynthGlass::icon(g,"directory",{38,40,22,22});SynthGlass::text(g,L"SynthScan",{79,33,120,35},20,SynthGlass::Ink,true);
         SynthGlass::text(g,L"YOUR VERSE, CONNECTED",{33,79,170,20},9,SynthGlass::Muted);
-        const std::vector<std::pair<std::wstring,std::string>> nav={{L"Home","home"},{L"Item & Ship Finder","directory"},{L"People","people"},{L"Server History","servers"},{L"Blueprint Library","blueprints"},{L"Mining Planner","planner"},{L"Mining Diary","diary"},{L"Refinery","refinery"},{L"Piracy","hud_piracy"},{L"Day/Night Forecast","daylight"},{L"Automatic Acceptance","acceptance"},{L"Settings","settings"}};
+        const std::vector<std::pair<std::wstring,std::string>> nav={{L"Home","home"},{L"Item & Ship Finder","directory"},{L"Citizens","people"},{L"Server History","servers"},{L"Blueprint Library","blueprints"},{L"Mining Tools","planner"},{L"Refinery","refinery"},{L"Piracy","hud_piracy"},{L"Day/Night Forecast","daylight"},{L"Automatic Acceptance","acceptance"},{L"Settings","settings"}};
         float ny=120;for(const auto& n:nav){bool on=n.second=="people";if(on)SynthGlass::panel(g,{24,ny,176,37},true,false,10);SynthGlass::icon(g,n.second,{37,ny+10,17,17},on?SynthGlass::Accent:SynthGlass::Muted);SynthGlass::text(g,n.first,{66,ny,128,37},11.5f,on?SynthGlass::Ink:SynthGlass::Muted,on);ny+=45;}
-        SynthGlass::text(g,L"People",{242,30,600,45},30,SynthGlass::Ink,true);SynthGlass::text(g,L"A familiar face in a very large universe.",{243,79,700,24},13,SynthGlass::Muted);
+        SynthGlass::text(g,L"Citizens",{242,30,600,45},30,SynthGlass::Ink,true);SynthGlass::text(g,L"A familiar face in a very large universe.",{243,79,700,24},13,SynthGlass::Muted);
         SynthGlass::panel(g,{242,123,561,38},false,false,10);SynthGlass::icon(g,"search",{255,133,18,18});SynthGlass::text(g,L"Filter this list by handle or tag",{285,123,500,38},13,SynthGlass::Muted);
-        SynthGlass::button(g,{814,123,72,38},L"Clear","");SynthGlass::button(g,{896,123,139,38},L"Find player","search");SynthGlass::button(g,{1045,123,166,38},L"Refresh shard","refresh");
+        SynthGlass::button(g,{814,123,72,38},L"Clear","");SynthGlass::button(g,{896,123,139,38},L"Find citizen","search");SynthGlass::button(g,{1045,123,166,38},L"Refresh shard","refresh");
         SynthGlass::panel(g,{242,177,220,36});SynthGlass::text(g,L"Shard members   \u2304",{257,177,198,36},13);SynthGlass::checkbox(g,{480,186,18,18},false);SynthGlass::text(g,L"Tagged only",{509,177,120,36},12,SynthGlass::Muted);
         SynthGlass::text(g,L"128 MEMBERS  /  LIVE SHARD",{242,225,500,24},10,SynthGlass::Muted);
-        std::vector<float> widths={300,230,85,170,184};const wchar_t* names[]={L"PLAYER",L"TAGS",L"ALERTS",L"RELATIONSHIP",L"SOURCE"};float x=242;
+        std::vector<float> widths={300,230,85,170,184};const wchar_t* names[]={L"CITIZEN",L"TAGS",L"ALERTS",L"RELATIONSHIP",L"SOURCE"};float x=242;
         for(int i=0;i<5;i++){SynthGlass::text(g,names[i],{x+(i?12:74),266,widths[i]-24,28},10,SynthGlass::Muted);x+=widths[i];}
         const std::vector<std::vector<std::wstring>> rows={{L"Example Pilot One",L"Crew, Friendly",L"On",L"Party",L"Shard group"},{L"Nova Drift",L"Trader",L"Off",L"Friend",L"Shard group"},{L"Orion Atlas",L"Org Affiliate",L"On",L"Org",L"Shard group"},{L"Pilot Wildflower",L"",L"Off",L"—",L"Shard group"},{L"Starlight Echo",L"Friendly",L"Off",L"Friend",L"Shard group"},{L"Wanderer",L"",L"Off",L"—",L"Shard group"},{L"Cassiopeia",L"Crew",L"On",L"Party",L"Shard group"}};
         for(size_t i=0;i<rows.size();++i)drawPersonRow(g,{242,300+float(i)*42,969,40},rows[i],widths,i==0||i==2,i==3,i==0||i==6?Gdiplus::Color(255,116,183,255):i==1||i==4?Gdiplus::Color(255,121,225,158):SynthGlass::Muted,i==0);

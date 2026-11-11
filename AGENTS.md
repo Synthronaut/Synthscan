@@ -5,3 +5,30 @@ installer, setup screen, HUD or navigation. Its standards are requirements,
 including during small fixes. Preserve existing player records and work added
 by other chats. Use isolated profiles for installation tests; never reset a
 real profile to simulate first run. Publish only after the release gates pass.
+
+## Win32 Window Lifecycle & Anti-"White Demon Box" Invariant
+
+The "white demon box" was a notorious regression where a secondary, unpainted white window titled `SynthScan` (class `SCMinerGUI`) appeared on the user's desktop at launch: unmovable, un-interactable, and un-closeable.
+
+Future agents and developers MUST strictly follow these rules:
+
+1. **Zero Desktop Presence for SCMinerGUI**:
+   - `SCMinerGUI` (the mining HUD view, `MinerGUI.cpp`) must NEVER be created, mapped, restored, or displayed as an independent `WS_OVERLAPPEDWINDOW` on the user's desktop.
+   - It exists in only two valid display states:
+     a) **In-game compact overlay** (`overlayMode_ == true`): a top-level `WS_POPUP | WS_EX_LAYERED | WS_EX_TOPMOST` HUD floating over Star Citizen.
+     b) **Embedded child page** (`SynthPages::contains(hwnd_) == true`): a `WS_CHILD | WS_CLIPCHILDREN` control hosted inside `SynthPages` within `SynthHome` (`SynthScan — Home`).
+   - In all other states (including app launch in desktop mode), `SCMinerGUI` must remain strictly offscreen (`-32000, -32000`) and hidden (`SW_HIDE`).
+
+2. **Creation Coordinates**:
+   - In `MinerGUI::initialize()`, `hwnd_` must be created at offscreen coordinates (`-32000, -32000`), NEVER `CW_USEDEFAULT, CW_USEDEFAULT`. Windows DWM maps default coordinates directly to the primary monitor, which creates an unpainted surface if shown before being embedded.
+
+3. **Never Intercept Win32 Visibility to Create "Zombie" Windows**:
+   - NEVER add hacks in `handleMessage` that intercept `WM_WINDOWPOSCHANGING`, `WM_STYLECHANGING`, or `WM_SHOWWINDOW` to strip `SWP_SHOWWINDOW` or `WS_VISIBLE` or return 0 from `WM_SHOWWINDOW`.
+   - Modifying window flags in `WM_WINDOWPOSCHANGING` while DWM is mapping a window desynchronizes Win32 from DWM compositing: DWM presents an uninitialized DirectX/GDI surface (pure `#FFFFFF` white) while Win32 marks the window non-visible (`IsWindowVisible() == 0`), preventing input hit-testing and trapping the unclosable zombie box on the desktop.
+
+4. **Background Brushes & WM_ERASEBKGND**:
+   - Window classes and `WM_ERASEBKGND` handlers must ALWAYS erase/fill using the dark theme background brush `CreateSolidBrush(CR_BG)` (`RGB(15, 16, 19)`). Never leave background erase empty or rely solely on deferred paints when DWM surfaces are allocated.
+
+5. **Safe Page Unmounting in SynthPages::release**:
+   - When `SynthPages::release()` reparents a hosted page back to `nullptr` (desktop), it must immediately move it offscreen (`-32000, -32000`) with `SWP_NOSIZE | SWP_NOACTIVATE | SWP_HIDEWINDOW | SWP_FRAMECHANGED` and `SW_HIDE`, never leaving a reparented window at desktop `(0, 0)`.
+

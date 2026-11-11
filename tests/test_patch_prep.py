@@ -25,6 +25,12 @@ class TestPatchPrep(unittest.TestCase):
         self.sc_root = self.tmp / 'StarCitizen'
         self.sc_root.mkdir()
 
+        # Isolate LOCALAPPDATA so tests NEVER touch real player shader caches
+        self._orig_localappdata = os.environ.get('LOCALAPPDATA')
+        self.mock_appdata = self.tmp / 'AppData' / 'Local'
+        self.mock_appdata.mkdir(parents=True)
+        os.environ['LOCALAPPDATA'] = str(self.mock_appdata)
+
         # Create mock LIVE
         self.live_dir = self.sc_root / 'LIVE'
         self.live_dir.mkdir()
@@ -52,6 +58,10 @@ class TestPatchPrep(unittest.TestCase):
         self.mock_char.write_bytes(b'chf_binary_mesh_data')
 
     def tearDown(self):
+        if self._orig_localappdata is not None:
+            os.environ['LOCALAPPDATA'] = self._orig_localappdata
+        else:
+            os.environ.pop('LOCALAPPDATA', None)
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def test_inspect_channel(self):

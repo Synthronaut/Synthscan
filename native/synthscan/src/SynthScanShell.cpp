@@ -355,8 +355,32 @@ void homeAction(const std::string& value){
         SynthPages::mount(panel,px(100));
     }else if(value=="blueprints"){mining->openBlueprintLibrary();SynthPages::mount(mining->craftingHandle());}
     else if(value=="refinery"){mining->openRefineryOrders();SynthPages::mount(mining->refineryHandle());}
-    else if(value=="planner"){mining->openMiningPlanner();SynthPages::mount(mining->plannerHandle());}
-    else if(value=="diary"){SynthScanDiary::open();SynthPages::mount(SynthScanDiary::window());}
+    else if(value=="planner"||value=="diary"||value=="mining_tools"){
+        mining->openMiningPlanner();
+        HWND plannerWin = mining->plannerHandle();
+        SynthScanDiary::open();
+        HWND diaryWin = SynthScanDiary::window();
+        if(diaryWin && plannerWin){
+            if(GetParent(diaryWin) != plannerWin){
+                SetWindowLongPtrW(diaryWin, GWL_STYLE, (GetWindowLongPtrW(diaryWin, GWL_STYLE) & ~(WS_POPUP|WS_CAPTION|WS_THICKFRAME|WS_SYSMENU|WS_MINIMIZEBOX|WS_MAXIMIZEBOX)) | WS_CHILD | WS_CLIPCHILDREN | WS_CLIPSIBLINGS);
+                SetWindowLongPtrW(diaryWin, GWL_EXSTYLE, (GetWindowLongPtrW(diaryWin, GWL_EXSTYLE) & ~(WS_EX_APPWINDOW|WS_EX_TOOLWINDOW|WS_EX_TOPMOST|WS_EX_NOACTIVATE)) | WS_EX_CONTROLPARENT);
+                SetParent(diaryWin, plannerWin);
+            }
+            RECT rc{}; GetClientRect(plannerWin, &rc);
+            float s = GetDpiForWindow(plannerWin) / 96.0f;
+            int dy = int((880 + 70) * s);
+            int dh = int(810 * s);
+            SetWindowPos(diaryWin, nullptr, 0, dy, rc.right, dh, SWP_NOZORDER | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+            ShowWindow(diaryWin, SW_SHOW);
+        }
+        SynthPages::mount(plannerWin);
+        if(value=="diary"){
+            float s = GetDpiForWindow(plannerWin) / 96.0f;
+            SynthPages::scrollTo(int((880 + 70) * s));
+        } else {
+            SynthPages::scrollTo(0);
+        }
+    }
     else if(value=="bookmarks"){SynthScanNav::open();SynthPages::mount(SynthScanNav::window());}
     else if(value=="daylight"){
         if(SynthWebView::available()){
@@ -846,6 +870,10 @@ void timer(){
         if(!inHost){
             bool wanted=mining->isOverlayMode()&&HudVisibility::shouldShow(hudVisible,activityExpanded,game,manualHudPreview);
             if(bool(IsWindowVisible(mining->windowHandle()))!=wanted)ShowWindow(mining->windowHandle(),wanted?SW_SHOWNOACTIVATE:SW_HIDE);
+            if(!wanted&&!mining->isOverlayMode()&&GetParent(mining->windowHandle())==nullptr){
+                RECT r{};GetWindowRect(mining->windowHandle(),&r);
+                if(r.left>-1000&&r.top>-1000)SetWindowPos(mining->windowHandle(),nullptr,-32000,-32000,0,0,SWP_NOSIZE|SWP_NOZORDER|SWP_NOACTIVATE|SWP_HIDEWINDOW);
+            }
         }
     }
     if(panel&&IsWindowVisible(panel)&&currentTab==6)InvalidateRect(panel,nullptr,FALSE);
@@ -959,7 +987,7 @@ LRESULT CALLBACK mainSubclass(HWND hwnd,UINT message,WPARAM w,LPARAM l,UINT_PTR,
             HMENU mode=CreatePopupMenu();AppendMenuW(mode,MF_STRING|(activityMode()?0:MF_CHECKED),10,L"Mining HUD");AppendMenuW(mode,MF_STRING|(pirate?MF_CHECKED:0),11,L"Piracy HUD");AppendMenuW(mode,MF_STRING|(quest?MF_CHECKED:0),13,L"Missions HUD");AppendMenuW(mode,MF_STRING|(finder?MF_CHECKED:0),19,L"Finder HUD");AppendMenuW(mode,MF_STRING|(hangars?MF_CHECKED:0),15,L"Hangars HUD");AppendMenuW(mode,MF_STRING|(placementLocked?MF_CHECKED:0),12,L"Lock HUD position");AppendMenuW(mode,MF_STRING,20,L"Dock HUD top right");AppendMenuW(mode,MF_STRING,16,L"Day/Night Forecast");appendAfkMenu(mode,17);AppendMenuW(mode,MF_STRING,18,L"Automatic acceptance…");AppendMenuW(mode,MF_SEPARATOR,0,nullptr);AppendMenuW(mode,MF_STRING,4,L"Server log & interdiction history");AppendMenuW(mode,MF_STRING,6,L"Startup & HUD settings");AppendMenuW(mode,MF_STRING,14,L"Setup & reputation status");
             POINT at;GetCursorPos(&at);appendProfileMenu(mode);pruneHudMenu(mode);int choice=SynthMenus::track(mode,TPM_RETURNCMD,at.x,at.y,0,hwnd,nullptr);DestroyMenu(mode);if(choice==20){dockHud();return 0;}if(handleProfileChoice(choice))return 0;if(choice==19){setMode(4);showHud(true);setActivityExpanded(true);return 0;}if(choice==18)spawnPython(L"contract_share_helper.py",{L"--owner",std::to_wstring(GetCurrentProcessId())});if(choice==17)toggleAfk();if(choice==16)spawnPython(L"daylight_planner.py",{});if(choice==12)togglePlacement();if(choice==15)setMode(3);if(choice==13)setMode(2);if(choice==10||choice==11)setMode(choice==11);if(choice==4)workspace(2);if(choice==6)workspace(4);if(choice==14)spawnPython(L"app_launcher.py",{L"--status"});return 0;
         }
-        HMENU menu=CreatePopupMenu();AppendMenuW(menu,MF_STRING,2,L"Item directory");AppendMenuW(menu,MF_STRING,3,L"Material picker");AppendMenuW(menu,MF_STRING,4,L"Server log");AppendMenuW(menu,MF_STRING,5,L"Review imported records");AppendMenuW(menu,MF_STRING,6,L"Startup & HUD settings");AppendMenuW(menu,MF_STRING,7,L"Show / hide HUD");AppendMenuW(menu,MF_STRING,8,L"Mining diary & personal records");AppendMenuW(menu,MF_STRING,9,L"Rock bookmarks & return test");AppendMenuW(menu,MF_STRING,16,L"Day/Night Forecast");AppendMenuW(menu,MF_STRING,14,L"Setup & reputation status");
+        HMENU menu=CreatePopupMenu();AppendMenuW(menu,MF_STRING,2,L"Item directory");AppendMenuW(menu,MF_STRING,3,L"Material picker");AppendMenuW(menu,MF_STRING,4,L"Server log");AppendMenuW(menu,MF_STRING,5,L"Review imported records");AppendMenuW(menu,MF_STRING,6,L"Startup & HUD settings");AppendMenuW(menu,MF_STRING,7,L"Show / hide HUD");AppendMenuW(menu,MF_STRING,8,L"Mining tools & personal records");AppendMenuW(menu,MF_STRING,9,L"Rock bookmarks & return test");AppendMenuW(menu,MF_STRING,16,L"Day/Night Forecast");AppendMenuW(menu,MF_STRING,14,L"Setup & reputation status");
         appendAfkMenu(menu,17);AppendMenuW(menu,MF_STRING,18,L"Automatic acceptance…");AppendMenuW(menu,MF_SEPARATOR,0,nullptr);AppendMenuW(menu,MF_STRING|(activityMode()?0:MF_CHECKED),10,L"HUD mode: Mining");AppendMenuW(menu,MF_STRING|(pirate?MF_CHECKED:0),11,L"HUD mode: Piracy");
         AppendMenuW(menu,MF_STRING|(quest?MF_CHECKED:0),13,L"HUD mode: Missions");AppendMenuW(menu,MF_STRING|(finder?MF_CHECKED:0),19,L"HUD mode: Finder");AppendMenuW(menu,MF_STRING|(hangars?MF_CHECKED:0),15,L"HUD mode: Hangars");AppendMenuW(menu,MF_STRING|(placementLocked?MF_CHECKED:0),12,L"Lock HUD position");AppendMenuW(menu,MF_STRING,20,L"Dock HUD top right");POINT at;GetCursorPos(&at);appendProfileMenu(menu);pruneHudMenu(menu);int choice=SynthMenus::track(menu,TPM_RETURNCMD,at.x,at.y,0,hwnd,nullptr);DestroyMenu(menu);if(choice==20){dockHud();return 0;}if(handleProfileChoice(choice))return 0;if(choice==19){setMode(4);showHud(true);setActivityExpanded(true);return 0;}
         if(choice==18){spawnPython(L"contract_share_helper.py",{L"--owner",std::to_wstring(GetCurrentProcessId())});return 0;}

@@ -10,6 +10,9 @@ import {
   normalizePlayer,
 } from './bridge';
 import { personColor, splitTags, tagColor } from './colors';
+import { DaylightViewController } from './daylight_view';
+import { PiracyViewController } from './piracy_view';
+import { MissionViewController } from './mission_view';
 
 export const ROW_HEIGHT_PX = 40;
 
@@ -26,7 +29,7 @@ export class DesktopAppController {
   private unsubscribe: (() => void) | null = null;
 
   private snapshot: PeopleSnapshot | null = null;
-  private activeMode: 'people' | 'buyer_alerts' | 'home' | 'settings' = 'people';
+  private activeMode: 'people' | 'buyer_alerts' | 'home' | 'settings' | 'daylight' | 'hud_piracy' | 'mission_log' = 'people';
   private sourceIndex = 0; // 0: Shard, 1: Search, 2: Tagged, 3: Friends
   private taggedOnly = false;
   private searchQuery = '';
@@ -89,6 +92,7 @@ export class DesktopAppController {
   private tagDraftInputEl!: HTMLInputElement;
   private joinAlertsCheckboxEl!: HTMLInputElement;
   private queueStatusEl!: HTMLElement;
+  private footerEl!: HTMLElement;
   private footerStatusEl!: HTMLElement;
 
   // Buttons
@@ -112,6 +116,12 @@ export class DesktopAppController {
   private marketSectionEl!: HTMLElement;
   private homeSectionEl!: HTMLElement;
   private settingsSectionEl!: HTMLElement;
+  private daylightSectionEl!: HTMLElement;
+  private daylightController: DaylightViewController | null = null;
+  private piracySectionEl!: HTMLElement;
+  private piracyController: PiracyViewController | null = null;
+  private missionSectionEl!: HTMLElement;
+  private missionController: MissionViewController | null = null;
   private modalBackdropEl!: HTMLElement;
   private modalTitleEl!: HTMLElement;
   private modalSummaryEl!: HTMLElement;
@@ -122,6 +132,7 @@ export class DesktopAppController {
   private modalCancelBtn!: HTMLButtonElement;
   private modalPauseBtn!: HTMLButtonElement;
   private modalStopQueueBtn!: HTMLButtonElement;
+  private contextMenuEl: HTMLElement | null = null;
 
   // Buyer alerts DOM elements
   private marketSearchInputEl!: HTMLInputElement;
@@ -147,6 +158,18 @@ export class DesktopAppController {
     if (this.unsubscribe) {
       this.unsubscribe();
       this.unsubscribe = null;
+    }
+    if (this.daylightController) {
+      this.daylightController.destroy();
+      this.daylightController = null;
+    }
+    if (this.piracyController) {
+      this.piracyController.destroy();
+      this.piracyController = null;
+    }
+    if (this.missionController) {
+      this.missionController.destroy();
+      this.missionController = null;
     }
   }
 
@@ -206,22 +229,6 @@ export class DesktopAppController {
   private buildShell(): void {
     this.root.innerHTML = `
       <div class="ss-shell">
-        <header class="ss-topbar">
-          <div class="ss-brand">
-            <span class="ss-brand-badge" aria-hidden="true">◆</span>
-            <div>
-              <h1 class="ss-page-title" id="ss-page-title">People</h1>
-              <p class="ss-page-subtitle" id="ss-page-subtitle">A familiar face in a very large universe.</p>
-            </div>
-          </div>
-          <nav class="ss-mode-tabs" role="tablist" aria-label="Workspace views">
-            <button type="button" class="ss-tab is-active" data-mode="people" role="tab" aria-selected="true">Shard &amp; Friends</button>
-            <button type="button" class="ss-tab" data-mode="buyer_alerts" role="tab" aria-selected="false">Buyer Alerts</button>
-            <button type="button" class="ss-tab ss-tab-hosted-hidden" data-mode="home" role="tab" aria-selected="false">Session Recap</button>
-            <button type="button" class="ss-tab ss-tab-hosted-hidden" data-mode="settings" role="tab" aria-selected="false">Settings &amp; Modules</button>
-          </nav>
-        </header>
-
         <section id="ss-view-people" class="ss-view">
           <div class="ss-people-grid">
             <!-- Left Column: Roster -->
@@ -229,13 +236,12 @@ export class DesktopAppController {
               <div class="ss-toolbar-row">
                 <input id="people-search-input" class="ss-input ss-grow" type="text" placeholder="Filter this list by handle or tag" autocomplete="off" />
                 <button id="people-clear-btn" type="button" class="ss-btn">Clear</button>
-                <button id="people-find-btn" type="button" class="ss-btn ss-btn-accent">Find player</button>
               </div>
               <div class="ss-toolbar-row ss-toolbar-sub">
-                <select id="people-source-select" class="ss-select" aria-label="Player list source">
+                <select id="people-source-select" class="ss-select" aria-label="Citizen list source">
                   <option value="0">Shard members</option>
                   <option value="1">Handle search results</option>
-                  <option value="2">Saved player tags</option>
+                  <option value="2">Saved citizen tags</option>
                   <option value="3">Friends</option>
                 </select>
                 <label class="ss-checkbox-label">
@@ -249,14 +255,14 @@ export class DesktopAppController {
                 </div>
               </div>
               <div class="ss-pane-meta">
-                <span id="people-roster-status" class="ss-status-line">Loading player list…</span>
-                <span class="ss-hint-line">Players · click to select / deselect</span>
+                <span id="people-roster-status" class="ss-status-line">Loading citizen list…</span>
+                <span class="ss-hint-line">Citizens · click to select / deselect</span>
               </div>
-              <div id="people-roster-scroll" class="ss-table-scroll" tabindex="0" role="region" aria-label="Player roster">
+              <div id="people-roster-scroll" class="ss-table-scroll" tabindex="0" role="region" aria-label="Citizen roster">
                 <table class="ss-table" id="people-roster-table">
                   <thead>
                     <tr>
-                      <th class="col-player">PLAYER</th>
+                      <th class="col-player">CITIZEN</th>
                       <th class="col-tags">TAGS</th>
                       <th class="col-rel">RELATIONSHIP</th>
                     </tr>
@@ -279,20 +285,20 @@ export class DesktopAppController {
                   <button id="clear-actions-btn" type="button" class="ss-btn">Clear actions</button>
                 </div>
                 <div class="ss-toolbar-row ss-toolbar-sub">
-                  <select id="stage-tag-select" class="ss-select ss-grow" aria-label="Stage players by tag"></select>
+                  <select id="stage-tag-select" class="ss-select ss-grow" aria-label="Stage citizens by tag"></select>
                   <button id="stage-by-tag-btn" type="button" class="ss-btn">Add by tag</button>
                   <button id="stage-friends-btn" type="button" class="ss-btn">Add friends →</button>
                   <button id="stage-org-btn" type="button" class="ss-btn">Add org →</button>
                 </div>
                 <div class="ss-pane-meta">
                   <span id="people-action-header" class="ss-status-line">Action list · 0 / 50</span>
-                  <span class="ss-hint-line">Tags: shard members · Friend: your friends list</span>
+                  <span class="ss-hint-line">Tags: shard citizens · Friend: your friends list</span>
                 </div>
                 <div id="people-action-scroll" class="ss-table-scroll ss-action-scroll" tabindex="0" role="region" aria-label="Staged action list">
                   <table class="ss-table" id="people-action-table">
                     <thead>
                       <tr>
-                        <th class="col-player">PLAYER</th>
+                        <th class="col-player">CITIZEN</th>
                         <th class="col-tags">TAGS</th>
                         <th class="col-rel">RELATIONSHIP</th>
                       </tr>
@@ -444,6 +450,10 @@ export class DesktopAppController {
           </div>
         </section>
 
+        <section id="ss-view-daylight" class="ss-view" hidden></section>
+        <section id="ss-view-piracy" class="ss-view" hidden></section>
+        <section id="ss-view-mission" class="ss-view" hidden></section>
+
         <footer class="ss-footer">
           <div id="companion-footer-status" class="ss-footer-text">Ready</div>
         </footer>
@@ -457,7 +467,7 @@ export class DesktopAppController {
               <table class="ss-table">
                 <thead>
                   <tr>
-                    <th>Player</th>
+                    <th>Citizen</th>
                     <th>Result / Status</th>
                     <th>Details</th>
                   </tr>
@@ -496,6 +506,7 @@ export class DesktopAppController {
     this.tagDraftInputEl = this.root.querySelector('#tag-draft-input')!;
     this.joinAlertsCheckboxEl = this.root.querySelector('#join-alerts-checkbox')!;
     this.queueStatusEl = this.root.querySelector('#queue-status-text')!;
+    this.footerEl = this.root.querySelector('.ss-footer')!;
     this.footerStatusEl = this.root.querySelector('#companion-footer-status')!;
 
     this.stageSelectedBtn = this.root.querySelector('#stage-selected-btn')!;
@@ -517,6 +528,24 @@ export class DesktopAppController {
     this.marketSectionEl = this.root.querySelector('#ss-view-market')!;
     this.homeSectionEl = this.root.querySelector('#ss-view-home')!;
     this.settingsSectionEl = this.root.querySelector('#ss-view-settings')!;
+    this.daylightSectionEl = this.root.querySelector('#ss-view-daylight')!;
+    this.daylightController = new DaylightViewController(this.daylightSectionEl, this.bridge, {
+      onCopyNotice: (msg) => {
+        if (this.footerStatusEl) this.footerStatusEl.textContent = msg;
+      },
+    });
+    this.piracySectionEl = this.root.querySelector('#ss-view-piracy')!;
+    this.missionSectionEl = this.root.querySelector('#ss-view-mission')!;
+    this.missionController = new MissionViewController(this.missionSectionEl, this.bridge, {
+      onNotice: (msg) => {
+        if (this.footerStatusEl) this.footerStatusEl.textContent = msg;
+      },
+    });
+    this.piracyController = new PiracyViewController(this.piracySectionEl, this.bridge, {
+      onNotice: (msg) => {
+        if (this.footerStatusEl) this.footerStatusEl.textContent = msg;
+      },
+    });
 
     this.modalBackdropEl = this.root.querySelector('#ss-modal-backdrop')!;
     this.modalTitleEl = this.root.querySelector('#ss-modal-title')!;
@@ -543,14 +572,6 @@ export class DesktopAppController {
   }
 
   private bindEvents(): void {
-    // Mode switcher tabs
-    this.root.querySelectorAll<HTMLButtonElement>('.ss-tab').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const nextMode = (btn.dataset.mode as typeof this.activeMode) ?? 'people';
-        this.setMode(nextMode);
-      });
-    });
-
     // Settings tiles navigation
     this.root.querySelectorAll<HTMLButtonElement>('[data-nav]').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -579,16 +600,6 @@ export class DesktopAppController {
       this.renderPeople();
     });
 
-    this.root.querySelector('#people-find-btn')!.addEventListener('click', () => {
-      this.sourceIndex = 1;
-      this.sourceSelectEl.value = '1';
-      void this.bridge.sendCommand({
-        action: 'search',
-        query: this.searchInputEl.value.trim(),
-      });
-      this.renderPeople();
-    });
-
     this.root.querySelector('#people-refresh-btn')!.addEventListener('click', () => {
       void this.bridge.sendCommand({ action: 'refresh_people' });
     });
@@ -607,13 +618,41 @@ export class DesktopAppController {
     this.rosterScrollEl.addEventListener('scroll', () => {
       this.virtualScrollTop = Math.round(this.rosterScrollEl.scrollTop);
       this.virtualScrollLeft = Math.round(this.rosterScrollEl.scrollLeft);
+      this.closeContextMenu();
     });
     this.rosterTbodyEl.addEventListener('click', (ev) => {
+      this.closeContextMenu();
       const tr = (ev.target as HTMLElement).closest<HTMLTableRowElement>('tr[data-player-id]');
       if (!tr) return;
       const id = tr.dataset.playerId!;
       this.toggleSelection(id, ev.shiftKey, false);
     });
+
+    // Right-click context menu in Roster table
+    this.rosterTbodyEl.addEventListener('contextmenu', (ev) => {
+      const tr = (ev.target as HTMLElement).closest<HTMLTableRowElement>('tr[data-player-id]');
+      if (!tr) return;
+      const id = tr.dataset.playerId!;
+      const player = this.filteredPeople.find((p) => p.id === id);
+      if (!player) return;
+
+      ev.preventDefault();
+      this.openContextMenu(player, ev.clientX, ev.clientY);
+    });
+
+    if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+      document.addEventListener('click', (ev) => {
+        if (this.contextMenuEl && !this.contextMenuEl.contains(ev.target as Node)) {
+          this.closeContextMenu();
+        }
+      });
+
+      document.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Escape') {
+          this.closeContextMenu();
+        }
+      });
+    }
 
     // Ordinary click toggles in Action table
     this.actionTbodyEl.addEventListener('click', (ev) => {
@@ -730,7 +769,7 @@ export class DesktopAppController {
     this.sendFriendsBtn.addEventListener('click', () => {
       const targets = this.getActionTargets().filter((p) => !p.is_friend);
       if (targets.length === 0) {
-        this.footerStatusEl.textContent = 'Add eligible players to the Action list first.';
+        this.footerStatusEl.textContent = 'Add eligible citizens to the Action list first.';
         return;
       }
       this.openConfirmationModal('confirm_friend', targets);
@@ -739,7 +778,7 @@ export class DesktopAppController {
     this.invitePartyBtn.addEventListener('click', () => {
       const targets = this.getActionTargets().filter((p) => !p.in_party);
       if (targets.length === 0) {
-        this.footerStatusEl.textContent = 'Add eligible players to the Action list first.';
+        this.footerStatusEl.textContent = 'Add eligible citizens to the Action list first.';
         return;
       }
       this.openConfirmationModal('confirm_party', targets);
@@ -872,54 +911,231 @@ export class DesktopAppController {
     });
   }
 
-  public setMode(mode: 'people' | 'buyer_alerts' | 'home' | 'settings'): void {
+  private closeContextMenu(): void {
+    if (this.contextMenuEl) {
+      this.contextMenuEl.remove();
+      this.contextMenuEl = null;
+    }
+  }
+
+  private openContextMenu(player: Player, x: number, y: number): void {
+    this.closeContextMenu();
+
+    const menu = document.createElement('div');
+    menu.className = 'ss-context-menu';
+    menu.id = 'ss-roster-context-menu';
+
+    const header = document.createElement('div');
+    header.className = 'ss-context-menu-header';
+    header.textContent = player.handle;
+    menu.appendChild(header);
+
+    // Friend Request item
+    const friendBtn = document.createElement('button');
+    friendBtn.type = 'button';
+    friendBtn.className = 'ss-context-menu-item';
+    friendBtn.textContent = 'Send Friend Request';
+    if (player.is_self || player.is_friend) {
+      friendBtn.disabled = true;
+      if (player.is_friend) friendBtn.textContent = 'Already Friend';
+    } else {
+      friendBtn.addEventListener('click', () => {
+        this.closeContextMenu();
+        void this.bridge.sendCommand({
+          action: 'friend',
+          player_id: player.id,
+          confirmed: true,
+        });
+      });
+    }
+    menu.appendChild(friendBtn);
+
+    // Invite Party item
+    const partyBtn = document.createElement('button');
+    partyBtn.type = 'button';
+    partyBtn.className = 'ss-context-menu-item';
+    partyBtn.textContent = 'Invite to Party';
+    if (player.is_self || player.in_party) {
+      partyBtn.disabled = true;
+      if (player.in_party) partyBtn.textContent = 'Already in Party';
+    } else {
+      partyBtn.addEventListener('click', () => {
+        this.closeContextMenu();
+        void this.bridge.sendCommand({
+          action: 'party',
+          player_id: player.id,
+          confirmed: true,
+        });
+      });
+    }
+    menu.appendChild(partyBtn);
+
+    // Divider
+    const div1 = document.createElement('div');
+    div1.className = 'ss-context-menu-divider';
+    menu.appendChild(div1);
+
+    // Tag Presets Header
+    const tagHeader = document.createElement('div');
+    tagHeader.style.padding = '4px 14px 2px';
+    tagHeader.style.fontSize = '11px';
+    tagHeader.style.color = 'var(--ss-muted, #94a3b8)';
+    tagHeader.textContent = 'DESIGNATE TAG:';
+    menu.appendChild(tagHeader);
+
+    // Preset buttons grid
+    const grid = document.createElement('div');
+    grid.className = 'ss-context-menu-tag-grid';
+    const presets = ['Friendly', 'Trader', 'Scout', 'Target', 'Miner', 'Org'];
+    for (const preset of presets) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'ss-context-menu-tag-btn';
+      btn.textContent = preset;
+      btn.addEventListener('click', () => {
+        this.closeContextMenu();
+        void this.bridge.sendCommand({
+          action: 'tag',
+          player_id: player.id,
+          label: preset,
+          alert: true,
+        });
+      });
+      grid.appendChild(btn);
+    }
+    menu.appendChild(grid);
+
+    // Custom Tag input row
+    const customRow = document.createElement('div');
+    customRow.className = 'ss-context-menu-custom-tag';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = 'Custom tag…';
+    input.maxLength = 32;
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.textContent = 'Tag';
+    const applyCustom = () => {
+      const val = input.value.trim();
+      if (!val) return;
+      this.closeContextMenu();
+      void this.bridge.sendCommand({
+        action: 'tag',
+        player_id: player.id,
+        label: val,
+        alert: true,
+      });
+    };
+    saveBtn.addEventListener('click', applyCustom);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        applyCustom();
+      }
+    });
+    customRow.appendChild(input);
+    customRow.appendChild(saveBtn);
+    menu.appendChild(customRow);
+
+    // Clear tag option if player has tags
+    if (player.tags && player.tags.length > 0) {
+      const clearBtn = document.createElement('button');
+      clearBtn.type = 'button';
+      clearBtn.className = 'ss-context-menu-item';
+      clearBtn.style.color = '#f87171';
+      clearBtn.textContent = '✕ Remove Tag';
+      clearBtn.addEventListener('click', () => {
+        this.closeContextMenu();
+        void this.bridge.sendCommand({
+          action: 'tag',
+          player_id: player.id,
+          label: '',
+          clear_tags: true,
+        });
+      });
+      menu.appendChild(clearBtn);
+    }
+
+    // Append to document body and position safely
+    document.body.appendChild(menu);
+    this.contextMenuEl = menu;
+
+    const rect = menu.getBoundingClientRect();
+    let posX = x;
+    let posY = y;
+    if (posX + rect.width > window.innerWidth - 8) {
+      posX = Math.max(8, window.innerWidth - rect.width - 8);
+    }
+    if (posY + rect.height > window.innerHeight - 8) {
+      posY = Math.max(8, window.innerHeight - rect.height - 8);
+    }
+    menu.style.left = `${posX}px`;
+    menu.style.top = `${posY}px`;
+  }
+
+  public setMode(mode: 'people' | 'buyer_alerts' | 'home' | 'settings' | 'daylight' | 'hud_piracy' | 'mission_log'): void {
     this.activeMode = mode;
     this.peopleSectionEl.hidden = mode !== 'people';
     this.marketSectionEl.hidden = mode !== 'buyer_alerts';
     this.homeSectionEl.hidden = mode !== 'home';
     this.settingsSectionEl.hidden = mode !== 'settings';
-
-    const modeTabsEl = this.root.querySelector<HTMLElement>('.ss-mode-tabs');
-    if (modeTabsEl) {
-      modeTabsEl.hidden = mode !== 'people' && mode !== 'buyer_alerts';
-      modeTabsEl.style.display = (mode === 'people' || mode === 'buyer_alerts') ? 'flex' : 'none';
+    this.daylightSectionEl.hidden = mode !== 'daylight';
+    this.piracySectionEl.hidden = mode !== 'hud_piracy';
+    this.missionSectionEl.hidden = mode !== 'mission_log';
+    if (mode === 'mission_log') {
+      this.missionController?.activate();
     }
 
-    this.root.querySelectorAll<HTMLButtonElement>('.ss-tab').forEach((btn) => {
-      const active = btn.dataset.mode === mode;
-      btn.classList.toggle('is-active', active);
-      btn.setAttribute('aria-selected', active ? 'true' : 'false');
-    });
+    if (this.footerEl) {
+      this.footerEl.hidden = mode !== 'people' && mode !== 'hud_piracy' && mode !== 'mission_log';
+    }
 
-    const titleEl = this.root.querySelector('#ss-page-title')!;
-    const subEl = this.root.querySelector('#ss-page-subtitle')!;
-    if (mode === 'people') {
-      titleEl.textContent = 'People';
-      subEl.textContent = 'A familiar face in a very large universe.';
-    } else if (mode === 'buyer_alerts') {
-      titleEl.textContent = 'Buyer Alerts';
-      subEl.textContent = 'Watch UEX buy orders for your best mining and crafting hauls.';
-    } else if (mode === 'home') {
-      titleEl.textContent = 'Home';
-      subEl.textContent = "Find your next upgrade. See what you've accomplished.";
-    } else {
-      titleEl.textContent = 'Settings & Modules';
-      subEl.textContent = 'Customize HUD behavior, shortcuts, privacy, and installed modules.';
+    const titleEl = this.root.querySelector('#ss-page-title');
+    const subEl = this.root.querySelector('#ss-page-subtitle');
+    if (titleEl && subEl) {
+      if (mode === 'people') {
+        titleEl.textContent = 'Citizens';
+        subEl.textContent = 'A familiar face in a very large universe.';
+      } else if (mode === 'buyer_alerts') {
+        titleEl.textContent = 'Buyer Alerts';
+        subEl.textContent = 'Watch UEX buy orders for your best mining and crafting hauls.';
+      } else if (mode === 'daylight') {
+        titleEl.textContent = 'Day/Night Forecast';
+        subEl.textContent = 'Destination-first solar geometry. Plan for the light when you arrive.';
+      } else if (mode === 'hud_piracy') {
+        titleEl.textContent = 'Piracy & Flight';
+        subEl.textContent = 'Live Game.log avionics, unmonitored jurisdiction radar, and snare ops.';
+      } else if (mode === 'mission_log') {
+        titleEl.textContent = 'Mission & Wallet Log';
+        subEl.textContent = 'Every contract, reputation shift and aUEC movement, grouped by play session.';
+      } else if (mode === 'home') {
+        titleEl.textContent = 'Home';
+        subEl.textContent = "Find your next upgrade. See what you've accomplished.";
+      } else {
+        titleEl.textContent = 'Settings & Modules';
+        subEl.textContent = 'Customize HUD behavior, shortcuts, privacy, and installed modules.';
+      }
     }
   }
 
   private onSnapshot(snap: PeopleSnapshot): void {
-    const modeChanged = snap.mode && snap.mode !== this.activeMode;
-    this.snapshot = snap;
-    if (modeChanged && snap.mode && (snap.mode === 'people' || snap.mode === 'buyer_alerts' || snap.mode === 'home' || snap.mode === 'settings')) {
-      if (!(snap.mode === 'people' && (this.activeMode === 'home' || this.activeMode === 'settings' || this.activeMode === 'buyer_alerts'))) {
-        this.setMode(snap.mode);
-      }
+    if (snap.mode && snap.mode !== this.activeMode) {
+      this.setMode(snap.mode);
     }
+    this.snapshot = snap;
     this.renderPeople();
     this.renderMarketCatalog();
     this.renderMarket();
     this.renderHome();
+    if (snap.daylight && this.daylightController) {
+      this.daylightController.updateFromDaylightState(snap.daylight);
+    }
+    if (this.piracyController) {
+      this.piracyController.updateFromSnapshot(snap.piracy, snap.session_token ?? snap.session);
+    }
+    if (this.missionController) {
+      this.missionController.updateFromState(snap.mission);
+    }
     if (this.modalOpen && this.modalMode === 'queue_report') {
       this.renderQueueReportRows();
     }
@@ -1390,8 +1606,11 @@ export class DesktopAppController {
     this.queueStatusEl.textContent = this.formatQueueSummary(q);
 
     // Footer status
+    if (this.footerEl) {
+      this.footerEl.hidden = this.activeMode !== 'people';
+    }
     let footer = snap.status ?? 'Ready';
-    footer += ' · Tagged-player alerts report list appearances; the first snapshot stays quiet.';
+    footer += ' · Tagged-citizen alerts report list appearances; the first snapshot stays quiet.';
     if (snap.friends_known === false || snap.party_known === false) {
       footer += ' · Friend / party status is checking or unavailable; unconfirmed rows stay neutral.';
     }

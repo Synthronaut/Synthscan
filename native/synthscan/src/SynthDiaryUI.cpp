@@ -119,6 +119,7 @@ void showPreview(const std::string& path){
 }
 LRESULT CALLBACK proc(HWND h,UINT m,WPARAM w,LPARAM l){
     switch(m){
+    case WM_MOUSEWHEEL:if(HWND p=GetParent(h))return SendMessageW(p,m,w,l);break;
     case WM_SIZE:layout();return 0;
     case WM_CLOSE:if(discard()){fill(current);ShowWindow(h,SW_HIDE);}return 0;
     case WM_COMMAND:{int id=LOWORD(w),code=HIWORD(w);if(!busy&&((id>=420&&id<=439&&code==EN_CHANGE)||(id==430&&code==CBN_SELCHANGE)))dirty=true;act(id);return 0;}
@@ -186,7 +187,10 @@ void open(){
     }
     lastRows.clear();lastOptions.clear();update(model,obj(),"");
     if(testing)ShowWindow(win,SW_SHOWNOACTIVATE);
-    else if(SynthHome::visible()){SynthPages::mount(win);filters();}
+    else if(SynthHome::visible()){
+        if(GetParent(win))ShowWindow(win,SW_SHOW);
+        filters();
+    }
     else{ShowWindow(win,SW_SHOW);SetForegroundWindow(win);filters();}
 }
 void update(const Json& value,const Json& result,const std::string& note){

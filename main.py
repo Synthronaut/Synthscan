@@ -683,7 +683,7 @@ class SynthScanApp:
             ("home", "Home", "Choose your next task"),
             ("hud", "HUD layout", "Position, size & preview"),
             ("blueprints", "Library", "Items, materials & blueprints"),
-            ("mining_planner", "Mining planner", "Locations & secondary ores"),
+            ("mining_planner", "Mining Tools", "Locations & secondary ores"),
             ("refinery", "Materials & refinery", "Your ledger & scanned orders"),
             ("radar", "Mining scanner", "Recognize rock signatures"),
             ("servers", "Session history", "Shards, visits & notes"),

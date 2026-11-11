@@ -60,7 +60,7 @@ void open(){
  ctl(L"STATIC",L"Body / coordinate model",0,20,95,370,20,0);ctl(L"COMBOBOX",L"",CBS_DROPDOWNLIST|WS_VSCROLL,20,119,400,350,701);
  ctl(L"STATIC",L"Bookmark name",0,440,95,300,20,0);ctl(L"EDIT",L"Rock / station test",ES_AUTOHSCROLL,440,119,440,28,702);SendDlgItemMessageW(win,702,EM_SETLIMITTEXT,200,0);
  ctl(L"STATIC",L"Distance from ship to rock · meters (uncertainty)",0,20,162,460,20,0);ctl(L"EDIT",L"0",ES_AUTOHSCROLL,500,158,120,28,703);SendDlgItemMessageW(win,703,EM_SETLIMITTEXT,10,0);
- ctl(L"BUTTON",L"‹ Mining Diary",BS_PUSHBUTTON,20,16,230,30,717);
+ ctl(L"BUTTON",L"‹ Mining Tools",BS_PUSHBUTTON,20,16,230,30,717);
  ctl(L"BUTTON",L"1  Arm new bookmark",BS_PUSHBUTTON,20,202,265,34,710);ctl(L"BUTTON",L"2  Arm stationary check",BS_PUSHBUTTON,300,202,280,34,711);ctl(L"BUTTON",L"3  Arm current fix",BS_PUSHBUTTON,595,202,285,34,712);
  ctl(L"STATIC",L"After arming, type /showlocation in game chat. For step 2, stay parked for at least 30 seconds.",0,20,250,860,35,0);
  ctl(L"LISTBOX",L"",LBS_NOTIFY|WS_VSCROLL,20,295,310,220,704);

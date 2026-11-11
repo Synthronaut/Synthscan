@@ -84,7 +84,7 @@ LRESULT CALLBACK createHook(int code,WPARAM wp,LPARAM lp){
         if(!(create->style&WS_CHILD)&&!IS_INTRESOURCE(create->lpszClass)){
             std::wstring cls=create->lpszClass;
             bool tool=(cls.rfind(L"SCMiner",0)==0||cls.rfind(L"SynthScan",0)==0)&&
-                cls!=L"SCMinerGUI"&&cls!=L"SCMinerHudFeather"&&cls!=L"SynthScanHome"&&cls!=L"SynthScanPageHost"&&cls!=L"SynthScanHost"&&
+                cls!=L"SCMinerGUI"&&cls!=L"SCMinerHudFeather"&&cls!=L"SynthScanHome"&&cls!=L"SynthScanPageHost"&&cls!=L"SynthScanHost"&&cls!=L"SynthScanMiningDiary"&&
                 cls.find(L"Suggest")==std::wstring::npos&&cls.find(L"Popup")==std::wstring::npos&&cls.find(L"Overlay")==std::wstring::npos;
             if(tool){
                 Page p;p.style=create->style;p.ex=create->dwExStyle;p.parent=create->hwndParent;p.width=std::max(100,create->cx);p.height=std::max(100,create->cy);p.captured=true;
@@ -145,7 +145,7 @@ void release(HWND page){
     auto found=pages.find(page);if(found==pages.end())return;auto value=found->second;
     ShowWindow(page,SW_HIDE);RemoveWindowSubclass(page,childProc,1);SetParent(page,value.parent);
     SetWindowLongPtrW(page,GWL_STYLE,value.style&~WS_VISIBLE);SetWindowLongPtrW(page,GWL_EXSTYLE,value.ex);
-    SetWindowPos(page,nullptr,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE|SWP_NOZORDER|SWP_NOACTIVATE|SWP_FRAMECHANGED);
+    SetWindowPos(page,nullptr,value.parent?0:-32000,value.parent?0:-32000,0,0,SWP_NOSIZE|SWP_NOZORDER|SWP_NOACTIVATE|SWP_HIDEWINDOW|SWP_FRAMECHANGED);
     ShowWindow(page,SW_HIDE);
     pages.erase(found);if(active==page)active=nullptr;
 }
@@ -162,5 +162,12 @@ void beginTransition(){
 void endTransition(){
     if(!container||!transitioning)return;transitioning=false;
     if(((GetWindowLongPtrW(container,GWL_STYLE)&WS_VISIBLE)!=0)!=wantVisible)ShowWindow(container,wantVisible?SW_SHOW:SW_HIDE);
+}
+void scrollTo(int y){
+    if(!container||!active)return;
+    auto& p=pages[active];
+    SCROLLINFO si{sizeof(si),SIF_ALL};GetScrollInfo(container,SB_VERT,&si);
+    p.y=std::clamp(y,0,std::max(0,si.nMax-int(si.nPage)+1));
+    arrange();
 }
 }

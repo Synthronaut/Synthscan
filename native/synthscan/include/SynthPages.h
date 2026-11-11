@@ -15,4 +15,5 @@ unsigned generation();
 void advanceGeneration();
 void beginTransition();
 void endTransition();
+void scrollTo(int y);
 }

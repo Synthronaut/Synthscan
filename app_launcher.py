@@ -69,7 +69,7 @@ class SetupWindow:
         self.account=tk.BooleanVar(value=bool(privacy.get('account_access',account_feature)))
         if account_feature:
             ttk.Checkbutton(outer,text='Allow selected features to read my signed-in game account',variable=self.account).pack(anchor='w',pady=(12,3))
-            ttk.Label(outer,text='For your reputation, contracts, wallet and People. Uses the local game session directly with CIG; no password or token is sent to SynthScan. You can turn this off in Privacy.',style='Sub.TLabel',wraplength=700).pack(anchor='w')
+            ttk.Label(outer,text='For your reputation, contracts, wallet and Citizens. Uses the local game session directly with CIG; no password or token is sent to SynthScan. You can turn this off in Privacy.',style='Sub.TLabel',wraplength=700).pack(anchor='w')
         controls=ttk.Frame(outer);controls.pack(fill='x',pady=(15,12))
         self.retry=ttk.Button(controls,text='Retry setup',command=self.start);self.retry.pack(side='left',padx=(0,8))
         self.browse=ttk.Button(controls,text='Choose game folder',command=self.choose);self.browse.pack(side='left',padx=(0,8))

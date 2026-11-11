@@ -1137,7 +1137,10 @@ private:
     void placePlanner();
     void paintPlanner(HDC hdc);
     static constexpr int PLANNER_WIDTH = 620;
-    static constexpr int PLANNER_HEIGHT = 880;   // 840 cut the last ground row off
+    static constexpr int PLANNER_TOP_HEIGHT = 880;
+    static constexpr int PLANNER_BREAK_HEIGHT = 70;
+    static constexpr int PLANNER_DIARY_HEIGHT = 810;
+    static constexpr int PLANNER_HEIGHT = 1760;
     // UEX's prices (setUexPrices): the WHERE TO SELL card, and the ore that
     // fetches most refined, whose row in the list blinks red
     bool uexEnabled_ = false;

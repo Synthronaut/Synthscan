@@ -984,7 +984,7 @@ bool MinerGUI::initialize(HINSTANCE hInstance) {
         // WS_CLIPCHILDREN: the double-buffered repaint must not paint over the
         // edit boxes and buttons, or every live update makes them flicker
         WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
-        CW_USEDEFAULT, CW_USEDEFAULT,
+        -32000, -32000,
         desired.right - desired.left,
         desired.bottom - desired.top,
         nullptr, nullptr, hInstance_, nullptr
@@ -1332,7 +1332,8 @@ void MinerGUI::toggleOverlayMode(bool showWindow) {
 
         SetWindowTextW(btnOverlay_, L"Overlay");
         SetWindowPos(hwnd_, HWND_NOTOPMOST,
-                     restoreRect_.left, restoreRect_.top,
+                     allowShow ? restoreRect_.left : -32000,
+                     allowShow ? restoreRect_.top : -32000,
                      restoreRect_.right - restoreRect_.left,
                      restoreRect_.bottom - restoreRect_.top,
                      SWP_FRAMECHANGED | (allowShow?SWP_SHOWWINDOW:SWP_HIDEWINDOW) | (allowShow?0:SWP_NOACTIVATE));
@@ -2442,33 +2443,10 @@ LRESULT CALLBACK MinerGUI::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARA
 
 LRESULT MinerGUI::handleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     switch (uMsg) {
-        case WM_WINDOWPOSCHANGING: {
-            WINDOWPOS* wp = reinterpret_cast<WINDOWPOS*>(lParam);
-            if (wp && !overlayMode_ && !SynthPages::contains(hwnd)) {
-                if (wp->flags & SWP_SHOWWINDOW) {
-                    wp->flags &= ~SWP_SHOWWINDOW;
-                    wp->flags |= SWP_HIDEWINDOW;
-                }
-            }
-            break;
-        }
-        case WM_STYLECHANGING: {
-            if (wParam == GWL_STYLE) {
-                STYLESTRUCT* ss = reinterpret_cast<STYLESTRUCT*>(lParam);
-                if (ss && !overlayMode_ && !SynthPages::contains(hwnd)) {
-                    ss->styleNew &= ~WS_VISIBLE;
-                }
-            }
-            break;
-        }
         case WM_WINDOWPOSCHANGED:
             HudFeather::sync(hwnd,overlayMode_&&!headless_,scaleF(1)*overlayZoom_);
             break;
         case WM_SHOWWINDOW:
-            if (wParam && !overlayMode_ && !SynthPages::contains(hwnd)) {
-                ShowWindow(hwnd, SW_HIDE);
-                return 0;
-            }
             HudFeather::sync(hwnd,overlayMode_&&!headless_,scaleF(1)*overlayZoom_);
             break;
         case WM_PAINT: {
@@ -2522,8 +2500,14 @@ LRESULT MinerGUI::handleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
             clearHover(hwnd, hoverMain_);
             return 0;
 
-        case WM_ERASEBKGND:
-            return 1;   // everything is painted in onPaint (double-buffered)
+        case WM_ERASEBKGND: {
+            HDC hdc = reinterpret_cast<HDC>(wParam);
+            RECT r;
+            GetClientRect(hwnd, &r);
+            static HBRUSH bgBrush = CreateSolidBrush(CR_BG);
+            FillRect(hdc, &r, bgBrush);
+            return 1;
+        }
 
         case WM_DRAWITEM: {
             const DRAWITEMSTRUCT* dis = reinterpret_cast<DRAWITEMSTRUCT*>(lParam);
@@ -12409,6 +12393,20 @@ LRESULT MinerGUI::handlePlannerMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPAR
             return 0;
         case WM_ERASEBKGND:
             return 1;
+        case WM_SIZE: {
+            HWND diary = FindWindowExW(hwnd, nullptr, L"SynthScanMiningDiary", nullptr);
+            if (diary) {
+                RECT rc{};
+                GetClientRect(hwnd, &rc);
+                int topH = scale(PLANNER_TOP_HEIGHT + PLANNER_BREAK_HEIGHT);
+                int diaryH = (std::max)(scale(PLANNER_DIARY_HEIGHT), (int)rc.bottom - topH);
+                SetWindowPos(diary, nullptr, 0, topH, rc.right, diaryH, SWP_NOZORDER | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+            }
+            break;
+        }
+        case WM_MOUSEWHEEL:
+            if (HWND p = GetParent(hwnd)) return SendMessageW(p, uMsg, wParam, lParam);
+            break;
         case WM_LBUTTONDOWN: {
             const float px = (float)(short)LOWORD(lParam);
             const float py = (float)(short)HIWORD(lParam);
@@ -13116,6 +13114,7 @@ void MinerGUI::paintPlanner(HDC hdc) {
     RECT rc;
     GetClientRect(planner_, &rc);
     const int cw = rc.right, ch = rc.bottom;
+    const int planH = (std::min)(ch, scale(PLANNER_TOP_HEIGHT));
 
     HDC memDC = CreateCompatibleDC(hdc);
     HBITMAP memBitmap = CreateCompatibleBitmap(hdc, cw, ch);
@@ -13310,7 +13309,7 @@ void MinerGUI::paintPlanner(HDC hdc) {
 
         // The UEX tab puts the marketplace where the places are
         if (plannerUex_) {
-            paintMarketColumn(g, cw, ch, M + leftW + M, listTop);
+            paintMarketColumn(g, cw, planH, M + leftW + M, listTop);
         } else if(plannerTargets_.size()>1&&!byPlace){
             const float x=M+leftW+M,w=float(cw)-M-x;
             auto stops=miningTripStops(plannerTargets_,plannerSystem_);
@@ -13326,15 +13325,15 @@ void MinerGUI::paintPlanner(HDC hdc) {
                 if(overlap&&stop.materials.size()!=plannerTargets_.size())continue;
                 bool adds=false;for(const auto& m:stop.materials)if(std::find(covered.begin(),covered.end(),m)==covered.end())adds=true;
                 if(!overlap&&!adds)continue;
-                if(y+scaleF(68)>ch-scaleF(58)||shown++>=8)break;
+                if(y+scaleF(68)>planH-scaleF(58)||shown++>=8)break;
                 std::wstring title=toW(stop.location)+L" · "+toW(stop.system);
                 g.DrawString(title.c_str(),-1,&placeFont,Gdiplus::RectF(x,y,w,scaleF(22)),nullptr,&textBrush);
                 std::wstring materials;for(const auto& m:stop.materials){if(!materials.empty())materials+=L", ";materials+=toW(m);covered.push_back(m);}
                 g.DrawString(materials.c_str(),-1,&subFont,Gdiplus::RectF(x,y+scaleF(25),w,scaleF(34)),nullptr,&dimBrush);y+=scaleF(68);
             }
             for(const auto& target:plannerTargets_){bool found=false;for(const auto& stop:stops)if(std::find(stop.materials.begin(),stop.materials.end(),target)!=stop.materials.end())found=true;
-                if(!found&&y+scaleF(24)<ch-scaleF(50)){g.DrawString((L"No source listed: "+toW(target)).c_str(),-1,&subFont,Gdiplus::PointF(x,y),&dimBrush);y+=scaleF(24);}}
-            g.DrawString(L"Configured deposits, not guaranteed spawns. No travel-distance ranking.\nUntick materials to change the plan.",-1,&subFont,Gdiplus::RectF(x,float(ch)-scaleF(48),w,scaleF(42)),nullptr,&dimBrush);
+                if(!found&&y+scaleF(24)<planH-scaleF(50)){g.DrawString((L"No source listed: "+toW(target)).c_str(),-1,&subFont,Gdiplus::PointF(x,y),&dimBrush);y+=scaleF(24);}}
+            g.DrawString(L"Configured deposits, not guaranteed spawns. No travel-distance ranking.\nUntick materials to change the plan.",-1,&subFont,Gdiplus::RectF(x,float(planH)-scaleF(48),w,scaleF(42)),nullptr,&dimBrush);
         } else {
             // Right column: where the picked ore is, on a card of its own - the
             // answer to the pick on the left, and as tall as the answer is. The
@@ -13610,7 +13609,7 @@ void MinerGUI::paintPlanner(HDC hdc) {
             const float dealCardH = deals.empty() ? 0.0f
                                                   : scaleF(34) + dealH * (float)dealsShown +
                                                         ((int)deals.size() > dealsShown ? scaleF(14) : 0.0f) + scaleF(4);
-            const float roomDown = (float)ch - scaleF(64) - ry - (rockCardH > 0 ? rockCardH + scaleF(10) : 0.0f) -
+            const float roomDown = (float)planH - scaleF(64) - ry - (rockCardH > 0 ? rockCardH + scaleF(10) : 0.0f) -
                                    (sellCardH > 0 ? sellCardH + scaleF(10) : 0.0f) -
                                    (dealCardH > 0 ? dealCardH + scaleF(10) : 0.0f);
             int shown = 0;
@@ -13912,7 +13911,7 @@ void MinerGUI::paintPlanner(HDC hdc) {
 
         // Footer, without a rule over it, as the Refinery has it: the list
         // and the card end the page on their own
-        const float fy = (float)ch - scaleF(20);
+        const float fy = (float)planH - scaleF(20);
         Gdiplus::RectF fr(M, fy, (float)cw - 2 * M, scaleF(16));
         g.DrawString(L"game data 4.10", -1, &subFont, fr, &rightAlign, &faintBrush);
         // ...and before it the way to Report to UEX, a link as the main
@@ -13945,8 +13944,61 @@ void MinerGUI::paintPlanner(HDC hdc) {
         }
         g.DrawString(footer.c_str(), -1, &subFont, Gdiplus::PointF(M, fy), &faintBrush);
         // Report to UEX, over everything else
-        if (uexCard_.step) drawUexCard(g, cw, ch, uexCard_, hoverPlan_);
+        if (uexCard_.step) drawUexCard(g, cw, planH, uexCard_, hoverPlan_);
         else uexCard_.hits.clear();
+
+        // Page break divider between Mining Planner (Ore Finder) and Mining Diary
+        if (ch > scale(PLANNER_TOP_HEIGHT)) {
+            const float breakY = (float)scale(PLANNER_TOP_HEIGHT);
+            const float breakH = (float)scale(PLANNER_BREAK_HEIGHT);
+            const float midY = breakY + breakH * 0.5f;
+
+            // Fill page break background with surface color
+            Gdiplus::SolidBrush breakBg(Gdiplus::Color(255, 15, 16, 19));
+            g.FillRectangle(&breakBg, 0.0f, breakY, (float)cw, breakH);
+
+            // Badge text & measurement
+            const std::wstring badgeText = L"MINING DIARY & RECORDS";
+            Gdiplus::Font badgeFont(&textFamily(), scaleF(11), Gdiplus::FontStyleBold, Gdiplus::UnitPixel);
+            Gdiplus::RectF textBounds;
+            g.MeasureString(badgeText.c_str(), -1, &badgeFont, Gdiplus::PointF(0, 0), &textBounds);
+
+            const float pillPadH = scaleF(18);
+            const float pillPadV = scaleF(7);
+            const float pillW = textBounds.Width + pillPadH * 2.0f + scaleF(16);
+            const float pillH = textBounds.Height + pillPadV * 2.0f;
+            const float pillX = ((float)cw - pillW) * 0.5f;
+            const float pillY = midY - pillH * 0.5f;
+
+            // Subtle glowing accent rules on left and right of badge
+            Gdiplus::Pen rulePen(Gdiplus::Color(55, 98, 204, 255), 1.0f);
+            Gdiplus::Pen ruleGlow(Gdiplus::Color(25, 98, 204, 255), 3.0f);
+
+            if (pillX > M + scaleF(20)) {
+                g.DrawLine(&ruleGlow, M, midY, pillX - scaleF(14), midY);
+                g.DrawLine(&rulePen, M, midY, pillX - scaleF(14), midY);
+            }
+            if ((float)cw - M > pillX + pillW + scaleF(20)) {
+                g.DrawLine(&ruleGlow, pillX + pillW + scaleF(14), midY, (float)cw - M, midY);
+                g.DrawLine(&rulePen, pillX + pillW + scaleF(14), midY, (float)cw - M, midY);
+            }
+
+            // Rounded badge pill
+            Gdiplus::RectF pillRect(pillX, pillY, pillW, pillH);
+            fillRoundRect(g, pillRect, pillH * 0.5f, Gdiplus::Color(240, 20, 26, 36));
+            strokeRoundRect(g, pillRect, pillH * 0.5f, Gdiplus::Color(90, 98, 204, 255), 1.0f);
+
+            // Glowing cyan accent status dot
+            const float dotR = scaleF(4.0f);
+            const float dotX = pillX + pillPadH;
+            const float dotY = midY - dotR;
+            Gdiplus::SolidBrush dotBrush(Gdiplus::Color(255, 98, 204, 255));
+            g.FillEllipse(&dotBrush, dotX, dotY, dotR * 2.0f, dotR * 2.0f);
+
+            // Badge text
+            Gdiplus::SolidBrush badgeTextBrush(Gdiplus::Color(240, 214, 230, 245));
+            g.DrawString(badgeText.c_str(), -1, &badgeFont, Gdiplus::PointF(dotX + dotR * 2.0f + scaleF(8), pillY + pillPadV), &badgeTextBrush);
+        }
     }
     BitBlt(hdc, 0, 0, cw, ch, memDC, 0, 0, SRCCOPY);
     SelectObject(memDC, oldBitmap);
