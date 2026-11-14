@@ -1,11 +1,5 @@
 name: Automatic signed update channel
 on:
-  push:
-    branches:
-      - main
-    paths-ignore:
-      - '*.md'
-      - 'docs/**'
   workflow_dispatch:
 concurrency:
   group: synthscan-update-channel
