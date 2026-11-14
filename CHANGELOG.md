@@ -1,14 +1,3 @@
-## Unreleased
-
-- Blend Home button corners with the surface behind them, including HUD tiles
-  and the game-text controls.
-- Show the installed Star Citizen patch and a concise SynthStrings result on
-  Home. Existing text without preparation records is neutral: “Game text
-  unchanged · No action needed.” Reserve warnings for specific problems.
-- Show the current result and last check in Patch status; keep recovery history
-  in local diagnostic files. Detect a newer manifest before reusing a ready state.
-- Move Feature modules from the sidebar into Settings.
-
 ## 0.1.0-alpha.11 — 2026-11-10
 
 - Ship one modular installer with 13 optional features. Keep the existing feature-card design and preserve installed choices across verified updates.

@@ -243,7 +243,7 @@ def run(data_dir,owner,native=None):
         blueprint_texts=BlueprintTextSync(directory,service.reader.log_path)
     if enabled('piracy'):
         from piracy_watch import PiracyReader
-        piracy=PiracyReader(directory)
+        piracy=PiracyReader(directory,service.reader.log_path)
     from reputation_notice import NoticeGate
     from setup_status import reputation_view
     rep_notices=NoticeGate();rep_notice=''
@@ -314,12 +314,15 @@ def run(data_dir,owner,native=None):
                 desktop=optional_state(directory/'home_status.json')
                 pirate_mode=quest_settings.get('hud_mode')=='piracy' or (desktop.get('owner_pid')==owner and desktop.get('visible') and desktop.get('active_page')=='hud_piracy')
                 state['piracy_watch']=piracy.tick(pirate_mode,state.get('session_token')) if piracy else {}
+                state['flight']=state['piracy_watch'].get('flight',{})
                 pirate_command=directory/'piracy_command.json'
                 if pirate_command.exists():
-                    value=read_shared_json(pirate_command)
-                    if piracy and value.get('owner_pid')==owner and 0<=time.time()-value.get('at',0)<15 and pirate_mode:
-                        piracy.watch.command(value.get('action'),time.time())
-                        state['piracy_watch']=piracy.watch.view(time.time(),pirate_mode)
+                    value=read_shared_json(pirate_command) or {}
+                    action=value.get('action')
+                    if piracy and value.get('owner_pid')==owner and 0<=time.time()-value.get('at',0)<15 and (pirate_mode or str(action).startswith('piracy_')):
+                        piracy.command(action,value,time.time())
+                        state['piracy_watch']=piracy.tick(pirate_mode,state.get('session_token'))
+                        state['flight']=state['piracy_watch'].get('flight',{})
                     pirate_command.unlink(missing_ok=True)
                 from installation import RELEASE
                 # Reputation labels are a background feature in every HUD mode,

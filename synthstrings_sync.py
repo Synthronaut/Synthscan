@@ -122,6 +122,15 @@ def sync_blueprints_to_global_ini(ini_path=DEFAULT_INI_PATH, owned_blueprints=No
         if "Potential Harvestables:" in line:
             line = line.replace("Potential Harvestables:", "Potential Harv:")
 
+        if "=" in line:
+            k_part, v_part = line.split("=", 1)
+            k_low = k_part.split(",")[0].strip().casefold()
+            if ("title" in k_low or k_low.endswith("_name")) and ("potential blueprints" in v_part.casefold() or "multiple blueprint pools" in v_part.casefold()):
+                ending = "\r\n" if line.endswith("\r\n") else "\n" if line.endswith("\n") else ""
+                body = v_part[:-len(ending)] if ending else v_part
+                cleaned = re.sub(r"\\n\\n<EM4>(?:Potential Blueprints|Multiple Blueprint Pools).*$", "", body, flags=re.I).rstrip()
+                line = f"{k_part}={cleaned}{ending}"
+
         if "Potential Blueprints" in line:
             parts = line.split("Potential Blueprints", 1)
             prefix = parts[0] + "Potential Blueprints"

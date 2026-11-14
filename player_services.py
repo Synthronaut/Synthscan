@@ -1,7 +1,37 @@
 """Own-session social reads and explicitly selected, one-shot social actions."""
 import re
+import json
+import os
+import uuid
+from threading import RLock
 import time
 from pathlib import Path
+
+_DIAGNOSTIC_LOCK=RLock()
+
+def save_social_error(directory,error,**context):
+    """Local bounded evidence; never serialize RPC requests, headers or credentials."""
+    try:code=error.code().name
+    except Exception:code='LOCAL_ERROR'
+    try:detail=error.details()
+    except Exception:detail=str(error)
+    detail=str(detail or '')
+    detail=re.sub(r'(?i)bearer\s+[^\s,;]+','Bearer [redacted]',detail)
+    detail=re.sub(r'[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]+','[redacted token]',detail)
+    detail=re.sub(r'(?i)(authorization|auth_token|access_token|refresh_token|password|secret)([\s\"\':=]+)[^\s,;\"\']+',r'\1=[redacted]',detail)
+    entry=dict(schema=1,id=uuid.uuid4().hex[:12],at=time.time(),code=code,exception_type=type(error).__name__,detail=detail[:1200],
+               **{k:v for k,v in context.items() if k in ('route','elapsed_ms','queue_id','operation','recipient_id','recipient_handle','phase')})
+    saved=False
+    if directory is not None:
+        try:
+            folder=Path(directory);folder.mkdir(parents=True,exist_ok=True);path=folder/'social_errors.jsonl'
+            with _DIAGNOSTIC_LOCK:
+                if path.exists() and path.stat().st_size>=2*1024*1024:os.replace(path,folder/'social_errors.previous.jsonl')
+                with path.open('a',encoding='utf-8') as stream:
+                    stream.write(json.dumps(entry,ensure_ascii=True)+'\n');stream.flush();os.fsync(stream.fileno())
+            saved=True
+        except (OSError,ValueError):pass
+    return dict(entry,saved=saved)
 
 PLAYER_PREFIX='urn:sc:global:player:geid:'
 READS={('social','SocialService','ListGroups'),('identity','IdentityService','GetPlayersNames'),
@@ -30,6 +60,8 @@ class PlayerClient:
         from installation import reference_paths
         from google.protobuf.descriptor_pb2 import FileDescriptorSet
         self.account=OwnAccount()
+        from installation import PROFILE
+        self.diagnostic_directory=PROFILE
         self.descriptors={d.name:d for d in FileDescriptorSet.FromString(reference_paths()['schemas'].read_bytes()).file}
 
     def close(self):self.account.close()
@@ -52,8 +84,17 @@ class PlayerClient:
         from account_permission import require_account_access
         require_account_access()
         response=self.message(domain,method+'Response')
-        return self.account.channel.unary_unary('/sc.external.services.'+domain+'.v1.'+service+'/'+method,
+        started=time.monotonic()
+        try:
+            return self.account.channel.unary_unary('/sc.external.services.'+domain+'.v1.'+service+'/'+method,
             request_serializer=lambda v:v.SerializeToString(),response_deserializer=response.FromString)(request,timeout=8,metadata=self.account.metadata)
+        except Exception as error:
+            context=dict(getattr(self,'_diagnostic_context',{}),route='/sc.external.services.'+domain+'.v1.'+service+'/'+method,elapsed_ms=round((time.monotonic()-started)*1000))
+            evidence=save_social_error(getattr(self,'diagnostic_directory',None),error,**context)
+            try:error.social_diagnostic=evidence
+            except Exception:pass
+            raise
+
 
     def scope(self,context):
         from player_session import require_current_session
@@ -203,6 +244,7 @@ class PlayerClient:
         party=set(relations[membership]);attempted=set(previous);results=[];stopped=False;sent=0
         for person in people:
             row=dict(id=person['id'],handle=person['handle'])
+            self._diagnostic_context=dict(queue_id=control.identifier,operation=operation,recipient_id=person['id'],recipient_handle=person['handle'],phase='recipient processing')
             reason='You' if person['id']==self.account.subject else ('Already a friend' if operation=='friend' else 'Already in party') if person['id'] in party else 'No longer on shard' if require_shard and person['id'] not in roster and not (allow_friends and operation=='party' and person['id'] in friends) else 'Already attempted this session; explicitly enable repeat requests' if person['id'] in attempted else ''
             if reason:row.update(outcome='Skipped',detail=reason)
             elif control.cancel_event.is_set():row.update(outcome='Not sent',detail='Invitation queue cancelled.')
@@ -229,7 +271,10 @@ class PlayerClient:
                                 row.update(outcome='Sent',detail=detail);sent+=1
                 except PlayerLeftShard as error:row.update(outcome='Skipped',detail=str(error))
                 except Exception as error:
-                    message=str(error)[:240] if isinstance(error,ValueError) else public_error(error)
+                    evidence=getattr(error,'social_diagnostic',None) or save_social_error(getattr(self,'diagnostic_directory',None),error,**self._diagnostic_context)
+                    row['error_id']=evidence['id'];row['error_code']=evidence['code']
+                    message=public_error(error)+' ['+evidence['code']+']'
+                    message+=(' Error reference '+evidence['id']+'.' if evidence['saved'] else ' Diagnostic file could not be saved.')
                     try:code=error.code().name
                     except Exception:code=''
                     if code in ('ALREADY_EXISTS','NOT_FOUND','INVALID_ARGUMENT'):

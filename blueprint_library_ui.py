@@ -244,12 +244,13 @@ class BlueprintLibraryPage(ctk.CTkFrame):
             card = ctk.CTkFrame(self.detail, fg_color='#262b35', corner_radius=6)
             card.pack(fill='x', padx=14, pady=5)
             self.label(card, mission['title'], 15, bold=True)
-            self.label(card, '  ·  '.join(v for v in (mission['faction'], mission['system']) if v), color=ACCENT)
-            self.label(card, f"Required rank: {mission['standing'] or 'Not specified'}  ·  Cooldown: {mission['cooldown']} min", 12, MUTED)
-            self.label(card, f"Reward roll: {mission['chance']}% for a pool of {mission['pool_size']} blueprints. This is not an individual blueprint drop rate.", 12, MUTED)
-            if mission['illegal']:
+            self.label(card, f"Organization: {mission['faction'] or 'Independent'}  ·  Location: {mission['system'] or 'System-wide'}", color=ACCENT)
+            rep_grant = mission.get('reputation') or (f"+{mission.get('rep_gain', 0)} Standing" if mission.get('rep_gain') else 'Standard payout')
+            self.label(card, f"Required rank: {mission['standing'] or 'Neutral (Open to all)'}  ·  Reputation granted: {rep_grant}", 12, MUTED)
+            self.label(card, f"Blueprint roll: {mission['chance']}%  ·  1 of {mission['pool_size']} in pool  ·  Cooldown: {mission['cooldown']} min", 12, MUTED)
+            if mission.get('illegal'):
                 self.label(card, 'Illegal contract', 12, GOLD)
-            if mission['once_only']:
+            if mission.get('once_only'):
                 self.label(card, 'Once-only contract', 12, GOLD)
             ctk.CTkButton(card, text='Mission briefing & reward pool', fg_color='transparent', anchor='w',
                           command=lambda m=mission: self.show_mission(m)).pack(fill='x', padx=8, pady=5)

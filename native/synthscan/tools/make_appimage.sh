@@ -34,7 +34,7 @@ mkdir -p "$APPDIR/usr/bin" "$APPDIR/usr/share/applications" "$APPDIR/usr/share/i
 cp "$BUILD/bedrock" "$APPDIR/usr/bin/bedrock"
 # the app token lies beside the program, not in it (CMakeLists.txt)
 [ -f "$BUILD/uex_token.dat" ] && cp "$BUILD/uex_token.dat" "$APPDIR/usr/bin/uex_token.dat"
-cp "$SRC/resources/linux/bedrock.desktop" "$APPDIR/usr/share/applications/"
+cp "$SRC/resources/linux/synthscan.desktop" "$APPDIR/usr/share/applications/"
 cp "$SRC/resources/icon_256.png" "$APPDIR/usr/share/icons/hicolor/256x256/apps/bedrock.png"
 # the licences travel with the binary, as they do beside Bedrock.exe
 mkdir -p "$APPDIR/usr/share/doc/bedrock"

@@ -1,0 +1,2 @@
+# Offline artwork refresh only; regular gameplay does not need an SVG renderer.
+resvg-py==0.5.0

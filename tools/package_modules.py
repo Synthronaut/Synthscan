@@ -32,7 +32,7 @@ OWNERS = {
     'server_history': {'server_log_manager.py','SERVER_HISTORY.md'},
     'people': {'companion_features.py','companion_toasts.py','party_invites.py'},
     'piracy': {'piracy_watch.py','snare_alert_ui.py','assets/snare_watch.wav'},
-    'missions': {'mission_hud.py','mission_log.py','mission_log_service.py','mission_log_report.py','mission_capture.py'},
+    'missions': {'mission_hud.py','mission_log.py','mission_log_service.py','mission_log_report.py','mission_analytics.py','mission_capture.py'},
     'hangars': {'executive_hangar.py','executive_hangar_hud.py','hangar_card.py','hangar_verification.py','hangar_reset_feed.py','compboard_inventory.py','data/executive_hangar_schedule.json'},
     'daylight': {'daylight.py','daylight_catalogue.py','daylight_planner.py','data/daylight_catalogue.json'},
     'acceptance': {'contract_share.py','contract_share_helper.py'},

@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
 import re
 import time
@@ -20,6 +21,17 @@ import xml.etree.ElementTree as ET
 from telemetry_ipc import read_shared_json, publish_json
 
 ROOT = Path(__file__).resolve().parent
+ORACLE_MANIFEST_URL = 'https://synthscan.158-101-88-35.sslip.io/data/manifest.json'
+ORACLE_BASE_URL = 'https://synthscan.158-101-88-35.sslip.io'
+ORACLE_FILE_MAP = {
+    'blueprints_catalog.json': ROOT / 'blueprints_catalog.json',
+    'crafting_recipes.json': ROOT / 'crafting_recipes.json',
+    'mining_hardware.json': ROOT / 'data/mining_hardware.json',
+    'material_qualities.json': ROOT / 'data/material_qualities.json',
+    'wikelo_data.json': ROOT / 'data/wikelo_data.json',
+    'executive_hangar_schedule.json': ROOT / 'data/executive_hangar_schedule.json',
+    'daylight_catalogue.json': ROOT / 'data/daylight_catalogue.json',
+}
 INTERVAL = 6 * 3600
 RETRY = 300
 LIMIT = 4 * 1024 * 1024
@@ -156,11 +168,54 @@ def local_reference_status():
                     detail='No complete local reference generation is available. Rebuild local references.')
 
 
+def sync_oracle_hub():
+    """Download and verify updated catalogs from the SynthScan data hub."""
+    manifest = json.loads(download(ORACLE_MANIFEST_URL, limit=1024 * 1024).decode('utf-8'))
+    files = manifest.get('files') or {}
+    if not isinstance(files, dict) or not files:
+        raise ValueError('Empty data hub manifest')
+    updated = []
+    for name, dest in ORACLE_FILE_MAP.items():
+        meta = files.get(name)
+        if not isinstance(meta, dict):
+            continue
+        expected = meta.get('sha256', '')
+        rel_url = meta.get('url', '')
+        if not re.fullmatch(r'[a-f0-9]{64}', expected) or not rel_url.startswith('/data/'):
+            continue
+        if dest.exists() and hashlib.sha256(dest.read_bytes()).hexdigest() == expected:
+            continue
+        raw = download(ORACLE_BASE_URL + rel_url, limit=16 * 1024 * 1024)
+        if hashlib.sha256(raw).hexdigest() != expected:
+            raise ValueError(f'Checksum mismatch for {name}')
+        json.loads(raw.decode('utf-8'))
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        tmp = dest.with_suffix(dest.suffix + '.tmp')
+        tmp.write_bytes(raw)
+        os.replace(tmp, dest)
+        updated.append(name)
+    if 'blueprints_catalog.json' in updated:
+        try:
+            from synthstrings_sync import sync_blueprints_to_global_ini
+            sync_blueprints_to_global_ini()
+        except Exception:
+            pass
+    rev = str(manifest.get('updated_at') or '')
+    ver = str(manifest.get('game_version') or 'unknown')
+    if updated:
+        detail = f"Updated {', '.join(updated)} for Star Citizen {ver}."
+        status = 'updated'
+    else:
+        detail = f"All {len(ORACLE_FILE_MAP)} catalogs match Star Citizen {ver}."
+        status = 'current'
+    return dict(status=status, revision=rev, detail=detail)
+
+
 class DataUpdateService:
     def __init__(self, directory, checks=None, local_check=local_reference_status,exclusive=False):
         self.directory = Path(directory)
         self.path = self.directory / 'data_update_status.json'
-        self.checks = checks if checks is not None else {'bedrock':check_bedrock,'extractor':check_extractor}
+        self.checks = checks if checks is not None else {'oracle_hub':sync_oracle_hub,'bedrock':check_bedrock,'extractor':check_extractor}
         self.app_updates=None;self.reference_sources=None
         if checks is None:
             from app_updates import AppUpdateService
@@ -289,7 +344,7 @@ def status_lines(directory, now=None):
     if state.get('rebuilding'):lines+=['Rebuilding references in the background…','']
     elif state.get('deferred'):lines+=['Local rebuild will start after Star Citizen closes.','']
     elif state.get('refresh_result'):lines += [state['refresh_result'],'']
-    names = {'synthscan':'SynthScan application','bedrock': 'Bedrock mining / crafting tables', 'scmdb': 'SCMDB', 'extractor': 'Game-file extractor'}
+    names = {'synthscan':'SynthScan application','oracle_hub':'SynthScan data hub','bedrock': 'Bedrock mining / crafting tables', 'scmdb': 'SCMDB', 'extractor': 'Game-file extractor'}
     sources=state.get('sources',{})
     if not isinstance(sources,dict):sources={}
     for key, name in names.items():

@@ -10,6 +10,7 @@
 #include <commctrl.h>
 #include <uxtheme.h>
 #include <shellapi.h>
+#include <commdlg.h>
 #include <gdiplus.h>
 #include <algorithm>
 #include <ctime>
@@ -27,7 +28,7 @@ namespace SynthCompanion {
 namespace {
 using namespace SynthScan;
 HWND page=nullptr;HFONT font=nullptr;std::filesystem::path folder;
-std::string mode,lastState,selected,selectedWatch;Json model;
+std::string mode,lastState,lastWebExtra,selected,selectedWatch;Json model;
 std::vector<Json> people,actionRows,items,notices;bool filling=false;double lastLoad=0;
 std::vector<std::string> selectedIds;
 std::vector<std::string> actionEditorIds;std::string tagOptions;
@@ -238,6 +239,42 @@ void handleWebViewCommand(const Json& command){
         cmd.members.push_back({"at",num(now())});
         std::error_code error;std::filesystem::create_directories(folder/L"daylight_commands",error);
         write(folder/L"daylight_commands"/(std::wstring(id,id+strlen(id))+L".json"),cmd);
+        return;
+    }
+    if(action.rfind("mission_",0)==0){
+        if(folder.empty())folder=SCMiner::AppPaths::data();
+        Json cmd;
+        if(action=="mission_view"){
+            cmd=obj({{"action",str("view")},{"query",str(command.textOr("query"))},{"mode",str(command.textOr("mode"))},
+                     {"outcome",str(command.textOr("outcome"))},{"direction",str(command.textOr("direction"))},
+                     {"category",str(command.textOr("category"))},{"current_session",SynthScan::boolean(flag(command,"current_session"))},
+                     {"offset",num(std::max(0.0,command.numberOr("offset")))}});
+        }else if(action=="mission_classify"){
+            cmd=obj({{"action",str("classify_wallet")},{"change_id",str(command.textOr("change_id"))},{"category",str(command.textOr("category"))}});
+        }else if(action=="mission_export"){
+            const std::string format=command.textOr("format");
+            if(format!="csv"&&format!="json"&&format!="html")return;
+            const std::wstring ext=wide(format);
+            wchar_t path[32768]{};swprintf_s(path,L"SynthScan mission and wallet report.%s",ext.c_str());
+            OPENFILENAMEW dialog{sizeof(dialog)};dialog.hwndOwner=page;dialog.lpstrFile=path;dialog.nMaxFile=32768;
+            dialog.lpstrFilter=format=="csv"?L"CSV data\0*.csv\0":format=="json"?L"JSON with source observations\0*.json\0":L"Readable HTML report\0*.html\0";
+            dialog.lpstrDefExt=ext.c_str();dialog.Flags=OFN_OVERWRITEPROMPT|OFN_NOCHANGEDIR|OFN_PATHMUSTEXIST;
+            if(!GetSaveFileNameW(&dialog))return;
+            cmd=obj({{"action",str("export")},{"path",str(utf8(path))}});
+        }else return;
+        static unsigned missionSequence=0;
+        auto id=std::to_string(GetTickCount64())+"-"+std::to_string(GetCurrentProcessId())+"-"+std::to_string(++missionSequence);
+        cmd.members.push_back({"id",str(id)});
+        auto commands=folder/L"mission_log_commands";std::error_code error;std::filesystem::create_directories(commands,error);
+        write(commands/std::filesystem::u8path(id+".json"),cmd);
+        return;
+    }
+    if(action.rfind("piracy_",0)==0){
+        if(folder.empty())folder=SCMiner::AppPaths::data();
+        Json cmd=command;
+        cmd.members.push_back({"owner_pid",num(GetCurrentProcessId())});
+        cmd.members.push_back({"at",num(now())});
+        write(folder/L"piracy_command.json",cmd);
         return;
     }
     queue(command);
@@ -474,14 +511,28 @@ void refresh(bool force=false){
     model=next;lastState=serialized;
     if(mode=="people"){if(changed||force)renderPeople();else selection();}
     else if(changed||force){renderMarket();if(force||items.empty())catalog();}
-    if(SynthWebView::active()&&(changed||force)){
+    if(SynthWebView::active()){
         if(items.empty())catalog();
-        Json marketItems=arr();for(const auto& item:items)marketItems.items.push_back(item);
         Json homeOverview=read(folder/L"home_overview.json",2*1024*1024);
         Json daylightState=read(folder/L"daylight_state.json",4*1024*1024);
+        Json sess=read(folder/L"session_state.json",4*1024*1024);
+        Json piracyPayload=obj({
+            {"flight", field(sess,"flight")},
+            {"piracy_watch", field(sess,"piracy_watch")},
+            {"session_token", field(sess,"session_token")},
+            {"server_joined", field(sess,"server_joined")},
+            {"account_handle", field(sess,"account_handle")},
+            {"game_running", field(sess,"game_running")}
+        });
         const std::string pageName = SynthHome::selectedPage();
         const std::string snapMode = (!pageName.empty() && pageName != "home" && pageName != "people" && pageName != "buyer_alerts") ? pageName : mode;
-        SynthWebView::pushSnapshot(snapMode, model, marketItems, homeOverview, daylightState);
+        Json missionState=snapMode=="mission_log"?read(folder/L"mission_log_view.json",32*1024*1024):obj({});
+        const std::string extraSig = snapMode + "|" + encode(homeOverview) + "|" + encode(daylightState) + "|" + encode(piracyPayload) + "|" + encode(missionState);
+        if(changed || force || extraSig != lastWebExtra){
+            lastWebExtra = extraSig;
+            Json marketItems=arr();for(const auto& item:items)marketItems.items.push_back(item);
+            SynthWebView::pushSnapshot(snapMode, model, marketItems, homeOverview, daylightState, piracyPayload, missionState);
+        }
     }
 }
 void createControls(){
@@ -624,7 +675,7 @@ int stylePreview(const std::filesystem::path& output){
         SynthGlass::panel(g,{14,14,196,812},false,false,18);
         SynthGlass::rounded(g,{31,33,36,36},Gdiplus::Color(255,35,52,64),11);SynthGlass::icon(g,"directory",{38,40,22,22});SynthGlass::text(g,L"SynthScan",{79,33,120,35},20,SynthGlass::Ink,true);
         SynthGlass::text(g,L"YOUR VERSE, CONNECTED",{33,79,170,20},9,SynthGlass::Muted);
-        const std::vector<std::pair<std::wstring,std::string>> nav={{L"Home","home"},{L"Item & Ship Finder","directory"},{L"Citizens","people"},{L"Server History","servers"},{L"Blueprint Library","blueprints"},{L"Mining Tools","planner"},{L"Refinery","refinery"},{L"Piracy","hud_piracy"},{L"Day/Night Forecast","daylight"},{L"Automatic Acceptance","acceptance"},{L"Settings","settings"}};
+        const std::vector<std::pair<std::wstring,std::string>> nav={{L"Home","home"},{L"Item & Ship Finder","directory"},{L"Citizens","people"},{L"Server History","servers"},{L"Blueprint Library","blueprints"},{L"Mining Tools","planner"},{L"Refinery","refinery"},{L"Piracy / Flight","hud_piracy"},{L"Day/Night Forecast","daylight"},{L"Automatic Acceptance","acceptance"},{L"Fate Roulette","roulette"},{L"Settings","settings"}};
         float ny=120;for(const auto& n:nav){bool on=n.second=="people";if(on)SynthGlass::panel(g,{24,ny,176,37},true,false,10);SynthGlass::icon(g,n.second,{37,ny+10,17,17},on?SynthGlass::Accent:SynthGlass::Muted);SynthGlass::text(g,n.first,{66,ny,128,37},11.5f,on?SynthGlass::Ink:SynthGlass::Muted,on);ny+=45;}
         SynthGlass::text(g,L"Citizens",{242,30,600,45},30,SynthGlass::Ink,true);SynthGlass::text(g,L"A familiar face in a very large universe.",{243,79,700,24},13,SynthGlass::Muted);
         SynthGlass::panel(g,{242,123,561,38},false,false,10);SynthGlass::icon(g,"search",{255,133,18,18});SynthGlass::text(g,L"Filter this list by handle or tag",{285,123,500,38},13,SynthGlass::Muted);

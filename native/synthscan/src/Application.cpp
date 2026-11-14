@@ -1021,14 +1021,16 @@ void Application::runWithGUI(HINSTANCE hInstance) {
         GetWindowThreadProcessId(GetForegroundWindow(),&foregroundPid);
         const bool usingInterface=foregroundPid==GetCurrentProcessId();
         const bool scanAvailable=!usingInterface&&SynthScan::gameAvailable();
+        static bool wasScanAvailable=false;
+        if(wasScanAvailable&&!scanAvailable)screenCapture_.releaseWindowCapture();
+        wasScanAvailable=scanAvailable;
         if(signatureReadingExpired(signatureAutomatic_,lastRecognizedSignature_,
                 std::chrono::duration<double>(std::chrono::steady_clock::now()-signatureSeenAt_).count())){
             lastRecognizedSignature_=0;signatureAutomatic_=false;agreedValue_=0;
             hasLastLabel_=false;lockPatch_.release();
             gui_->updateResults(0,{},-1.0,false);
         }
-        // ...and a refinery's terminal, at a station that has one
-        if(!usingInterface&&(scanAvailable||SynthScan::activityMode()))lookForRefinery();
+        // Refinery terminal OCR is parked until revisited; keep OCR gated to when the Mining HUD is open.
         handRefineryOrdersToUex();
         serviceRefineryShare();
 
@@ -1051,7 +1053,10 @@ void Application::runWithGUI(HINSTANCE hInstance) {
         // Single scan
         if (scanRequested_) {
             scanRequested_ = false;
-            processScanWithGUI();
+            if (scanAvailable) {
+                processScanWithGUI();
+                if (!liveModeActive_) screenCapture_.releaseWindowCapture();
+            }
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(10));

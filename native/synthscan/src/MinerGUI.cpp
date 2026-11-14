@@ -1113,7 +1113,7 @@ void MinerGUI::createControls() {
         0, 0, 10, 10, hwnd_, (HMENU)ID_BTN_KEYS, hInstance_, nullptr);
 
     CreateWindowW(L"BUTTON",L"Mining",btnStyle,0,0,10,10,hwnd_,(HMENU)31810,hInstance_,nullptr);
-    CreateWindowW(L"BUTTON",L"Piracy",btnStyle,0,0,10,10,hwnd_,(HMENU)31811,hInstance_,nullptr);
+    CreateWindowW(L"BUTTON",L"Piracy / Flight",btnStyle,0,0,10,10,hwnd_,(HMENU)31811,hInstance_,nullptr);
     CreateWindowW(L"BUTTON",L"Missions",btnStyle,0,0,10,10,hwnd_,(HMENU)31813,hInstance_,nullptr);
     CreateWindowW(L"BUTTON",L"Hangars",btnStyle,0,0,10,10,hwnd_,(HMENU)31818,hInstance_,nullptr);
     CreateWindowW(L"BUTTON",L"Finder",btnStyle,0,0,10,10,hwnd_,(HMENU)31819,hInstance_,nullptr);
@@ -2225,6 +2225,14 @@ bool MinerGUI::processMessages() {
         // Dispatch its messages once, directly; IsDialogMessage on the HUD
         // consumes ordinary letters before the search edit receives them.
         if(SynthScan::finderOwnsInput(msg.hwnd)){TranslateMessage(&msg);DispatchMessage(&msg);continue;}
+        // Blueprint library owns text search input. Dispatch its keyboard
+        // and mouse messages directly so IsDialogMessage on the HUD does not
+        // consume ordinary characters before the search field receives them.
+        if (crafting_ && (msg.hwnd == crafting_ || IsChild(crafting_, msg.hwnd))) {
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+            continue;
+        }
         // Buttons and menus own app actions. Escape and Alt+F4 must not
         // close an app window if it receives focus during play.
         if ((msg.message == WM_KEYDOWN || msg.message == WM_SYSKEYDOWN) &&
@@ -10584,6 +10592,7 @@ LRESULT MinerGUI::handleCraftingMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
             }
             return 0;
         case WM_LBUTTONDOWN: {
+            SetFocus(hwnd);
             const float px = (float)(short)LOWORD(lParam);
             const float py = (float)(short)HIWORD(lParam);
             if (cartPickOpen_) {
@@ -12408,6 +12417,7 @@ LRESULT MinerGUI::handlePlannerMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPAR
             if (HWND p = GetParent(hwnd)) return SendMessageW(p, uMsg, wParam, lParam);
             break;
         case WM_LBUTTONDOWN: {
+            SetFocus(hwnd);
             const float px = (float)(short)LOWORD(lParam);
             const float py = (float)(short)HIWORD(lParam);
             // Report to UEX, while it is up, takes every click: its buttons,
@@ -15924,6 +15934,7 @@ LRESULT MinerGUI::handleGrindMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
             return 0;
         }
         case WM_LBUTTONDOWN: {
+            SetFocus(hwnd);
             const float px = (float)(short)LOWORD(lParam);
             const float py = (float)(short)HIWORD(lParam);
             // A click anywhere but in the finder gives the keys back to the
@@ -16328,6 +16339,7 @@ LRESULT MinerGUI::handleRefineryMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
         case WM_ERASEBKGND:
             return 1;
         case WM_LBUTTONDOWN: {
+            SetFocus(hwnd);
             const float px = (float)(short)LOWORD(lParam);
             const float py = (float)(short)HIWORD(lParam);
             if (refineryMethodOpen_) {

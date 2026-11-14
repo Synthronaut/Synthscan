@@ -2165,18 +2165,18 @@ body,
 
 .ss-mission-kpis {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 10px;
 }
 
 .ss-mission-analytics {
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.2fr) minmax(0, 0.9fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 12px;
 }
 
 .ss-mission-analytics .ss-card {
-  min-height: 250px;
+  min-height: 220px;
 }
 
 .ss-faction-bars {
@@ -2198,6 +2198,169 @@ body,
   align-items: center;
   gap: 6px;
   font-size: 12px;
+}
+
+.ss-faction-top-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ss-rank-pill {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(98, 204, 255, 0.12);
+  border: 1px solid rgba(98, 204, 255, 0.35);
+  color: #62ccff;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
+
+.ss-rank-pill-promo {
+  background: rgba(255, 196, 77, 0.18);
+  border-color: rgba(255, 196, 77, 0.55);
+  color: #ffc44d;
+  font-weight: bold;
+}
+
+.ss-faction-rank-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 3px 0 2px 0;
+  background: rgba(14, 18, 26, 0.6);
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(154, 185, 206, 0.1);
+}
+
+.ss-rank-tier-labels {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  flex-wrap: wrap;
+}
+
+.ss-rank-next-arrow {
+  color: #8895a4;
+  font-size: 9px;
+}
+
+.ss-rank-next-target {
+  color: #dbe2ea;
+  font-weight: 600;
+  font-size: 11px;
+}
+
+.ss-rank-needed {
+  color: #8895a4;
+  font-size: 10.5px;
+  margin-left: auto;
+}
+
+.ss-rank-next-note {
+  font-size: 10.5px;
+  color: #8895a4;
+}
+
+.ss-rank-max {
+  color: #53d09f;
+  font-weight: 600;
+}
+
+.ss-rank-track {
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.ss-rank-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #62ccff, #ffc44d);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.ss-mission-promotions-banner {
+  background: rgba(255, 196, 77, 0.08);
+  border: 1px solid rgba(255, 196, 77, 0.3);
+  border-radius: 9px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+}
+
+.ss-promotion-banner-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.ss-promotion-banner-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ss-promotion-banner-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(15, 20, 28, 0.7);
+  border: 1px solid rgba(255, 196, 77, 0.22);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+
+.ss-promotion-icon {
+  font-size: 18px;
+}
+
+.ss-promotion-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.ss-promotion-headline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.ss-promotion-rank-badge {
+  background: rgba(255, 196, 77, 0.2);
+  border: 1px solid rgba(255, 196, 77, 0.45);
+  color: #ffc44d;
+  font-weight: bold;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10.5px;
+}
+
+.ss-promotion-sub {
+  font-size: 11px;
+  color: #8895a4;
+}
+
+.ss-promotion-time {
+  font-size: 10.5px;
+  color: #8895a4;
+  margin-left: auto;
+}
+
+.ss-row-promotion {
+  background: rgba(255, 196, 77, 0.06);
 }
 
 .ss-chart-box {
@@ -2249,9 +2412,9 @@ body,
   margin-top: 8px;
 }
 
-/* Balance history chart card */
+/* Balance history chart card — sits right under KPIs */
 .ss-mission-balance-card {
-  margin-top: 10px;
+  /* no extra margin needed; gap from ss-mission-root handles spacing */
 }
 
 .ss-chart-balance {
@@ -2283,23 +2446,32 @@ body,
 }
 
 .ss-ledger-card {
-  min-height: 420px;
+  min-height: 300px;
 }
 
 .ss-ledger-toolbar {
   flex-wrap: wrap;
 }
 
-.ss-ledger-split {
+/* Full-width by default; gains split class when evidence pane opens */
+.ss-ledger-body {
   display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(260px, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   min-height: 0;
 }
 
+.ss-ledger-body.ss-ledger-body-split {
+  grid-template-columns: minmax(0, 1.8fr) minmax(260px, 0.8fr);
+}
+
 .ss-ledger-scroll {
-  max-height: 440px;
+  max-height: 540px;
   overflow: auto;
+}
+
+.ss-ledger-body.ss-ledger-body-split .ss-ledger-scroll {
+  max-height: 460px;
 }
 
 .ss-ledger-table tr.is-selected td {
@@ -2308,6 +2480,17 @@ body,
 
 .ss-ledger-table tbody tr[data-entry-id] {
   cursor: pointer;
+}
+
+/* Middle-ground density: 12px font, 4px 8px padding — readable but compact */
+.ss-ledger-table td,
+.ss-ledger-table th {
+  font-size: 12px;
+  padding: 4px 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 260px;
 }
 
 .ss-session-divider td {
@@ -2350,9 +2533,7 @@ body,
   flex-direction: column;
   gap: 8px;
   min-height: 0;
-}
-
-.ss-ledger-detail {
+}.ss-ledger-detail {
   margin: 0;
   flex: 1;
   max-height: 400px;

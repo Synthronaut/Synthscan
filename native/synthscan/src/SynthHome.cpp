@@ -160,7 +160,7 @@ void paint(HDC target=nullptr){
         std::wstring heading=L"Home";
         for(const auto& button:buttons)if(button.navigation&&button.action==activePage)heading=button.label;
         words(g,heading,224,30,main,40,29,INK,true);
-        words(g,activePage=="home"?L"Find your next upgrade. See what you've accomplished.":activePage=="people"?L"A familiar face in a very large universe.":activePage=="executive_hangar"?L"Watch the window. Keep your next full set ready.":activePage=="planner"?L"Ore finder, location presets, rock memories and hauls.":L"",224,76,main,28,13,MUTED);
+        words(g,activePage=="home"?L"Find your next upgrade. See what you've accomplished.":activePage=="people"?L"A familiar face in a very large universe.":activePage=="executive_hangar"?L"Watch the window. Keep your next full set ready.":activePage=="planner"?L"Ore finder, location presets, rock memories and hauls.":activePage=="roulette"?L"Let fate decide your next challenge in the verse.":L"",224,76,main,28,13,MUTED);
         if(activePage=="home"){
         words(g,L"SESSION RECAP",224,241,main-300,24,11,ACCENT,true);
         const Json& session=field(overview,previous?"previous":"current");
@@ -250,8 +250,8 @@ void create(){
         info.rcWork.left+(info.rcWork.right-info.rcWork.left-width)/2,info.rcWork.top+(info.rcWork.bottom-info.rcWork.top-height)/2,width,height,nullptr,nullptr,cls.hInstance,nullptr);
     BOOL dark=TRUE;DwmSetWindowAttribute(window,20,&dark,sizeof(dark));
     SynthPages::initialize(window);
-    const wchar_t* names[]={L"Home",L"Item & Ship Finder",L"Citizens",L"Mission & Wallet Log",L"Server History",L"Blueprint Library",L"Mining Tools",L"Refinery",L"Executive Hangar",L"Piracy",L"Day/Night Forecast",L"Automatic Acceptance",L"Settings"};
-    const char* actions[]={"home","directory","people","mission_log","servers","blueprints","planner","refinery","executive_hangar","hud_piracy","daylight","acceptance","settings"};
+    const wchar_t* names[]={L"Home",L"Item & Ship Finder",L"Citizens",L"Mission & Wallet Log",L"Server History",L"Blueprint Library",L"Mining Tools",L"Refinery",L"Executive Hangar",L"Piracy / Flight",L"Day/Night Forecast",L"Automatic Acceptance",L"Fate Roulette",L"Settings"};
+    const char* actions[]={"home","directory","people","mission_log","servers","blueprints","planner","refinery","executive_hangar","hud_piracy","daylight","acceptance","roulette","settings"};
     for(int i=0;i<int(sizeof(names)/sizeof(names[0]));i++)add(strcmp(actions[i],"settings")==0?114:100+i,names[i],actions[i],true);
     add(200,L"Mining HUD\nAutomatic scan reading","hud_mining",false);add(201,L"Finder HUD\nShops & player market","hud_finder",false);
     add(202,L"Missions HUD\nContracts & reputation","hud_missions",false);add(203,L"Hangars HUD\nContested-zone timing","hud_hangars",false);
@@ -356,6 +356,10 @@ bool routeMessage(MSG& message){
                 return true;
             }
         }
+    }
+    if(activePage=="blueprints"){
+        HWND current=SynthPages::current();
+        if(current&&(message.hwnd==current||IsChild(current,message.hwnd)))return false;
     }
     return window&&(message.hwnd==window||IsChild(window,message.hwnd))&&IsDialogMessage(window,&message);
 }

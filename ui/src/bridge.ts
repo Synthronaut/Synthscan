@@ -123,13 +123,230 @@ export interface HomeOverviewState {
   };
 }
 
+export interface DaylightSyncState {
+  state: 'idle' | 'checking' | 'ok' | 'offline';
+  at?: number;
+  message?: string;
+}
+
+export interface DaylightCalibrationEntry {
+  phase_offset: number;
+  quality: string;
+  calibrated: boolean;
+}
+
+export interface DaylightNotice {
+  id?: string;
+  ok: boolean;
+  message: string;
+}
+
+export interface DaylightState {
+  kind?: string;
+  schema?: number;
+  revision?: number;
+  written_at?: number;
+  owner_pid?: number;
+  catalogue?: {
+    schema?: number;
+    source?: string;
+    signature?: string;
+    checked_at?: number;
+    bodies?: import('./daylight_math').BodyRecord[];
+    sites?: import('./daylight_math').SiteRecord[];
+  };
+  calibration?: Record<string, DaylightCalibrationEntry>;
+  preferences?: {
+    system?: string;
+    body?: string;
+    site?: string;
+  };
+  build?: {
+    available?: boolean;
+    patch?: string;
+  };
+  sync?: DaylightSyncState;
+  notice?: DaylightNotice;
+}
+
+export interface FleetShipEntry {
+  name: string;
+  mfg: string;
+  color?: string;
+  sorties: number;
+  seconds: number;
+  jumps: number;
+  contracts: number;
+  losses: number;
+  pct: number;
+}
+
+export interface FlightSortieEntry {
+  ship: string;
+  mfg: string;
+  color?: string;
+  duration_s: number;
+  jumps: number;
+  contracts: number;
+  destination?: string;
+  incident?: string;
+  reason?: string;
+  time: string;
+}
+
+export interface FlightState {
+  state?: 'ON_FOOT' | 'BOARDED' | 'IN_FLIGHT' | string;
+  active_ship?: string;
+  active_mfg?: string;
+  active_color?: string;
+  active_helm_s?: number;
+  active_boarded_s?: number;
+  active_jumps?: number;
+  active_contracts?: number;
+  active_route?: string;
+  jurisdiction?: string;
+  monitored?: boolean | null;
+  entitlements?: number;
+  total_sorties?: number;
+  total_helm_s?: number;
+  total_jumps?: number;
+  total_contracts?: number;
+  total_losses?: number;
+  fleet?: FleetShipEntry[];
+  recent?: FlightSortieEntry[];
+}
+
+export interface PiracyPullEntry {
+  id: string;
+  at: number;
+  target: string;
+  lane: string;
+  outcome: 'catch' | 'escaped' | 'dry' | 'combat' | string;
+  value_uec: number;
+  notes?: string;
+}
+
+export interface PiracyWatchState {
+  waiting_s?: number;
+  waiting_active?: boolean;
+  source?: string;
+  status?: string;
+  timer_note?: string;
+  pulls?: PiracyPullEntry[];
+  pull_stats?: {
+    total: number;
+    catches: number;
+    hit_rate: number;
+    total_loot_uec: number;
+  };
+  flight?: FlightState;
+}
+
+export interface PiracySnapshotPayload {
+  flight?: FlightState;
+  piracy_watch?: PiracyWatchState;
+  session_token?: string;
+  server_joined?: boolean;
+  account_handle?: string;
+  game_running?: boolean;
+}
+
+export interface MissionAnalyticsFaction {
+  name: string;
+  auec: number;
+  missions: number;
+  rep_net: number;
+  avg_per_mission: number | null;
+  standing?: string;
+  next_standing?: string | null;
+  points_to_next?: number;
+  rep_progress_pct?: number;
+  rep_score?: number;
+  scope?: string;
+  is_max_rank?: boolean;
+}
+
+export interface MissionAnalyticsPromotion {
+  faction: string;
+  rank: string;
+  threshold?: number;
+  previous_rank?: string | null;
+  scope: string;
+  scope_display?: string;
+  delta?: number;
+  at: number;
+}
+
+export interface MissionAnalyticsState {
+  totals?: {
+    gains: number;
+    losses: number;
+    net: number;
+    attributed: number;
+    unattributed_gain: number;
+    missions_completed: number;
+  };
+  factions?: MissionAnalyticsFaction[];
+  categories?: { key: string; label: string; gain: number; loss: number }[];
+  daily?: { day: string; gain: number; loss: number; net: number }[];
+  sessions?: { id: string; started_at?: number; ended_at?: number | null; net: number | null; completed: number }[];
+  top_missions?: { title: string; faction: string; auec: number; at: number }[];
+  balance_history?: { at: number; auec: number }[];
+  promotions?: MissionAnalyticsPromotion[];
+  note?: string;
+}
+
+export interface MissionLogEntry {
+  id: string;
+  at: number;
+  session?: string;
+  cells: string[];
+  detail: string;
+  change_id?: string;
+  is_wallet?: boolean;
+  category?: string;
+  is_promotion?: boolean;
+  promotion?: { rank: string; threshold?: number; scope: string };
+}
+
+export interface MissionLogSession {
+  id: string;
+  started_at?: number;
+  ended_at?: number | null;
+  completed?: number;
+  failed?: number;
+  abandoned?: number;
+  active?: number;
+  wallet?: { currency: string; delta: number | null }[];
+}
+
+export interface MissionLogState {
+  columns?: [string, number][];
+  entries?: MissionLogEntry[];
+  display_count?: number;
+  display_offset?: number;
+  display_limit?: number;
+  mode?: string;
+  direction?: string;
+  sessions?: MissionLogSession[];
+  current_session?: string;
+  recording?: boolean;
+  error?: string;
+  wallet_error?: string;
+  note?: string;
+  note_until?: number;
+  analytics?: MissionAnalyticsState;
+  written_at?: number;
+  count?: number;
+}
+
 export interface PeopleSnapshot {
   revision: number;
   owner_pid?: number;
   written_at?: number;
   session: string;
   session_token?: string;
-  mode?: 'people' | 'buyer_alerts' | 'home' | 'settings';
+  mode?: 'people' | 'buyer_alerts' | 'home' | 'settings' | 'daylight' | 'hud_piracy' | 'mission_log';
   players: Player[];
   rows?: Player[];
   action_people?: Player[];
@@ -155,6 +372,9 @@ export interface PeopleSnapshot {
   notifications?: CompanionNotice[];
   market_items?: MarketCatalogItem[];
   home?: HomeOverviewState;
+  daylight?: DaylightState;
+  piracy?: PiracySnapshotPayload;
+  mission?: MissionLogState;
 }
 
 export type DesktopCommandAction =
@@ -181,11 +401,23 @@ export type DesktopCommandAction =
   | 'open_uex_ad'
   | 'strings_settings'
   | 'strings_details'
+  | 'daylight_preferences'
+  | 'daylight_observe'
+  | 'daylight_refresh'
+  | 'daylight_copy_forecast'
+  | 'piracy_toggle_wait'
+  | 'piracy_reset_wait'
+  | 'piracy_log_pull'
+  | 'piracy_delete_pull'
+  | 'mission_view'
+  | 'mission_classify'
+  | 'mission_export'
   | 'navigate';
 
 export interface DesktopCommand {
   action: DesktopCommandAction;
   query?: string;
+  text?: string;
   player_id?: string;
   player_ids?: string[];
   label?: string;
@@ -204,6 +436,24 @@ export interface DesktopCommand {
   watch_id?: string;
   url?: string;
   target?: string;
+  system?: string;
+  body?: string;
+  site?: string;
+  kind?: 'sunrise' | 'sunset';
+  observed_at?: number;
+  signature?: string;
+  lane?: string;
+  outcome?: string;
+  value_uec?: number;
+  notes?: string;
+  pull_id?: string;
+  mode?: string;
+  direction?: string;
+  category?: string;
+  change_id?: string;
+  format?: 'csv' | 'json' | 'html';
+  current_session?: boolean;
+  offset?: number;
 }
 
 export interface DesktopBridge {
@@ -242,6 +492,14 @@ export function validateOutgoingCommand(command: DesktopCommand): void {
     const url = command.url ?? '';
     if (!url.startsWith('https://uexcorp.space/marketplace/item/info/') || /[\r\n\t ]/.test(url)) {
       throw new Error('Invalid UEX advertisement URL');
+    }
+  }
+  if (command.action === 'daylight_observe') {
+    if (!command.system || !command.body || !command.site || !command.kind || typeof command.observed_at !== 'number') {
+      throw new Error('Daylight observation requires system, body, site, kind and observed_at timestamp');
+    }
+    if (command.kind !== 'sunrise' && command.kind !== 'sunset') {
+      throw new Error('Daylight observation kind must be sunrise or sunset');
     }
   }
 }
@@ -287,6 +545,9 @@ export function normalizeSnapshot(raw: Partial<PeopleSnapshot>): PeopleSnapshot 
     search: searchPeople,
     tag_options: raw.tag_options ?? ['Org', 'Friendly', 'Aggressive', 'Trader', 'Friend'],
     action_limit: typeof raw.action_limit === 'number' ? raw.action_limit : ACTION_LIMIT,
+    daylight: raw.daylight,
+    piracy: raw.piracy,
+    mission: raw.mission,
   };
 }
 
@@ -405,6 +666,98 @@ export class InMemoryDesktopBridge implements DesktopBridge {
       this.applyTagUpdate([command.player_id], command.label ?? '', Boolean(command.clear_tags), command.alert);
     } else if (command.action === 'tag_many' && Array.isArray(command.player_ids)) {
       this.applyTagUpdate(command.player_ids, command.label ?? '', Boolean(command.clear_tags));
+    } else if (command.action === 'daylight_preferences' && command.system && command.body && command.site) {
+      const prev = this.snapshot.daylight ?? {};
+      this.publish({
+        daylight: {
+          ...prev,
+          preferences: {
+            system: command.system,
+            body: command.body,
+            site: command.site,
+          },
+        },
+      });
+    } else if (command.action === 'daylight_observe' && command.body && command.kind) {
+      const prev = this.snapshot.daylight ?? {};
+      const cal = { ...(prev.calibration ?? {}) };
+      cal[command.body] = {
+        phase_offset: 0.123,
+        quality: 'Local observation · Just now',
+        calibrated: true,
+      };
+      this.publish({
+        daylight: {
+          ...prev,
+          calibration: cal,
+          notice: {
+            id: 'mock-obs',
+            ok: true,
+            message: `Observation saved. ${command.body} clock adjusted.`,
+          },
+        },
+      });
+    } else if (command.action === 'daylight_refresh') {
+      const prev = this.snapshot.daylight ?? {};
+      this.publish({
+        daylight: {
+          ...prev,
+          sync: {
+            state: 'ok',
+            at: Date.now() / 1000,
+            message: 'Public catalogue checked · timing calibration is separate',
+          },
+        },
+      });
+    } else if (command.action === 'piracy_toggle_wait') {
+      const prev = this.snapshot.piracy ?? {};
+      const watch = { ...(prev.piracy_watch ?? {}) };
+      watch.waiting_active = !watch.waiting_active;
+      watch.waiting_s = watch.waiting_s ?? 0;
+      this.publish({ piracy: { ...prev, piracy_watch: watch } });
+    } else if (command.action === 'piracy_reset_wait') {
+      const prev = this.snapshot.piracy ?? {};
+      const watch = { ...(prev.piracy_watch ?? {}) };
+      watch.waiting_s = 0;
+      this.publish({ piracy: { ...prev, piracy_watch: watch } });
+    } else if (command.action === 'piracy_log_pull') {
+      const prev = this.snapshot.piracy ?? {};
+      const watch = { ...(prev.piracy_watch ?? {}) };
+      const pulls = [...(watch.pulls ?? [])];
+      const nextPull: PiracyPullEntry = {
+        id: `pull-${pulls.length + 1}`,
+        at: Date.now() / 1000,
+        target: command.target ?? 'Unknown Vessel',
+        lane: command.lane ?? 'Open Lane',
+        outcome: command.outcome ?? 'catch',
+        value_uec: command.value_uec ?? 0,
+        notes: command.notes ?? '',
+      };
+      pulls.unshift(nextPull);
+      const catches = pulls.filter((p) => p.outcome === 'catch').length;
+      const totalLoot = pulls.reduce((acc, p) => acc + (p.value_uec ?? 0), 0);
+      watch.pulls = pulls;
+      watch.pull_stats = {
+        total: pulls.length,
+        catches,
+        hit_rate: Math.round((catches / pulls.length) * 100),
+        total_loot_uec: totalLoot,
+      };
+      this.publish({ piracy: { ...prev, piracy_watch: watch } });
+    } else if (command.action === 'piracy_delete_pull' && command.pull_id) {
+      const prev = this.snapshot.piracy ?? {};
+      const watch = { ...(prev.piracy_watch ?? {}) };
+      const pulls = (watch.pulls ?? []).filter((p) => p.id !== command.pull_id);
+      const catches = pulls.filter((p) => p.outcome === 'catch').length;
+      const totalLoot = pulls.reduce((acc, p) => acc + (p.value_uec ?? 0), 0);
+      watch.pulls = pulls;
+      watch.pull_stats = {
+        total: pulls.length,
+        catches,
+        hit_rate: pulls.length > 0 ? Math.round((catches / pulls.length) * 100) : 0,
+        total_loot_uec: totalLoot,
+      };
+      this.publish({ piracy: { ...prev, piracy_watch: watch } });
     }
   }
 
@@ -488,6 +841,9 @@ export class WebViewDesktopBridge implements DesktopBridge {
               (record.market_items as MarketCatalogItem[] | undefined) ??
               stateObj.market_items,
             home: (record.home as HomeOverviewState | undefined) ?? stateObj.home,
+            daylight: (record.daylight as DaylightState | undefined) ?? stateObj.daylight,
+            piracy: (record.piracy as PiracySnapshotPayload | undefined) ?? stateObj.piracy,
+            mission: (record.mission as MissionLogState | undefined) ?? stateObj.mission,
           });
           for (const listener of this.listeners) {
             listener(this.snapshot);

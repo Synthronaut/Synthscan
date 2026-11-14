@@ -18,7 +18,7 @@ constexpr UINT READY=WM_APP+417;
 bool responsivePage(HWND hwnd){
     wchar_t cls[64]{};GetClassNameW(hwnd,cls,64);std::wstring name=cls;
     return name==L"SynthScanCompanion"||name==L"SynthScanMissionLog"||name==L"SynthScanExecutiveHangar"||
-        name==L"SynthScanPrivacy"||name==L"SynthScanWorkspace"||name==L"TkTopLevel";
+        name==L"SynthScanPrivacy"||name==L"SynthScanRoulette"||name==L"SynthScanWorkspace"||name==L"TkTopLevel";
 }
 bool flexibleWidthPage(HWND hwnd){
     wchar_t cls[64]{};GetClassNameW(hwnd,cls,64);std::wstring name=cls;

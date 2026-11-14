@@ -242,7 +242,12 @@ void paint(HWND hwnd){
             }
             if(!loading){
                 FinderCards::Canvas cards{g,w,ui};cards.clipTop=contentTop;cards.clipBottom=h-6*ui;
-                if(row.textOr("kind")=="Blueprint"){
+                const auto& wikelo=field(row,"wikelo_turnin");
+                bool isWikelo=!wikelo.textOr("task").empty()||row.textOr("category")=="Wikelo Barter Ships"||row.textOr("id").find("wikelo-")==0;
+                if(isWikelo){
+                    y=cards.wikeloTurnin(row,y);
+                    y=cards.mounts(row,y);
+                }else if(row.textOr("kind")=="Blueprint"){
                     y=cards.note("Crafting recipe and acquisition sources",y);
                 }else if(playerMarket){
                     if(marketView.numberOr("presentation_schema")==1)y=cards.market(marketView,y,qualityMinimum);
@@ -387,7 +392,7 @@ void prepare(const SCMiner::JsonValue& library){
     for(const auto& row:SynthScan::field(library,"rows").items){
         auto kind=row.textOr("kind");if((kind!="Item"&&kind!="Component"&&kind!="Ship"&&kind!="Vehicle"&&kind!="Market item")||row.textOr("item_id").empty())continue;
         auto name=SynthScan::wide(row.textOr("name"));Row item;item.value=SynthScan::obj({{"id",SynthScan::field(row,"id")},{"item_id",SynthScan::field(row,"item_id")},{"name",SynthScan::field(row,"name")},
-            {"kind",SynthScan::field(row,"kind")},{"category",SynthScan::field(row,"category")},{"ship_stats",SynthScan::field(row,"ship_stats")},{"finder_blueprints",SynthScan::field(row,"finder_blueprints")},{"market_item_id",SynthScan::field(row,"market_item_id")},{"market_identity",SynthScan::field(row,"market_identity")},{"market_board",SynthScan::field(row,"market_board")},{"quality_values",SynthScan::field(row,"quality_values")}});
+            {"kind",SynthScan::field(row,"kind")},{"category",SynthScan::field(row,"category")},{"ship_stats",SynthScan::field(row,"ship_stats")},{"ship_overview",SynthScan::field(row,"ship_overview")},{"finder_blueprints",SynthScan::field(row,"finder_blueprints")},{"market_item_id",SynthScan::field(row,"market_item_id")},{"market_identity",SynthScan::field(row,"market_identity")},{"market_board",SynthScan::field(row,"market_board")},{"quality_values",SynthScan::field(row,"quality_values")}});
         item.name=normalize(name);item.hay=normalize(SynthScan::wide(row.textOr("search",row.textOr("name")+" "+row.textOr("category"))));item.display=name+L" · "+SynthScan::wide(kind);next->push_back(std::move(item));
     }
     std::atomic_store(&index,std::shared_ptr<const Index>(std::move(next)));

@@ -259,7 +259,9 @@ bool allowedAction(const std::string& action) {
         "pause_invites", "resume_invites", "cancel_invites",
         "add_watch", "toggle_watch", "remove_watch", "dismiss_notices",
         "open_uex_ad", "navigate",
-        "daylight_preferences", "daylight_observe", "daylight_refresh"
+        "daylight_preferences", "daylight_observe", "daylight_refresh",
+        "piracy_toggle_wait", "piracy_reset_wait", "piracy_log_pull", "piracy_delete_pull",
+        "mission_view", "mission_classify", "mission_export"
     };
     return allowed.count(action) > 0;
 }
@@ -303,6 +305,8 @@ Json g_pendingState;
 Json g_pendingMarketItems;
 Json g_pendingHome;
 Json g_pendingDaylight;
+Json g_pendingPiracy;
+Json g_pendingMission;
 Json g_suiteResult;
 bool g_hasSuiteResult = false;
 std::wstring g_initialUrl = L"https://synthscan.local/index.html";
@@ -316,7 +320,9 @@ void sendSnapshotMessage() {
         {"state", g_pendingState},
         {"market_items", g_pendingMarketItems},
         {"home", g_pendingHome},
-        {"daylight", g_pendingDaylight}
+        {"daylight", g_pendingDaylight},
+        {"piracy", g_pendingPiracy},
+        {"mission", g_pendingMission}
     });
     auto payload = wide(encode(envelope));
     g_webview->PostWebMessageAsJson(payload.c_str());
@@ -555,12 +561,14 @@ bool attach(HWND parent, const std::filesystem::path& dataFolder, const std::str
     return true;
 }
 
-void pushSnapshot(const std::string& mode, const Json& state, const Json& marketItems, const Json& homeOverview, const Json& daylight) {
+void pushSnapshot(const std::string& mode, const Json& state, const Json& marketItems, const Json& homeOverview, const Json& daylight, const Json& piracy, const Json& mission) {
     g_pendingMode = mode;
     g_pendingState = state;
     g_pendingMarketItems = marketItems;
     g_pendingHome = homeOverview;
     g_pendingDaylight = daylight;
+    g_pendingPiracy = piracy;
+    g_pendingMission = mission;
     sendSnapshotMessage();
 }
 

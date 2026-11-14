@@ -72,7 +72,13 @@ void layout(){
 void selectDetail(){
     int at=ListView_GetNextItem(list,-1,LVNI_SELECTED);const auto& rows=field(model,"entries").items;
     if(at<0||size_t(at)>=rows.size()){SetWindowTextW(detail,L"Select an activity to inspect the balance window, reward comparisons and source coverage.");return;}
-    selected=rows[at].textOr("id");auto body=rows[at].textOr("detail");std::string lines;for(char c:body){if(c=='\n'&&(lines.empty()||lines.back()!='\r'))lines+='\r';lines+=c;}SetWindowTextW(detail,wide(lines).c_str());
+    // Preserve the detail box scroll position when updating the same entry
+    // (e.g. a background classification change) so the user is not jerked back
+    // to the top while reading evidence halfway down.
+    const std::string nextId=rows[at].textOr("id");
+    const int savedLine=(nextId==selected)?int(SendMessageW(detail,EM_GETFIRSTVISIBLELINE,0,0)):0;
+    selected=nextId;auto body=rows[at].textOr("detail");std::string lines;for(char c:body){if(c=='\n'&&(lines.empty()||lines.back()!='\r'))lines+='\r';lines+=c;}SetWindowTextW(detail,wide(lines).c_str());
+    if(savedLine>0)SendMessageW(detail,EM_LINESCROLL,0,savedLine);
 }
 void paintHeader(HWND hwnd,HDC target=nullptr){
     PAINTSTRUCT ps{};HDC dc=target?target:BeginPaint(hwnd,&ps);RECT client{};GetClientRect(hwnd,&client);
@@ -94,6 +100,10 @@ void refresh(){
     bool columnsChanged=columns!=lastColumns,rowsChanged=rows!=lastRows;
     model=std::move(next);
     if(columnsChanged||rowsChanged){
+        // Preserve scroll position across background refreshes so the user
+        // is not snapped back to the top whenever new data arrives.
+        const int savedTop=columnsChanged?0:ListView_GetTopIndex(list);
+        const int savedHoriz=columnsChanged?0:GetScrollPos(list,SB_HORZ);
         filling=true;SendMessageW(list,WM_SETREDRAW,FALSE,0);ListView_DeleteAllItems(list);
         if(columnsChanged){
             while(ListView_DeleteColumn(list,0)){}
@@ -108,7 +118,17 @@ void refresh(){
             }
             if(entries[i].textOr("id")==selected)selection=int(i);
         }
-        if(selection>=0)ListView_SetItemState(list,selection,LVIS_SELECTED|LVIS_FOCUSED,LVIS_SELECTED|LVIS_FOCUSED);
+        if(selection>=0){
+            ListView_SetItemState(list,selection,LVIS_SELECTED|LVIS_FOCUSED,LVIS_SELECTED|LVIS_FOCUSED);
+        } else if(savedTop>0){
+            // No selected row to anchor on; scroll back to where the user was.
+            const int newCount=ListView_GetItemCount(list);
+            const int clampedTop=std::min(savedTop,std::max(0,newCount-1));
+            ListView_EnsureVisible(list,std::min(clampedTop+ListView_GetCountPerPage(list)-1,newCount-1),FALSE);
+            ListView_EnsureVisible(list,clampedTop,FALSE);
+        }
+        // Restore horizontal scroll offset.
+        if(savedHoriz!=0)ListView_Scroll(list,savedHoriz-GetScrollPos(list,SB_HORZ),0);
         SendMessageW(list,WM_SETREDRAW,TRUE,0);InvalidateRect(list,nullptr,TRUE);filling=false;selectDetail();lastRows=rows;lastColumns=columns;
     }
     EnableWindow(control(510),model.numberOr("display_offset")>0);

@@ -1,0 +1,3 @@
+# Optional window-surface capture. Numeric recognition uses the app's existing
+# rapidocr_onnxruntime dependency. Missing WGC falls back to foreground capture.
+windows-capture==2.0.1; sys_platform == "win32"

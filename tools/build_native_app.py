@@ -95,7 +95,7 @@ def main():
         with ThreadPoolExecutor(max_workers=2) as pool:zstd_objects=list(pool.map(compile_zstd,zstd_files))
         cache_path.write_text(json.dumps(next_cache,indent=2))
         resource=BUILD/'app.res'
-        run([SDK/'bin'/VERSION/'x64/rc.exe','/nologo','/fo',resource,*(['/dSYNTHSCAN_NO_SCREEN_READING=1'] if edition=='standard' else []),SOURCE/'resources/bedrock.rc'],SOURCE/'resources')
+        run([SDK/'bin'/VERSION/'x64/rc.exe','/nologo','/fo',resource,*(['/dSYNTHSCAN_NO_SCREEN_READING=1'] if edition=='standard' else []),SOURCE/'resources/synthscan.rc'],SOURCE/'resources')
         binary=BUILD/'SynthScan.exe'
         run([MSVC/'bin/Hostx64/x64/link.exe','/nologo','/OUT:'+str(binary),'/SUBSYSTEM:WINDOWS','/OPT:REF','/Brepro',*objects,resource,
              OPENCV/'x64/vc16/lib/opencv_world4120.lib',*zstd_objects,
@@ -111,12 +111,11 @@ def main():
         ui_src = ROOT/'ui/dist'
         if ui_src.exists():
             ui_dst = OUT.parent/'ui/dist'
-            ui_dst.mkdir(parents=True, exist_ok=True)
-            for f in ui_src.glob('*'):
-                if f.is_file(): safe_copy(f, ui_dst)
+            shutil.rmtree(ui_dst, ignore_errors=True)
+            shutil.copytree(ui_src, ui_dst)
         shutil.copy2(ZSTD_SOURCE.parent/'LICENSE',OUT/'LICENSE-zstd')
         manifest=dict(edition=edition,screen_reading=edition=='full',upstream=json.loads((ROOT/'native/synthscan-upstream.json').read_text())['commit'],
-                      source_files={p.relative_to(SOURCE).as_posix():digest(p) for p in files+list((SOURCE/'include').glob('*.h'))+[SOURCE/'resources/bedrock.rc',SOURCE/'resources/synthscan.ico']},
+                      source_files={p.relative_to(SOURCE).as_posix():digest(p) for p in files+list((SOURCE/'include').glob('*.h'))+[SOURCE/'resources/synthscan.rc',SOURCE/'resources/synthscan.ico']},
                       binary_files={p.name:digest(p) for p in OUT.glob('*') if p.suffix in ('.exe','.dll')},toolchain=dict(msvc=str(MSVC),sdk=VERSION),reproducibility=dict(deterministic=True,path_prefix='SYNTHSCAN'),
                       zstd=json.loads((ROOT/'third_party/build_tools/zstd_source.json').read_text()))
         (OUT/'build_manifest.json').write_text(json.dumps(manifest,indent=2))

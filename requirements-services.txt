@@ -1,0 +1,3 @@
+# Read-only own-account mission and reputation services
+grpcio==1.84.0
+protobuf==7.35.1

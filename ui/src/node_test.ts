@@ -1,4 +1,8 @@
 import { runPeopleRosterRegressionSuite } from './roster_suite';
+import { runDaylightParity, type ParityFixture } from './daylight_parity';
+import { runDaylightRegressionSuite } from './daylight_suite';
+import { runPiracyRegressionSuite } from './piracy_suite';
+import { runMissionRegressionSuite } from './mission_suite';
 
 type Listener = (ev: FakeEvent) => void;
 
@@ -63,17 +67,47 @@ class FakeElement {
   public hidden = false;
   public disabled = false;
   public checked = false;
-  public value = '';
+  private _value: string | undefined = undefined;
   public placeholder = '';
   public scrollTop = 0;
   public scrollLeft = 0;
-  private _textContent = '';
+  public _textContent = '';
   private _innerHTML = '';
   private listeners = new Map<string, Listener[]>();
 
   constructor(tagName: string, doc: FakeDocument) {
     this.tagName = tagName.toUpperCase();
     this.ownerDocument = doc;
+  }
+
+  public get value(): string {
+    if (this._value !== undefined) return this._value;
+    if (this.tagName === 'SELECT') {
+      const options = this.querySelectorAll('option');
+      const selected = options.find((o) => o.hasAttribute('selected')) ?? options[0];
+      return selected ? selected.value : '';
+    }
+    return '';
+  }
+  public set value(v: string) {
+    this._value = String(v ?? '');
+    if (this.tagName === 'SELECT') {
+      for (const opt of this.querySelectorAll('option')) {
+        if (opt.value === v) {
+          opt.setAttribute('selected', '');
+        } else {
+          opt.removeAttribute('selected');
+        }
+      }
+    }
+  }
+
+  public hasAttribute(name: string): boolean {
+    return this.attributes.has(name);
+  }
+
+  public removeAttribute(name: string): void {
+    this.attributes.delete(name);
   }
 
   public get id(): string {
@@ -103,10 +137,8 @@ class FakeElement {
   }
 
   public get textContent(): string {
-    if (this.children.length > 0) {
-      return this.children.map((c) => c.textContent).join('');
-    }
-    return this._textContent;
+    const childText = this.children.map((c) => c.textContent).join(' ');
+    return [childText, this._textContent].filter(Boolean).join(' ').trim();
   }
   public set textContent(v: string) {
     this.children = [];
@@ -227,25 +259,31 @@ class FakeElement {
     if (s.startsWith('#')) {
       return this.id === s.slice(1);
     }
-    if (s.startsWith('.')) {
-      return this.classList.contains(s.slice(1));
-    }
-    const attrMatch = /^([a-zA-Z0-9_-]+)?\[([a-zA-Z0-9_-]+)(?:="([^"]*)")?\]$/.exec(s);
-    if (attrMatch) {
-      const [, tag, attr, val] = attrMatch;
+    const combinedMatch = /^(?:([a-zA-Z0-9_-]+))?(?:\.([a-zA-Z0-9_.-]+))?(?:\[([a-zA-Z0-9_-]+)(?:="([^"]*)")?\])?$/.exec(s);
+    if (combinedMatch && (combinedMatch[1] || combinedMatch[2] || combinedMatch[3])) {
+      const [, tag, classChain, attr, val] = combinedMatch;
       if (tag && this.tagName !== tag.toUpperCase()) return false;
-      const hasAttr =
-        attr.startsWith('data-')
+      if (classChain) {
+        const parts = classChain.split('.').filter(Boolean);
+        if (!parts.every((p) => this.classList.contains(p))) return false;
+      }
+      if (attr) {
+        const hasAttr = attr.startsWith('data-')
           ? this.dataset[attr.slice(5).replace(/-([a-z])/g, (_, c: string) => c.toUpperCase())] !== undefined
           : this.attributes.has(attr);
-      if (!hasAttr) return false;
-      if (val !== undefined) {
-        const actual = attr.startsWith('data-')
-          ? this.dataset[attr.slice(5).replace(/-([a-z])/g, (_, c: string) => c.toUpperCase())]
-          : this.attributes.get(attr);
-        return actual === val;
+        if (!hasAttr) return false;
+        if (val !== undefined) {
+          const actual = attr.startsWith('data-')
+            ? this.dataset[attr.slice(5).replace(/-([a-z])/g, (_, c: string) => c.toUpperCase())]
+            : this.attributes.get(attr);
+          if (actual !== val) return false;
+        }
       }
       return true;
+    }
+    if (s.startsWith('.')) {
+      const parts = s.split('.').filter(Boolean);
+      return parts.every((p) => this.classList.contains(p));
     }
     return this.tagName === s.toUpperCase();
   }
@@ -296,8 +334,9 @@ function parseHtmlInto(root: FakeElement, html: string): void {
     const [full, rawTag, rawAttrs, textNode] = match;
     const current = stack[stack.length - 1];
     if (textNode !== undefined) {
-      if (current.children.length === 0 && textNode.trim().length > 0) {
-        current.textContent = textNode.trim();
+      const trimmed = textNode.trim();
+      if (trimmed.length > 0) {
+        current._textContent = current._textContent ? current._textContent + ' ' + trimmed : trimmed;
       }
       continue;
     }
@@ -335,7 +374,28 @@ async function main(): Promise<void> {
 
   const result = await runPeopleRosterRegressionSuite(root as unknown as HTMLElement);
   console.log(JSON.stringify(result, null, 2));
-  if (!result.passed) {
+  const fs = (await import(/* @vite-ignore */ 'node:fs' as string)) as {
+    readFileSync(path: string, encoding: string): string;
+  };
+  const parity = runDaylightParity(
+    JSON.parse(fs.readFileSync('test-fixtures/daylight_parity.json', 'utf8')) as ParityFixture,
+  );
+  console.log(JSON.stringify(parity, null, 2));
+  const daylightResult = await runDaylightRegressionSuite(doc.createElement('div') as unknown as HTMLElement);
+  console.log(JSON.stringify(daylightResult, null, 2));
+  const piracyResult = await runPiracyRegressionSuite(doc.createElement('div') as unknown as HTMLElement);
+  console.log(JSON.stringify(piracyResult, null, 2));
+  const missionResult = await runMissionRegressionSuite(doc.createElement('div') as unknown as HTMLElement);
+  console.log(JSON.stringify(missionResult, null, 2));
+
+  if (
+    !result.passed ||
+    parity.daylight_mismatches > 0 ||
+    parity.daylight_cases === 0 ||
+    !daylightResult.passed ||
+    !piracyResult.passed ||
+    !missionResult.passed
+  ) {
     const proc = (globalThis as { process?: { exit?: (code: number) => void } }).process;
     if (proc?.exit) proc.exit(1);
   }

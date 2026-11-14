@@ -23,6 +23,7 @@ inline const char* featureForAction(const std::string& action){
     if(action=="hud_piracy")return "piracy";
     if(action=="daylight")return "daylight";
     if(action=="acceptance")return "acceptance";
+    if(action=="roulette"||action=="fate_roulette")return ""; // always available
     if(action=="hud_mining"||action=="mining")return "mining_recognition";
     if(action=="strings_settings"||action=="strings_details")return "synthstrings";
     return "";

@@ -28,22 +28,89 @@ def clean_title(value):
     return re.sub(r'\s*\[(?:\d+ Rep|BP|ALL BP).*$', '', str(value)).strip()[:500]
 
 
-def wallet_classification(window, missions, catalog):
-    """Inferred mission windows stay distinct from player labels and receipts."""
+def load_retail_price_index(directory):
+    """Index known retail purchase prices from item_shops and directory_vehicles for automatic purchase matching."""
+    price_map = {}
+    if not directory:
+        return price_map
+    dir_path = Path(directory)
+    uuid_names = {}
+    for candidate in (Path('data/local_game_library.json'), dir_path / 'local_game_library.json'):
+        if candidate.exists():
+            try:
+                data = json.loads(candidate.read_text(encoding='utf-8'))
+                for entry in data.get('entries', []):
+                    uuid_names[entry.get('id')] = (entry.get('name', 'Item'), 'vehicle_purchase' if entry.get('kind') in ('Ship', 'Vehicle') else 'store_purchase')
+            except Exception:
+                pass
+            break
+    vpath = dir_path / 'directory_vehicles.json'
+    vmap = {}
+    if vpath.exists():
+        try:
+            vdata = json.loads(vpath.read_text(encoding='utf-8'))
+            for r in vdata.get('rows', []):
+                vmap[r.get('id')] = r.get('name', 'Vehicle')
+        except Exception:
+            pass
+    shops_dir = dir_path / 'item_shops'
+    if shops_dir.exists():
+        for f in shops_dir.glob('*.json'):
+            try:
+                content = json.loads(f.read_text(encoding='utf-8'))
+                item_id = content.get('item_id', f.stem)
+                if item_id in vmap:
+                    name, cat = vmap[item_id], 'vehicle_purchase'
+                elif item_id in uuid_names:
+                    name, cat = uuid_names[item_id]
+                else:
+                    name, cat = f.stem, 'store_purchase'
+                for row in content.get('rows', []):
+                    p = row.get('price')
+                    if p and p > 0:
+                        cost = int(round(p))
+                        price_map.setdefault(cost, dict(name=name, category=cat, item_id=item_id,
+                                                        shop=row.get('shop') or row.get('location', '').split('→')[-1].strip(),
+                                                        location=row.get('location')))
+            except Exception:
+                pass
+    return price_map
+
+
+def wallet_classification(window, missions, catalog, rep_by_mission=None, price_index=None):
+    """Inferred mission windows and purchase matches stay distinct from player labels and receipts."""
     manual = window.get('annotation') or {}
     if manual:return dict(manual)
+    delta = window.get('delta', 0)
+    if delta < 0 and price_index:
+        cost = abs(int(round(delta)))
+        match = price_index.get(cost)
+        if match:
+            return dict(category=match['category'], source=f"Retail price match: {match['name']}",
+                        item_name=match['name'], item_id=match.get('item_id'), shop=match.get('shop'),
+                        price_match=True)
     result = dict(category='unclassified', source='Unclassified')
     if (window.get('kind') != 'wallets' or window.get('track', '').upper() != 'AUEC'
-            or window.get('delta', 0) <= 0 or not window.get('associated')
+            or delta <= 0 or not window.get('associated')
             or window.get('reason') != 'Single completion in window' or len(window.get('missions', [])) != 1):
         return result
     mission = missions.get(window['missions'][0], {})
     if mission.get('status') != 'Complete':return result
     definition = mission.get('definition_snapshot') or catalog.get(mission.get('definition_id'), {})
+    giver = definition.get('mission_giver')
+    reward_organizations = list(dict.fromkeys(r['faction'] for r in definition.get('rewards', []) if r.get('faction')))
+    if not reward_organizations and not giver and rep_by_mission:
+        names = catalog.get('_names', {})
+        for r in rep_by_mission.get(mission['id'], []):
+            if r.get('delta', 0) > 0:
+                ent = r['track'].partition('|')[0]
+                fname = names.get(ent, ent)
+                if fname and fname not in reward_organizations:
+                    reward_organizations.append(fname)
     return dict(category='mission_reward', source='Mission completion correlation',
                 mission_id=mission['id'], mission_title=mission['title'],
-                mission_giver=definition.get('mission_giver'),
-                reward_organizations=list(dict.fromkeys(r['faction'] for r in definition.get('rewards', []) if r.get('faction'))))
+                mission_giver=giver,
+                reward_organizations=reward_organizations)
 
 
 def mission_timing(mission, now, accepted=None):
@@ -109,6 +176,8 @@ class MissionLog:
             CREATE INDEX IF NOT EXISTS mission_time ON missions(at);
         ''')
         self.db.commit()
+        self._price_index = None
+        self._price_index_time = 0
         version = self.meta('schema')
         if version is not None and version != 1:
             self.db.close()
@@ -283,11 +352,20 @@ class MissionLog:
                           'Single non-completion in window' if other_endings else
                           'Single completion in window' if len(candidates) == 1 else 'Unmatched balance change')
                 change_id = hashlib.sha256(json.dumps([table, character, before['read_at'], at, key]).encode()).hexdigest()[:24]
-                result.append(dict(id=change_id, kind=table, character=character, start=before['read_at'], end=at,
-                                   session=sample.get('session', ''),
-                                   track=key, before=left, after=right, delta=right-left,
-                                   missions=endings, other_endings=other_endings, reason=reason,
-                                   associated=len(endings) == 1 and reason in ('Single completion in window', 'Single non-completion in window')))
+                item = dict(id=change_id, kind=table, character=character, start=before['read_at'], end=at,
+                            session=sample.get('session', ''),
+                            track=key, before=left, after=right, delta=right-left,
+                            missions=endings, other_endings=other_endings, reason=reason,
+                            associated=len(endings) == 1 and reason in ('Single completion in window', 'Single non-completion in window'))
+                if table == 'reputation' and right > left:
+                    try:
+                        from reputation_ranks import detect_promotion
+                        promo = detect_promotion(key.partition('|')[2], left, right)
+                        if promo:
+                            item['promotion'] = promo
+                    except Exception:
+                        pass
+                result.append(item)
         return result
 
     def view(self, catalog=None, query='', session='', outcome='', offset=0, limit=100, now=None):
@@ -322,9 +400,19 @@ class MissionLog:
         intervals = self.intervals('reputation', missions, catalog) + self.intervals('wallets', missions, catalog)
         annotations = {row[0]: json.loads(row[1]) for row in self.db.execute('SELECT id,body FROM annotations')}
         mission_index = {m['id']: m for m in missions}
+        # Pre-build rep-by-mission for faction fallback attribution
+        rep_by_mission = {}
+        for interval in intervals:
+            if interval['kind'] == 'reputation':
+                for mid in interval.get('missions', []):
+                    rep_by_mission.setdefault(mid, []).append(interval)
+        # Load retail price index (cached, refreshed at most once per view call)
+        price_index = load_retail_price_index(self.directory)
         for window in intervals:
             window['annotation'] = annotations.get(window['id'], {})
-            window['classification'] = wallet_classification(window, mission_index, catalog)
+            window['classification'] = wallet_classification(window, mission_index, catalog,
+                                                             rep_by_mission=rep_by_mission,
+                                                             price_index=price_index)
         by_mission = {}
         for interval in intervals:
             for mid in interval['missions']:
@@ -379,6 +467,8 @@ class MissionLog:
                              analysis_status=status, windows=windows))
         total = len(rows)
         offset = max(0, min(int(offset), max(0, ((total-1)//limit)*limit)))
+        latest_rep_row = self.db.execute('SELECT body FROM reputation ORDER BY at DESC LIMIT 1').fetchone()
+        latest_rep = json.loads(latest_rep_row[0]).get('records', {}) if latest_rep_row else {}
         return dict(schema=1, written_at=now, count=total, offset=offset, limit=limit,
                     rows=rows[offset:offset+limit],
                     sessions=[s for s in self.session_recaps(missions, catalog, intervals) if not session or s['id'] == session],
@@ -388,6 +478,7 @@ class MissionLog:
                     wallet_reads=self.db.execute('SELECT COUNT(*) FROM wallets').fetchone()[0],
                     latest_rep_at=self.db.execute('SELECT MAX(at) FROM reputation').fetchone()[0],
                     latest_wallet_at=self.db.execute('SELECT MAX(at) FROM wallets').fetchone()[0],
+                    latest_reputation=latest_rep,
                     unmatched=[w for w in reversed(intervals) if not w['missions']][-100:],
                     coverage='Net changes between reads. A single-completion window is a correlation; other activity can affect balances.')
 

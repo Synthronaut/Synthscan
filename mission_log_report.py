@@ -64,7 +64,7 @@ def present(view, catalog=None, mode='all', direction='', category='', query='',
                      if mission_mode else [row['local_time'], 'Mission', row['title'], row.get('status') or 'Active',
                                            number(delta, True), number(row['observed_money'], True), row['analysis_status']])
             entries.append(dict(id='mission:'+row['id'], at=row.get('ended_at') or row.get('accepted_at') or row['first_seen_at'],
-                                cells=cells, detail=detail))
+                                session=row.get('session', ''), cells=cells, detail=detail))
     if mode in ('all', 'reputation', 'wallet'):
         for change in view.get('changes', []):
             wallet = change['kind'] == 'wallets'
@@ -73,7 +73,9 @@ def present(view, catalog=None, mode='all', direction='', category='', query='',
             inferred = classification.get('source') == 'Mission completion correlation'
             category_key = classification.get('category', 'unclassified')
             category_label = CATEGORIES.get(category_key, 'Unclassified')
-            if inferred:category_label += ' (correlated)'
+            if inferred: category_label += ' (correlated)'
+            if classification.get('price_match') and classification.get('item_name'):
+                category_label = classification['item_name'] + ' (price match)'
             if category and (not wallet or category != category_key):
                 continue
             if wallet and change['track'].upper() != 'AUEC':
@@ -84,6 +86,7 @@ def present(view, catalog=None, mode='all', direction='', category='', query='',
                 continue
             titles = [view.get('mission_names', {}).get(m, by_id.get(m, {}).get('title', m)) for m in change['missions']]
             entity, _, scope = change['track'].partition('|')
+            promo = change.get('promotion') or classification.get('promotion')
             title = 'aUEC wallet' if wallet else names.get(entity, 'Organization')+' / '+scope
             association = '; '.join(titles) or 'No matching mission'
             detail = (f"{title}\nObserved net change: {number(change['delta'], True)}\n"
@@ -94,20 +97,26 @@ def present(view, catalog=None, mode='all', direction='', category='', query='',
                       +f"Classification source: {classification.get('source', 'Unclassified')}\n"
                       +('Reward organization: '+', '.join(classification['reward_organizations'])+'\n' if classification.get('reward_organizations') else '')
                       +('Mission giver: '+classification['mission_giver']+'\n' if classification.get('mission_giver') else '')
+                      +('Matched item: '+classification['item_name']+(' at '+classification['shop'] if classification.get('shop') else '')+'\n' if classification.get('price_match') and classification.get('item_name') else '')
                       + (f"Note: {annotation['note']}\n" if annotation.get('note') else '')+'\n'
-                      'These are balance observations. Changes between reads can combine multiple rewards, purchases, transfers or penalties. '
+                      + (f"PROMOTION MILESTONE: Promoted to {promo['rank']} (Threshold: {number(promo.get('threshold'))} rep)!\n\n" if promo else '')
+                      +'These are balance observations. Changes between reads can combine multiple rewards, purchases, transfers or penalties. '
                       'The logger cannot reconstruct offsetting transactions from balance snapshots. No mission match is treated as an unexplained change, not a zero reward.')
             if query.casefold() not in detail.casefold():
                 continue
             if wallet:
                 detail += '\n\nRight-click this wallet entry to classify a cause you recognize. A label does not turn a net balance window into an itemized receipt.'
-            cells = ([clock(change['end']), title if not wallet else category_label, 'Increase' if change['delta'] > 0 else 'Decrease',
+            promo_label = f"Promotion: {promo['rank']}" if promo else None
+            cells = ([clock(change['end']), title if not wallet else category_label, promo_label or ('Increase' if change['delta'] > 0 else 'Decrease'),
                       number(change['before']), number(change['after']), number(change['delta'], True), association, change['reason']]
                      if mode in ('reputation', 'wallet') else
-                     [clock(change['end']), 'Wallet' if wallet else 'Reputation', (category_label+': '+classification.get('mission_title', title)) if wallet else title, 'Increase' if change['delta'] > 0 else 'Decrease',
+                     [clock(change['end']), 'Wallet' if wallet else ('Promotion' if promo else 'Reputation'),
+                      (category_label+': '+classification.get('mission_title', title)) if wallet else (f"{title} (Promoted to {promo['rank']})" if promo else title),
+                      promo_label or ('Increase' if change['delta'] > 0 else 'Decrease'),
                       '—' if wallet else number(change['delta'], True), number(change['delta'], True) if wallet else '—', change['reason']])
             entries.append(dict(id='change:'+change['id'], change_id=change['id'], is_wallet=wallet, category=category_key,
-                                at=change['end'], cells=cells, detail=detail))
+                                is_promotion=bool(promo), promotion=promo,
+                                session=change.get('session', ''), at=change['end'], cells=cells, detail=detail))
     if mode == 'sessions':
         for session in view.get('sessions', []):
             rep = '\n'.join(f"{r['faction']} / {r['scope']}: {number(r['delta'], True)} ({number(r['before'])} → {number(r['after'])}); reads {clock(r['baseline_at'])}–{clock(r['last_read_at'])}" for r in session['reputation']) or 'No verified reputation change recorded.'
@@ -123,7 +132,7 @@ def present(view, catalog=None, mode='all', direction='', category='', query='',
             if query.casefold() not in detail.casefold():
                 continue
             auec = [r['delta'] for r in session['wallet'] if r['currency'] == 'AUEC' and r['delta'] is not None]
-            entries.append(dict(id='session:'+session['id'], at=session['started_at'], detail=detail,
+            entries.append(dict(id='session:'+session['id'], at=session['started_at'], detail=detail, session=session['id'],
                                 cells=[clock(session['started_at']), clock(session.get('ended_at')) if session.get('ended_at') else 'Open', str(session['completed']),
                                        str(session['failed']), str(session['abandoned']), str(len(session['reputation']))+' tracks', number(sum(auec), True) if auec else '—']))
     entries.sort(key=lambda row: -row['at'])

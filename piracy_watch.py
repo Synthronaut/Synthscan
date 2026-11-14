@@ -1,6 +1,11 @@
-"""DisplayInfo observations for piracy planning; population is not a catch signal."""
+"""DisplayInfo observations and persistent snare pull ledger for piracy & flight planning."""
+import json
 import math
+from pathlib import Path
 import time
+import uuid
+
+from flight_tracker import atomic_json
 
 FIELDS=('shard_pop','srv_pop','server_fps','ping_ms')
 LIVE_SECONDS=4
@@ -66,9 +71,79 @@ class PopulationWatch:
                     timer_note='Manual timer · not snare detection')
 
 class PiracyReader:
-    """Log-only piracy support. No capture worker, OCR imports or screen metrics."""
-    def __init__(self, directory):
-        self.watch=PopulationWatch(directory)
+    """Log-only piracy & flight telemetry support. No capture worker, OCR imports or screen metrics."""
+    def __init__(self, directory, log_path=None):
+        self.directory = Path(directory) if directory is not None else None
+        self.log_file = (self.directory / 'piracy_log.json') if self.directory is not None else None
+        self.watch = PopulationWatch(directory)
+        from flight_tracker import FlightTracker
+        self.flight = FlightTracker(directory, log_path)
+        self.pulls = []
+        self._load_pulls()
+
+    def _load_pulls(self):
+        if self.log_file and self.log_file.exists():
+            try:
+                data = json.loads(self.log_file.read_text(encoding='utf-8'))
+                if data.get('schema') == 1 and isinstance(data.get('pulls'), list):
+                    self.pulls = data['pulls'][-200:]
+            except Exception:
+                self.pulls = []
+
+    def _save_pulls(self):
+        if not self.log_file:
+            return
+        try:
+            atomic_json(self.log_file, {'schema': 1, 'pulls': self.pulls[-200:]})
+        except Exception:
+            pass
+
+    def command(self, action, payload=None, now=None):
+        now = time.time() if now is None else now
+        payload = payload or {}
+        if action in ('toggle_wait', 'piracy_toggle_wait'):
+            self.watch.command('toggle_wait', now)
+        elif action in ('reset_wait', 'piracy_reset_wait'):
+            self.watch.command('reset_wait', now)
+        elif action == 'piracy_log_pull':
+            outcome = str(payload.get('outcome') or 'catch').strip().lower()
+            if outcome not in ('catch', 'escaped', 'dry', 'combat'):
+                outcome = 'catch'
+            try:
+                value_uec = max(0, int(payload.get('value_uec') or 0))
+            except (TypeError, ValueError):
+                value_uec = 0
+            entry = {
+                'id': uuid.uuid4().hex[:12],
+                'at': float(payload.get('observed_at') or now),
+                'target': str(payload.get('target') or 'Unknown Vessel')[:80],
+                'lane': str(payload.get('lane') or self.flight.active_route or 'Open Lane')[:80],
+                'outcome': outcome,
+                'value_uec': value_uec,
+                'notes': str(payload.get('notes') or '')[:160],
+            }
+            self.pulls.append(entry)
+            self.pulls = self.pulls[-200:]
+            self._save_pulls()
+        elif action == 'piracy_delete_pull':
+            pull_id = str(payload.get('pull_id') or '')
+            if pull_id:
+                self.pulls = [p for p in self.pulls if p.get('id') != pull_id]
+                self._save_pulls()
+
+    def _pull_summary(self):
+        total = len(self.pulls)
+        catches = sum(1 for p in self.pulls if p.get('outcome') == 'catch')
+        loot = sum(int(p.get('value_uec') or 0) for p in self.pulls)
+        return {
+            'pulls': list(reversed(self.pulls[-40:])),
+            'pull_stats': {
+                'total': total,
+                'catches': catches,
+                'hit_rate': int(round((catches / total) * 100)) if total > 0 else 0,
+                'total_loot_uec': loot,
+            },
+        }
 
     def tick(self, enabled, token, now=None):
         now=time.time() if now is None else now
@@ -78,6 +153,8 @@ class PiracyReader:
         view.update(metrics={},field_ages={},held_fields=[],points=[],delta_5m=None,delta_15m=None,
                     observed_at=0,age_s=None,fresh=False,source='Game logs and manual timer',
                     status='Log reports and manual wait timer' if token else 'Join a shard to use the wait timer')
+        view['flight']=self.flight.tick(now)
+        view.update(self._pull_summary())
         return view
 
     def close(self):

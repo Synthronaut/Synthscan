@@ -98,6 +98,14 @@ def library_export(destination,game=None,catalog=None,extra_rows=()):
     for row in extra_rows:
         if display_name(row.get('name')):rows.append(row)
         else:excluded.append(dict(id=row.get('id'),reason='Unresolved external display name'))
+    try:
+        import sys
+        sys.path.insert(0, str(ROOT))
+        from tools.populate_all_wikelo_items import ALL_WIKELO_ROWS
+        for w in ALL_WIKELO_ROWS:
+            rows.append(dict(w))
+    except Exception:
+        pass
     from finder_categories import enrich
     enrich(rows,g.data.get('ship_reference',{}))
     rows.sort(key=lambda e:(e['name'].casefold(),e['id']))

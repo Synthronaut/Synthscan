@@ -64,6 +64,25 @@ def category(row):
     return row.get('category','Other')
 
 
+def hangar_classification(kind, size, length):
+    if kind == 'Vehicle':
+        return 'Vehicle Bay / XS'
+    if size == 1: return 'Extra Small (XS)'
+    if size == 2: return 'Small (S)'
+    if size == 3: return 'Medium (M)'
+    if size == 4: return 'Large (L)'
+    if size == 5: return 'Extra Large (XL)'
+    if size and size >= 6: return 'Capital / Docking'
+    if length and length > 0:
+        if length < 14: return 'Extra Small (XS)'
+        if length <= 28.5: return 'Small (S)'
+        if length <= 50: return 'Medium (M)'
+        if length <= 75: return 'Large (L)'
+        if length <= 160: return 'Extra Large (XL)'
+        return 'Capital / Docking'
+    return ''
+
+
 def enrich(rows,ship_reference):
     ships=ship_reference.get('ships',{})
     for row in rows:
@@ -77,4 +96,9 @@ def enrich(rows,ship_reference):
             row['ship_stats']=dict(ships[identity],patch=ship_reference.get('build',{}).get('Branch','Unknown build'))
         row['source_category']=row['category']
         row['category']=category(row)
+        if row.get('kind') in ('Ship','Vehicle'):
+            h=hangar_classification(row.get('kind'),row.get('ship_stats',{}).get('size'),row.get('ship_overview',{}).get('length'))
+            if h:
+                row['hangar']=h
+                row['search']=row.get('search','')+' '+h+' hangar'
         row['search']=row.get('search','')+' '+row['category']+' '+row['source_category']+' '+row.get('ship_stats',{}).get('role','')

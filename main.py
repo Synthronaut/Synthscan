@@ -143,6 +143,7 @@ class SynthScanApp:
         self.purge_confirm_armed = False
         self.restore_confirm_armed = False
         self.comms_history = []
+        # Fate Roulette — initialised lazily; window created on first open
 
         self.monitors = get_monitors()
         # Default UI to Monitor 2 if 2+ monitors exist, Game to Monitor 1
@@ -521,6 +522,7 @@ class SynthScanApp:
         )
         self.btn_hdr_med.pack(side="left", padx=(0, 8))
 
+
         # Monitor Snap Controls right in the header!
         mon_strip = ctk.CTkFrame(right_hdr, fg_color=SC_BG_CARD, corner_radius=4, border_width=1, border_color=SC_BORDER_DIM)
         mon_strip.pack(side="left", padx=(0, 10), ipady=2)
@@ -690,6 +692,7 @@ class SynthScanApp:
             ("crafting", "Custom crafting", "Your saved recipes & deductions"),
             ("performance", "Graphics lab", "Quality & frame pacing"),
             ("system", "Settings", "Monitors, HUD & voice"),
+            ("fate_roulette", "Fate Roulette", "Wheel of destiny"),
         ]
 
         for key, title, sub in nav_specs:
@@ -799,6 +802,7 @@ class SynthScanApp:
             "system": self._build_page_system,
             "performance": self._build_page_performance,
             "mining_planner": self._build_page_mining_planner,
+            "fate_roulette": self._build_page_fate_roulette,
         }
         for k in self._page_builders:
             f = ctk.CTkFrame(self.viewport, fg_color=SC_BG_PANEL, corner_radius=0)
@@ -1714,6 +1718,10 @@ class SynthScanApp:
     def open_library(self, mode='Items'):
         self.switch_page('blueprints')
         self.library_page.set_mode(mode)
+
+    def _build_page_fate_roulette(self, parent):
+        from fate_roulette import FateRoulettePage
+        self.fate_roulette_page = FateRoulettePage(parent, self)
 
     def _build_page_mining_planner(self, parent):
         from mining_planner_ui import MiningPlannerPage

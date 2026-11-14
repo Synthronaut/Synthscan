@@ -63,11 +63,16 @@ def vehicle_rows(payload,checked_at):
         key=f'vehicle-{identifier}-{fingerprint}'
         kind='Vehicle' if vehicle.get('is_ground_vehicle') else 'Ship'
         maker=str(vehicle.get('company_name') or 'Unknown manufacturer')
-        detail=f"{name}\n{kind} · {maker}\n\nIn-game purchase locations and aUEC prices are checked separately from the vehicle catalog.\n"
+        from finder_categories import vehicle_metadata, hangar_classification
+        overview=vehicle_metadata(vehicle)
+        hangar=hangar_classification(kind, None, overview.get('length'))
+        specs=[]
+        if overview.get('length'):specs.append(f"Length: {overview['length']:g} m")
+        if hangar:specs.append(f"Expected hangar: {hangar}")
+        spec_text = ('\n' + ' · '.join(specs) + '\n') if specs else ''
+        detail=f"{name}\n{kind} · {maker}\n{spec_text}\nIn-game purchase locations and aUEC prices are checked separately from the vehicle catalog.\n"
         if vehicle.get('is_concept'):detail+='Listed as a concept by UEX; inclusion here does not imply in-game availability.\n'
         detail+='\nVehicle directory: UEX Corp · checked '+date(checked_at)
-        from finder_categories import vehicle_metadata
-        overview=vehicle_metadata(vehicle)
         rows.append(dict(id=key,item_id=key,name=name,kind=kind,category='Ground vehicles' if kind=='Vehicle' else 'Ships',
                          detail=detail,icon='',search=' '.join([name,str(vehicle.get('name') or ''),maker,kind]),uex_vehicle_id=identifier,game_vehicle_id=str(vehicle.get('uuid') or ''),ship_overview=overview))
     return rows

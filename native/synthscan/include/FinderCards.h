@@ -33,6 +33,48 @@ struct Canvas {
     }
     float heading(const std::string& label,float y){line(label,left()+2*scale,y,inner(),10,Accent,true);return y+24*scale;}
     float note(const std::string& label,float y){return y+text(label,left()+4*scale,y,inner()-8*scale,10,Muted)+8*scale;}
+    float wikeloTurnin(const Json& row,float y){
+        const auto& wikelo=field(row,"wikelo_turnin");
+        y=heading("WIKELO TURN-IN TASK REQUIREMENTS",y);
+        box(left(),y,inner(),64*scale);
+        std::string task=wikelo.textOr("task","Wikelo Barter Turn-in");
+        line("CONTRACT: \""+task+"\"",left()+10*scale,y+6*scale,inner()-170*scale,13,Ink,true);
+        line("Deposit in Freight Elevator",left()+10*scale,y+26*scale,inner()-170*scale,10,Muted);
+        line("Dasi / Selo / Kinga Station",left()+10*scale,y+44*scale,inner()-170*scale,9,Accent);
+        line("NO aUEC COST",left()+inner()-160*scale,y+6*scale,150*scale,16,Green,true);
+        line("BARTER TURN-IN ONLY",left()+inner()-160*scale,y+28*scale,150*scale,9,Accent,true);
+        y+=72*scale;
+
+        int count=int(wikelo.numberOr("favors",0));
+        if(count>0){
+            box(left(),y,inner(),64*scale);
+            line("PRIMARY BARTER CURRENCY",left()+10*scale,y+6*scale,inner()-20*scale,9,Muted,true);
+            std::string favorsLabel=wikelo.textOr("favors_label");
+            if(favorsLabel.empty()){
+                favorsLabel=std::to_string(count)+" × Wikelo Favors";
+            }
+            line(favorsLabel,left()+10*scale,y+22*scale,inner()-20*scale,18,Accent,true);
+            line("Earn: 50x MG/Council Scrip, 50x Carinite, or 12x Valakkar Pearls (AA)",left()+10*scale,y+46*scale,inner()-20*scale,9,Ink);
+            y+=72*scale;
+        } else {
+            box(left(),y,inner(),50*scale);
+            line("PRIMARY BARTER: DIRECT MATERIAL TURN-IN",left()+10*scale,y+6*scale,inner()-20*scale,9,Muted,true);
+            line("Deliver the required items and commodities below",left()+10*scale,y+24*scale,inner()-20*scale,12,Ink);
+            y+=58*scale;
+        }
+
+        const auto& reqItems=field(wikelo,"items").items;
+        for(const auto& req:reqItems){
+            box(left(),y,inner(),46*scale);
+            line(req.textOr("label",req.textOr("name")),left()+10*scale,y+5*scale,inner()-120*scale,12,Ink,true);
+            line(req.textOr("detail","Required turn-in component"),left()+10*scale,y+26*scale,inner()-120*scale,9,Muted);
+            line("REQUIRED",left()+inner()-110*scale,y+14*scale,100*scale,11,Accent,true);
+            y+=54*scale;
+        }
+
+        y=note("Prerequisite: Complete \"Wikelo Arrive to System\" contract · starcitizen.tools/Wikelo",y);
+        return y+4*scale;
+    }
     float shops(const Json& view,float y){
         y=heading("WHERE TO BUY",y);const auto& rows=field(view,"rows").items;double low=0,high=0;
         for(const auto& row:rows){double price=row.numberOr("price");if(std::isfinite(price)&&price>0){if(!low||price<low)low=price;high=std::max(high,price);}}
@@ -85,6 +127,24 @@ struct Canvas {
         return note("Advertisements, not confirmed sales · listing patch is not supplied by UEX",y);
     }
     float mounts(const Json& row,float y){
+        auto hangar=FinderLayout::classifyShipHangar(row);
+        if(hangar.isShip||hangar.isGround||row.find("ship_stats")!=nullptr){
+            if(!hangar.hangar.empty()||hangar.length>0){
+                y=heading("HULL & HANGAR SPECIFICATIONS",y+8*scale);
+                float tile=(inner()-10*scale)/2;
+                box(left(),y,tile,51*scale);
+                line("EXPECTED HANGAR",left()+10*scale,y+5*scale,tile-20*scale,10,Muted,true);
+                line(hangar.hangar.empty()?"—":hangar.hangar,left()+10*scale,y+23*scale,tile-20*scale,15,Accent,true);
+                box(left()+tile+10*scale,y,tile,51*scale);
+                line("HULL LENGTH & SIZE",left()+tile+20*scale,y+5*scale,tile-20*scale,10,Muted,true);
+                std::string lenStr=(hangar.length>0?quantity(hangar.length)+" m":"—")+(hangar.sizeLabel.empty()?"":"  ·  "+hangar.sizeLabel);
+                line(lenStr,left()+tile+20*scale,y+23*scale,tile-20*scale,15,Ink,true);
+                y+=59*scale;
+                if(hangar.width>0&&hangar.height>0){
+                    y=note("Dimensions: "+quantity(hangar.length)+"m (L) × "+quantity(hangar.width)+"m (W) × "+quantity(hangar.height)+"m (H)",y);
+                }
+            }
+        }
         const auto& ship=field(row,"ship_stats");const auto& ports=field(ship,"hardpoints");const auto& groups=field(ports,"groups").items;if(groups.empty())return y;
         y=heading("COMPONENT SLOTS & WEAPON MOUNTS",y+8*scale);float cell=(inner()-10*scale)/2;
         for(size_t i=0;i<groups.size();++i){const auto& part=groups[i];float x=left()+(i%2)*(cell+10*scale),top=y+(i/2)*59*scale;box(x,top,cell,51*scale);int minimum=std::max(1,int(part.numberOr("minimum"))),maximum=int(part.numberOr("maximum"));auto size=minimum==maximum?"S"+std::to_string(maximum):"S"+std::to_string(minimum)+"–S"+std::to_string(maximum);

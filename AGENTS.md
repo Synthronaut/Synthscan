@@ -32,3 +32,19 @@ Future agents and developers MUST strictly follow these rules:
 5. **Safe Page Unmounting in SynthPages::release**:
    - When `SynthPages::release()` reparents a hosted page back to `nullptr` (desktop), it must immediately move it offscreen (`-32000, -32000`) with `SWP_NOSIZE | SWP_NOACTIVATE | SWP_HIDEWINDOW | SWP_FRAMECHANGED` and `SW_HIDE`, never leaving a reparented window at desktop `(0, 0)`.
 
+## Oracle Hub, Game Data & Release Publishing Protocol
+
+Read [docs/UPDATING_AND_RELEASES.md](docs/UPDATING_AND_RELEASES.md) before modifying update feeds, `blueprints_catalog.json`, `global.ini` syncers, or publishing releases.
+
+1. **Oracle Server Isolation (`158.101.88.35`)**:
+   - SynthScan's public website, data hub, and release channel live at `https://synthscan.158-101-88-35.sslip.io/` (`/var/www/synthscan/` and `/home/ubuntu/synthscan/`, Nginx site `synthscan-app`, timer `synthscan-sync.timer`).
+   - NEVER modify files, Docker containers, ports, or Nginx configs belonging to other projects on that server (BTD, AXEN, Embers).
+
+2. **Blueprint Catalog & `global.ini` Invariants**:
+   - `blueprints_catalog.json` must ONLY contain obtainable reward blueprints (`isReward == true`, deduplicated via `blueprint_strings.item_key()`). Never bulk-import `isReward == false` records from `blueprints_source.json`.
+   - Mission `_title` / `_name` keys in `global.ini` must NEVER contain `<EM4>Potential Blueprints</EM4>` or `<EM4>Multiple Blueprint Pools</EM4>` lists. Keep only `[X Rep]` and `[ALL BP OWNED]` / `[BP: X LEFT]` tags in titles; blueprint lists belong in `_desc` keys.
+
+3. **Private GitHub + Self-Hosted Releases**:
+   - `update_trust.json` points to `https://synthscan.158-101-88-35.sslip.io/releases/` (NOT GitHub, which is private). Do not revert `update_trust.json` or the website Download button to GitHub URLs.
+   - Always ship code/UI iterations via `.\publish_release.ps1` and data-only updates by publishing to `/var/www/synthscan/data/` and running `python3 /home/ubuntu/synthscan/scripts/sync_data.py`.
+

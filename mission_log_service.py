@@ -435,6 +435,11 @@ class Logger:
                              category=self.category, query=self.filters['query'], offset=self.filters['offset']))
         value.update(recording=allowed, recording_since=self.book.meta('recording_since'), current_session=self.session,
                      error=self.error, wallet_error=self.wallet_error, note=self.note, note_until=self.note_at+12)
+        try:
+            from mission_analytics import analyze
+            value['analytics'] = analyze(full, self.catalog.get('_names', {}), now)
+        except (ImportError, KeyError, TypeError, ValueError):
+            value['analytics'] = {}
         for key in ('rows', 'changes', 'mission_names'):
             value.pop(key, None)
         value['sessions'] = value['sessions'][:30]

@@ -9,6 +9,7 @@
 #include "SynthHome.h"
 #include "SynthMissionLog.h"
 #include "SynthPrivacy.h"
+#include "SynthRoulette.h"
 #include "SynthCapturePrivacy.h"
 #include "SynthCompanion.h"
 #include "SynthWebView.h"
@@ -337,6 +338,7 @@ void homeAction(const std::string& value){
         if(testing)command(obj({{"action",str("strings_settings")}}));
         else spawnPython(L"strings_settings.py",{L"--native",(SCMiner::AppPaths::program()/L"SynthScan.exe").wstring(),L"--profile",data.wstring()});
     }else if(value=="privacy"){SynthPrivacy::show(SynthHome::pageHost(),data);
+    }else if(value=="roulette"){SynthRoulette::show(SynthHome::pageHost(),data);
     }else if(value=="executive_hangar"){
         updateBoardHud();hangarDesktop=read(data/L"hangar_desktop.json",32768);
         SynthExecutiveHangar::update(boardHud,hangarDesktop,!boardPending.empty(),boardNote);
@@ -347,7 +349,8 @@ void homeAction(const std::string& value){
             return queueBoardEdit(command);
         });
     }else if(value=="mission_log"){
-        SynthMissionLog::show(SynthHome::pageHost(),data);
+        if(SynthWebView::available())SynthCompanion::show(SynthHome::pageHost(),data,value);
+        else SynthMissionLog::show(SynthHome::pageHost(),data);
     }else if(value=="people"||value=="buyer_alerts"){
         SynthCompanion::show(SynthHome::pageHost(),data,value);
     }else if(value=="directory"||value=="servers"||value=="settings"||value=="acceptance"){
@@ -391,7 +394,13 @@ void homeAction(const std::string& value){
             write(data/L"daylight_embed_request.json",obj({{"owner_pid",num(GetCurrentProcessId())},{"parent",num(double(reinterpret_cast<UINT_PTR>(SynthHome::pageHost())))},{"generation",num(SynthPages::generation())},{"at",num(epoch())}}));
             spawnPython(L"daylight_planner.py",{L"--embedded",L"--owner",std::to_wstring(GetCurrentProcessId())});
         }
-    }else if(value=="hud_piracy"){workspace(6);SynthPages::mount(panel,px(100));}
+    }else if(value=="hud_piracy"){
+        if(SynthWebView::available()){
+            SynthCompanion::show(SynthHome::pageHost(),data,value);
+        }else{
+            workspace(6);SynthPages::mount(panel,px(100));
+        }
+    }
     else if(value=="dismiss_refinery")command(obj({{"action",str("dismiss_refinery_notices")}}));
     else if(value.rfind("hud_",0)==0){
         SynthPages::release(mining->windowHandle());
@@ -433,6 +442,10 @@ void updateDirectoryCategories(){
 void listRows(){
     if(!listing)return;
     std::string prior=selected>=0&&selected<int(visible.size())?visible[selected].textOr("id"):"";
+    // Save scroll position so a background state refresh doesn't snap the user
+    // back to the top while they are reading further down the list.
+    const int savedTop=ListView_GetTopIndex(listing);
+    const int savedHoriz=GetScrollPos(listing,SB_HORZ);
     SendMessageW(listing,WM_SETREDRAW,FALSE,0);ListView_DeleteAllItems(listing);visible.clear();selected=-1;icon.reset();if(currentTab==0)EnableWindow(GetDlgItem(panel,210),FALSE);
     std::wstring query=lower(text(search)),type=text(kind),cat=text(category);
     size_t matched=0;
@@ -469,8 +482,20 @@ void listRows(){
     }
     SendMessageW(listing,WM_SETREDRAW,TRUE,0);InvalidateRect(listing,nullptr,TRUE);
     if(!visible.empty()){
-        int index=0;for(int i=0;i<int(visible.size());i++)if(visible[i].textOr("id")==prior){index=i;break;}
-        ListView_SetItemState(listing,index,LVIS_SELECTED|LVIS_FOCUSED,LVIS_SELECTED|LVIS_FOCUSED);ListView_EnsureVisible(listing,index,FALSE);
+        int index=0;bool foundPrior=false;for(int i=0;i<int(visible.size());i++)if(visible[i].textOr("id")==prior){index=i;foundPrior=true;break;}
+        if(foundPrior){
+            ListView_SetItemState(listing,index,LVIS_SELECTED|LVIS_FOCUSED,LVIS_SELECTED|LVIS_FOCUSED);ListView_EnsureVisible(listing,index,FALSE);
+        } else {
+            // No prior selection to anchor on. Restore the scroll position the
+            // user had so a periodic state update doesn't snap them to the top.
+            if(savedTop>0){
+                const int newCount=ListView_GetItemCount(listing);
+                const int clampedTop=std::min(savedTop,std::max(0,newCount-1));
+                ListView_EnsureVisible(listing,std::min(clampedTop+ListView_GetCountPerPage(listing)-1,newCount-1),FALSE);
+                ListView_EnsureVisible(listing,clampedTop,FALSE);
+            }
+        }
+        if(savedHoriz!=0)ListView_Scroll(listing,savedHoriz-GetScrollPos(listing,SB_HORZ),0);
     }else{
         if(currentTab==0)SynthDirectoryCard::update(detail,obj({}),obj({}),false);else SetWindowTextW(detail,L"No matches. Change the search or filters.");directoryRowId.clear();directoryItemId.clear();directoryRequestId.clear();directoryText.clear();
     }
@@ -483,7 +508,12 @@ void renderDirectoryDetail(const Json& row){
     if(currentTab==0&&row.textOr("kind")!="Blueprint"&&!row.textOr("item_id").empty())body=row.textOr("name")+"\n\n"+directoryText+"\n\n"+body;
     if(favorites.count(row.textOr("id")))body="★ Favorite\n\n"+body;
     std::wstring rendered=wide(body);for(size_t p=0;(p=rendered.find(L'\n',p))!=std::wstring::npos;p+=2)rendered.replace(p,1,L"\r\n");
+    // Preserve the info-box scroll position when refreshing the same row in
+    // the background so the user is not snapped back to the top while reading.
+    const int savedLine=(detail&&row.textOr("id")==(selected>=0&&selected<int(visible.size())?visible[selected].textOr("id"):""))?
+        int(SendMessageW(detail,EM_GETFIRSTVISIBLELINE,0,0)):0;
     SetWindowTextW(detail,rendered.c_str());
+    if(savedLine>0)SendMessageW(detail,EM_LINESCROLL,0,savedLine);
 }
 void selection(){
     int i=ListView_GetNextItem(listing,-1,LVNI_SELECTED);if(i<0||i>=int(visible.size()))return;selected=i;
@@ -946,7 +976,7 @@ LRESULT CALLBACK hostProc(HWND hwnd,UINT message,WPARAM w,LPARAM l){
     if(message==WM_TIMER){if(w==AFK_PULSE_TIMER)pulseAfk();else if(w==HUD_KEY_TIMER)pollHudKeys();else timer();return 0;}
     if(message==HOTKEY_REFRESH){applyHotkey();return 0;}
     if(message==WM_HOTKEY){handleHudHotkey(int(w),l);return 0;}
-    if(message==TRAY){if(l==WM_LBUTTONDBLCLK){desktop();return 0;}if(l==WM_RBUTTONUP){HMENU menu=CreatePopupMenu();AppendMenuW(menu,MF_STRING,1,L"Open SynthScan");AppendMenuW(menu,MF_STRING,2,L"Show / hide HUD");AppendMenuW(menu,MF_STRING,3,L"Startup & HUD settings");AppendMenuW(menu,MF_STRING|(activityMode()?0:MF_CHECKED),5,L"HUD mode: Mining");AppendMenuW(menu,MF_STRING|(pirate?MF_CHECKED:0),6,L"HUD mode: Piracy");AppendMenuW(menu,MF_STRING|(quest?MF_CHECKED:0),8,L"HUD mode: Missions");AppendMenuW(menu,MF_STRING|(placementLocked?MF_CHECKED:0),7,L"Lock HUD position");AppendMenuW(menu,MF_STRING,20,L"Dock HUD top right");AppendMenuW(menu,MF_STRING|(finder?MF_CHECKED:0),19,L"HUD mode: Finder");AppendMenuW(menu,MF_STRING|(hangars?MF_CHECKED:0),9,L"HUD mode: Hangars");AppendMenuW(menu,MF_STRING,11,L"Day/Night Forecast");appendAfkMenu(menu,12);AppendMenuW(menu,MF_STRING,13,L"Automatic acceptance…");POINT at;GetCursorPos(&at);SetForegroundWindow(hwnd);appendProfileMenu(menu);pruneHudMenu(menu,true);AppendMenuW(menu,MF_SEPARATOR,0,nullptr);AppendMenuW(menu,MF_STRING,4,L"Exit SynthScan");int choice=SynthMenus::track(menu,TPM_RETURNCMD|TPM_RIGHTBUTTON,at.x,at.y,0,hwnd,nullptr);DestroyMenu(menu);if(choice==20){dockHud();return 0;}if(handleProfileChoice(choice))return 0;if(choice==19){setMode(4);showHud(true);setActivityExpanded(true);return 0;}if(choice==1)desktop();if(choice==2)showHud(!hudVisible);if(choice==3)workspace(4);if(choice==5||choice==6)setMode(choice==6);if(choice==8)setMode(2);if(choice==7)togglePlacement();if(choice==9){setMode(3);showHud(true);setActivityExpanded(true);}if(choice==11)spawnPython(L"daylight_planner.py",{});if(choice==12)toggleAfk();if(choice==13)spawnPython(L"contract_share_helper.py",{L"--owner",std::to_wstring(GetCurrentProcessId())});if(choice==4&&mining){markUserExit();PostMessageW(mining->windowHandle(),WM_CLOSE,0,0);}return 0;}}
+    if(message==TRAY){if(l==WM_LBUTTONDBLCLK){desktop();return 0;}if(l==WM_RBUTTONUP){HMENU menu=CreatePopupMenu();AppendMenuW(menu,MF_STRING,1,L"Open SynthScan");AppendMenuW(menu,MF_STRING,2,L"Show / hide HUD");AppendMenuW(menu,MF_STRING,3,L"Startup & HUD settings");AppendMenuW(menu,MF_STRING|(activityMode()?0:MF_CHECKED),5,L"HUD mode: Mining");AppendMenuW(menu,MF_STRING|(pirate?MF_CHECKED:0),6,L"HUD mode: Piracy / Flight");AppendMenuW(menu,MF_STRING|(quest?MF_CHECKED:0),8,L"HUD mode: Missions");AppendMenuW(menu,MF_STRING|(placementLocked?MF_CHECKED:0),7,L"Lock HUD position");AppendMenuW(menu,MF_STRING,20,L"Dock HUD top right");AppendMenuW(menu,MF_STRING|(finder?MF_CHECKED:0),19,L"HUD mode: Finder");AppendMenuW(menu,MF_STRING|(hangars?MF_CHECKED:0),9,L"HUD mode: Hangars");AppendMenuW(menu,MF_STRING,11,L"Day/Night Forecast");appendAfkMenu(menu,12);AppendMenuW(menu,MF_STRING,13,L"Automatic acceptance…");POINT at;GetCursorPos(&at);SetForegroundWindow(hwnd);appendProfileMenu(menu);pruneHudMenu(menu,true);AppendMenuW(menu,MF_SEPARATOR,0,nullptr);AppendMenuW(menu,MF_STRING,4,L"Exit SynthScan");int choice=SynthMenus::track(menu,TPM_RETURNCMD|TPM_RIGHTBUTTON,at.x,at.y,0,hwnd,nullptr);DestroyMenu(menu);if(choice==20){dockHud();return 0;}if(handleProfileChoice(choice))return 0;if(choice==19){setMode(4);showHud(true);setActivityExpanded(true);return 0;}if(choice==1)desktop();if(choice==2)showHud(!hudVisible);if(choice==3)workspace(4);if(choice==5||choice==6)setMode(choice==6);if(choice==8)setMode(2);if(choice==7)togglePlacement();if(choice==9){setMode(3);showHud(true);setActivityExpanded(true);}if(choice==11)spawnPython(L"daylight_planner.py",{});if(choice==12)toggleAfk();if(choice==13)spawnPython(L"contract_share_helper.py",{L"--owner",std::to_wstring(GetCurrentProcessId())});if(choice==4&&mining){markUserExit();PostMessageW(mining->windowHandle(),WM_CLOSE,0,0);}return 0;}}
     return DefWindowProcW(hwnd,message,w,l);
 }
 LRESULT CALLBACK mainSubclass(HWND hwnd,UINT message,WPARAM w,LPARAM l,UINT_PTR,DWORD_PTR){
@@ -984,11 +1014,11 @@ LRESULT CALLBACK mainSubclass(HWND hwnd,UINT message,WPARAM w,LPARAM l,UINT_PTR,
     if(message==WM_COMMAND&&LOWORD(w)==1017){
         if(mining&&!mining->isOverlayMode()){SynthHome::selectPage("home");desktop();return 0;}
         if(mining&&mining->isOverlayMode()){
-            HMENU mode=CreatePopupMenu();AppendMenuW(mode,MF_STRING|(activityMode()?0:MF_CHECKED),10,L"Mining HUD");AppendMenuW(mode,MF_STRING|(pirate?MF_CHECKED:0),11,L"Piracy HUD");AppendMenuW(mode,MF_STRING|(quest?MF_CHECKED:0),13,L"Missions HUD");AppendMenuW(mode,MF_STRING|(finder?MF_CHECKED:0),19,L"Finder HUD");AppendMenuW(mode,MF_STRING|(hangars?MF_CHECKED:0),15,L"Hangars HUD");AppendMenuW(mode,MF_STRING|(placementLocked?MF_CHECKED:0),12,L"Lock HUD position");AppendMenuW(mode,MF_STRING,20,L"Dock HUD top right");AppendMenuW(mode,MF_STRING,16,L"Day/Night Forecast");appendAfkMenu(mode,17);AppendMenuW(mode,MF_STRING,18,L"Automatic acceptance…");AppendMenuW(mode,MF_SEPARATOR,0,nullptr);AppendMenuW(mode,MF_STRING,4,L"Server log & interdiction history");AppendMenuW(mode,MF_STRING,6,L"Startup & HUD settings");AppendMenuW(mode,MF_STRING,14,L"Setup & reputation status");
+            HMENU mode=CreatePopupMenu();AppendMenuW(mode,MF_STRING|(activityMode()?0:MF_CHECKED),10,L"Mining HUD");AppendMenuW(mode,MF_STRING|(pirate?MF_CHECKED:0),11,L"Piracy / Flight HUD");AppendMenuW(mode,MF_STRING|(quest?MF_CHECKED:0),13,L"Missions HUD");AppendMenuW(mode,MF_STRING|(finder?MF_CHECKED:0),19,L"Finder HUD");AppendMenuW(mode,MF_STRING|(hangars?MF_CHECKED:0),15,L"Hangars HUD");AppendMenuW(mode,MF_STRING|(placementLocked?MF_CHECKED:0),12,L"Lock HUD position");AppendMenuW(mode,MF_STRING,20,L"Dock HUD top right");AppendMenuW(mode,MF_STRING,16,L"Day/Night Forecast");appendAfkMenu(mode,17);AppendMenuW(mode,MF_STRING,18,L"Automatic acceptance…");AppendMenuW(mode,MF_SEPARATOR,0,nullptr);AppendMenuW(mode,MF_STRING,4,L"Server log & interdiction history");AppendMenuW(mode,MF_STRING,6,L"Startup & HUD settings");AppendMenuW(mode,MF_STRING,14,L"Setup & reputation status");
             POINT at;GetCursorPos(&at);appendProfileMenu(mode);pruneHudMenu(mode);int choice=SynthMenus::track(mode,TPM_RETURNCMD,at.x,at.y,0,hwnd,nullptr);DestroyMenu(mode);if(choice==20){dockHud();return 0;}if(handleProfileChoice(choice))return 0;if(choice==19){setMode(4);showHud(true);setActivityExpanded(true);return 0;}if(choice==18)spawnPython(L"contract_share_helper.py",{L"--owner",std::to_wstring(GetCurrentProcessId())});if(choice==17)toggleAfk();if(choice==16)spawnPython(L"daylight_planner.py",{});if(choice==12)togglePlacement();if(choice==15)setMode(3);if(choice==13)setMode(2);if(choice==10||choice==11)setMode(choice==11);if(choice==4)workspace(2);if(choice==6)workspace(4);if(choice==14)spawnPython(L"app_launcher.py",{L"--status"});return 0;
         }
         HMENU menu=CreatePopupMenu();AppendMenuW(menu,MF_STRING,2,L"Item directory");AppendMenuW(menu,MF_STRING,3,L"Material picker");AppendMenuW(menu,MF_STRING,4,L"Server log");AppendMenuW(menu,MF_STRING,5,L"Review imported records");AppendMenuW(menu,MF_STRING,6,L"Startup & HUD settings");AppendMenuW(menu,MF_STRING,7,L"Show / hide HUD");AppendMenuW(menu,MF_STRING,8,L"Mining tools & personal records");AppendMenuW(menu,MF_STRING,9,L"Rock bookmarks & return test");AppendMenuW(menu,MF_STRING,16,L"Day/Night Forecast");AppendMenuW(menu,MF_STRING,14,L"Setup & reputation status");
-        appendAfkMenu(menu,17);AppendMenuW(menu,MF_STRING,18,L"Automatic acceptance…");AppendMenuW(menu,MF_SEPARATOR,0,nullptr);AppendMenuW(menu,MF_STRING|(activityMode()?0:MF_CHECKED),10,L"HUD mode: Mining");AppendMenuW(menu,MF_STRING|(pirate?MF_CHECKED:0),11,L"HUD mode: Piracy");
+        appendAfkMenu(menu,17);AppendMenuW(menu,MF_STRING,18,L"Automatic acceptance…");AppendMenuW(menu,MF_SEPARATOR,0,nullptr);AppendMenuW(menu,MF_STRING|(activityMode()?0:MF_CHECKED),10,L"HUD mode: Mining");AppendMenuW(menu,MF_STRING|(pirate?MF_CHECKED:0),11,L"HUD mode: Piracy / Flight");
         AppendMenuW(menu,MF_STRING|(quest?MF_CHECKED:0),13,L"HUD mode: Missions");AppendMenuW(menu,MF_STRING|(finder?MF_CHECKED:0),19,L"HUD mode: Finder");AppendMenuW(menu,MF_STRING|(hangars?MF_CHECKED:0),15,L"HUD mode: Hangars");AppendMenuW(menu,MF_STRING|(placementLocked?MF_CHECKED:0),12,L"Lock HUD position");AppendMenuW(menu,MF_STRING,20,L"Dock HUD top right");POINT at;GetCursorPos(&at);appendProfileMenu(menu);pruneHudMenu(menu);int choice=SynthMenus::track(menu,TPM_RETURNCMD,at.x,at.y,0,hwnd,nullptr);DestroyMenu(menu);if(choice==20){dockHud();return 0;}if(handleProfileChoice(choice))return 0;if(choice==19){setMode(4);showHud(true);setActivityExpanded(true);return 0;}
         if(choice==18){spawnPython(L"contract_share_helper.py",{L"--owner",std::to_wstring(GetCurrentProcessId())});return 0;}
         if(choice==17){toggleAfk();return 0;}
@@ -1023,8 +1053,15 @@ bool compboardActionEnabled(int id){
     return flag(boardHud,"can_undo");
 }
 bool hudLocked(){return placementLocked;}
+bool miningHudOpen(){
+    if(!mining)return false;
+    HWND window=mining->windowHandle();
+    if(!window)return false;
+    HWND rootWindow=GetAncestor(window,GA_ROOT);
+    return HudVisibility::miningOcrAllowed(activityMode(),IsWindowVisible(window)!=FALSE,mining->isOverlayMode(),hudVisible,activityExpanded,rootWindow&&IsIconic(rootWindow));
+}
 bool gameAvailable(){
-    if(activityMode())return false;
+    if(!miningHudOpen())return false;
     static double checked=-10;static bool available=false;
     if(epoch()-checked>=1){available=SCMiner::ScreenCapture::gameWindow()!=nullptr;checked=epoch();}
     return available;
@@ -1174,7 +1211,7 @@ int compboardHudPreview(const std::filesystem::path& output){
         };
         for(int id=31930;id<=31947;++id){auto rect=CompboardHud::control(id);fit&=rect.x>=0&&rect.x+rect.width<=430&&rect.y+rect.height<=360;button(CompboardHud::caption(id,true),rect);}
         button(L"More",{320,8,52,20});button(L"Full",{376,8,46,20});
-        const wchar_t* tabs[]={L"Mining",L"Piracy",L"Missions",L"Hangars",L"Finder"};for(int i=0;i<5;++i)button(tabs[i],{8+84*i,363,80,22});
+        const wchar_t* tabs[]={L"Mining",L"Piracy / Flight",L"Missions",L"Hangars",L"Finder"};for(int i=0;i<5;++i)button(tabs[i],{8+84*i,363,80,22});
         const CLSID png={0x557cf406,0x1a04,0x11d3,{0x9a,0x73,0x00,0x00,0xf8,0x1e,0xf3,0x2e}};
         saved=bitmap.Save(output.c_str(),&png,nullptr)==Gdiplus::Ok;
     }
@@ -1186,42 +1223,292 @@ void drawQuesting(Gdiplus::Graphics& g,float width,float height,float scale){
     MissionHud::draw(g,width,scale,missionTab,missionHud,bridgeFresh?field(state,"questing"):Json{},epoch(),ledgerFresh);
 }
 void drawPiracy(Gdiplus::Graphics& g,float width,float height,float scale){
-    Gdiplus::SolidBrush ink(HudTheme::Text),accent(HudTheme::modeAccent(1)),muted(HudTheme::Muted),green(Gdiplus::Color(255,83,208,159));
+    Gdiplus::SolidBrush ink(HudTheme::Text),accent(HudTheme::modeAccent(1)),muted(HudTheme::Muted),faint(HudTheme::Faint),green(Gdiplus::Color(255,83,208,159)),cyan(Gdiplus::Color(255,98,204,255));
     Gdiplus::Pen border(HudTheme::Border);
-    auto text=[&](const std::string& value,float x,float y,float size,Gdiplus::Brush* brush,float span){
-        Gdiplus::Font f(L"Segoe UI",size*scale,Gdiplus::FontStyleRegular,Gdiplus::UnitPixel);Gdiplus::StringFormat format;
-        format.SetFormatFlags(Gdiplus::StringFormatFlagsNoWrap);format.SetTrimming(Gdiplus::StringTrimmingEllipsisCharacter);
-        g.DrawString(wide(value).c_str(),-1,&f,Gdiplus::RectF(x*scale,y*scale,span*scale,(size+8)*scale),&format,brush);
+
+    auto parseHex = [](const std::string& hex, Gdiplus::Color fallback) -> Gdiplus::Color {
+        if(hex.size() == 7 && hex[0] == '#') {
+            int r = 0, gr = 0, b = 0;
+            if(sscanf_s(hex.c_str() + 1, "%02x%02x%02x", &r, &gr, &b) == 3) {
+                return Gdiplus::Color(255, (BYTE)r, (BYTE)gr, (BYTE)b);
+            }
+        }
+        return fallback;
     };
-    const float logicalWidth=width/scale;
-    const bool fresh=testing||(epoch()-lastStateAt<4&&state.numberOr("owner_pid")==GetCurrentProcessId());
-    const bool joined=fresh&&!state.textOr("session_token").empty();
-    const auto& watch=field(state,"piracy_watch");
-    text("PIRACY",10,8,12,&accent,130);
-    drawJurisdictionBadge(g,jurisdictionBadgeModel(state,joined,epoch()),10,38,logicalWidth-20,scale,epoch());
-    const auto& logged=field(state,"interdictions");
-    text("LOGGED INTERDICTION REPORTS",10,80,10,&muted,logicalWidth/2-20);
-    text(joined?std::to_string(int(logged.numberOr("current_count"))):"--",10,98,28,&ink,logicalWidth/2-20);
-    int seconds=joined?int(watch.numberOr("waiting_s")):0;std::ostringstream wait;
-    wait<<std::setfill('0')<<std::setw(2)<<seconds/3600<<":"<<std::setw(2)<<(seconds/60)%60<<":"<<std::setw(2)<<seconds%60;
-    text("MANUAL WAIT · "+std::string(flag(watch,"waiting_active")?"RUNNING":"PAUSED"),logicalWidth/2,80,10,&muted,logicalWidth/2-12);
-    text(wait.str(),logicalWidth/2,98,26,&ink,logicalWidth/2-12);
-    text(!fresh?"Session service unavailable":!joined?"Join a shard to use the wait timer":"Game-log reports · manual wait timer",10,136,10,&muted,logicalWidth-20);
-    text("A logged crime report is not confirmation of every snare catch",10,156,10,&muted,logicalWidth-20);
-    const auto& report=field(state,"interdictions");const auto& current=field(report,"current").items;
-    const bool recent=joined&&!current.empty()&&epoch()-current.front().numberOr("at")>=0&&epoch()-current.front().numberOr("at")<8;
-    if(recent)text("Logged interdiction: "+current.front().textOr("target"),10,177,11,&accent,logicalWidth-20);
-    if(!pirateDetails)return;
-    g.DrawLine(&border,10*scale,204*scale,width-10*scale,204*scale);
-    int waited=joined?int(watch.numberOr("waiting_s")):0;std::ostringstream clock;clock<<std::setfill('0')<<std::setw(2)<<waited/3600<<":"<<std::setw(2)<<(waited/60)%60<<":"<<std::setw(2)<<waited%60;
-    text("Waiting "+clock.str()+(flag(watch,"waiting_active")?" · running":" · paused"),10,212,14,&ink,logicalWidth-20);
-    text("Logged interdiction reports: "+std::to_string(joined?int(report.numberOr("current_count")):0),10,268,11,&ink,logicalWidth-20);
-    if(joined&&!current.empty()){
-        double seconds=std::max(0.,epoch()-current.front().numberOr("at"));
-        text(current.front().textOr("target"),10,290,14,recent?&accent:&ink,logicalWidth-20);
-        text("Last report "+std::to_string(int(seconds<60?seconds:seconds/60))+(seconds<60?"s ago":"m ago"),10,313,10,&muted,logicalWidth-20);
-    }else text("No logged reports on this visit",10,290,12,&muted,logicalWidth-20);
-    text("Station / guard hostility: UNKNOWN · zone reports do not predict attacks",10,337,9,&muted,logicalWidth-20);
+
+    auto addRRect = [](Gdiplus::GraphicsPath& path, const Gdiplus::RectF& r, float radius) {
+        float d = 2.0f * radius;
+        if (d > r.Width) d = r.Width;
+        if (d > r.Height) d = r.Height;
+        path.AddArc(r.X, r.Y, d, d, 180, 90);
+        path.AddArc(r.X + r.Width - d, r.Y, d, d, 270, 90);
+        path.AddArc(r.X + r.Width - d, r.Y + r.Height - d, d, d, 0, 90);
+        path.AddArc(r.X, r.Y + r.Height - d, d, d, 90, 90);
+        path.CloseFigure();
+    };
+
+    auto fillRRect = [&](const Gdiplus::RectF& r, float radius, const Gdiplus::Color& color) {
+        Gdiplus::GraphicsPath path;
+        addRRect(path, r, radius);
+        Gdiplus::SolidBrush b(color);
+        g.FillPath(&b, &path);
+    };
+
+    auto strokeRRect = [&](const Gdiplus::RectF& r, float radius, const Gdiplus::Color& color, float penW = 1.0f) {
+        Gdiplus::GraphicsPath path;
+        addRRect(path, r, radius);
+        Gdiplus::Pen p(color, penW * scale);
+        g.DrawPath(&p, &path);
+    };
+
+    auto text = [&](const std::string& value, float x, float y, float size, Gdiplus::Brush* brush, float span = 0, bool bold = false, bool center = false) {
+        Gdiplus::Font f(L"Segoe UI", size * scale, bold ? Gdiplus::FontStyleBold : Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
+        Gdiplus::StringFormat format;
+        format.SetFormatFlags(Gdiplus::StringFormatFlagsNoWrap);
+        format.SetTrimming(Gdiplus::StringTrimmingEllipsisCharacter);
+        if (center) format.SetAlignment(Gdiplus::StringAlignmentCenter);
+        g.DrawString(wide(value).c_str(), -1, &f, Gdiplus::RectF(x * scale, y * scale, (span > 0 ? span : width / scale - x - 12) * scale, (size + 10) * scale), &format, brush);
+    };
+
+    auto headText = [&](const std::string& value, float x, float y, float size, Gdiplus::Brush* brush, float span = 0, bool bold = false, bool center = false) {
+        Gdiplus::Font f(L"Bahnschrift", size * scale, bold ? Gdiplus::FontStyleBold : Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
+        Gdiplus::StringFormat format;
+        format.SetFormatFlags(Gdiplus::StringFormatFlagsNoWrap);
+        format.SetTrimming(Gdiplus::StringTrimmingEllipsisCharacter);
+        if (center) format.SetAlignment(Gdiplus::StringAlignmentCenter);
+        g.DrawString(wide(value).c_str(), -1, &f, Gdiplus::RectF(x * scale, y * scale, (span > 0 ? span : width / scale - x - 12) * scale, (size + 10) * scale), &format, brush);
+    };
+
+    auto fmtSec = [](int total_s) -> std::string {
+        if (total_s <= 0) return "0s";
+        int h = total_s / 3600;
+        int m = (total_s % 3600) / 60;
+        int s = total_s % 60;
+        std::ostringstream out;
+        if (h > 0) out << h << "h " << m << "m";
+        else if (m > 0) out << m << "m " << s << "s";
+        else out << s << "s";
+        return out.str();
+    };
+
+    auto fmtClock = [](int sec) -> std::string {
+        std::ostringstream out;
+        out << std::setfill('0') << std::setw(2) << sec / 3600 << ":"
+            << std::setfill('0') << std::setw(2) << (sec / 60) % 60 << ":"
+            << std::setfill('0') << std::setw(2) << sec % 60;
+        return out.str();
+    };
+
+    const float logicalWidth = width / scale;
+    const bool fresh = testing || (epoch() - lastStateAt < 4 && state.numberOr("owner_pid") == GetCurrentProcessId());
+    const bool joined = fresh && !state.textOr("session_token").empty();
+    const auto& watch = field(state, "piracy_watch");
+    const auto& flight = field(state, "flight").kind == Json::Kind::Object ? field(state, "flight") : field(watch, "flight");
+    const auto& logged = field(state, "interdictions");
+    const int waitSec = joined ? int(watch.numberOr("waiting_s")) : 0;
+    const bool waitActive = flag(watch, "waiting_active");
+
+    const std::string fState = flight.textOr("state", "ON_FOOT");
+    std::string shipName = flight.textOr("active_ship", "--");
+    if(shipName.empty() || shipName == "--") shipName = "No Vessel Boarded";
+    const int helmS = int(flight.numberOr("active_helm_s"));
+    const int jumps = int(flight.numberOr("active_jumps"));
+    const int contracts = int(flight.numberOr("active_contracts"));
+
+    if (logicalWidth >= 600) {
+        // Desktop Companion / Workspace View (logicalWidth ~ 816)
+        headText("PIRACY / FLIGHT TELEMETRY", 10, 6, 14, &accent, 260, true);
+        text("AVIONICS & INTERDICTION RADAR", 274, 9, 10, &muted, 220);
+        drawJurisdictionBadge(g, jurisdictionBadgeModel(state, joined, epoch()), logicalWidth - 280, 4, 270, scale, epoch());
+
+        // Row of 3 Cards: Active Sortie, Career Avionics, Snare/Wait
+        // Card 1: Active Sortie
+        fillRRect(Gdiplus::RectF(10 * scale, 34 * scale, 265 * scale, 76 * scale), 6 * scale, Gdiplus::Color(230, 20, 26, 38));
+        strokeRRect(Gdiplus::RectF(10 * scale, 34 * scale, 265 * scale, 76 * scale), 6 * scale, HudTheme::Border);
+        text("ACTIVE SORTIE", 20, 40, 9, &muted, 110);
+        if (fState == "IN_FLIGHT") {
+            fillRRect(Gdiplus::RectF(145 * scale, 39 * scale, 120 * scale, 17 * scale), 4 * scale, Gdiplus::Color(60, 103, 213, 154));
+            text("● IN FLIGHT", 145, 41, 9, &green, 120, true, true);
+        } else if (fState == "BOARDED") {
+            fillRRect(Gdiplus::RectF(145 * scale, 39 * scale, 120 * scale, 17 * scale), 4 * scale, Gdiplus::Color(60, 98, 204, 255));
+            text("● ABOARD", 145, 41, 9, &cyan, 120, true, true);
+        } else {
+            fillRRect(Gdiplus::RectF(145 * scale, 39 * scale, 120 * scale, 17 * scale), 4 * scale, Gdiplus::Color(45, 136, 149, 164));
+            text("○ ON FOOT", 145, 41, 9, &faint, 120, false, true);
+        }
+        headText(shipName, 20, 58, 13, &ink, 245, true);
+        std::string liveStats = "Helm: " + fmtSec(helmS) + " · " + std::to_string(jumps) + (jumps == 1 ? " jump" : " jumps") + " · " + std::to_string(contracts) + (contracts == 1 ? " contract" : " contracts");
+        text(liveStats, 20, 84, 9, &muted, 245);
+
+        // Card 2: Career Avionics
+        fillRRect(Gdiplus::RectF(285 * scale, 34 * scale, 245 * scale, 76 * scale), 6 * scale, Gdiplus::Color(230, 20, 26, 38));
+        strokeRRect(Gdiplus::RectF(285 * scale, 34 * scale, 245 * scale, 76 * scale), 6 * scale, HudTheme::Border);
+        text("CAREER FLIGHT AVIONICS", 295, 40, 9, &muted, 225);
+        int totalHelm = int(flight.numberOr("total_helm_s"));
+        headText(fmtSec(totalHelm), 295, 56, 19, &cyan, 225, true);
+        int totalSorties = int(flight.numberOr("total_sorties"));
+        int totalJumps = int(flight.numberOr("total_jumps"));
+        int totalLosses = int(flight.numberOr("total_losses"));
+        std::string careerStats = std::to_string(totalSorties) + " sorties · " + std::to_string(totalJumps) + " jumps · " + std::to_string(totalLosses) + " losses";
+        text(careerStats, 295, 84, 9, &muted, 225);
+
+        // Card 3: Snare / Interdiction Watch
+        fillRRect(Gdiplus::RectF(540 * scale, 34 * scale, 266 * scale, 76 * scale), 6 * scale, Gdiplus::Color(230, 20, 26, 38));
+        strokeRRect(Gdiplus::RectF(540 * scale, 34 * scale, 266 * scale, 76 * scale), 6 * scale, HudTheme::Border);
+        text("MANUAL WAIT · " + std::string(waitActive ? "RUNNING" : "PAUSED"), 550, 40, 9, waitActive ? &green : &muted, 246);
+        headText(fmtClock(waitSec), 550, 56, 19, waitActive ? &ink : &muted, 246, true);
+        int repCount = joined ? int(logged.numberOr("current_count")) : 0;
+        std::string repStr = std::to_string(repCount) + " logged interdiction report(s)";
+        text(repStr, 550, 84, 9, repCount > 0 ? &accent : &muted, 246);
+
+        // Section 2: Fleet Proportional Bar Chart (Left) & Recent Sorties Ledger (Right)
+        // Left Column: Fleet Bar Chart
+        fillRRect(Gdiplus::RectF(10 * scale, 118 * scale, 390 * scale, 246 * scale), 6 * scale, Gdiplus::Color(210, 16, 22, 32));
+        strokeRRect(Gdiplus::RectF(10 * scale, 118 * scale, 390 * scale, 246 * scale), 6 * scale, HudTheme::Border);
+        headText("FLEET FLIGHT DISTRIBUTION", 20, 126, 11, &accent, 240, true);
+        text("HOURS BY HULL", 295, 128, 9, &faint, 95, false, true);
+
+        const auto& fleet = field(flight, "fleet").items;
+        if (fleet.empty()) {
+            text("No flight history recorded yet.", 20, 175, 11, &muted, 360);
+            text("Board and fly any ship in Star Citizen to build your avionics profile.", 20, 200, 9, &faint, 360);
+        } else {
+            for (size_t i = 0; i < fleet.size() && i < 4; ++i) {
+                const auto& row = fleet[i];
+                float yPos = 152.0f + float(i) * 47.0f;
+                Gdiplus::Color shipCol = parseHex(row.textOr("color"), Gdiplus::Color(255, 98, 204, 255));
+                fillRRect(Gdiplus::RectF(20 * scale, (yPos + 4) * scale, 7 * scale, 7 * scale), 3.5f * scale, shipCol);
+                text(row.textOr("name"), 32, yPos, 11, &ink, 240, true);
+                int sec = int(row.numberOr("seconds"));
+                int pct = int(row.numberOr("pct"));
+                std::string durStr = fmtSec(sec) + " (" + std::to_string(pct) + "%)";
+                text(durStr, 275, yPos, 10, &muted, 115, false, true);
+
+                float trackW = 360.0f, trackH = 6.0f;
+                fillRRect(Gdiplus::RectF(20 * scale, (yPos + 18) * scale, trackW * scale, trackH * scale), 3.0f * scale, Gdiplus::Color(255, 28, 36, 50));
+                float fillW = std::clamp((float(pct) / 100.0f) * trackW, (pct > 0 ? 5.0f : 0.0f), trackW);
+                fillRRect(Gdiplus::RectF(20 * scale, (yPos + 18) * scale, fillW * scale, trackH * scale), 3.0f * scale, shipCol);
+
+                int sCount = int(row.numberOr("sorties"));
+                int jCount = int(row.numberOr("jumps"));
+                int cCount = int(row.numberOr("contracts"));
+                std::string sub = std::to_string(sCount) + " sorties · " + std::to_string(jCount) + " quantum jumps · " + std::to_string(cCount) + " contracts";
+                text(sub, 20, yPos + 28, 9, &faint, 360);
+            }
+        }
+
+        // Right Column: Recent Sorties Ledger
+        fillRRect(Gdiplus::RectF(416 * scale, 118 * scale, 390 * scale, 246 * scale), 6 * scale, Gdiplus::Color(210, 16, 22, 32));
+        strokeRRect(Gdiplus::RectF(416 * scale, 118 * scale, 390 * scale, 246 * scale), 6 * scale, HudTheme::Border);
+        headText("RECENT SORTIES LEDGER", 426, 126, 11, &accent, 240, true);
+        text("TIME & DURATION", 695, 128, 9, &faint, 100, false, true);
+
+        const auto& recent = field(flight, "recent").items;
+        if (recent.empty()) {
+            text("No recent completed sorties logged.", 426, 175, 11, &muted, 360);
+            text("Completed flight sorties and landing reports will appear here.", 426, 200, 9, &faint, 360);
+        } else {
+            for (size_t i = 0; i < recent.size() && i < 4; ++i) {
+                const auto& row = recent[i];
+                float yPos = 152.0f + float(i) * 47.0f;
+                text(row.textOr("time", "--:--"), 426, yPos, 10, &muted, 45);
+                text(row.textOr("ship"), 475, yPos, 11, &ink, 220, true);
+                int durS = int(row.numberOr("duration_s"));
+                text(fmtSec(durS), 705, yPos, 10, &cyan, 90, false, true);
+
+                int j = int(row.numberOr("jumps"));
+                std::string details = std::to_string(j) + (j == 1 ? " quantum jump" : " quantum jumps");
+                int c = int(row.numberOr("contracts"));
+                if (c > 0) details += " · " + std::to_string(c) + (c == 1 ? " contract complete" : " contracts complete");
+                text(details, 475, yPos + 18, 9, &faint, 215);
+
+                std::string inc = row.textOr("incident");
+                std::string reason = row.textOr("reason", "Landed");
+                if (!inc.empty()) {
+                    fillRRect(Gdiplus::RectF(695 * scale, (yPos + 18) * scale, 100 * scale, 17 * scale), 4 * scale, Gdiplus::Color(55, 239, 108, 116));
+                    text(inc, 695, yPos + 20, 9, &accent, 100, true, true);
+                } else {
+                    fillRRect(Gdiplus::RectF(695 * scale, (yPos + 18) * scale, 100 * scale, 17 * scale), 4 * scale, Gdiplus::Color(45, 83, 208, 159));
+                    text(reason, 695, yPos + 20, 9, &green, 100, false, true);
+                }
+            }
+        }
+
+        // Bottom notice
+        text("Star Citizen flight telemetry derived from Game.log engine and comms events · No telemetry guessed", 10, 372, 9, &muted, logicalWidth - 20);
+        const auto& current = field(logged, "current").items;
+        if (joined && !current.empty() && epoch() - current.front().numberOr("at") >= 0 && epoch() - current.front().numberOr("at") < 8) {
+            text("Logged interdiction: " + current.front().textOr("target"), 10, 390, 10, &accent, logicalWidth - 20);
+        }
+        return;
+    }
+
+    // In-Game HUD Overlay (logicalWidth < 600)
+    headText("PIRACY / FLIGHT", 10, 8, 12, &accent, 160, true);
+    drawJurisdictionBadge(g, jurisdictionBadgeModel(state, joined, epoch()), 10, 34, logicalWidth - 20, scale, epoch());
+
+    // Active Vessel Card
+    fillRRect(Gdiplus::RectF(10 * scale, 70 * scale, (logicalWidth - 20) * scale, 56 * scale), 6 * scale, Gdiplus::Color(220, 20, 26, 38));
+    strokeRRect(Gdiplus::RectF(10 * scale, 70 * scale, (logicalWidth - 20) * scale, 56 * scale), 6 * scale, HudTheme::Border);
+    if (fState == "IN_FLIGHT") {
+        fillRRect(Gdiplus::RectF(18 * scale, 77 * scale, 86 * scale, 16 * scale), 4 * scale, Gdiplus::Color(60, 103, 213, 154));
+        text("● IN FLIGHT", 18, 79, 9, &green, 86, true, true);
+    } else if (fState == "BOARDED") {
+        fillRRect(Gdiplus::RectF(18 * scale, 77 * scale, 86 * scale, 16 * scale), 4 * scale, Gdiplus::Color(60, 98, 204, 255));
+        text("● ABOARD", 18, 79, 9, &cyan, 86, true, true);
+    } else {
+        fillRRect(Gdiplus::RectF(18 * scale, 77 * scale, 86 * scale, 16 * scale), 4 * scale, Gdiplus::Color(45, 136, 149, 164));
+        text("○ ON FOOT", 18, 79, 9, &faint, 86, false, true);
+    }
+    headText(shipName, 110, 77, 12, &ink, logicalWidth - 130, true);
+    std::string liveStats = "Helm: " + fmtSec(helmS) + " · " + std::to_string(jumps) + (jumps == 1 ? " jump" : " jumps") + " · " + std::to_string(contracts) + (contracts == 1 ? " contract" : " contracts");
+    text(liveStats, 18, 102, 9, &muted, logicalWidth - 36);
+
+    // Interdictions & Wait
+    text("LOGGED INTERDICTIONS", 10, 134, 9, &muted, logicalWidth / 2 - 15);
+    headText(joined ? std::to_string(int(logged.numberOr("current_count"))) : "--", 10, 148, 24, &ink, logicalWidth / 2 - 15, true);
+
+    text("MANUAL WAIT · " + std::string(waitActive ? "RUNNING" : "PAUSED"), logicalWidth / 2, 134, 9, waitActive ? &green : &muted, logicalWidth / 2 - 10);
+    headText(fmtClock(waitSec), logicalWidth / 2, 148, 22, waitActive ? &ink : &muted, logicalWidth / 2 - 10, true);
+
+    text(!fresh ? "Session service unavailable" : !joined ? "Join a shard to use wait timer" : "Game-log reports · manual wait timer", 10, 182, 9, &muted, logicalWidth - 20);
+
+    const auto& current = field(logged, "current").items;
+    const bool recentHit = joined && !current.empty() && epoch() - current.front().numberOr("at") >= 0 && epoch() - current.front().numberOr("at") < 8;
+    if (recentHit) text("Logged interdiction: " + current.front().textOr("target"), 10, 196, 10, &accent, logicalWidth - 20);
+
+    if (!pirateDetails) return;
+
+    // Expanded Overlay mode: Details line and Mini Fleet Chart
+    g.DrawLine(&border, 10 * scale, 212 * scale, width - 10 * scale, 212 * scale);
+    headText("FLEET FLIGHT SHARE", 10, 220, 10, &accent, 160, true);
+
+    const auto& fleet = field(flight, "fleet").items;
+    if (fleet.empty()) {
+        text("No flight history recorded yet", 10, 238, 10, &muted, logicalWidth - 20);
+    } else {
+        for (size_t i = 0; i < fleet.size() && i < 2; ++i) {
+            const auto& row = fleet[i];
+            float yPos = 236.0f + float(i) * 24.0f;
+            Gdiplus::Color shipCol = parseHex(row.textOr("color"), Gdiplus::Color(255, 98, 204, 255));
+            fillRRect(Gdiplus::RectF(10 * scale, (yPos + 3) * scale, 6 * scale, 6 * scale), 3 * scale, shipCol);
+            text(row.textOr("name"), 20, yPos, 10, &ink, logicalWidth - 140, true);
+            int sec = int(row.numberOr("seconds"));
+            int pct = int(row.numberOr("pct"));
+            std::string durStr = fmtSec(sec) + " (" + std::to_string(pct) + "%)";
+            text(durStr, logicalWidth - 120, yPos, 9, &muted, 110, false, true);
+        }
+    }
+
+    text("Waiting " + fmtClock(waitSec) + (waitActive ? " · running" : " · paused"), 10, 288, 12, &ink, logicalWidth - 20);
+    text("Logged interdiction reports: " + std::to_string(joined ? int(logged.numberOr("current_count")) : 0), 10, 310, 10, &ink, logicalWidth - 20);
+    if (joined && !current.empty()) {
+        double seconds = std::max(0., epoch() - current.front().numberOr("at"));
+        text(current.front().textOr("target"), 10, 326, 12, recentHit ? &accent : &ink, logicalWidth - 20);
+        text("Last report " + std::to_string(int(seconds < 60 ? seconds : seconds / 60)) + (seconds < 60 ? "s ago" : "m ago"), 10, 342, 9, &muted, logicalWidth - 20);
+    } else {
+        text("No logged reports on this visit", 10, 326, 11, &muted, logicalWidth - 20);
+    }
 }
 
 void drawSession(Gdiplus::Graphics& g,float width,float top,float height,float scale){

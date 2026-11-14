@@ -34,13 +34,19 @@ void paint(HWND window){
         if(m.item.textOr("name").empty())text(g,"Select an item to see prices and places to buy it.",pad,y,width-32,40,14,MUTED);
         else {
             text(g,m.item.textOr("name"),pad,y,width-200,30,21,INK,true);
-            text(g,m.favorite?"FAVORITE  ·  "+m.item.textOr("kind"):m.item.textOr("kind"),width-180,y+5,164,22,11,GOLD,true);
+            const auto& wikelo=field(m.item,"wikelo_turnin");
+            bool isWikelo=!wikelo.textOr("task").empty()||m.item.textOr("category").find("Wikelo")!=std::string::npos||m.item.textOr("id").find("wikelo-")==0;
+            std::string kindBadge=isWikelo?(m.item.textOr("category")=="Wikelo Barter Ships"?"WIKELO SHIP":m.item.textOr("category")=="Wikelo Weapons"?"WIKELO WEAPON":m.item.textOr("category")=="Wikelo Armor"?"WIKELO ARMOR":m.item.textOr("category")=="Wikelo Currencies"?"WIKELO CURRENCY":"WIKELO ITEM"):m.item.textOr("kind");
+            text(g,m.favorite?"FAVORITE  ·  "+kindBadge:kindBadge,width-180,y+5,164,22,11,GOLD,true);
             y+=42;
             const auto& ship=field(m.item,"ship_stats");const auto& overview=field(m.item,"ship_overview");
             if(m.item.textOr("kind")=="Ship"||m.item.textOr("kind")=="Vehicle"){
                 text(g,"STOCK SHIP OVERVIEW",pad,y,width-32,20,10,MUTED,true);y+=24;
+                auto hangarInfo=FinderLayout::classifyShipHangar(m.item);
                 auto role=ship.textOr("role",m.item.textOr("category"));
-                text(g,role+(flag(overview,"concept")?" · CONCEPT LISTING":""),pad,y,width-32,24,15,GOLD,true);y+=30;
+                std::string headerLine=role+(flag(overview,"concept")?" · CONCEPT LISTING":"");
+                if(!hangarInfo.hangar.empty())headerLine+="  ·  "+hangarInfo.hangar+" Hangar";
+                text(g,headerLine,pad,y,width-32,24,15,GOLD,true);y+=30;
                 const auto& ports=field(ship,"hardpoints");const auto& groups=field(ports,"groups").items;
                 text(g,"COMPONENT SLOTS & WEAPON MOUNTS",pad,y,width-32,18,10,MUTED,true);y+=24;
                 if(groups.empty()){text(g,"Mount limits unavailable for this exact ship.",pad,y,width-32,24,12,MUTED);y+=30;}
@@ -57,14 +63,24 @@ void paint(HWND window){
                     if(ports.textOr("status")=="partial"){text(g,"Some mount limits are unavailable; only resolved slots are shown.",pad,y,width-32,28,10,MUTED);y+=32;}
                 }
                 text(g,"BASIC STOCK SPECS",pad,y,width-32,18,10,MUTED,true);y+=24;
-                const char* labels[]={"BODY HP","STOCK SHIELDS","CARGO","CREW"};
-                std::string values[]={statValue(ship,"body_hp"),statValue(ship,"shield_hp"),statValue(overview,"scu"),overview.textOr("crew","—")};
-                const char* units[]={"main body part","generator capacity","SCU · UEX","listed · UEX"};
-                int columns=width>=650?4:2;float tile=(width-32-(columns-1)*10)/columns;
-                for(int i=0;i<4;++i){float x=pad+(i%columns)*(tile+10),top=y+(i/columns)*86;rounded(g,x,top,tile,76);text(g,labels[i],x+10,top+8,tile-20,16,9,MUTED,true);text(g,values[i],x+10,top+25,tile-20,29,21,INK,true);text(g,units[i],x+10,top+55,tile-20,16,10,MUTED);}
-                y+=columns==4?86:172;
+                const char* labels[]={"BODY HP","STOCK SHIELDS","CARGO","CREW","LENGTH","HANGAR"};
+                std::string lenStr=statValue(overview,"length");
+                if(lenStr!="—")lenStr+=" m";
+                std::string values[]={statValue(ship,"body_hp"),statValue(ship,"shield_hp"),statValue(overview,"scu"),overview.textOr("crew","—"),lenStr,hangarInfo.hangar.empty()?"—":hangarInfo.hangar};
+                std::string hangarUnit=hangarInfo.sizeLabel.empty()?"landing bay":hangarInfo.sizeLabel;
+                const char* units[]={"main body part","generator capacity","SCU · UEX","listed · UEX","hull length",hangarUnit.c_str()};
+                int columns=width>=860?6:width>=560?3:2;float tile=(width-32-(columns-1)*10)/columns;
+                for(int i=0;i<6;++i){
+                    float x=pad+(i%columns)*(tile+10),top=y+(i/columns)*86;
+                    rounded(g,x,top,tile,76);
+                    text(g,labels[i],x+10,top+8,tile-20,16,9,MUTED,true);
+                    text(g,values[i],x+10,top+25,tile-20,29,(i>=4)?16:21,(i==5)?GOLD:INK,true);
+                    text(g,units[i],x+10,top+55,tile-20,16,10,MUTED);
+                }
+                y+=((6+columns-1)/columns)*86;
                 text(g,"Armor damage taken: physical ×"+statValue(ship,"armor_physical")+" · energy ×"+statValue(ship,"armor_energy"),pad,y,width-32,22,12,INK);y+=26;
-                text(g,"Size "+statValue(ship,"size")+" · L × W × H: "+statValue(overview,"length")+" × "+statValue(overview,"width")+" × "+statValue(overview,"height")+" m",pad,y,width-32,22,12,MUTED);y+=26;
+                std::string dimLine="Hangar: "+hangarInfo.hangar+" ("+(hangarInfo.sizeLabel.empty()?"Size —":hangarInfo.sizeLabel)+") · Dimensions: "+statValue(overview,"length")+"m (L) × "+statValue(overview,"width")+"m (W) × "+statValue(overview,"height")+"m (H)";
+                text(g,dimLine,pad,y,width-32,22,12,GOLD);y+=26;
                 text(g,"Defense: "+ship.textOr("patch","not available for this exact ship")+" · body HP is not total survival HP",pad,y,width-32,32,10,MUTED);y+=36;
                 text(g,"Basic specs: UEX · patch "+overview.textOr("patch","not reported")+" · — = unavailable",pad,y,width-32,30,10,MUTED);y+=34;
             }
@@ -83,7 +99,72 @@ void paint(HWND window){
                 }
                 text(g,"Stock, full-rate burst · excludes spin-up, recharge, heat pauses, hit chance and crafted bonuses",pad,y,width-32,32,10,MUTED);y+=38;
             }
-            if(m.item.textOr("kind")!="Blueprint"){
+            if(isWikelo){
+                text(g,"WIKELO TURN-IN TASK REQUIREMENTS",pad,y,width-260,20,10,MUTED,true);
+                text(g,"BANU BARTER · FREIGHT ELEVATOR",width-250,y,234,20,10,GOLD,true);y+=26;
+
+                // 1. Task Header Box
+                rounded(g,pad,y,width-32,74);
+                std::string taskName=wikelo.textOr("task");
+                if(taskName.empty())taskName="Wikelo Barter Turn-in";
+                text(g,"CONTRACT: \""+taskName+"\"",pad+16,y+10,width-260,24,15,INK,true);
+                text(g,"NO aUEC COST",width-238,y+10,202,24,16,GREEN,true);
+                text(g,"BARTER TURN-IN ONLY",width-238,y+32,202,18,10,GOLD,true);
+                text(g,"Deliver required Favors & components via station freight elevator.",pad+16,y+38,width-260,20,11,MUTED);
+                y+=84;
+
+                // 2. Primary Currency: Wikelo Favors or Direct Barter
+                double count=wikelo.numberOr("favors",0);
+                if(count>0){
+                    rounded(g,pad,y,width-32,84);
+                    text(g,"PRIMARY BARTER CURRENCY",pad+16,y+10,width-260,18,10,MUTED,true);
+                    std::string favorsLabel=wikelo.textOr("favors_label");
+                    if(favorsLabel.empty()){
+                        std::ostringstream fo;fo<<int(count)<<" × Wikelo Favors";favorsLabel=fo.str();
+                    }
+                    text(g,favorsLabel,pad+16,y+28,width-260,28,21,GOLD,true);
+                    text(g,"Physical trade tokens · Not in mobiGlas balance · Manage as inventory cargo",pad+16,y+58,width-32,18,11,INK);
+                    y+=94;
+
+                    // 3. How to Earn Favors Panel
+                    rounded(g,pad,y,width-32,74);
+                    text(g,"HOW TO EARN WIKELO FAVORS (1 FAVOR PER TURN-IN):",pad+16,y+10,width-64,18,10,MUTED,true);
+                    text(g,"• 50× MG Scrip    • 50× Council Scrip    • 50× Carinite    • 12× Irradiated Valakkar Pearls (AA)",pad+16,y+30,width-64,22,12,INK,true);
+                    text(g,"Exchange scrips or rare commodities at Wikelo Emporium terminals.",pad+16,y+50,width-64,18,10,MUTED);
+                    y+=84;
+                } else {
+                    rounded(g,pad,y,width-32,68);
+                    text(g,"PRIMARY BARTER: DIRECT MATERIAL TURN-IN",pad+16,y+10,width-64,18,10,MUTED,true);
+                    text(g,"No Wikelo Favors required. Deliver the exact materials and items listed below.",pad+16,y+32,width-64,22,12,INK,true);
+                    y+=78;
+                }
+
+                // 4. Required Turn-in Components / Items
+                const auto& reqItems=field(wikelo,"items").items;
+                if(!reqItems.empty()){
+                    text(g,"REQUIRED TURN-IN COMPONENTS & MATERIALS",pad,y,width-32,20,10,MUTED,true);y+=24;
+                    for(const auto& req:reqItems){
+                        rounded(g,pad,y,width-32,64);
+                        text(g,req.textOr("label",req.textOr("name")),pad+16,y+10,width-220,24,15,INK,true);
+                        text(g,req.textOr("detail","Required turn-in component"),pad+16,y+35,width-220,20,11,MUTED);
+                        text(g,"REQUIRED",width-190,y+12,160,20,12,GOLD,true);
+                        text(g,"Deposit in elevator",width-190,y+34,160,18,10,MUTED);
+                        y+=74;
+                    }
+                }
+
+                // 5. Locations & Prerequisite Box
+                rounded(g,pad,y,width-32,80);
+                text(g,"TURN-IN LOCATIONS & UNLOCK PREREQUISITE",pad+16,y+10,width-64,18,10,MUTED,true);
+                std::string locs=wikelo.textOr("locations","Wikelo Emporiums: Dasi Station (Hurston) · Selo Station (Crusader) · Kinga Station (microTech)");
+                text(g,locs,pad+16,y+29,width-64,22,12,INK,true);
+                std::string prereq=wikelo.textOr("prerequisite","Prerequisite: Complete \"Wikelo Arrive to System\" contract in mobiGlas Contract Manager");
+                text(g,prereq,pad+16,y+52,width-64,18,10,GOLD);
+                y+=90;
+
+                text(g,"Wikelo turn-in data: starcitizen.tools/Wikelo · verified for Alpha 4.1+",pad,y,width-32,20,10,MUTED);
+                y+=26;
+            } else if(m.item.textOr("kind")!="Blueprint"){
             text(g,"WHERE TO BUY",pad,y,200,20,10,MUTED,true);
             text(g,"UEX CORP · IN-GAME SHOPS",width-228,y,212,20,10,MUTED);y+=26;
             const auto& rows=field(m.shops,"rows").items;
@@ -116,7 +197,7 @@ void paint(HWND window){
             }
             auto notes=m.item.textOr("detail");
             if(!notes.empty()){
-                text(g,m.item.textOr("kind")=="Blueprint"?"CRAFTING & ACQUISITION":"ITEM DETAILS",pad,y,width-32,20,10,MUTED,true);y+=24;
+                text(g,isWikelo?"WIKELO TASK & CONTRACT BRIEFING":m.item.textOr("kind")=="Blueprint"?"CRAFTING & ACQUISITION":"ITEM DETAILS",pad,y,width-32,20,10,MUTED,true);y+=24;
                 Gdiplus::Font f(L"Segoe UI",12,Gdiplus::FontStyleRegular,Gdiplus::UnitPixel);Gdiplus::RectF bounds;auto value=wide(notes);
                 g.MeasureString(value.c_str(),-1,&f,Gdiplus::RectF(pad,y,width-32,100000),&bounds);
                 text(g,notes,pad,y,width-32,bounds.Height+8,12,MUTED);y+=bounds.Height+16;

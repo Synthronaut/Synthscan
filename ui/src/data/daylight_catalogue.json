@@ -1,0 +1,5260 @@
+{
+  "schema": 1,
+  "source": "https://dydrmr.github.io/VerseTime/data/",
+  "signature": "d8ae58463cb47be537b010c86362a911d45025e5499e019facdeb25a53007f62",
+  "bodies": [
+    {
+      "name": "ArcCorp",
+      "system": "Stanton",
+      "radius_km": 800.0,
+      "period_seconds": 11196.0,
+      "correction_degrees": 88.718,
+      "center_km": [
+        18587664.74,
+        -22151916.92,
+        0.0
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "star_km": [
+        136049.87,
+        1294427.4,
+        2923345.368
+      ],
+      "star_radius_km": 696000.0
+    },
+    {
+      "name": "Crusader",
+      "system": "Stanton",
+      "radius_km": 7450.01,
+      "period_seconds": 18360.0,
+      "correction_degrees": 152.311,
+      "center_km": [
+        -18962176.0,
+        -2664960.0,
+        0.0
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "star_km": [
+        136049.87,
+        1294427.4,
+        2923345.368
+      ],
+      "star_radius_km": 696000.0
+    },
+    {
+      "name": "Hurston",
+      "system": "Stanton",
+      "radius_km": 1000.0,
+      "period_seconds": 8928.0,
+      "correction_degrees": 27.481,
+      "center_km": [
+        12850457.093,
+        0.0,
+        0.0
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "star_km": [
+        136049.87,
+        1294427.4,
+        2923345.368
+      ],
+      "star_radius_km": 696000.0
+    },
+    {
+      "name": "microTech",
+      "system": "Stanton",
+      "radius_km": 1000.0,
+      "period_seconds": 14832.0,
+      "correction_degrees": 131.621,
+      "center_km": [
+        22462085.252,
+        37185744.965,
+        0.0
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "star_km": [
+        136049.87,
+        1294427.4,
+        2923345.368
+      ],
+      "star_radius_km": 696000.0
+    },
+    {
+      "name": "Aberdeen",
+      "system": "Stanton",
+      "radius_km": 274.0,
+      "period_seconds": 9360.0,
+      "correction_degrees": 198.981,
+      "center_km": [
+        12905757.636,
+        40955.551,
+        0.0
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "star_km": [
+        136049.87,
+        1294427.4,
+        2923345.368
+      ],
+      "star_radius_km": 696000.0
+    },
+    {
+      "name": "Arial",
+      "system": "Stanton",
+      "radius_km": 344.5,
+      "period_seconds": 19836.0,
+      "correction_degrees": 293.738,
+      "center_km": [
+        12892673.309,
+        -31476.129,
+        0.0
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "star_km": [
+        136049.87,
+        1294427.4,
+        2923345.368
+      ],
+      "star_radius_km": 696000.0
+    },
+    {
+      "name": "Calliope",
+      "system": "Stanton",
+      "radius_km": 240.0,
+      "period_seconds": 16524.0,
+      "correction_degrees": 114.335,
+      "center_km": [
+        22398369.308,
+        37168840.679,
+        0.0
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "star_km": [
+        136049.87,
+        1294427.4,
+        2923345.368
+      ],
+      "star_radius_km": 696000.0
+    },
+    {
+      "name": "Cellin",
+      "system": "Stanton",
+      "radius_km": 260.0,
+      "period_seconds": 16020.0,
+      "correction_degrees": 300.531,
+      "center_km": [
+        -18987611.119,
+        -2709009.661,
+        0.0
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "star_km": [
+        136049.87,
+        1294427.4,
+        2923345.368
+      ],
+      "star_radius_km": 696000.0
+    },
+    {
+      "name": "Clio",
+      "system": "Stanton",
+      "radius_km": 337.17,
+      "period_seconds": 11700.0,
+      "correction_degrees": 285.42,
+      "center_km": [
+        22476728.221,
+        37091020.074,
+        0.0
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "star_km": [
+        136049.87,
+        1294427.4,
+        2923345.368
+      ],
+      "star_radius_km": 696000.0
+    },
+    {
+      "name": "Daymar",
+      "system": "Stanton",
+      "radius_km": 295.0,
+      "period_seconds": 8928.0,
+      "correction_degrees": 27.482,
+      "center_km": [
+        -18930539.54,
+        -2610158.765,
+        0.0
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "star_km": [
+        136049.87,
+        1294427.4,
+        2923345.368
+      ],
+      "star_radius_km": 696000.0
+    },
+    {
+      "name": "Euterpe",
+      "system": "Stanton",
+      "radius_km": 213.0,
+      "period_seconds": 15408.0,
+      "correction_degrees": 72.554,
+      "center_km": [
+        22488109.736,
+        37081123.565,
+        0.0
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "star_km": [
+        136049.87,
+        1294427.4,
+        2923345.368
+      ],
+      "star_radius_km": 696000.0
+    },
+    {
+      "name": "Ita",
+      "system": "Stanton",
+      "radius_km": 325.0,
+      "period_seconds": 17460.0,
+      "correction_degrees": 143.818,
+      "center_km": [
+        12830194.716,
+        114913.609,
+        0.0
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "star_km": [
+        136049.87,
+        1294427.4,
+        2923345.368
+      ],
+      "star_radius_km": 696000.0
+    },
+    {
+      "name": "Lyria",
+      "system": "Stanton",
+      "radius_km": 223.0,
+      "period_seconds": 23148.0,
+      "correction_degrees": 85.383,
+      "center_km": [
+        18703607.172,
+        -22121650.134,
+        0.0
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "star_km": [
+        136049.87,
+        1294427.4,
+        2923345.368
+      ],
+      "star_radius_km": 696000.0
+    },
+    {
+      "name": "Magda",
+      "system": "Stanton",
+      "radius_km": 340.83,
+      "period_seconds": 6984.0,
+      "correction_degrees": 117.217,
+      "center_km": [
+        12792686.359,
+        -74464.581,
+        0.0
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "star_km": [
+        136049.87,
+        1294427.4,
+        2923345.368
+      ],
+      "star_radius_km": 696000.0
+    },
+    {
+      "name": "Wala",
+      "system": "Stanton",
+      "radius_km": 283.0,
+      "period_seconds": 22752.0,
+      "correction_degrees": 294.841,
+      "center_km": [
+        18379649.31,
+        -22000466.768,
+        0.0
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "star_km": [
+        136049.87,
+        1294427.4,
+        2923345.368
+      ],
+      "star_radius_km": 696000.0
+    },
+    {
+      "name": "Yela",
+      "system": "Stanton",
+      "radius_km": 313.0,
+      "period_seconds": 6552.0,
+      "correction_degrees": 271.832,
+      "center_km": [
+        -19022916.799,
+        -2613996.152,
+        0.0
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "star_km": [
+        136049.87,
+        1294427.4,
+        2923345.368
+      ],
+      "star_radius_km": 696000.0
+    },
+    {
+      "name": "Pyro I",
+      "system": "Pyro",
+      "radius_km": 411.7,
+      "period_seconds": 8712.0,
+      "correction_degrees": 342.024,
+      "center_km": [
+        1720027.321,
+        -8091980.53,
+        0.0
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "star_km": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "star_radius_km": 570720.0
+    },
+    {
+      "name": "Monox",
+      "system": "Pyro",
+      "radius_km": 529.5,
+      "period_seconds": 11196.0,
+      "correction_degrees": 173.951,
+      "center_km": [
+        9198417.196,
+        5310746.464,
+        0.0
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "star_km": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "star_radius_km": 570720.0
+    },
+    {
+      "name": "Bloom",
+      "system": "Pyro",
+      "radius_km": 413.9,
+      "period_seconds": 18108.0,
+      "correction_degrees": 194.822,
+      "center_km": [
+        -8900812.465,
+        -15417125.828,
+        0.0
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "star_km": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "star_radius_km": 570720.0
+    },
+    {
+      "name": "Pyro V",
+      "system": "Pyro",
+      "radius_km": 7812.3,
+      "period_seconds": 18360.0,
+      "correction_degrees": 255.394,
+      "center_km": [
+        42285285.514,
+        -7454592.607,
+        0.0
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "star_km": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "star_radius_km": 570720.0
+    },
+    {
+      "name": "Pyro IV",
+      "system": "Pyro",
+      "radius_km": 321.4,
+      "period_seconds": 14724.0,
+      "correction_degrees": 198.548,
+      "center_km": [
+        42614426.19,
+        -7273205.337,
+        0.0
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "star_km": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "star_radius_km": 570720.0
+    },
+    {
+      "name": "Terminus",
+      "system": "Pyro",
+      "radius_km": 285.0,
+      "period_seconds": 10332.0,
+      "correction_degrees": 121.41,
+      "center_km": [
+        -52336519.523,
+        -43918227.841,
+        0.0
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "star_km": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "star_radius_km": 570720.0
+    },
+    {
+      "name": "Ignis",
+      "system": "Pyro",
+      "radius_km": 393.17,
+      "period_seconds": 12384.0,
+      "correction_degrees": 335.794,
+      "center_km": [
+        42296896.252,
+        -7508654.045,
+        0.0
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "star_km": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "star_radius_km": 570720.0
+    },
+    {
+      "name": "Vatra",
+      "system": "Pyro",
+      "radius_km": 365.81,
+      "period_seconds": 12312.0,
+      "correction_degrees": 315.865,
+      "center_km": [
+        42216744.564,
+        -7426205.056,
+        0.0
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "star_km": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "star_radius_km": 570720.0
+    },
+    {
+      "name": "Adir",
+      "system": "Pyro",
+      "radius_km": 431.0,
+      "period_seconds": 8532.0,
+      "correction_degrees": 312.525,
+      "center_km": [
+        42263774.718,
+        -7355835.885,
+        0.0
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "star_km": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "star_radius_km": 570720.0
+    },
+    {
+      "name": "Fairo",
+      "system": "Pyro",
+      "radius_km": 392.24,
+      "period_seconds": 18288.0,
+      "correction_degrees": 349.722,
+      "center_km": [
+        42403120.915,
+        -7498712.832,
+        0.0
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "star_km": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "star_radius_km": 570720.0
+    },
+    {
+      "name": "Fuego",
+      "system": "Pyro",
+      "radius_km": 465.67,
+      "period_seconds": 0.0,
+      "correction_degrees": 0.0,
+      "center_km": [
+        42364491.779,
+        -7328588.036,
+        0.0
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "star_km": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "star_radius_km": 570720.0
+    },
+    {
+      "name": "Vuur",
+      "system": "Pyro",
+      "radius_km": 452.83,
+      "period_seconds": 18576.0,
+      "correction_degrees": 125.782,
+      "center_km": [
+        42164417.395,
+        -7582710.086,
+        0.0
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "star_km": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "star_radius_km": 570720.0
+    }
+  ],
+  "sites": [
+    {
+      "name": "Abandoned Outpost (Cellin)",
+      "body": "Cellin",
+      "system": "Stanton",
+      "kind": "Ruins",
+      "coordinates_km": [
+        130.062,
+        184.915,
+        130.356
+      ]
+    },
+    {
+      "name": "Abandoned Outpost (Daymar)",
+      "body": "Daymar",
+      "system": "Stanton",
+      "kind": "Ruins",
+      "coordinates_km": [
+        73.139,
+        285.904,
+        1.906
+      ]
+    },
+    {
+      "name": "Abandoned Outpost (Yela)",
+      "body": "Yela",
+      "system": "Stanton",
+      "kind": "Ruins",
+      "coordinates_km": [
+        -45.303,
+        308.85,
+        28.948
+      ]
+    },
+    {
+      "name": "ArcCorp Mining Area 045",
+      "body": "Wala",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        -282.798,
+        14.108,
+        10.62
+      ]
+    },
+    {
+      "name": "ArcCorp Mining Area 048",
+      "body": "Wala",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        -178.193,
+        97.756,
+        -196.34
+      ]
+    },
+    {
+      "name": "ArcCorp Mining Area 056",
+      "body": "Wala",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        116.546,
+        -50.147,
+        253.155
+      ]
+    },
+    {
+      "name": "ArcCorp Mining Area 061",
+      "body": "Wala",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        -21.04,
+        -247.548,
+        -132.57
+      ]
+    },
+    {
+      "name": "ArcCorp Mining Area 141",
+      "body": "Daymar",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        -18.167,
+        180.362,
+        -232.76
+      ]
+    },
+    {
+      "name": "ArcCorp Mining Area 157",
+      "body": "Yela",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        6.023,
+        222.356,
+        220.313
+      ]
+    },
+    {
+      "name": "Area04",
+      "body": "ArcCorp",
+      "system": "Stanton",
+      "kind": "City",
+      "coordinates_km": [
+        -314.306,
+        -601.435,
+        423.659
+      ]
+    },
+    {
+      "name": "Area06",
+      "body": "ArcCorp",
+      "system": "Stanton",
+      "kind": "City",
+      "coordinates_km": [
+        -745.806,
+        -111.306,
+        267.38
+      ]
+    },
+    {
+      "name": "Area11",
+      "body": "ArcCorp",
+      "system": "Stanton",
+      "kind": "City",
+      "coordinates_km": [
+        508.204,
+        397.589,
+        472.922
+      ]
+    },
+    {
+      "name": "Area17",
+      "body": "ArcCorp",
+      "system": "Stanton",
+      "kind": "City",
+      "coordinates_km": [
+        -310.29,
+        -601.811,
+        -425.98
+      ]
+    },
+    {
+      "name": "Area18",
+      "body": "ArcCorp",
+      "system": "Stanton",
+      "kind": "Landing zone",
+      "coordinates_km": [
+        -747.409,
+        -116.734,
+        -262.094
+      ]
+    },
+    {
+      "name": "Area20",
+      "body": "ArcCorp",
+      "system": "Stanton",
+      "kind": "City",
+      "coordinates_km": [
+        506.937,
+        401.104,
+        -471.308
+      ]
+    },
+    {
+      "name": "Ashburn Channel Aid Shelter",
+      "body": "Cellin",
+      "system": "Stanton",
+      "kind": "Emergency shelter",
+      "coordinates_km": [
+        3.024,
+        -257.942,
+        -37.129
+      ]
+    },
+    {
+      "name": "Aston Ridge Aid Shelter",
+      "body": "Yela",
+      "system": "Stanton",
+      "kind": "Emergency shelter",
+      "coordinates_km": [
+        207.944,
+        24.051,
+        -232.785
+      ]
+    },
+    {
+      "name": "Astor's Clearing",
+      "body": "microTech",
+      "system": "Stanton",
+      "kind": "Settlement",
+      "coordinates_km": [
+        -810.219,
+        577.884,
+        -101.43
+      ]
+    },
+    {
+      "name": "Barton Flats Aid Shelter",
+      "body": "Aberdeen",
+      "system": "Stanton",
+      "kind": "Emergency shelter",
+      "coordinates_km": [
+        54.341,
+        217.12,
+        -159.881
+      ]
+    },
+    {
+      "name": "Benson Mining Outpost",
+      "body": "Yela",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        48.998,
+        -275.606,
+        -140.136
+      ]
+    },
+    {
+      "name": "Bloodshot Ridge",
+      "body": "microTech",
+      "system": "Stanton",
+      "kind": "Settlement",
+      "coordinates_km": [
+        733.94,
+        -674.648,
+        101.876
+      ]
+    },
+    {
+      "name": "Bountiful Harvest Hydroponics",
+      "body": "Daymar",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        57.552,
+        -92.267,
+        -274.246
+      ]
+    },
+    {
+      "name": "Brio's Breaker Yard",
+      "body": "Daymar",
+      "system": "Stanton",
+      "kind": "Scrapyard",
+      "coordinates_km": [
+        -176.683,
+        -161.257,
+        173.852
+      ]
+    },
+    {
+      "name": "Bud's Growery",
+      "body": "Euterpe",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        50.173,
+        -172.259,
+        115.271
+      ]
+    },
+    {
+      "name": "Calhoun Pass Emergency Shelter",
+      "body": "microTech",
+      "system": "Stanton",
+      "kind": "Emergency shelter",
+      "coordinates_km": [
+        938.116,
+        -347.818,
+        31.708
+      ]
+    },
+    {
+      "name": "Clear View Emergency Shelter",
+      "body": "microTech",
+      "system": "Stanton",
+      "kind": "Emergency shelter",
+      "coordinates_km": [
+        -609.561,
+        -688.363,
+        393.203
+      ]
+    },
+    {
+      "name": "Cutter's Rig",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Settlement",
+      "coordinates_km": [
+        -455.119,
+        -200.497,
+        867.564
+      ]
+    },
+    {
+      "name": "Deakins Research Outpost",
+      "body": "Yela",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        231.587,
+        -210.279,
+        13.278
+      ]
+    },
+    {
+      "name": "Devlin Scrap & Salvage",
+      "body": "Euterpe",
+      "system": "Stanton",
+      "kind": "Scrapyard",
+      "coordinates_km": [
+        14.506,
+        211.267,
+        25.886
+      ]
+    },
+    {
+      "name": "Dunboro",
+      "body": "microTech",
+      "system": "Stanton",
+      "kind": "Settlement",
+      "coordinates_km": [
+        -735.672,
+        678.04,
+        9.31
+      ]
+    },
+    {
+      "name": "Dunlow Ridge Aid Shelter",
+      "body": "Daymar",
+      "system": "Stanton",
+      "kind": "Emergency shelter",
+      "coordinates_km": [
+        -51.85,
+        280.932,
+        75.331
+      ]
+    },
+    {
+      "name": "Eager Flats Aid Shelter",
+      "body": "Daymar",
+      "system": "Stanton",
+      "kind": "Emergency shelter",
+      "coordinates_km": [
+        200.545,
+        -104.917,
+        190.097
+      ]
+    },
+    {
+      "name": "Echo Island",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        -405.1,
+        -275.11,
+        -872.2
+      ]
+    },
+    {
+      "name": "Finn's Folly",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Settlement",
+      "coordinates_km": [
+        -196.592,
+        -197.871,
+        961.999
+      ]
+    },
+    {
+      "name": "Flanagan's Ravine Aid Shelter",
+      "body": "Cellin",
+      "system": "Stanton",
+      "kind": "Emergency shelter",
+      "coordinates_km": [
+        -194.282,
+        151.722,
+        84.997
+      ]
+    },
+    {
+      "name": "Frostbite",
+      "body": "microTech",
+      "system": "Stanton",
+      "kind": "Settlement",
+      "coordinates_km": [
+        539.62,
+        762.339,
+        -361.448
+      ]
+    },
+    {
+      "name": "Gallete Family Farms",
+      "body": "Cellin",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        -89.471,
+        106.717,
+        220.041
+      ]
+    },
+    {
+      "name": "Ghost Hollow",
+      "body": "microTech",
+      "system": "Stanton",
+      "kind": "Settlement",
+      "coordinates_km": [
+        -127.194,
+        982.004,
+        149.145
+      ]
+    },
+    {
+      "name": "Good Times Temple",
+      "body": "Wala",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -113.3,
+        179.51,
+        187.366
+      ]
+    },
+    {
+      "name": "Harper's Point",
+      "body": "microTech",
+      "system": "Stanton",
+      "kind": "Settlement",
+      "coordinates_km": [
+        -687.373,
+        716.613,
+        128.227
+      ]
+    },
+    {
+      "name": "HDES-Calthrope (NA)",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Cave",
+      "coordinates_km": [
+        -203.376,
+        -806.58,
+        557.779
+      ]
+    },
+    {
+      "name": "HDMO-Dobbs (NA)",
+      "body": "Aberdeen",
+      "system": "Stanton",
+      "kind": "Cave",
+      "coordinates_km": [
+        270.579,
+        47.399,
+        -11.404
+      ]
+    },
+    {
+      "name": "HDMS Anderson",
+      "body": "Aberdeen",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        -26.95,
+        180.221,
+        206.879
+      ]
+    },
+    {
+      "name": "HDMS Norgaard",
+      "body": "Aberdeen",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        -141.572,
+        195.318,
+        132.098
+      ]
+    },
+    {
+      "name": "HDMS-Bezdek",
+      "body": "Arial",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        26.735,
+        -234.698,
+        251.505
+      ]
+    },
+    {
+      "name": "HDMS-Edmond",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        -284.48,
+        -730.502,
+        620.924
+      ]
+    },
+    {
+      "name": "HDMS-Hadley",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        626.167,
+        -583.971,
+        -518.485
+      ]
+    },
+    {
+      "name": "HDMS-Hahn",
+      "body": "Magda",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        -147.384,
+        -292.217,
+        95.247
+      ]
+    },
+    {
+      "name": "HDMS-Lathan",
+      "body": "Arial",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        339.193,
+        33.686,
+        55.843
+      ]
+    },
+    {
+      "name": "HDMS-Oparei",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        -556.126,
+        -72.591,
+        -828.071
+      ]
+    },
+    {
+      "name": "HDMS-Perlman",
+      "body": "Magda",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        -140.696,
+        287.922,
+        -116.688
+      ]
+    },
+    {
+      "name": "HDMS-Pinewood",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        985.564,
+        90.029,
+        149.896
+      ]
+    },
+    {
+      "name": "HDMS-Ryder",
+      "body": "Ita",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        -175.874,
+        -263.381,
+        73.709
+      ]
+    },
+    {
+      "name": "HDMS-Stanhope",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        -648.608,
+        198.313,
+        735.121
+      ]
+    },
+    {
+      "name": "HDMS-Thedus",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        443.322,
+        891.525,
+        101.509
+      ]
+    },
+    {
+      "name": "HDMS-Woodruff",
+      "body": "Ita",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        114.792,
+        219.661,
+        210.467
+      ]
+    },
+    {
+      "name": "HDSF-Adlai",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -236.846,
+        -810.89,
+        537.736
+      ]
+    },
+    {
+      "name": "HDSF-Barnabas",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -895.864,
+        365.595,
+        -252.546
+      ]
+    },
+    {
+      "name": "HDSF-Breckinridge",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -557.599,
+        680.528,
+        -477.825
+      ]
+    },
+    {
+      "name": "HDSF-Colfax",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        902.272,
+        383.795,
+        -203.763
+      ]
+    },
+    {
+      "name": "HDSF-Damaris",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -898.695,
+        420.101,
+        -141.747
+      ]
+    },
+    {
+      "name": "HDSF-Elbridge",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        449.413,
+        838.666,
+        310.624
+      ]
+    },
+    {
+      "name": "HDSF-Hendricks",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        63.555,
+        -969.07,
+        -242.52
+      ]
+    },
+    {
+      "name": "HDSF-Hiram",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -942.48,
+        -317.031,
+        122.747
+      ]
+    },
+    {
+      "name": "HDSF-Hobart",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -492.22,
+        768.371,
+        410.823
+      ]
+    },
+    {
+      "name": "HDSF-Ishmael",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -266.171,
+        -159.479,
+        952.333
+      ]
+    },
+    {
+      "name": "HDSF-Millerand",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -847.551,
+        517.597,
+        126.804
+      ]
+    },
+    {
+      "name": "HDSF-Palomar",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        766.601,
+        -74.225,
+        -640.183
+      ]
+    },
+    {
+      "name": "HDSF-Rufus",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -64.794,
+        11.531,
+        -998.425
+      ]
+    },
+    {
+      "name": "HDSF-Sherman",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        899.38,
+        -406.057,
+        168.518
+      ]
+    },
+    {
+      "name": "HDSF-Tamar",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        121.122,
+        -810.963,
+        -573.527
+      ]
+    },
+    {
+      "name": "HDSF-Tompkins",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        374.762,
+        724.551,
+        579.815
+      ]
+    },
+    {
+      "name": "HDSF-Zacharias",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        249.567,
+        398.572,
+        -884.801
+      ]
+    },
+    {
+      "name": "Hickes Research Outpost",
+      "body": "Cellin",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        3.27,
+        13.091,
+        -260.316
+      ]
+    },
+    {
+      "name": "Humboldt Mines",
+      "body": "Lyria",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        5.311,
+        -193.819,
+        -112.545
+      ]
+    },
+    {
+      "name": "Javelin Wreck (UEES Flyssa)",
+      "body": "Daymar",
+      "system": "Stanton",
+      "kind": "Shipwreck",
+      "coordinates_km": [
+        102.055,
+        267.619,
+        -70.856
+      ]
+    },
+    {
+      "name": "Julep Ravine Aid Shelter",
+      "body": "Cellin",
+      "system": "Stanton",
+      "kind": "Emergency shelter",
+      "coordinates_km": [
+        -111.528,
+        -56.297,
+        -228.95
+      ]
+    },
+    {
+      "name": "Jumptown",
+      "body": "Daymar",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        80.44,
+        242.72,
+        -147.63
+      ]
+    },
+    {
+      "name": "Klescher Rehabilitation Facility",
+      "body": "Aberdeen",
+      "system": "Stanton",
+      "kind": "Prison",
+      "coordinates_km": [
+        44.975,
+        221.563,
+        -156.583
+      ]
+    },
+    {
+      "name": "Kosso Basin Aid Shelter",
+      "body": "Yela",
+      "system": "Stanton",
+      "kind": "Emergency shelter",
+      "coordinates_km": [
+        -31.289,
+        -118.13,
+        288.314
+      ]
+    },
+    {
+      "name": "Kudre Ore",
+      "body": "Daymar",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        146.617,
+        -177.093,
+        -184.862
+      ]
+    },
+    {
+      "name": "Kudre Ore Mine (Closed)",
+      "body": "Daymar",
+      "system": "Stanton",
+      "kind": "Cave",
+      "coordinates_km": [
+        81.008,
+        -280.683,
+        43.649
+      ]
+    },
+    {
+      "name": "Launch Pad",
+      "body": "Lyria",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -213.84,
+        -65.163,
+        16.508
+      ]
+    },
+    {
+      "name": "Lorville",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Landing zone",
+      "coordinates_km": [
+        -328.989,
+        -752.435,
+        572.12
+      ]
+    },
+    {
+      "name": "Lost and Found",
+      "body": "Wala",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        62.556,
+        114.33,
+        251.559
+      ]
+    },
+    {
+      "name": "Loveridge Mineral Reserve",
+      "body": "Lyria",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        181.8,
+        128.166,
+        24.94
+      ]
+    },
+    {
+      "name": "Ludlow",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Settlement",
+      "coordinates_km": [
+        -878.668,
+        -467.858,
+        111.091
+      ]
+    },
+    {
+      "name": "Maker's Point",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Settlement",
+      "coordinates_km": [
+        -154.007,
+        128.325,
+        979.766
+      ]
+    },
+    {
+      "name": "Mogote Aid Shelter",
+      "body": "Cellin",
+      "system": "Stanton",
+      "kind": "Emergency shelter",
+      "coordinates_km": [
+        -198.664,
+        50.79,
+        160.875
+      ]
+    },
+    {
+      "name": "Moreland Hills",
+      "body": "microTech",
+      "system": "Stanton",
+      "kind": "Settlement",
+      "coordinates_km": [
+        -665.088,
+        726.918,
+        178.064
+      ]
+    },
+    {
+      "name": "Nakamura Valley Aid Shelter",
+      "body": "Yela",
+      "system": "Stanton",
+      "kind": "Emergency shelter",
+      "coordinates_km": [
+        -275.722,
+        124.074,
+        81.717
+      ]
+    },
+    {
+      "name": "New Babbage",
+      "body": "microTech",
+      "system": "Stanton",
+      "kind": "Landing zone",
+      "coordinates_km": [
+        520.723,
+        419.364,
+        743.655
+      ]
+    },
+    {
+      "name": "NT-999-XV",
+      "body": "Cellin",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        146.849,
+        135.264,
+        167.452
+      ]
+    },
+    {
+      "name": "NT-999-XVI",
+      "body": "Daymar",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        250.895,
+        154.055,
+        -24.263
+      ]
+    },
+    {
+      "name": "NT-999-XX",
+      "body": "Yela",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        -205.659,
+        -73.988,
+        224.325
+      ]
+    },
+    {
+      "name": "NT-999-XXII",
+      "body": "Yela",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        54.565,
+        55.939,
+        -303.344
+      ]
+    },
+    {
+      "name": "Nuen Waste Management",
+      "body": "Daymar",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        -18.943,
+        293.341,
+        25.478
+      ]
+    },
+    {
+      "name": "Nuiqsut Emergency Shelter",
+      "body": "microTech",
+      "system": "Stanton",
+      "kind": "Emergency shelter",
+      "coordinates_km": [
+        750.613,
+        -207.852,
+        -627.225
+      ]
+    },
+    {
+      "name": "Operations Depot Lyria 1",
+      "body": "Lyria",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -147.804,
+        -17.445,
+        167.34
+      ]
+    },
+    {
+      "name": "Orison",
+      "body": "Crusader",
+      "system": "Stanton",
+      "kind": "Landing zone",
+      "coordinates_km": [
+        5295.517,
+        -863.194,
+        5282.237
+      ]
+    },
+    {
+      "name": "Outpost 54",
+      "body": "microTech",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        113.566,
+        14.479,
+        -994.363
+      ]
+    },
+    {
+      "name": "Paradise Cove",
+      "body": "Wala",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        79.98,
+        -217.91,
+        162.33
+      ]
+    },
+    {
+      "name": "Picker's Field",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Settlement",
+      "coordinates_km": [
+        -679.766,
+        262.266,
+        -686.08
+      ]
+    },
+    {
+      "name": "Point Wain Emergency Shelter",
+      "body": "microTech",
+      "system": "Stanton",
+      "kind": "Emergency shelter",
+      "coordinates_km": [
+        -627.441,
+        -485.258,
+        611.733
+      ]
+    },
+    {
+      "name": "PRIVATE PROPERTY",
+      "body": "Cellin",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        97.749,
+        -173.764,
+        167.078
+      ]
+    },
+    {
+      "name": "Prospect Point",
+      "body": "Crusader",
+      "system": "Stanton",
+      "kind": "Settlement",
+      "coordinates_km": [
+        3254.279,
+        -1225.248,
+        6683.686
+      ]
+    },
+    {
+      "name": "Rappel",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Settlement",
+      "coordinates_km": [
+        352.952,
+        -661.89,
+        663.889
+      ]
+    },
+    {
+      "name": "Raven's Roost",
+      "body": "microTech",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        355.9,
+        -75.59,
+        932.65
+      ]
+    },
+    {
+      "name": "Rayari Anvik Research Outpost",
+      "body": "Calliope",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        -184.632,
+        -127.794,
+        84.724
+      ]
+    },
+    {
+      "name": "Rayari Cantwell Research Outpost",
+      "body": "Clio",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        -217.175,
+        215.278,
+        142.842
+      ]
+    },
+    {
+      "name": "Rayari Deltana Research Outpost",
+      "body": "microTech",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        -693.91,
+        -648.299,
+        316.681
+      ]
+    },
+    {
+      "name": "Rayari Kaltag Research Outpost",
+      "body": "Calliope",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        205.267,
+        6.261,
+        -124.485
+      ]
+    },
+    {
+      "name": "Rayari McGrath Research Outpost",
+      "body": "Clio",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        -325.904,
+        -85.713,
+        -18.786
+      ]
+    },
+    {
+      "name": "Razor's Edge",
+      "body": "microTech",
+      "system": "Stanton",
+      "kind": "Settlement",
+      "coordinates_km": [
+        -666.067,
+        726.221,
+        179.518
+      ]
+    },
+    {
+      "name": "Reclamation & Disposal Orinth",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Scrapyard",
+      "coordinates_km": [
+        1.141,
+        -794.276,
+        607.652
+      ]
+    },
+    {
+      "name": "Samson & Son's Salvage Center",
+      "body": "Wala",
+      "system": "Stanton",
+      "kind": "Scrapyard",
+      "coordinates_km": [
+        -42.545,
+        279.059,
+        19.438
+      ]
+    },
+    {
+      "name": "Security Post Criska",
+      "body": "Cellin",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        252.518,
+        62.917,
+        13.988
+      ]
+    },
+    {
+      "name": "Security Post Dipur",
+      "body": "Cellin",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        197.594,
+        57.562,
+        -160.055
+      ]
+    },
+    {
+      "name": "Security Post Lespin",
+      "body": "Cellin",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -214.293,
+        -149.184,
+        4.123
+      ]
+    },
+    {
+      "name": "Security Post Moluto",
+      "body": "Daymar",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        188.858,
+        33.746,
+        -224.163
+      ]
+    },
+    {
+      "name": "Security Post Opal",
+      "body": "Yela",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        241.073,
+        96.291,
+        -175.019
+      ]
+    },
+    {
+      "name": "Security Post Prashad",
+      "body": "Daymar",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -223.887,
+        65.623,
+        180.749
+      ]
+    },
+    {
+      "name": "Security Post Thaquray",
+      "body": "Daymar",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -6.981,
+        -89.665,
+        281.36
+      ]
+    },
+    {
+      "name": "Security Post Wan",
+      "body": "Yela",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -208.367,
+        53.166,
+        -227.454
+      ]
+    },
+    {
+      "name": "Shady Glen Farms",
+      "body": "Wala",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        -20.622,
+        268.985,
+        87.534
+      ]
+    },
+    {
+      "name": "Shubin Mining Facility SAL-2",
+      "body": "Lyria",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        150.636,
+        -53.619,
+        156.668
+      ]
+    },
+    {
+      "name": "Shubin Mining Facility SAL-5",
+      "body": "Lyria",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        98.07,
+        78.361,
+        185.821
+      ]
+    },
+    {
+      "name": "Shubin Mining Facility SCD-1",
+      "body": "Daymar",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        126.025,
+        -149.581,
+        221.253
+      ]
+    },
+    {
+      "name": "Shubin Mining Facility SM0-10",
+      "body": "microTech",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        85.476,
+        -950.856,
+        298.799
+      ]
+    },
+    {
+      "name": "Shubin Mining Facility SM0-13",
+      "body": "microTech",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        -172.819,
+        -981.308,
+        97.767
+      ]
+    },
+    {
+      "name": "Shubin Mining Facility SM0-18",
+      "body": "microTech",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        920.21,
+        -389.542,
+        43.837
+      ]
+    },
+    {
+      "name": "Shubin Mining Facility SM0-22",
+      "body": "microTech",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        24.299,
+        -822.591,
+        568.174
+      ]
+    },
+    {
+      "name": "Shubin Mining Facility SMCa-6",
+      "body": "Calliope",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        50.066,
+        233.437,
+        24.936
+      ]
+    },
+    {
+      "name": "Shubin Mining Facility SMCa-8",
+      "body": "Calliope",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        160.166,
+        168.987,
+        -58.4
+      ]
+    },
+    {
+      "name": "Shubin Processing Facility SPAL-12",
+      "body": "Lyria",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -173.503,
+        124.81,
+        66.784
+      ]
+    },
+    {
+      "name": "Shubin Processing Facility SPAL-16",
+      "body": "Lyria",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -40.101,
+        -66.263,
+        209.892
+      ]
+    },
+    {
+      "name": "Shubin Processing Facility SPAL-21",
+      "body": "Lyria",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -19.527,
+        13.462,
+        222.716
+      ]
+    },
+    {
+      "name": "Shubin Processing Facility SPAL-3",
+      "body": "Lyria",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -208.404,
+        11.275,
+        -81.322
+      ]
+    },
+    {
+      "name": "Shubin Processing Facility SPAL-7",
+      "body": "Lyria",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        37.914,
+        -126.142,
+        181.387
+      ]
+    },
+    {
+      "name": "Shubin Processing Facility SPAL-9",
+      "body": "Lyria",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        146.676,
+        -169.035,
+        8.34
+      ]
+    },
+    {
+      "name": "Shubin Processing Facility SPMC-1",
+      "body": "Calliope",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        231.078,
+        -34.373,
+        -55.893
+      ]
+    },
+    {
+      "name": "Shubin Processing Facility SPMC-10",
+      "body": "Calliope",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -222.726,
+        -74.372,
+        -49.719
+      ]
+    },
+    {
+      "name": "Shubin Processing Facility SPMC-11",
+      "body": "Calliope",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        72.393,
+        -187.928,
+        130.918
+      ]
+    },
+    {
+      "name": "Shubin Processing Facility SPMC-14",
+      "body": "Calliope",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        228.587,
+        -21.222,
+        71.196
+      ]
+    },
+    {
+      "name": "Shubin Processing Facility SPMC-3",
+      "body": "Calliope",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        239.598,
+        -11.458,
+        8.683
+      ]
+    },
+    {
+      "name": "Shubin Processing Facility SPMC-5",
+      "body": "Calliope",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -229.991,
+        66.814,
+        19.274
+      ]
+    },
+    {
+      "name": "Sketto Rock",
+      "body": "Magda",
+      "system": "Stanton",
+      "kind": "Landmark",
+      "coordinates_km": [
+        -335.013,
+        45.699,
+        50.233
+      ]
+    },
+    {
+      "name": "Snake Pit",
+      "body": "Clio",
+      "system": "Stanton",
+      "kind": "Racetrack",
+      "coordinates_km": [
+        -327.835,
+        -78.887,
+        -13.657
+      ]
+    },
+    {
+      "name": "Talarine Divide Aid Shelter",
+      "body": "Yela",
+      "system": "Stanton",
+      "kind": "Emergency shelter",
+      "coordinates_km": [
+        -21.221,
+        310.79,
+        30.932
+      ]
+    },
+    {
+      "name": "Tamdon Plains Aid Shelter",
+      "body": "Daymar",
+      "system": "Stanton",
+      "kind": "Emergency shelter",
+      "coordinates_km": [
+        -138.114,
+        -24.463,
+        -259.849
+      ]
+    },
+    {
+      "name": "Teddy's Playhouse",
+      "body": "Lyria",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        95.429,
+        160.94,
+        -122.846
+      ]
+    },
+    {
+      "name": "Terra Mills HydroFarm",
+      "body": "Cellin",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        100.137,
+        27.701,
+        239.024
+      ]
+    },
+    {
+      "name": "Test Facility Octagon",
+      "body": "microTech",
+      "system": "Stanton",
+      "kind": "Landmark",
+      "coordinates_km": [
+        635.765,
+        -155.464,
+        758.837
+      ]
+    },
+    {
+      "name": "The Garden",
+      "body": "Daymar",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -175.97,
+        146.723,
+        186.026
+      ]
+    },
+    {
+      "name": "The Icebreaker",
+      "body": "Euterpe",
+      "system": "Stanton",
+      "kind": "Racetrack",
+      "coordinates_km": [
+        -42.101,
+        198.111,
+        66.582
+      ]
+    },
+    {
+      "name": "The Necropolis",
+      "body": "microTech",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        63.643,
+        -162.085,
+        985.651
+      ]
+    },
+    {
+      "name": "The Orphanage",
+      "body": "Lyria",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        -91.99,
+        92.484,
+        182.182
+      ]
+    },
+    {
+      "name": "The Pit",
+      "body": "Lyria",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        59.094,
+        68.115,
+        204.997
+      ]
+    },
+    {
+      "name": "TPF",
+      "body": "Daymar",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        37.248,
+        203.877,
+        -209.981
+      ]
+    },
+    {
+      "name": "Tram & Myers Mining",
+      "body": "Cellin",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        -241.164,
+        2.396,
+        -98.7
+      ]
+    },
+    {
+      "name": "Utopia",
+      "body": "Yela",
+      "system": "Stanton",
+      "kind": "Outpost",
+      "coordinates_km": [
+        -0.173,
+        -1.851,
+        -313.08
+      ]
+    },
+    {
+      "name": "Weeping Cove",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Settlement",
+      "coordinates_km": [
+        -455.172,
+        -202.318,
+        867.424
+      ]
+    },
+    {
+      "name": "Wheeler's",
+      "body": "Lyria",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -53.37,
+        -209.9,
+        -57.123
+      ]
+    },
+    {
+      "name": "Whistler's Crypt",
+      "body": "Daymar",
+      "system": "Stanton",
+      "kind": "Settlement",
+      "coordinates_km": [
+        182.262,
+        222.629,
+        65.625
+      ]
+    },
+    {
+      "name": "Wolf Point Aid Shelter",
+      "body": "Daymar",
+      "system": "Stanton",
+      "kind": "Emergency shelter",
+      "coordinates_km": [
+        -4.42,
+        279.067,
+        95.733
+      ]
+    },
+    {
+      "name": "Yadar Valley",
+      "body": "Daymar",
+      "system": "Stanton",
+      "kind": "Racetrack",
+      "coordinates_km": [
+        -171.798,
+        157.576,
+        181.015
+      ]
+    },
+    {
+      "name": "Zephyr",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Settlement",
+      "coordinates_km": [
+        108.16,
+        -133.662,
+        986.694
+      ]
+    },
+    {
+      "name": "Covalex Distribution Centre S1DC06",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Distribution center",
+      "coordinates_km": [
+        742.847,
+        15.48,
+        671.074
+      ]
+    },
+    {
+      "name": "Dupree Industrial Manufacturing Facility",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Distribution center",
+      "coordinates_km": [
+        239.426,
+        -969.806,
+        68.635
+      ]
+    },
+    {
+      "name": "Greycat Stanton I Production Complex-B",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Distribution center",
+      "coordinates_km": [
+        -407.457,
+        -656.296,
+        636.322
+      ]
+    },
+    {
+      "name": "HDPC-Cassillo",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Distribution center",
+      "coordinates_km": [
+        -789.716,
+        615.354,
+        -2.353
+      ]
+    },
+    {
+      "name": "HDPC-Farnesway",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Distribution center",
+      "coordinates_km": [
+        129.223,
+        63.888,
+        989.575
+      ]
+    },
+    {
+      "name": "Sakura Sun Magnolia Workcenter",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Distribution center",
+      "coordinates_km": [
+        -229.373,
+        -864.793,
+        -446.96
+      ]
+    },
+    {
+      "name": "Covalex Distribution Centre S4DC05",
+      "body": "microTech",
+      "system": "Stanton",
+      "kind": "Distribution center",
+      "coordinates_km": [
+        -332.505,
+        897.834,
+        -290.234
+      ]
+    },
+    {
+      "name": "Cry-Astro Processing Plant 19-02",
+      "body": "microTech",
+      "system": "Stanton",
+      "kind": "Distribution center",
+      "coordinates_km": [
+        584.139,
+        -0.789,
+        812.169
+      ]
+    },
+    {
+      "name": "Cry-Astro Processing Plant 34-12",
+      "body": "microTech",
+      "system": "Stanton",
+      "kind": "Distribution center",
+      "coordinates_km": [
+        -316.285,
+        -882.04,
+        -350.639
+      ]
+    },
+    {
+      "name": "Greycat Stanton IV Production Complex-A",
+      "body": "microTech",
+      "system": "Stanton",
+      "kind": "Distribution center",
+      "coordinates_km": [
+        -423.347,
+        -141.169,
+        -895.145
+      ]
+    },
+    {
+      "name": "MicroTech Logistics Depot S4LD01",
+      "body": "microTech",
+      "system": "Stanton",
+      "kind": "Distribution center",
+      "coordinates_km": [
+        884.615,
+        467.868,
+        -19.153
+      ]
+    },
+    {
+      "name": "MicroTech Logistics Depot S4LD13",
+      "body": "microTech",
+      "system": "Stanton",
+      "kind": "Distribution center",
+      "coordinates_km": [
+        843.838,
+        -179.535,
+        505.834
+      ]
+    },
+    {
+      "name": "Sakura Sun Goldenrod Workcenter",
+      "body": "microTech",
+      "system": "Stanton",
+      "kind": "Distribution center",
+      "coordinates_km": [
+        -173.422,
+        -923.63,
+        -343.265
+      ]
+    },
+    {
+      "name": "Rustville",
+      "body": "Pyro I",
+      "system": "Pyro",
+      "kind": "Settlement",
+      "coordinates_km": [
+        -195.852,
+        -319.059,
+        170.82
+      ]
+    },
+    {
+      "name": "Stag's Rut",
+      "body": "Pyro I",
+      "system": "Pyro",
+      "kind": "Settlement",
+      "coordinates_km": [
+        -383.466,
+        106.78,
+        -103.639
+      ]
+    },
+    {
+      "name": "Arid Reach",
+      "body": "Monox",
+      "system": "Pyro",
+      "kind": "Settlement",
+      "coordinates_km": [
+        -6.319,
+        521.28,
+        -92.75
+      ]
+    },
+    {
+      "name": "Last Ditch",
+      "body": "Monox",
+      "system": "Pyro",
+      "kind": "Settlement",
+      "coordinates_km": [
+        -143.491,
+        -34.931,
+        508.706
+      ]
+    },
+    {
+      "name": "Jackson's Swap",
+      "body": "Monox",
+      "system": "Pyro",
+      "kind": "Settlement",
+      "coordinates_km": [
+        383.115,
+        -245.83,
+        -272.467
+      ]
+    },
+    {
+      "name": "Ostler's Claim",
+      "body": "Monox",
+      "system": "Pyro",
+      "kind": "Settlement",
+      "coordinates_km": [
+        509.445,
+        -54.407,
+        -136.104
+      ]
+    },
+    {
+      "name": "Sunset Mesa",
+      "body": "Monox",
+      "system": "Pyro",
+      "kind": "Scrapyard",
+      "coordinates_km": [
+        373.54,
+        -262.716,
+        -269.591
+      ]
+    },
+    {
+      "name": "Yang's Place",
+      "body": "Monox",
+      "system": "Pyro",
+      "kind": "Settlement",
+      "coordinates_km": [
+        461.485,
+        -124.623,
+        -229.886
+      ]
+    },
+    {
+      "name": "Bueno Ravine",
+      "body": "Bloom",
+      "system": "Pyro",
+      "kind": "Settlement",
+      "coordinates_km": [
+        171.298,
+        -373.375,
+        -57.521
+      ]
+    },
+    {
+      "name": "Carver's Ridge",
+      "body": "Bloom",
+      "system": "Pyro",
+      "kind": "Settlement",
+      "coordinates_km": [
+        196.206,
+        -361.924,
+        -48.106
+      ]
+    },
+    {
+      "name": "Frigid Knot",
+      "body": "Bloom",
+      "system": "Pyro",
+      "kind": "Settlement",
+      "coordinates_km": [
+        230.664,
+        23.844,
+        -342.91
+      ]
+    },
+    {
+      "name": "Narena's Rest",
+      "body": "Bloom",
+      "system": "Pyro",
+      "kind": "Settlement",
+      "coordinates_km": [
+        -395.485,
+        122.932,
+        -11.78
+      ]
+    },
+    {
+      "name": "Shadowfall",
+      "body": "Bloom",
+      "system": "Pyro",
+      "kind": "Settlement",
+      "coordinates_km": [
+        -91.695,
+        399.585,
+        -57.006
+      ]
+    },
+    {
+      "name": "Shepherd's Rest",
+      "body": "Bloom",
+      "system": "Pyro",
+      "kind": "Settlement",
+      "coordinates_km": [
+        29.434,
+        359.999,
+        -202.126
+      ]
+    },
+    {
+      "name": "The Golden Riviera",
+      "body": "Bloom",
+      "system": "Pyro",
+      "kind": "Settlement",
+      "coordinates_km": [
+        -384.469,
+        153.328,
+        5.799
+      ]
+    },
+    {
+      "name": "The Yard",
+      "body": "Bloom",
+      "system": "Pyro",
+      "kind": "Settlement",
+      "coordinates_km": [
+        343.854,
+        188.822,
+        132.066
+      ]
+    },
+    {
+      "name": "Windfall",
+      "body": "Bloom",
+      "system": "Pyro",
+      "kind": "Settlement",
+      "coordinates_km": [
+        129.791,
+        -393.57,
+        -12.215
+      ]
+    },
+    {
+      "name": "Chawla's Beach",
+      "body": "Pyro IV",
+      "system": "Pyro",
+      "kind": "Settlement",
+      "coordinates_km": [
+        -244.78,
+        -86.153,
+        189.634
+      ]
+    },
+    {
+      "name": "Fallow Field",
+      "body": "Pyro IV",
+      "system": "Pyro",
+      "kind": "Settlement",
+      "coordinates_km": [
+        68.328,
+        -176.526,
+        262.25
+      ]
+    },
+    {
+      "name": "Goner's Deal",
+      "body": "Pyro IV",
+      "system": "Pyro",
+      "kind": "Settlement",
+      "coordinates_km": [
+        104.786,
+        -151.985,
+        265.305
+      ]
+    },
+    {
+      "name": "Sacren's Plot",
+      "body": "Pyro IV",
+      "system": "Pyro",
+      "kind": "Settlement",
+      "coordinates_km": [
+        -236.427,
+        -97.75,
+        194.621
+      ]
+    },
+    {
+      "name": "Ashland",
+      "body": "Ignis",
+      "system": "Pyro",
+      "kind": "Settlement",
+      "coordinates_km": [
+        -292.47,
+        -25.566,
+        265.63
+      ]
+    },
+    {
+      "name": "Kabir's Post",
+      "body": "Ignis",
+      "system": "Pyro",
+      "kind": "Settlement",
+      "coordinates_km": [
+        -155.802,
+        347.945,
+        108.787
+      ]
+    },
+    {
+      "name": "Prophet's Peak",
+      "body": "Adir",
+      "system": "Pyro",
+      "kind": "Settlement",
+      "coordinates_km": [
+        -234.185,
+        -328.845,
+        154.695
+      ]
+    },
+    {
+      "name": "Seer's Canyon",
+      "body": "Vatra",
+      "system": "Pyro",
+      "kind": "Settlement",
+      "coordinates_km": [
+        83.985,
+        337.165,
+        -119.605
+      ]
+    },
+    {
+      "name": "Blackrock Exchange",
+      "body": "Terminus",
+      "system": "Pyro",
+      "kind": "Settlement",
+      "coordinates_km": [
+        -211.807,
+        190.954,
+        -31.482
+      ]
+    },
+    {
+      "name": "Bullock's Reach",
+      "body": "Terminus",
+      "system": "Pyro",
+      "kind": "Settlement",
+      "coordinates_km": [
+        269.893,
+        9.428,
+        -93.113
+      ]
+    },
+    {
+      "name": "Canard View",
+      "body": "Terminus",
+      "system": "Pyro",
+      "kind": "Settlement",
+      "coordinates_km": [
+        -199.995,
+        179.15,
+        -102.07
+      ]
+    },
+    {
+      "name": "Kinder Plots",
+      "body": "Terminus",
+      "system": "Pyro",
+      "kind": "Settlement",
+      "coordinates_km": [
+        -256.764,
+        51.878,
+        -115.526
+      ]
+    },
+    {
+      "name": "Last Landings",
+      "body": "Terminus",
+      "system": "Pyro",
+      "kind": "Settlement",
+      "coordinates_km": [
+        -284.62,
+        -12.703,
+        -7.854
+      ]
+    },
+    {
+      "name": "Rough Landing",
+      "body": "Terminus",
+      "system": "Pyro",
+      "kind": "Settlement",
+      "coordinates_km": [
+        -198.809,
+        -188.787,
+        77.973
+      ]
+    },
+    {
+      "name": "Scarper's Turn",
+      "body": "Terminus",
+      "system": "Pyro",
+      "kind": "Settlement",
+      "coordinates_km": [
+        -282.325,
+        39.306,
+        0.249
+      ]
+    },
+    {
+      "name": "Stonetree",
+      "body": "Terminus",
+      "system": "Pyro",
+      "kind": "Settlement",
+      "coordinates_km": [
+        -259.098,
+        38.135,
+        -115.813
+      ]
+    },
+    {
+      "name": "Broken Patch",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Forward operating base",
+      "coordinates_km": [
+        -740.15,
+        -401.507,
+        -543.923
+      ]
+    },
+    {
+      "name": "Lowdown",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Forward operating base",
+      "coordinates_km": [
+        -93.423,
+        890.632,
+        -448.814
+      ]
+    },
+    {
+      "name": "Rico's Remains",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Forward operating base",
+      "coordinates_km": [
+        -118.731,
+        -23.754,
+        993.786
+      ]
+    },
+    {
+      "name": "Trilo",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Forward operating base",
+      "coordinates_km": [
+        421.159,
+        -901.888,
+        115.085
+      ]
+    },
+    {
+      "name": "The Dregs",
+      "body": "Arial",
+      "system": "Stanton",
+      "kind": "Forward operating base",
+      "coordinates_km": [
+        143.735,
+        -232.741,
+        210.212
+      ]
+    },
+    {
+      "name": "Smokestack",
+      "body": "Arial",
+      "system": "Stanton",
+      "kind": "Forward operating base",
+      "coordinates_km": [
+        -311.896,
+        -147.411,
+        -10.655
+      ]
+    },
+    {
+      "name": "Coven",
+      "body": "Arial",
+      "system": "Stanton",
+      "kind": "Forward operating base",
+      "coordinates_km": [
+        134.643,
+        285.357,
+        -139.695
+      ]
+    },
+    {
+      "name": "Boondoggle",
+      "body": "Aberdeen",
+      "system": "Stanton",
+      "kind": "Forward operating base",
+      "coordinates_km": [
+        134.849,
+        -191.27,
+        -144.287
+      ]
+    },
+    {
+      "name": "The Grove",
+      "body": "Aberdeen",
+      "system": "Stanton",
+      "kind": "Forward operating base",
+      "coordinates_km": [
+        -187.075,
+        169.927,
+        -108.364
+      ]
+    },
+    {
+      "name": "Nevermind",
+      "body": "Magda",
+      "system": "Stanton",
+      "kind": "Forward operating base",
+      "coordinates_km": [
+        -214.094,
+        -180.366,
+        194.506
+      ]
+    },
+    {
+      "name": "Gonzo",
+      "body": "Magda",
+      "system": "Stanton",
+      "kind": "Forward operating base",
+      "coordinates_km": [
+        315.109,
+        -86.768,
+        -96.936
+      ]
+    },
+    {
+      "name": "Thimblerig",
+      "body": "Ita",
+      "system": "Stanton",
+      "kind": "Forward operating base",
+      "coordinates_km": [
+        -215.66,
+        -147.318,
+        -193.859
+      ]
+    },
+    {
+      "name": "The Shades",
+      "body": "Ita",
+      "system": "Stanton",
+      "kind": "Forward operating base",
+      "coordinates_km": [
+        167.705,
+        231.211,
+        -155.324
+      ]
+    },
+    {
+      "name": "Stone's Throw",
+      "body": "Cellin",
+      "system": "Stanton",
+      "kind": "Forward operating base",
+      "coordinates_km": [
+        -187.393,
+        -71.585,
+        -166.115
+      ]
+    },
+    {
+      "name": "Fetch",
+      "body": "Cellin",
+      "system": "Stanton",
+      "kind": "Forward operating base",
+      "coordinates_km": [
+        241.761,
+        -47.094,
+        -84.846
+      ]
+    },
+    {
+      "name": "The Hollows",
+      "body": "Cellin",
+      "system": "Stanton",
+      "kind": "Forward operating base",
+      "coordinates_km": [
+        2.938,
+        201.304,
+        165.52
+      ]
+    },
+    {
+      "name": "Consumption",
+      "body": "Cellin",
+      "system": "Stanton",
+      "kind": "Forward operating base",
+      "coordinates_km": [
+        64.288,
+        -237.509,
+        85.093
+      ]
+    },
+    {
+      "name": "Minlo Spire",
+      "body": "Daymar",
+      "system": "Stanton",
+      "kind": "Forward operating base",
+      "coordinates_km": [
+        32.019,
+        -203.544,
+        211.215
+      ]
+    },
+    {
+      "name": "Wailing Rock",
+      "body": "Daymar",
+      "system": "Stanton",
+      "kind": "Forward operating base",
+      "coordinates_km": [
+        291.271,
+        14.332,
+        44.391
+      ]
+    },
+    {
+      "name": "Hospice",
+      "body": "Daymar",
+      "system": "Stanton",
+      "kind": "Forward operating base",
+      "coordinates_km": [
+        -9.001,
+        71.718,
+        -286.52
+      ]
+    },
+    {
+      "name": "Half Stack",
+      "body": "Yela",
+      "system": "Stanton",
+      "kind": "Forward operating base",
+      "coordinates_km": [
+        241.301,
+        -10.196,
+        -199.123
+      ]
+    },
+    {
+      "name": "Rolo's Crater",
+      "body": "Yela",
+      "system": "Stanton",
+      "kind": "Forward operating base",
+      "coordinates_km": [
+        -124.437,
+        -191.255,
+        -214.861
+      ]
+    },
+    {
+      "name": "Mainline",
+      "body": "Yela",
+      "system": "Stanton",
+      "kind": "Forward operating base",
+      "coordinates_km": [
+        -68.611,
+        302.162,
+        -46.109
+      ]
+    },
+    {
+      "name": "Rock Bottom",
+      "body": "Lyria",
+      "system": "Stanton",
+      "kind": "Forward operating base",
+      "coordinates_km": [
+        81.65,
+        139.798,
+        154.66
+      ]
+    },
+    {
+      "name": "World's End",
+      "body": "Lyria",
+      "system": "Stanton",
+      "kind": "Forward operating base",
+      "coordinates_km": [
+        82.35,
+        -155.839,
+        138.588
+      ]
+    },
+    {
+      "name": "Downlow",
+      "body": "Lyria",
+      "system": "Stanton",
+      "kind": "Forward operating base",
+      "coordinates_km": [
+        216.316,
+        -50.93,
+        -28.836
+      ]
+    },
+    {
+      "name": "Last Day",
+      "body": "Lyria",
+      "system": "Stanton",
+      "kind": "Forward operating base",
+      "coordinates_km": [
+        -95.229,
+        94.387,
+        -179.594
+      ]
+    },
+    {
+      "name": "Burnout",
+      "body": "Lyria",
+      "system": "Stanton",
+      "kind": "Forward operating base",
+      "coordinates_km": [
+        -213.528,
+        1.117,
+        68.089
+      ]
+    },
+    {
+      "name": "Balto's Blind",
+      "body": "Lyria",
+      "system": "Stanton",
+      "kind": "Forward operating base",
+      "coordinates_km": [
+        -80.96,
+        -208.719,
+        0.596
+      ]
+    },
+    {
+      "name": "Ako's Return",
+      "body": "Wala",
+      "system": "Stanton",
+      "kind": "Forward operating base",
+      "coordinates_km": [
+        227.662,
+        78.831,
+        147.02
+      ]
+    },
+    {
+      "name": "Scuttle",
+      "body": "Wala",
+      "system": "Stanton",
+      "kind": "Forward operating base",
+      "coordinates_km": [
+        10.026,
+        -280.775,
+        -26.625
+      ]
+    },
+    {
+      "name": "Washout",
+      "body": "Wala",
+      "system": "Stanton",
+      "kind": "Forward operating base",
+      "coordinates_km": [
+        -200.344,
+        179.033,
+        90.388
+      ]
+    },
+    {
+      "name": "Wiley Flats",
+      "body": "Wala",
+      "system": "Stanton",
+      "kind": "Forward operating base",
+      "coordinates_km": [
+        -231.254,
+        -64.899,
+        -150.276
+      ]
+    },
+    {
+      "name": "Kelo Bottom",
+      "body": "microTech",
+      "system": "Stanton",
+      "kind": "Forward operating base",
+      "coordinates_km": [
+        896.329,
+        430.723,
+        -116.471
+      ]
+    },
+    {
+      "name": "Drifters",
+      "body": "microTech",
+      "system": "Stanton",
+      "kind": "Forward operating base",
+      "coordinates_km": [
+        -331.818,
+        694.177,
+        -640.38
+      ]
+    },
+    {
+      "name": "Hela's Regret",
+      "body": "microTech",
+      "system": "Stanton",
+      "kind": "Forward operating base",
+      "coordinates_km": [
+        -666.883,
+        -561.293,
+        -490.322
+      ]
+    },
+    {
+      "name": "The Barrens",
+      "body": "microTech",
+      "system": "Stanton",
+      "kind": "Forward operating base",
+      "coordinates_km": [
+        231.942,
+        -973.238,
+        -1.731
+      ]
+    },
+    {
+      "name": "Blighter's Run",
+      "body": "Calliope",
+      "system": "Stanton",
+      "kind": "Forward operating base",
+      "coordinates_km": [
+        206.788,
+        -51.687,
+        110.564
+      ]
+    },
+    {
+      "name": "Hasbin Hall",
+      "body": "Calliope",
+      "system": "Stanton",
+      "kind": "Forward operating base",
+      "coordinates_km": [
+        181.913,
+        -149.785,
+        -46.792
+      ]
+    },
+    {
+      "name": "Regiment Downs",
+      "body": "Calliope",
+      "system": "Stanton",
+      "kind": "Forward operating base",
+      "coordinates_km": [
+        -60.059,
+        226.418,
+        -52.74
+      ]
+    },
+    {
+      "name": "Hard Knocks",
+      "body": "Calliope",
+      "system": "Stanton",
+      "kind": "Forward operating base",
+      "coordinates_km": [
+        -218.837,
+        -52.591,
+        84.53
+      ]
+    },
+    {
+      "name": "Kant's Peak",
+      "body": "Clio",
+      "system": "Stanton",
+      "kind": "Forward operating base",
+      "coordinates_km": [
+        -63.761,
+        220.298,
+        247.966
+      ]
+    },
+    {
+      "name": "Tremonte",
+      "body": "Clio",
+      "system": "Stanton",
+      "kind": "Forward operating base",
+      "coordinates_km": [
+        170.603,
+        -270.457,
+        107.535
+      ]
+    },
+    {
+      "name": "Shanks",
+      "body": "Euterpe",
+      "system": "Stanton",
+      "kind": "Forward operating base",
+      "coordinates_km": [
+        212.586,
+        -4.558,
+        18.229
+      ]
+    },
+    {
+      "name": "Adair's Retreat",
+      "body": "Euterpe",
+      "system": "Stanton",
+      "kind": "Forward operating base",
+      "coordinates_km": [
+        -165.447,
+        134.814,
+        -4.2
+      ]
+    },
+    {
+      "name": "Attritus PAF-I",
+      "body": "Daymar",
+      "system": "Stanton",
+      "kind": "Planetary alignment facility",
+      "coordinates_km": [
+        -65.555,
+        129.836,
+        256.575
+      ]
+    },
+    {
+      "name": "Attritus PAF-II",
+      "body": "Daymar",
+      "system": "Stanton",
+      "kind": "Planetary alignment facility",
+      "coordinates_km": [
+        -57.973,
+        131.036,
+        257.946
+      ]
+    },
+    {
+      "name": "Attritus PAF-III",
+      "body": "Daymar",
+      "system": "Stanton",
+      "kind": "Planetary alignment facility",
+      "coordinates_km": [
+        -60.601,
+        122.899,
+        261.369
+      ]
+    },
+    {
+      "name": "Lamina PAF-I",
+      "body": "Daymar",
+      "system": "Stanton",
+      "kind": "Planetary alignment facility",
+      "coordinates_km": [
+        -71.073,
+        -262.047,
+        -115.642
+      ]
+    },
+    {
+      "name": "Lamina PAF-II",
+      "body": "Daymar",
+      "system": "Stanton",
+      "kind": "Planetary alignment facility",
+      "coordinates_km": [
+        -78.987,
+        -263.371,
+        -107.23
+      ]
+    },
+    {
+      "name": "Lamina PAF-III",
+      "body": "Daymar",
+      "system": "Stanton",
+      "kind": "Planetary alignment facility",
+      "coordinates_km": [
+        -81.511,
+        -259.065,
+        -116.457
+      ]
+    },
+    {
+      "name": "Ruptura PAF-I",
+      "body": "Aberdeen",
+      "system": "Stanton",
+      "kind": "Planetary alignment facility",
+      "coordinates_km": [
+        -135.103,
+        69.995,
+        229.333
+      ]
+    },
+    {
+      "name": "Ruptura PAF-II",
+      "body": "Aberdeen",
+      "system": "Stanton",
+      "kind": "Planetary alignment facility",
+      "coordinates_km": [
+        -141.271,
+        69.076,
+        226.037
+      ]
+    },
+    {
+      "name": "Ruptura PAF-III",
+      "body": "Aberdeen",
+      "system": "Stanton",
+      "kind": "Planetary alignment facility",
+      "coordinates_km": [
+        -138.452,
+        75.932,
+        224.923
+      ]
+    },
+    {
+      "name": "Vivere PAF-I",
+      "body": "Aberdeen",
+      "system": "Stanton",
+      "kind": "Planetary alignment facility",
+      "coordinates_km": [
+        194.316,
+        95.552,
+        -169.697
+      ]
+    },
+    {
+      "name": "Vivere PAF-II",
+      "body": "Aberdeen",
+      "system": "Stanton",
+      "kind": "Planetary alignment facility",
+      "coordinates_km": [
+        190.769,
+        89.322,
+        -177.233
+      ]
+    },
+    {
+      "name": "Vivere PAF-III",
+      "body": "Aberdeen",
+      "system": "Stanton",
+      "kind": "Planetary alignment facility",
+      "coordinates_km": [
+        187.7,
+        97.786,
+        -176.091
+      ]
+    },
+    {
+      "name": "Dinger's Depot",
+      "body": "Pyro IV",
+      "system": "Pyro",
+      "kind": "Depot",
+      "coordinates_km": [
+        94.159,
+        -155.84,
+        267.272
+      ]
+    },
+    {
+      "name": "FEO Canyon Depot",
+      "body": "Fairo",
+      "system": "Pyro",
+      "kind": "Depot",
+      "coordinates_km": [
+        -328.583,
+        -198.056,
+        81.622
+      ]
+    },
+    {
+      "name": "Gray Gardens Depot",
+      "body": "Pyro I",
+      "system": "Pyro",
+      "kind": "Depot",
+      "coordinates_km": [
+        -380.335,
+        120.557,
+        -101.323
+      ]
+    },
+    {
+      "name": "Prospect Depot",
+      "body": "Bloom",
+      "system": "Pyro",
+      "kind": "Depot",
+      "coordinates_km": [
+        162.825,
+        -378.221,
+        -45.329
+      ]
+    },
+    {
+      "name": "Slowburn Depot",
+      "body": "Monox",
+      "system": "Pyro",
+      "kind": "Depot",
+      "coordinates_km": [
+        -139.082,
+        -38.392,
+        509.79
+      ]
+    },
+    {
+      "name": "Watcher's Depot",
+      "body": "Terminus",
+      "system": "Pyro",
+      "kind": "Depot",
+      "coordinates_km": [
+        -178.043,
+        -198.998,
+        103.144
+      ]
+    },
+    {
+      "name": "Lazarus Transport Hub Phoenix-I",
+      "body": "Pyro I",
+      "system": "Pyro",
+      "kind": "Outpost",
+      "coordinates_km": [
+        -141.001,
+        311.699,
+        229.269
+      ]
+    },
+    {
+      "name": "Lazarus Transport Hub Phoenix-II",
+      "body": "Pyro I",
+      "system": "Pyro",
+      "kind": "Outpost",
+      "coordinates_km": [
+        -139.636,
+        368.426,
+        120.664
+      ]
+    },
+    {
+      "name": "Lazarus Transport Hub Phoenix-III",
+      "body": "Pyro I",
+      "system": "Pyro",
+      "kind": "Outpost",
+      "coordinates_km": [
+        -268.24,
+        273.048,
+        151.651
+      ]
+    },
+    {
+      "name": "Lazarus Transport Hub Tithonus-I",
+      "body": "Pyro I",
+      "system": "Pyro",
+      "kind": "Outpost",
+      "coordinates_km": [
+        98.46,
+        -339.14,
+        -211.927
+      ]
+    },
+    {
+      "name": "Lazarus Transport Hub Tithonus-II",
+      "body": "Pyro I",
+      "system": "Pyro",
+      "kind": "Outpost",
+      "coordinates_km": [
+        229.528,
+        -265.424,
+        -216.913
+      ]
+    },
+    {
+      "name": "Lazarus Transport Hub Tithonus-III",
+      "body": "Pyro I",
+      "system": "Pyro",
+      "kind": "Outpost",
+      "coordinates_km": [
+        199.11,
+        -330.693,
+        -143.834
+      ]
+    },
+    {
+      "name": "Farro Data Center I",
+      "body": "Pyro IV",
+      "system": "Pyro",
+      "kind": "Outpost",
+      "coordinates_km": [
+        270.703,
+        -172.381,
+        17.854
+      ]
+    },
+    {
+      "name": "Farro Data Center II",
+      "body": "Pyro IV",
+      "system": "Pyro",
+      "kind": "Outpost",
+      "coordinates_km": [
+        312.23,
+        15.05,
+        -74.817
+      ]
+    },
+    {
+      "name": "Farro Data Center III",
+      "body": "Pyro IV",
+      "system": "Pyro",
+      "kind": "Outpost",
+      "coordinates_km": [
+        196.156,
+        196.986,
+        -161.386
+      ]
+    },
+    {
+      "name": "Farro Data Center IV",
+      "body": "Pyro IV",
+      "system": "Pyro",
+      "kind": "Outpost",
+      "coordinates_km": [
+        -2.597,
+        224.629,
+        -230.649
+      ]
+    },
+    {
+      "name": "Farro Data Center V",
+      "body": "Pyro IV",
+      "system": "Pyro",
+      "kind": "Outpost",
+      "coordinates_km": [
+        -78.154,
+        307.384,
+        -54.007
+      ]
+    },
+    {
+      "name": "Farro Data Center VI",
+      "body": "Pyro IV",
+      "system": "Pyro",
+      "kind": "Outpost",
+      "coordinates_km": [
+        86.118,
+        305.944,
+        -47.804
+      ]
+    },
+    {
+      "name": "Farro Data Center VII",
+      "body": "Pyro IV",
+      "system": "Pyro",
+      "kind": "Outpost",
+      "coordinates_km": [
+        -75.724,
+        60.775,
+        306.394
+      ]
+    },
+    {
+      "name": "Farro Data Center VIII",
+      "body": "Pyro IV",
+      "system": "Pyro",
+      "kind": "Outpost",
+      "coordinates_km": [
+        137.495,
+        103.253,
+        271.748
+      ]
+    },
+    {
+      "name": "Farro Data Center IX",
+      "body": "Pyro IV",
+      "system": "Pyro",
+      "kind": "Outpost",
+      "coordinates_km": [
+        109.613,
+        -206.013,
+        -221.84
+      ]
+    },
+    {
+      "name": "Farro Data Center X",
+      "body": "Pyro IV",
+      "system": "Pyro",
+      "kind": "Outpost",
+      "coordinates_km": [
+        -40.669,
+        -105.83,
+        -300.991
+      ]
+    },
+    {
+      "name": "ASD Onyx S4A1",
+      "body": "Calliope",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        20.562,
+        -236.174,
+        -38.637
+      ]
+    },
+    {
+      "name": "ASD Onyx S4A2",
+      "body": "Calliope",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -169.871,
+        -120.333,
+        -119.518
+      ]
+    },
+    {
+      "name": "ASD Onyx S4A3",
+      "body": "Calliope",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -152.877,
+        183.939,
+        19.942
+      ]
+    },
+    {
+      "name": "ASD Onyx S4A4",
+      "body": "Calliope",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        166.65,
+        108.856,
+        134.119
+      ]
+    },
+    {
+      "name": "ASD Onyx S4A5",
+      "body": "Calliope",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        54.002,
+        197.775,
+        -125.6
+      ]
+    },
+    {
+      "name": "ASD Onyx S4A6",
+      "body": "Calliope",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        175.374,
+        157.196,
+        46.203
+      ]
+    },
+    {
+      "name": "ASD Onyx S4A7",
+      "body": "Calliope",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        123.78,
+        22.665,
+        -204.404
+      ]
+    },
+    {
+      "name": "ASD Onyx S4A8",
+      "body": "Calliope",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -168.852,
+        94.71,
+        141.893
+      ]
+    },
+    {
+      "name": "ASD Onyx S4A9",
+      "body": "Calliope",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -70.648,
+        215.374,
+        79.466
+      ]
+    },
+    {
+      "name": "ASD Onyx S4A10",
+      "body": "Calliope",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        58.207,
+        -116.376,
+        201.693
+      ]
+    },
+    {
+      "name": "HDRSO Pearce",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -785.362,
+        -589.559,
+        -188.888
+      ]
+    },
+    {
+      "name": "HDRSO Simms",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -751.438,
+        -630.785,
+        -193.547
+      ]
+    },
+    {
+      "name": "HDRSO McKuen",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -834.443,
+        -514.533,
+        -198.282
+      ]
+    },
+    {
+      "name": "HDRSO Giblin",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -549.109,
+        246.068,
+        801.997
+      ]
+    },
+    {
+      "name": "HDRSO Bersch",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -436.245,
+        419.946,
+        795.883
+      ]
+    },
+    {
+      "name": "HDRSO Walker",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -610.036,
+        -794.239,
+        -16.094
+      ]
+    },
+    {
+      "name": "HDRSO Malloy",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -982.073,
+        -188.907,
+        39.898
+      ]
+    },
+    {
+      "name": "HDRSO Stott",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -676.84,
+        -709.291,
+        -198.744
+      ]
+    },
+    {
+      "name": "HDRSO Foster",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -407.132,
+        372.886,
+        836.012
+      ]
+    },
+    {
+      "name": "HDRSO Brel",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -420.218,
+        406.044,
+        813.71
+      ]
+    },
+    {
+      "name": "HDRSO Tillman",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -729.413,
+        -686.833,
+        10.067
+      ]
+    },
+    {
+      "name": "HDRSO Bowes",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -435.775,
+        430.996,
+        790.232
+      ]
+    },
+    {
+      "name": "HDRSO Baier",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -433.919,
+        301.727,
+        851.013
+      ]
+    },
+    {
+      "name": "HDRSO Olliff",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -785.953,
+        -584.009,
+        -203.892
+      ]
+    },
+    {
+      "name": "HDRSO Bardie",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -419.852,
+        440.358,
+        794.891
+      ]
+    },
+    {
+      "name": "HDRSO Hosley",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -986.146,
+        -173.108,
+        -0.898
+      ]
+    },
+    {
+      "name": "HDRSO Sheppard",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -786.392,
+        -599.621,
+        -151.02
+      ]
+    },
+    {
+      "name": "HDRSO Wyatt",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -567.315,
+        -815.069,
+        -128.385
+      ]
+    },
+    {
+      "name": "HDRSO Marling",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -864.196,
+        -474.996,
+        -171.181
+      ]
+    },
+    {
+      "name": "HDRSO Franz",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -453.501,
+        371.879,
+        812.093
+      ]
+    },
+    {
+      "name": "HDRSO Cronshaw",
+      "body": "Hurston",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -422.254,
+        382.551,
+        824.551
+      ]
+    },
+    {
+      "name": "ASD Onyx S1A1",
+      "body": "Arial",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        130.657,
+        -243.037,
+        -207.06
+      ]
+    },
+    {
+      "name": "ASD Onyx S1A2",
+      "body": "Arial",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        132.035,
+        311.317,
+        70.006
+      ]
+    },
+    {
+      "name": "ASD Onyx S1A3",
+      "body": "Arial",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -241.478,
+        162.131,
+        186.651
+      ]
+    },
+    {
+      "name": "ASD Onyx S1A4",
+      "body": "Arial",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -244.435,
+        -220.397,
+        104.248
+      ]
+    },
+    {
+      "name": "ASD Onyx S1A5",
+      "body": "Arial",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        301.416,
+        1.405,
+        168.537
+      ]
+    },
+    {
+      "name": "ASD Onyx S1A6",
+      "body": "Arial",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -302.533,
+        -92.754,
+        -138.02
+      ]
+    },
+    {
+      "name": "ASD Onyx S1A7",
+      "body": "Arial",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -295.631,
+        178.401,
+        -5.888
+      ]
+    },
+    {
+      "name": "ASD Onyx S1A8",
+      "body": "Arial",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        11.777,
+        343.888,
+        29.718
+      ]
+    },
+    {
+      "name": "ASD Onyx S1A9",
+      "body": "Arial",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        224.92,
+        138.108,
+        222.253
+      ]
+    },
+    {
+      "name": "ASD Onyx S1A10",
+      "body": "Arial",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        229.023,
+        -256.767,
+        -26.962
+      ]
+    },
+    {
+      "name": "ASD Onyx S1B1",
+      "body": "Aberdeen",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        234.353,
+        -131.073,
+        58.9
+      ]
+    },
+    {
+      "name": "ASD Onyx S1B2",
+      "body": "Aberdeen",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        213.758,
+        124.261,
+        119.737
+      ]
+    },
+    {
+      "name": "ASD Onyx S1B3",
+      "body": "Aberdeen",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -119.102,
+        246.71,
+        -25.577
+      ]
+    },
+    {
+      "name": "ASD Onyx S1B4",
+      "body": "Aberdeen",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -235.997,
+        -107.176,
+        -92.353
+      ]
+    },
+    {
+      "name": "ASD Onyx S1B5",
+      "body": "Aberdeen",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        3.43,
+        -251.294,
+        112.251
+      ]
+    },
+    {
+      "name": "ASD Onyx S1B6",
+      "body": "Aberdeen",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -236.121,
+        134.305,
+        45.387
+      ]
+    },
+    {
+      "name": "ASD Onyx S1B7",
+      "body": "Aberdeen",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -202.268,
+        -185.882,
+        14.625
+      ]
+    },
+    {
+      "name": "ASD Onyx S1B8",
+      "body": "Aberdeen",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -70.286,
+        136.109,
+        -228.353
+      ]
+    },
+    {
+      "name": "ASD Onyx S1B9",
+      "body": "Aberdeen",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        57.605,
+        -259.862,
+        -69.328
+      ]
+    },
+    {
+      "name": "ASD Onyx S1B10",
+      "body": "Aberdeen",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        46.855,
+        -100.03,
+        251.831
+      ]
+    },
+    {
+      "name": "ASD Onyx S1C1",
+      "body": "Magda",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        189.1,
+        -11.605,
+        283.428
+      ]
+    },
+    {
+      "name": "ASD Onyx S1C2",
+      "body": "Magda",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        200.466,
+        274.658,
+        -22.454
+      ]
+    },
+    {
+      "name": "ASD Onyx S1C3",
+      "body": "Magda",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -273.455,
+        135.679,
+        152.213
+      ]
+    },
+    {
+      "name": "ASD Onyx S1C4",
+      "body": "Magda",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -195.874,
+        -252.335,
+        -118.837
+      ]
+    },
+    {
+      "name": "ASD Onyx S1C5",
+      "body": "Magda",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        34.155,
+        -246.252,
+        -233.398
+      ]
+    },
+    {
+      "name": "ASD Onyx S1C6",
+      "body": "Magda",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -143.799,
+        -307.799,
+        -29.79
+      ]
+    },
+    {
+      "name": "ASD Onyx S1C7",
+      "body": "Magda",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -8.041,
+        -156.445,
+        303.018
+      ]
+    },
+    {
+      "name": "ASD Onyx S1C8",
+      "body": "Magda",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -32.11,
+        215.939,
+        -261.765
+      ]
+    },
+    {
+      "name": "ASD Onyx S1C9",
+      "body": "Magda",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        290.667,
+        -177.823,
+        11.715
+      ]
+    },
+    {
+      "name": "ASD Onyx S1C10",
+      "body": "Magda",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        101.832,
+        -274.674,
+        174.613
+      ]
+    },
+    {
+      "name": "ASD Onyx S1D1",
+      "body": "Ita",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        86.574,
+        -186.511,
+        251.742
+      ]
+    },
+    {
+      "name": "ASD Onyx S1D2",
+      "body": "Ita",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        286.936,
+        -137.699,
+        67.342
+      ]
+    },
+    {
+      "name": "ASD Onyx S1D3",
+      "body": "Ita",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        280.6,
+        113.634,
+        -118.749
+      ]
+    },
+    {
+      "name": "ASD Onyx S1D4",
+      "body": "Ita",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -307.404,
+        80.573,
+        68.729
+      ]
+    },
+    {
+      "name": "ASD Onyx S1D5",
+      "body": "Ita",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -155.823,
+        -251.756,
+        -135.896
+      ]
+    },
+    {
+      "name": "ASD Onyx S1D6",
+      "body": "Ita",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -143.309,
+        -230.604,
+        179.541
+      ]
+    },
+    {
+      "name": "ASD Onyx S1D7",
+      "body": "Ita",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        3.549,
+        325.201,
+        -4.226
+      ]
+    },
+    {
+      "name": "ASD Onyx S1D8",
+      "body": "Ita",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -54.896,
+        100.329,
+        304.343
+      ]
+    },
+    {
+      "name": "ASD Onyx S1D9",
+      "body": "Ita",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -30.506,
+        -276.138,
+        169.046
+      ]
+    },
+    {
+      "name": "ASD Onyx S1D10",
+      "body": "Ita",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -172.103,
+        -81.732,
+        263.174
+      ]
+    },
+    {
+      "name": "ASD Onyx S2A1",
+      "body": "Cellin",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -21.618,
+        260.131,
+        7.443
+      ]
+    },
+    {
+      "name": "ASD Onyx S2A2",
+      "body": "Cellin",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        174.259,
+        -182.968,
+        66.967
+      ]
+    },
+    {
+      "name": "ASD Onyx S2A3",
+      "body": "Cellin",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        20.585,
+        -80.694,
+        246.801
+      ]
+    },
+    {
+      "name": "ASD Onyx S2A4",
+      "body": "Cellin",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        204.695,
+        -154.661,
+        -46.141
+      ]
+    },
+    {
+      "name": "ASD Onyx S2A5",
+      "body": "Cellin",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -19.728,
+        257.238,
+        -37.281
+      ]
+    },
+    {
+      "name": "ASD Onyx S2A6",
+      "body": "Cellin",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -240.993,
+        82.896,
+        -56.456
+      ]
+    },
+    {
+      "name": "ASD Onyx S2A7",
+      "body": "Cellin",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -58.462,
+        -231.374,
+        -104.826
+      ]
+    },
+    {
+      "name": "ASD Onyx S2A8",
+      "body": "Cellin",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -26.609,
+        -133.673,
+        221.949
+      ]
+    },
+    {
+      "name": "ASD Onyx S2A9",
+      "body": "Cellin",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -138.368,
+        -165.234,
+        -146.307
+      ]
+    },
+    {
+      "name": "ASD Onyx S2A10",
+      "body": "Cellin",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        112.742,
+        -200.819,
+        -122.751
+      ]
+    },
+    {
+      "name": "ASD Onyx S2B1",
+      "body": "Daymar",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        242.038,
+        -168.33,
+        -13.307
+      ]
+    },
+    {
+      "name": "ASD Onyx S2B2",
+      "body": "Daymar",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -146.445,
+        -252.668,
+        44.456
+      ]
+    },
+    {
+      "name": "ASD Onyx S2B3",
+      "body": "Daymar",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        252.677,
+        55.096,
+        -142.078
+      ]
+    },
+    {
+      "name": "ASD Onyx S2B4",
+      "body": "Daymar",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        272.334,
+        -5.632,
+        113.683
+      ]
+    },
+    {
+      "name": "ASD Onyx S2B5",
+      "body": "Daymar",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        122.566,
+        39.773,
+        265.445
+      ]
+    },
+    {
+      "name": "ASD Onyx S2B6",
+      "body": "Daymar",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -123.044,
+        29.224,
+        266.654
+      ]
+    },
+    {
+      "name": "ASD Onyx S2B7",
+      "body": "Daymar",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -119.044,
+        242.239,
+        119.096
+      ]
+    },
+    {
+      "name": "ASD Onyx S2B8",
+      "body": "Daymar",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -201.411,
+        213.095,
+        -38.568
+      ]
+    },
+    {
+      "name": "ASD Onyx S2B9",
+      "body": "Daymar",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -230.921,
+        -116.335,
+        -141.897
+      ]
+    },
+    {
+      "name": "ASD Onyx S2B10",
+      "body": "Daymar",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -78.437,
+        -154.694,
+        238.719
+      ]
+    },
+    {
+      "name": "ASD Onyx S2C1",
+      "body": "Yela",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        301.409,
+        -76.152,
+        -38.446
+      ]
+    },
+    {
+      "name": "ASD Onyx S2C2",
+      "body": "Yela",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        90.22,
+        158.835,
+        -254.335
+      ]
+    },
+    {
+      "name": "ASD Onyx S2C3",
+      "body": "Yela",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        300.59,
+        -58.086,
+        -65.217
+      ]
+    },
+    {
+      "name": "ASD Onyx S2C4",
+      "body": "Yela",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        260.358,
+        174.725,
+        0.782
+      ]
+    },
+    {
+      "name": "ASD Onyx S2C5",
+      "body": "Yela",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        292.852,
+        54.679,
+        96.09
+      ]
+    },
+    {
+      "name": "ASD Onyx S2C6",
+      "body": "Yela",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        120.609,
+        -279.273,
+        74.593
+      ]
+    },
+    {
+      "name": "ASD Onyx S2C7",
+      "body": "Yela",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        59.966,
+        -175.197,
+        252.383
+      ]
+    },
+    {
+      "name": "ASD Onyx S2C8",
+      "body": "Yela",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -233.554,
+        -205.798,
+        33.279
+      ]
+    },
+    {
+      "name": "ASD Onyx S2C9",
+      "body": "Yela",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -39.651,
+        -293.909,
+        -101.618
+      ]
+    },
+    {
+      "name": "ASD Onyx S2C10",
+      "body": "Yela",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        200.845,
+        -199.456,
+        134.663
+      ]
+    },
+    {
+      "name": "Security Post Pakote",
+      "body": "Cellin",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        94.224,
+        -71.327,
+        232.359
+      ]
+    },
+    {
+      "name": "Security Post Birbari",
+      "body": "Cellin",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -152.438,
+        -195.542,
+        81.449
+      ]
+    },
+    {
+      "name": "Security Post Awala",
+      "body": "Cellin",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        241.708,
+        32.956,
+        92.301
+      ]
+    },
+    {
+      "name": "Security Post Saktigar",
+      "body": "Cellin",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        126.781,
+        -71.928,
+        215.954
+      ]
+    },
+    {
+      "name": "Security Post Kota",
+      "body": "Cellin",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        67.248,
+        -95.146,
+        232.975
+      ]
+    },
+    {
+      "name": "Security Post Chilad",
+      "body": "Cellin",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        -223.496,
+        -115.735,
+        66.944
+      ]
+    },
+    {
+      "name": "Security Post Sharga",
+      "body": "Cellin",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        102.725,
+        -55.538,
+        233.874
+      ]
+    },
+    {
+      "name": "Security Post Gandan",
+      "body": "Cellin",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        43.976,
+        -179.168,
+        184.168
+      ]
+    },
+    {
+      "name": "Security Post Iteke",
+      "body": "Yela",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        193.746,
+        106.8,
+        221.443
+      ]
+    },
+    {
+      "name": "Security Post Walvis",
+      "body": "Yela",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        102.466,
+        162.7,
+        246.987
+      ]
+    },
+    {
+      "name": "Security Post Triolet",
+      "body": "Yela",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        121.57,
+        151.521,
+        245.999
+      ]
+    },
+    {
+      "name": "Security Post Hasik",
+      "body": "Yela",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        208.442,
+        95.447,
+        213.177
+      ]
+    },
+    {
+      "name": "Security Post Peska",
+      "body": "Yela",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        139.437,
+        168.323,
+        224.702
+      ]
+    },
+    {
+      "name": "Security Post Klipra",
+      "body": "Yela",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        182.52,
+        120.862,
+        224.068
+      ]
+    },
+    {
+      "name": "Security Post Moka",
+      "body": "Yela",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        187.695,
+        136.653,
+        210.118
+      ]
+    },
+    {
+      "name": "Security Post Erden",
+      "body": "Daymar",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        114.598,
+        -269.978,
+        32.11
+      ]
+    },
+    {
+      "name": "Security Post Tavan",
+      "body": "Daymar",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        154.635,
+        -238.234,
+        -82.131
+      ]
+    },
+    {
+      "name": "Security Post Menian",
+      "body": "Daymar",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        119.404,
+        -263.294,
+        -62.655
+      ]
+    },
+    {
+      "name": "Security Post Dawu",
+      "body": "Daymar",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        138.795,
+        -259.884,
+        18.369
+      ]
+    },
+    {
+      "name": "Security Post Reawick",
+      "body": "Daymar",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        105.287,
+        -262.019,
+        -87.862
+      ]
+    },
+    {
+      "name": "Security Post Ulaga",
+      "body": "Daymar",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        150.88,
+        -244.523,
+        -69.995
+      ]
+    },
+    {
+      "name": "Security Post Yafa",
+      "body": "Daymar",
+      "system": "Stanton",
+      "kind": "Underground bunker",
+      "coordinates_km": [
+        150.046,
+        -250.093,
+        -48.435
+      ]
+    },
+    {
+      "name": "Siege of Orison (Orison reference)",
+      "body": "Crusader",
+      "system": "Stanton",
+      "kind": "Event reference",
+      "coordinates_km": [
+        5295.517,
+        -863.194,
+        5282.237
+      ],
+      "note": "Uses Orison city coordinates and Crusader world time. Siege platform positions, horizon and current instance alignment still need field validation."
+    }
+  ],
+  "bundled_revision": "6092b98125d1db6077ba999c2d9bc5ccc3b2ff99",
+  "source_date": "2026-07-10"
+}

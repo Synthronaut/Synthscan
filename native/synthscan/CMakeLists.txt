@@ -272,7 +272,7 @@ set(HEADERS
 if(WIN32)
     # Create executable (WIN32 for a GUI application)
     enable_language(RC)
-    add_executable(${PROJECT_NAME} WIN32 ${SOURCES} ${HEADERS} resources/bedrock.rc)
+    add_executable(${PROJECT_NAME} WIN32 ${SOURCES} ${HEADERS} resources/synthscan.rc)
     set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "Bedrock")
 
     # Source files are UTF-8 (without BOM) - required for the unicode UI strings

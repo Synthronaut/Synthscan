@@ -1,0 +1,40 @@
+{
+  "clear.png": {
+    "ping_ms": 8.4,
+    "server_fps": 8.7,
+    "server_name": "GAME-62",
+    "shard_pop": 470,
+    "srv_pop": 83
+  },
+  "banner.png": {
+    "server_fps": 7.2,
+    "shard_pop": 465,
+    "srv_pop": 80
+  },
+  "moving.png": {
+    "server_fps": 4.5,
+    "shard_pop": 468,
+    "srv_pop": 79
+  },
+  "node_change.png": {
+    "ping_ms": 23.2,
+    "server_fps": 26.6,
+    "server_name": "GAME-3",
+    "shard_pop": 478,
+    "srv_pop": 37
+  },
+  "ping_change.png": {
+    "ping_ms": 18.6,
+    "server_fps": 20.5,
+    "server_name": "GAME-3",
+    "shard_pop": 478,
+    "srv_pop": 37
+  },
+  "debug_off.png": {
+    "server_fps": null,
+    "ping_ms": null,
+    "shard_pop": null,
+    "srv_pop": null,
+    "server_name": "--"
+  }
+}
