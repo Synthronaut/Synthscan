@@ -103,11 +103,12 @@ void appendAfkMenu(HMENU menu,UINT id){
 }
 void desktop();
 const Json& releaseConfig(){
-    static double checked=-10;
+    static ULONGLONG checked=0;
     static Json cached;
-    if(testing||epoch()-checked>=5||cached.kind!=Json::Kind::Object){
+    auto now=GetTickCount64();
+    if(testing||!checked||now-checked>=5000||cached.kind!=Json::Kind::Object){
         cached=read(SCMiner::AppPaths::program().parent_path().parent_path()/L"release.json");
-        checked=epoch();
+        checked=now?now:1;
     }
     return cached;
 }
