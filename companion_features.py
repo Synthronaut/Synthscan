@@ -165,6 +165,10 @@ class CompanionService:
         self.friend_history=InviteHistory(directory,'friend_request_attempts.json');self.friend_requested=set()
         self.cancel_batch=Event()
         self.started_at=time.time();self.revision=0;self.notice_revision=0;self.market_last_request=0
+        from chat_codec import ChatTranslator
+        self.translator=ChatTranslator(self.directory/'chat_translations_cache.json')
+        self.chat_active=False;self.chat_auto_translate=True
+        self.chat_channels=[];self.chat_messages=[];self.chat_at=0;self.chat_due=0;self.chat_error=''
         self.command_dir=self.directory/'companion_commands';self.command_dir.mkdir(exist_ok=True)
     def changed(self):self.revision+=1;self.next_publish=0
     def fetch_org_members(self,symbol,tag_label,alert):
@@ -194,9 +198,13 @@ class CompanionService:
     def friend_ids(self,now):
         stamp=self.relationships.get('friends_at',0)
         return set(self.relationships.get('friends',[])) if stamp and 0<=now-stamp<120 else set()
+    def party_ids(self,now):
+        stamp=self.relationships.get('party_at',0)
+        return set(self.relationships.get('party',[])) if stamp and 0<=now-stamp<120 else set()
     def available_people(self):
         saved=[dict(id=key,handle=value['handle']) for key,value in self.store.data['tags'].items()]
-        return {p['id']:p for p in reversed(self.roster+self.relationships.get('friend_rows',[])+self.search+self.store.data['actions']+saved)}
+        chat_senders=[dict(id=m['sender_id'],handle=m['sender_handle'],is_self=m.get('is_self',False)) for m in getattr(self,'chat_messages',[]) if m.get('sender_id') and m.get('sender_handle')]
+        return {p['id']:p for p in reversed(self.roster+self.relationships.get('party_rows',[])+self.relationships.get('friend_rows',[])+self.search+self.store.data['actions']+chat_senders+saved)}
     def stage(self,targets,friends=()):
         if self.invite_queue and self.invite_queue.snapshot()['active']:raise ValueError('Cancel the running queue before changing the Action list.')
         current={p['id']:p for p in self.store.data['actions']}
@@ -214,7 +222,7 @@ class CompanionService:
         if not isinstance(identifier,str) or not identifier or len(identifier)>100 or identifier in self.store.data['commands']:return
         if self.store.read_only:raise ValueError('Saved companion records are unavailable.')
         action=command.get('action')
-        if action in ('friend','party','party_many','friend_many','stage_people','stage_tag','pause_invites','resume_invites','cancel_invites','search','refresh_people','tag','tag_many','mark_org'):
+        if action in ('friend','party','party_many','friend_many','kick_party_member','transfer_party_leader','leave_party','stage_people','stage_tag','pause_invites','resume_invites','cancel_invites','search','refresh_people','refresh_chat','send_chat_message','tag','tag_many','mark_org'):
             if not self.session or command.get('session_token')!=self.session:raise ValueError('Session changed. Refresh People before continuing.')
         if action=='stage_people':
             ids=command.get('player_ids');available=self.available_people()
@@ -242,6 +250,42 @@ class CompanionService:
             if action=='cancel_invites':self.invite_queue.cancel();self.action_status='Cancelling invitations after any request already in flight.'
             else:self.invite_queue.pause(action=='pause_invites');self.action_status='Invitation queue paused after any request in flight.' if action=='pause_invites' else 'Invitation queue resumed.'
         elif action=='refresh_people':self.roster_due=0;self.relationships_due=0
+        elif action=='set_chat_active':
+            self.chat_active=bool(command.get('active',True))
+            if self.chat_active:self.chat_due=0
+        elif action=='set_chat_translate':
+            self.chat_auto_translate=bool(command.get('enabled',True))
+            self.chat_due=0
+        elif action=='refresh_chat':
+            self.chat_active=True;self.chat_due=0
+        elif action in ('kick_party_member','transfer_party_leader','leave_party'):
+            if command.get('confirmed') is not True:raise ValueError('Confirm the party action first.')
+            if 'action' in self.jobs:raise ValueError('A social action is already running.')
+            player_id=str(command.get('player_id') or '').strip()
+            target=self.available_people().get(player_id,dict(id=player_id,handle=player_id))
+            if action!='leave_party':
+                party_set=set(self.relationships.get('party',[]))
+                if not player_id or target.get('is_self') or (party_set and player_id not in party_set):
+                    raise ValueError('Select another current party member first.')
+            self.store.data['commands']=(self.store.data['commands']+[identifier])[-1000:];self.store.save()
+            self.jobs['action']=(self.pool.submit(self.social,action,dict(self.context),player_id=player_id,handle=target.get('handle',''),confirmed=True),dict(self.context))
+            if action=='kick_party_member':
+                self.action_status=f"Removing {target.get('handle') or player_id} from party…"
+            elif action=='transfer_party_leader':
+                self.action_status=f"Making {target.get('handle') or player_id} party leader…"
+            else:
+                self.action_status='Leaving party…'
+        elif action=='send_chat_message':
+            if command.get('confirmed') is not True:raise ValueError('Confirm sending the chat message.')
+            if 'chat_send' in self.jobs:raise ValueError('A chat message is already being sent.')
+            group_id=str(command.get('group_id') or '').strip()
+            content=str(command.get('text') or command.get('query') or '').strip()
+            encode_zh=bool(command.get('encode_zh',False))
+            if not group_id:raise ValueError('Select a chat channel before sending.')
+            if not content:raise ValueError('Enter a message to send.')
+            self.store.data['commands']=(self.store.data['commands']+[identifier])[-1000:];self.store.save()
+            self.jobs['chat_send']=(self.pool.submit(self.social,'send_chat',dict(self.context),group_id=group_id,content=content,confirmed=True,encode_zh=encode_zh,translator=self.translator),dict(self.context))
+            self.action_status='Sending chat message…'
         elif action=='search':
             if 'search' in self.jobs:raise ValueError('A player search is already running.')
             query=str(command.get('query','')).strip()
@@ -250,7 +294,8 @@ class CompanionService:
         elif action in ('tag','friend','party'):
             saved=[dict(id=key,handle=value['handle']) for key,value in self.store.data['tags'].items()]
             target=self.available_people().get(command.get('player_id'))
-            if not target or target.get('is_self') or target['id'] not in ({p['id'] for p in self.roster}|self.friend_ids(now)):raise ValueError('Select another current-shard player first.')
+            chat_ids={m['sender_id'] for m in self.chat_messages if m.get('sender_id')}
+            if not target or target.get('is_self') or target['id'] not in ({p['id'] for p in self.roster}|self.friend_ids(now)|self.party_ids(now)|chat_ids):raise ValueError('Select another current-shard player first.')
             if action=='tag':
                 labels=tag_labels(command.get('label',''))
                 if 'Friend' in labels:raise ValueError('Friend is automatic from your game friends list; use Friendly for a custom tag.')
@@ -326,7 +371,9 @@ class CompanionService:
         if token!=self.session:
             self.cancel_batch.set()
             if self.invite_queue:self.invite_queue.cancel()
-            self.session=token;self.roster=[];self.search=[];self.roster_at=0;self.roster_due=0;self.gate.reset();self.roster_error='';self.relationships={};self.relationships_due=0;self.invited=self.invite_history.ids(token);self.friend_requested=self.friend_history.ids(token);self.batch_results=[];self.invite_queue=None;self.changed()
+            self.session=token;self.roster=[];self.search=[];self.roster_at=0;self.roster_due=0;self.gate.reset();self.roster_error='';self.relationships={};self.relationships_due=0;self.invited=self.invite_history.ids(token);self.friend_requested=self.friend_history.ids(token);self.batch_results=[];self.invite_queue=None
+            self.chat_channels=[];self.chat_messages=[];self.chat_at=0;self.chat_due=0;self.chat_error=''
+            self.changed()
             if token and self.store.data.get('actions_session')!=token and not self.store.read_only:
                 self.store.data['actions']=[];self.store.data['actions_session']=token
                 try:self.store.save()
@@ -419,10 +466,19 @@ class CompanionService:
                         remembered.update(row['id'] for row in self.batch_results if row['outcome'] in ('Sent','Check in game'))
                     else:self.action_status=result
                     self.relationships_due=0
+                elif kind=='chat':
+                    self.chat_channels=result.get('channels',[])
+                    self.chat_messages=result.get('messages',[])
+                    self.chat_at=result.get('observed_at',now)
+                    self.chat_error=''
+                elif kind=='chat_send':
+                    self.action_status='Chat message sent.'
+                    self.chat_due=0
             except Exception as error:
                 message=str(error)[:240] if isinstance(error,ValueError) else 'Refresh unavailable. Previous data retained.'
                 if kind=='roster':self.roster_error=message;self.gate.reset()
                 elif kind=='relationships':self.relationships={}
+                elif kind=='chat':self.chat_error=message
                 elif kind.startswith('market:'):
                     for watch in self.store.data['watches']:
                         if watch['item_id']==int(kind.split(':')[1]):watch.update(error='UEX refresh unavailable; cached matches retained.',due_at=now+MARKET_INTERVAL)
@@ -437,6 +493,9 @@ class CompanionService:
         if self.session and want_people and 'roster' not in self.jobs and now>=self.roster_due:
             known={p['id']:p['handle'] for p in self.roster}
             self.jobs['roster']=(self.pool.submit(self.social,'roster',dict(self.context),known=known),dict(self.context));self.roster_due=now+ROSTER_INTERVAL
+        if self.session and people_visible and self.chat_active and 'chat' not in self.jobs and now>=self.chat_due:
+            known={p['id']:p['handle'] for p in self.available_people().values() if p.get('id') and p.get('handle')}
+            self.jobs['chat']=(self.pool.submit(self.social,'chat_snapshot',dict(self.context),known=known,translator=self.translator,auto_translate=self.chat_auto_translate),dict(self.context));self.chat_due=now+4
         if not self.store.read_only and not any(k.startswith('market:') for k in self.jobs):
             for watch in self.store.data['watches']:
                 if watch['enabled'] and now>=watch.get('due_at',0):
@@ -481,6 +540,31 @@ class CompanionService:
             labels=([manual] if manual else [])+(['Friend'] if is_friend else [])
             return dict(p,tag=', '.join(labels),manual_tag=manual,requests=request_status(p['id']),alert=tags.get(p['id'],{}).get('alert',False),is_org=is_org(tags.get(p['id'],{})),is_friend=is_friend,in_party=in_party,relationship=relationship,invited_before=p['id'] in self.invited,friend_requested_before=p['id'] in self.friend_requested,on_shard=p['id'] in active)
         rows=[decorate(p) for p in self.roster];search=[decorate(p) for p in self.search]
+        party_group_id=str(relations.get('party_group_id','') or '') if party_known else ''
+        party_leader_id=str(relations.get('party_leader_id','') or '') if party_known else ''
+        self_id=str(relations.get('self_id','') or next((p['id'] for p in self.roster if p.get('is_self')),''))
+        is_party_leader=bool(party_known and party and (not party_leader_id or party_leader_id==self_id))
+        party_people=[]
+        if party_known and party:
+            for uid in party:
+                base=available.get(uid) or dict(id=uid,handle=uid[len('urn:sc:global:player:geid:'):] if uid.startswith('urn:sc:global:player:geid:') else uid,is_self=(uid==self_id))
+                dec=decorate(dict(base,is_self=bool(base.get('is_self') or uid==self_id)))
+                dec['is_leader']=bool(uid==party_leader_id or (not party_leader_id and uid==self_id))
+                party_people.append(dec)
+            party_people.sort(key=lambda p:(0 if p.get('is_leader') else 1 if p.get('is_self') else 2,str(p.get('handle','')).casefold()))
+        chat_messages=[]
+        for m in self.chat_messages:
+            sid=m.get('sender_id','')
+            stags=tag_labels(tags.get(sid,{}).get('label','')) if sid in tags else []
+            if sid in friends and 'Friend' not in stags:stags=stags+['Friend']
+            chat_messages.append(dict(
+                m,
+                sender_tags=stags,
+                sender_tag=', '.join(stags),
+                is_friend=sid in friends,
+                in_party=sid in party,
+                is_org=is_org(tags.get(sid,{})) if sid in tags else False,
+            ))
         tagged={key:dict(tag,is_friend=key in friends,in_party=key in party,on_shard=key in active,relationship='Party + Friend' if key in party and key in friends else 'Party' if key in party else 'Friend' if key in friends else '—' if friends_known and party_known else 'Unknown') for key,tag in tags.items()}
         notices=self.store.data['notifications']
         watches=[{key:value for key,value in watch.items() if key not in ('seen','identity')} for watch in self.store.data['watches']]
@@ -490,6 +574,9 @@ class CompanionService:
             watches=watches,tags=tagged,notifications=list(reversed(notices[-40:])),market_interval=MARKET_INTERVAL,
             org_rosters=self.store.data.get('org_rosters',{}),
             friends_known=friends_known,party_known=party_known,friend_people=[decorate(p) for p in sorted(available.values(),key=lambda p:p['handle'].casefold()) if p['id'] in friends],friend_names_error=relations.get('friend_names_error',''),
+            party_people=party_people,party_group_id=party_group_id,party_leader_id=party_leader_id,is_party_leader=is_party_leader,
+            chat_active=self.chat_active,chat_auto_translate=self.chat_auto_translate,chat_channels=self.chat_channels,chat_messages=chat_messages,
+            chat_at=self.chat_at,chat_loading='chat' in self.jobs,chat_sending='chat_send' in self.jobs,chat_error=self.chat_error,
             social_busy='action' in self.jobs,search_busy='search' in self.jobs,batch_results=self.batch_results,invite_queue=queue,
             action_people=[decorate(dict(available.get(p['id'],p))) for p in self.store.data['actions'] if p['id'] in eligible],tag_options=sorted({label for t in tags.values() for label in tag_labels(t['label'])}|set(TAG_PRESETS),key=lambda label:(0 if label=='Org' else 1 if label=='Friend' else 2 if label=='Friendly' else 3,label.casefold())))
         publish_json(self.directory/'companion_state.json',view)

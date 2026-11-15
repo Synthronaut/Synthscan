@@ -35,8 +35,11 @@ def save_social_error(directory,error,**context):
 
 PLAYER_PREFIX='urn:sc:global:player:geid:'
 READS={('social','SocialService','ListGroups'),('identity','IdentityService','GetPlayersNames'),
-       ('contacts','ContactsService','SearchAccount'),('contacts','ContactsService','ListContacts')}
-WRITES={('contacts','ContactsService','SendFriendRequest'),('social','SocialService','InviteToParty')}
+       ('contacts','ContactsService','SearchAccount'),('contacts','ContactsService','ListContacts'),
+       ('chat','ChatService','ListMessages')}
+WRITES={('contacts','ContactsService','SendFriendRequest'),('social','SocialService','InviteToParty'),
+        ('social','SocialService','KickGroupMember'),('social','SocialService','TransferGroupLeadership'),
+        ('social','SocialService','LeaveGroup'),('chat','ChatService','SendMessage')}
 
 class PlayerLeftShard(ValueError):pass
 
@@ -206,7 +209,10 @@ class PlayerClient:
             if len(groups)>1:raise ValueError('Current party is ambiguous')
             members={m.urn for g in groups for m in g.members}
             if any(not u.startswith(PLAYER_PREFIX) for u in members):raise ValueError('Unrecognised party identities')
-            output.update(party=sorted(members),party_at=time.time())
+            party_group=groups[0] if len(groups)==1 else None
+            party_group_id=str(getattr(party_group,'id','') or '') if party_group else ''
+            party_leader_id=str(getattr(party_group,'leader_urn','') or '') if party_group else ''
+            output.update(party=sorted(members),party_at=time.time(),party_group_id=party_group_id,party_leader_id=party_leader_id)
         except Exception:output['party_error']='Party membership unavailable'
         # Resolve the complete contact list without guessing blank/raw-ID names.
         output['friend_rows']=[];output['friend_names_error']=''
@@ -223,6 +229,23 @@ class PlayerClient:
                 output['friend_rows']=[dict(id=u,handle=names[u],is_self=u==self.account.subject) for u in sorted(names,key=lambda u:names[u].casefold())]
                 if len(names)!=len(ids):output['friend_names_error']=str(len(ids)-len(names))+' friend name(s) unavailable; refresh to retry.'
             except Exception:output['friend_names_error']='Some friend names could not be loaded; refresh to retry.'
+        output['party_rows']=[];output['self_id']=self.account.subject
+        if output.get('party_at') and output.get('party'):
+            try:
+                p_ids=set(output['party']);p_names={}
+                p_ordered=sorted(int(u[len(PLAYER_PREFIX):]) for u in p_ids if u[len(PLAYER_PREFIX):].isdigit())
+                for start in range(0,len(p_ordered),256):
+                    batch=set(p_ordered[start:start+256]);request=self.message('identity','GetPlayersNamesRequest')();request.player_geids.extend(sorted(batch))
+                    response=self.call('identity','IdentityService','GetPlayersNames',request)
+                    if any(n.geid not in batch for n in response.names):raise ValueError('Unexpected party-name response')
+                    for row in response.names:
+                        if row.name.strip():p_names[PLAYER_PREFIX+str(row.geid)]=row.name.strip()
+                leader_id=output.get('party_leader_id','')
+                output['party_rows']=[
+                    dict(id=u,handle=p_names[u],is_self=u==self.account.subject,is_leader=(u==leader_id))
+                    for u in sorted(p_names,key=lambda u:(0 if u==leader_id else 1,p_names[u].casefold()))
+                ]
+            except Exception:pass
         self.scope(context)
         return output
 
@@ -287,6 +310,239 @@ class PlayerClient:
         control.finish(results,error='Queue stopped after an unsuccessful invitation.' if stopped else '')
         return dict(status=('Friend requests' if operation=='friend' else 'Party invites')+f': {sent} sent, {skipped} skipped'+(', queue stopped' if stopped else '')+(f', {unsent} not sent' if unsent else '')+'. See Queue / results.',results=results)
 
+    def party_manage(self,action,member_id,context,confirmed=False,member_handle=''):
+        if action not in ('kick_party_member','transfer_party_leader','leave_party') or confirmed is not True:
+            raise ValueError('Choose and confirm a party action.')
+        self.scope(context)
+        groups=[];cursor=''
+        for _ in range(4):
+            request=self.message('social','ListGroupsRequest')();request.filters.types.append(4);request.pagination.first=5
+            if cursor:request.pagination.after=cursor
+            response=self.call('social','SocialService','ListGroups',request)
+            groups.extend(g for g in response.groups if g.type==4 and any(m.urn==self.account.subject for m in g.members))
+            if not response.page_info.has_next_page:break
+            next_cursor=response.page_info.end_cursor
+            if not next_cursor or next_cursor==cursor:break
+            cursor=next_cursor
+        if len(groups)!=1 or not getattr(groups[0],'id',''):
+            raise ValueError('You are not currently in an active party.')
+        party_group=groups[0]
+        group_id=str(party_group.id)
+        leader_urn=str(getattr(party_group,'leader_urn','') or '')
+        member_urns={m.urn for m in party_group.members}
+        self.scope(context)
+        if action=='leave_party':
+            req=self.message('social','LeaveGroupRequest')()
+            req.group_id=group_id
+            self.call('social','SocialService','LeaveGroup',req,confirmed=True)
+            return 'Left party.'
+        member_id=str(member_id or '').strip()
+        if not member_id or member_id==self.account.subject or member_id not in member_urns:
+            raise ValueError('Selected player is no longer in your party.')
+        if leader_urn and leader_urn!=self.account.subject:
+            raise ValueError('Only the party leader can manage party members.')
+        label=member_handle or member_id
+        if action=='kick_party_member':
+            req=self.message('social','KickGroupMemberRequest')()
+            req.group_id=group_id
+            req.member_urn=member_id
+            self.call('social','SocialService','KickGroupMember',req,confirmed=True)
+            return f'Removed {label} from the party.'
+        req=self.message('social','TransferGroupLeadershipRequest')()
+        req.group_id=group_id
+        req.player_urn=member_id
+        self.call('social','SocialService','TransferGroupLeadership',req,confirmed=True)
+        return f'Made {label} the party leader.'
+
+    def _list_active_chat_groups(self,context):
+        self.scope(context)
+        groups=[];cursor=''
+        for _ in range(4):
+            request=self.message('social','ListGroupsRequest')();request.pagination.first=50
+            if cursor:request.pagination.after=cursor
+            response=self.call('social','SocialService','ListGroups',request)
+            for g in response.groups:
+                if any(m.urn==self.account.subject for m in g.members):
+                    groups.append(g)
+            if not response.page_info.has_next_page:break
+            next_cursor=response.page_info.end_cursor
+            if not next_cursor or next_cursor==cursor:break
+            cursor=next_cursor
+        return groups
+
+    def chat_snapshot(self,context,known=None,translator=None,auto_translate=True):
+        import chat_codec
+        known=dict(known or {})
+        groups=self._list_active_chat_groups(context)
+        shard_id=str(context.get('full_shard_id') or '').casefold()
+        shard_pattern=r'(?<![a-z0-9_])'+re.escape(shard_id)+r'(?![a-z0-9_])' if shard_id else ''
+
+        channels=[]
+        dm_other_urns=set()
+        for g in groups:
+            gid=str(getattr(g,'id','') or '')
+            if not gid:continue
+            gtype=int(getattr(g,'type',0) or 0)
+            gname=str(getattr(g,'name','') or '').strip()
+            chat_enabled=True
+            try:
+                if hasattr(g,'settings') and hasattr(g.settings,'chat'):
+                    chat_enabled=bool(g.settings.chat.enabled)
+            except Exception:
+                chat_enabled=True
+            if not chat_enabled:continue
+
+            if gtype==2:
+                if shard_pattern and not re.search(shard_pattern,gname.casefold()):
+                    continue
+                kind='global'
+                label='Global'
+                sort_order=0
+            elif gtype==4:
+                kind='party'
+                label='Party'
+                sort_order=1
+            elif gtype==6:
+                kind='ship'
+                ship_title=gname.split(':',1)[0].strip() if ':' in gname else gname
+                label=f'Ship · {ship_title}' if ship_title else 'Ship'
+                sort_order=2
+            elif gtype==5:
+                kind='dm'
+                other_urn=next((m.urn for m in g.members if m.urn!=self.account.subject),'')
+                if other_urn:dm_other_urns.add(other_urn)
+                other_name=known.get(other_urn) or gname or 'Direct'
+                label=f'DM · {other_name}'
+                sort_order=3
+            else:
+                kind='group'
+                label=gname or 'Channel'
+                sort_order=4
+
+            updated_at=int(getattr(g,'updated_at',0) or getattr(g,'created_at',0) or 0)
+            channels.append(dict(
+                id=gid,
+                kind=kind,
+                group_type=gtype,
+                name=gname,
+                label=label,
+                member_count=len(getattr(g,'members',[])),
+                leader_urn=str(getattr(g,'leader_urn','') or ''),
+                updated_at=updated_at,
+                _sort=(sort_order,-updated_at,label.casefold()),
+            ))
+
+        channels.sort(key=lambda c:c['_sort'])
+        for c in channels:c.pop('_sort',None)
+
+        # Fetch messages for up to 8 active channels (Global, Party, Ship, DM, etc.)
+        raw_messages=[]
+        for ch in channels[:8]:
+            try:
+                req=self.message('chat','ListMessagesRequest')()
+                req.group_id=ch['id']
+                req.pagination.first=50
+                resp=self.call('chat','ChatService','ListMessages',req)
+                for m in resp.messages:
+                    raw_messages.append((ch,m))
+            except Exception:
+                continue
+
+        # Sort messages chronologically (oldest -> newest)
+        raw_messages.sort(key=lambda pair:(int(getattr(pair[1],'created_at',0) or 0),str(getattr(pair[1],'id','') or '')))
+        # Keep the last 160 messages across active channels
+        raw_messages=raw_messages[-160:]
+
+        messages=[]
+        translate_budget=18
+        for ch,m in raw_messages:
+            mid=str(getattr(m,'id','') or '')
+            sender_urn=str(getattr(m,'sender_urn','') or '')
+            handle=str(getattr(m,'sender_nickname','') or known.get(sender_urn) or '').strip()
+            display_name=str(getattr(m,'sender_display_name','') or handle).strip()
+            if not handle:
+                handle=display_name or (sender_urn[len(PLAYER_PREFIX):] if sender_urn.startswith(PLAYER_PREFIX) else 'Citizen')
+            content=str(getattr(m,'content','') or '')
+            created_ms=int(getattr(m,'created_at',0) or 0)
+            created_at=created_ms/1000.0 if created_ms>10_000_000_000 else float(created_ms)
+
+            decoded_info=chat_codec.decode_sc_chat(content)
+            decoded_text=str(decoded_info.get('decoded') or content)
+            was_zh=bool(decoded_info.get('was_zh_encoded'))
+            needs_tr=bool(decoded_info.get('needs_translation'))
+            lang_hint=str(decoded_info.get('lang_hint') or 'en')
+
+            translated_text=''
+            detected_lang=lang_hint
+            if auto_translate and needs_tr and translator is not None and translate_budget>0:
+                translate_budget-=1
+                tr_text,det=translator.translate(decoded_text,target_lang='en',source_lang=lang_hint if lang_hint!='en' else 'auto')
+                detected_lang=det or lang_hint
+                if tr_text and tr_text.strip().casefold()!=decoded_text.strip().casefold():
+                    translated_text=tr_text.strip()
+
+            messages.append(dict(
+                id=mid or f"{ch['id']}:{created_ms}:{sender_urn}",
+                group_id=ch['id'],
+                channel_kind=ch['kind'],
+                channel_label=ch['label'],
+                sender_id=sender_urn,
+                sender_handle=handle,
+                sender_display_name=display_name,
+                is_self=(sender_urn==self.account.subject),
+                raw_content=content,
+                content=decoded_text,
+                translated_content=translated_text,
+                was_zh_encoded=was_zh,
+                source_lang=detected_lang,
+                at=created_at,
+            ))
+
+        self.scope(context)
+        return dict(
+            channels=channels,
+            messages=messages,
+            observed_at=time.time(),
+            full_shard_id=context.get('full_shard_id',''),
+            session_token=context.get('session_token',''),
+        )
+
+    def send_chat(self,group_id,content,context,confirmed=False,encode_zh=False,translator=None):
+        import chat_codec
+        if confirmed is not True:
+            raise ValueError('Confirm sending the chat message.')
+        self.scope(context)
+        group_id=str(group_id or '').strip()
+        text=str(content or '').strip()
+        if not group_id:
+            raise ValueError('Select a chat channel before sending.')
+        if not text:
+            raise ValueError('Enter a message to send.')
+        if len(text)>480:
+            raise ValueError('Chat message is too long (maximum 480 characters).')
+
+        groups=self._list_active_chat_groups(context)
+        target_group=next((g for g in groups if str(getattr(g,'id','') or '')==group_id),None)
+        if target_group is None:
+            raise ValueError('Selected chat channel is no longer active on this shard.')
+
+        outgoing=text
+        if encode_zh:
+            if translator is not None:
+                encoded_bundle=translator.translate_and_encode_zh(text)
+                outgoing=encoded_bundle.get('encoded') or chat_codec.encode_sc_zh_chat(text)
+            else:
+                outgoing=chat_codec.encode_sc_zh_chat(text)
+
+        req=self.message('chat','SendMessageRequest')()
+        req.group_id=group_id
+        req.content=outgoing
+        if hasattr(req,'metadata') and context.get('full_shard_id'):
+            req.metadata.shard_id=str(context['full_shard_id'])
+        self.scope(context)
+        self.call('chat','ChatService','SendMessage',req,confirmed=True)
+        return dict(sent=True,group_id=group_id,content=outgoing,at=time.time())
+
 
 def social_job(kind,context,**options):
     client=None
@@ -297,6 +553,12 @@ def social_job(kind,context,**options):
         if kind=='relationships':return client.relationships(context)
         if kind in ('party_many','friend_many'):return client.invite_many(options['people'],context,options.get('confirmed'),options.get('previous',()),options.get('cancel'),options.get('control'),options.get('require_shard',True),'friend' if kind=='friend_many' else 'party',options.get('allow_friends',False))
         if kind in ('friend','party'):return client.send(kind,options['person'],context,options.get('confirmed'))
+        if kind in ('kick_party_member','transfer_party_leader','leave_party'):
+            return client.party_manage(kind,options.get('player_id',''),context,options.get('confirmed'),options.get('handle',''))
+        if kind=='chat_snapshot':
+            return client.chat_snapshot(context,options.get('known'),options.get('translator'),options.get('auto_translate',True))
+        if kind=='send_chat':
+            return client.send_chat(options.get('group_id',''),options.get('content',''),context,options.get('confirmed'),options.get('encode_zh',False),options.get('translator'))
         raise ValueError('Unknown social operation')
     except (ValueError,FileNotFoundError) as error:
         if isinstance(error,FileNotFoundError):raise ValueError('Sign in to Star Citizen to use social tools.') from None

@@ -9,6 +9,58 @@ from pathlib import Path
 import re
 
 
+MANUFACTURER_NAMES = {
+    'KSAR': 'Kastak Arms',
+    'BEHR': 'Behring',
+    'BEH': 'Behring',
+    'KLWE': 'Klaus & Werner',
+    'KLA': 'Klaus & Werner',
+    'GEMI': 'Gemini',
+    'GEM': 'Gemini',
+    'APAR': 'Apocalypse Arms',
+    'GATS': 'Gallenson Tactical Systems',
+    'GAT': 'Gallenson Tactical Systems',
+    'GRIN': 'Greycat Industrial',
+    'HDGW': 'Hedeby Gunworks',
+    'UTFL': 'UltiFlex',
+    'JOKP': 'Joker Engineering',
+    'JOK': 'Joker Engineering',
+    'KBAR': 'KnightBridge Arms',
+    'KRI': 'Kruger Intergalactic',
+    'KRON': 'Kroneg',
+    'MXOX': 'MaxOx',
+    'AMRS': 'Amon & Reese Co.',
+    'ANVL': 'Anvil Aerospace',
+    'AEGS': 'Aegis Dynamics',
+    'AEG': 'Aegis Dynamics',
+    'DRAK': 'Drake Interplanetary',
+    'CRUS': 'Crusader Industries',
+    'ARGO': 'Argo Astronautics',
+    'CNOU': 'Consolidated Outland',
+    'RSI': 'Roberts Space Industries',
+    'MISC': 'Musashi Industrial & Starflight Concern',
+    'MIS': 'Musashi Industrial & Starflight Concern',
+    'ORIG': 'Origin Jumpworks',
+    'ESPR': 'Esperia',
+    'TMBL': 'Tumbril Land Systems',
+    'VNCL': 'Vanduul',
+    'VNC': 'Vanduul',
+    'BANU': 'Banu',
+    'AOPOA': 'Aopoa',
+    'XNAA': 'Aopoa',
+    'GATA': 'Gatac Manufacture',
+    'GAM': 'Gatac Manufacture',
+    'VOLK': 'Volker',
+    'CHAS': 'Cascadia Heavy Armaments',
+    'PREP': 'Preacher Armament',
+    'HURT': 'Hurston Dynamics',
+    'HRST': 'Hurston Dynamics',
+    'ASD': 'Associated Science and Development',
+    'ASAD': 'Associated Science and Development',
+    'CDS': 'Clark Defense Systems',
+}
+
+
 def walk_nodes(value):
     if isinstance(value, dict):
         yield value
@@ -27,6 +79,15 @@ class GameRecords:
             key, sep, value = line.partition('=')
             if sep:
                 self.localization[key.strip().split(',')[0].casefold()] = value.strip()
+        custom = Path(__file__).resolve().parent / 'data/custom_synthstrings.json'
+        if custom.exists():
+            try:
+                for k, v in json.loads(custom.read_text(encoding='utf-8')).items():
+                    ck = k.casefold()
+                    if ck not in self.localization or not self.localization[ck]:
+                        self.localization[ck] = v
+            except Exception:
+                pass
         self.used = set()
         self.resources = {}
         resource_path = self.root / 'libs/foundry/records/resourcetypedatabase/resourcetypedatabase.json'
@@ -85,7 +146,16 @@ class GameRecords:
         name = self.text(loc.get('Name'))
         name = re.sub(r'^[A-Za-z]{2,5}/[\dSs]+/[A-Da-d]\s+', '', name)
         maker = self.value(attach['Manufacturer']) if attach.get('Manufacturer') else {}
+        maker_code = maker.get('Code', '')
+        maker_loc = maker.get('Localization', {}) if isinstance(maker, dict) else {}
+        maker_name = self.text(maker_loc.get('Name')) if maker_loc else ''
+        if not maker_name and maker_code:
+            maker_name = MANUFACTURER_NAMES.get(maker_code.upper(), '')
+        if maker_name and maker_code and maker_name != maker_code:
+            manufacturer = f"{maker_name} ({maker_code})"
+        else:
+            manufacturer = maker_name or maker_code
         return dict(guid=record['_RecordId_'], name=name,
                     description=self.text(loc.get('Description')),
                     type=attach.get('Type'), size=attach.get('Size'), grade=attach.get('Grade'),
-                    manufacturer=maker.get('Code', ''), components=components)
+                    manufacturer=manufacturer, components=components)

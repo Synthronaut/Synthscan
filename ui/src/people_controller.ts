@@ -1,6 +1,8 @@
 import {
   ACTION_LIMIT,
   BuyerWatch,
+  ChatChannel,
+  ChatMessage,
   CompanionNotice,
   DesktopBridge,
   InviteQueueState,
@@ -52,6 +54,16 @@ export class DesktopAppController {
   // Filtered roster state
   private filteredPeople: Player[] = [];
   private actionPeople: Player[] = [];
+  private partyPeople: Player[] = [];
+
+  // Citizens sub-mode ('roster' vs 'chat') and Live Chat state
+  private peopleSubMode: 'roster' | 'chat' = 'roster';
+  private selectedChatChannelId = 'all';
+  private selectedSendChannelId = '';
+  private chatShowRawCodes = false;
+  private chatLiveTranslate = true;
+  private lastChatSignature = '';
+  private lastPartySignature = '';
 
   // Buyer alerts state
   private marketSearch = '';
@@ -145,6 +157,25 @@ export class DesktopAppController {
   private marketNoticesHeadingEl!: HTMLElement;
   private marketShowMatchesBtn!: HTMLButtonElement;
 
+  // Citizens sub-mode, Party box & Live Chat DOM elements
+  private peopleModeRosterBtn!: HTMLButtonElement;
+  private peopleModeChatBtn!: HTMLButtonElement;
+  private peopleRosterWorkspaceEl!: HTMLElement;
+  private peopleChatWorkspaceEl!: HTMLElement;
+  private partyHeaderEl!: HTMLElement;
+  private partyListEl!: HTMLElement;
+  private leavePartyBtn!: HTMLButtonElement;
+  private chatChannelTabsEl!: HTMLElement;
+  private chatAutoTranslateCheckboxEl!: HTMLInputElement;
+  private chatShowRawCheckboxEl!: HTMLInputElement;
+  private chatRefreshBtn!: HTMLButtonElement;
+  private chatStatusLineEl!: HTMLElement;
+  private chatMessagesScrollEl!: HTMLElement;
+  private chatSendChannelSelectEl!: HTMLSelectElement;
+  private chatSendInputEl!: HTMLInputElement;
+  private chatEncodeZhCheckboxEl!: HTMLInputElement;
+  private chatSendBtn!: HTMLButtonElement;
+
   constructor(root: HTMLElement, bridge: DesktopBridge) {
     this.root = root;
     this.bridge = bridge;
@@ -230,7 +261,15 @@ export class DesktopAppController {
     this.root.innerHTML = `
       <div class="ss-shell">
         <section id="ss-view-people" class="ss-view">
-          <div class="ss-people-grid">
+          <div class="ss-toolbar-row ss-people-subnav">
+            <div class="ss-mode-tabs" role="tablist" aria-label="Citizens workspace view">
+              <button id="people-mode-roster-btn" type="button" class="ss-tab is-active" role="tab" aria-selected="true">Citizens &amp; Party</button>
+              <button id="people-mode-chat-btn" type="button" class="ss-tab" role="tab" aria-selected="false">Live Chat &amp; Translator</button>
+            </div>
+            <span class="ss-hint-line">Native gRPC social &amp; chat feed · Zero screen capture or OCR</span>
+          </div>
+
+          <div id="people-roster-workspace" class="ss-people-grid">
             <!-- Left Column: Roster -->
             <div class="ss-card ss-roster-pane">
               <div class="ss-toolbar-row">
@@ -256,7 +295,7 @@ export class DesktopAppController {
               </div>
               <div class="ss-pane-meta">
                 <span id="people-roster-status" class="ss-status-line">Loading citizen list…</span>
-                <span class="ss-hint-line">Citizens · click to select / deselect</span>
+                <span class="ss-hint-line">Citizens · click to select / right-click for actions</span>
               </div>
               <div id="people-roster-scroll" class="ss-table-scroll" tabindex="0" role="region" aria-label="Citizen roster">
                 <table class="ss-table" id="people-roster-table">
@@ -276,8 +315,19 @@ export class DesktopAppController {
               </div>
             </div>
 
-            <!-- Right Column: Action List + Tagging & Social Queue -->
+            <!-- Right Column: Party Box + Action List + Tagging & Social Queue -->
             <div class="ss-right-column">
+              <div class="ss-card ss-party-pane" id="people-party-pane">
+                <div class="ss-pane-meta">
+                  <span id="people-party-header" class="ss-status-line">Party · Solo</span>
+                  <div class="ss-toolbar-row">
+                    <span class="ss-hint-line">Right-click member to make leader or remove</span>
+                    <button id="leave-party-btn" type="button" class="ss-btn ss-btn-xs" hidden>Leave</button>
+                  </div>
+                </div>
+                <div id="people-party-list" class="ss-party-list" role="region" aria-label="Current party members"></div>
+              </div>
+
               <div class="ss-card ss-actions-pane">
                 <div class="ss-toolbar-row">
                   <button id="people-refresh-btn" type="button" class="ss-btn">Refresh shard</button>
@@ -336,6 +386,42 @@ export class DesktopAppController {
                 </div>
                 <div id="queue-status-text" class="ss-queue-summary">Party invitations: idle · 0.09–0.99s paced gap</div>
               </div>
+            </div>
+          </div>
+
+          <!-- Live Chat & Translator Workspace -->
+          <div id="people-chat-workspace" class="ss-card ss-chat-workspace" hidden>
+            <div class="ss-toolbar-row ss-toolbar-sub">
+              <div id="chat-channel-tabs" class="ss-mode-tabs ss-chat-channel-tabs" role="tablist" aria-label="Chat channels">
+                <button type="button" class="ss-tab is-active" data-channel-id="all">All Channels</button>
+              </div>
+              <div class="ss-toolbar-row">
+                <label class="ss-checkbox-label" title="Automatically translate decoded [zh] and foreign messages into English">
+                  <input id="chat-auto-translate-checkbox" type="checkbox" checked />
+                  <span>Live translate</span>
+                </label>
+                <label class="ss-checkbox-label" title="Also display the raw [zh] @CODE string underneath decoded messages">
+                  <input id="chat-show-raw-checkbox" type="checkbox" />
+                  <span>Show raw [zh]</span>
+                </label>
+                <button id="chat-refresh-btn" type="button" class="ss-btn">Refresh chat</button>
+              </div>
+            </div>
+            <div class="ss-pane-meta">
+              <span id="chat-status-line" class="ss-status-line">Waiting for active shard channels…</span>
+              <span class="ss-hint-line">Decodes [zh] @CODE chat automatically · Right-click any sender for social &amp; party actions</span>
+            </div>
+            <div id="chat-messages-scroll" class="ss-table-scroll ss-chat-feed" tabindex="0" role="log" aria-label="Live game chat feed"></div>
+            <div class="ss-toolbar-row ss-chat-compose">
+              <select id="chat-send-channel-select" class="ss-select ss-chat-channel-select" aria-label="Target chat channel">
+                <option value="">Select channel…</option>
+              </select>
+              <input id="chat-send-input" class="ss-input ss-grow" type="text" maxlength="480" placeholder="Type message to send to Star Citizen chat… (Enter to send)" autocomplete="off" />
+              <label class="ss-checkbox-label" title="Translate outgoing text to Simplified Chinese and encode as [zh] @CODE so Chinese players can read it in-game">
+                <input id="chat-encode-zh-checkbox" type="checkbox" />
+                <span>Send as [zh]</span>
+              </label>
+              <button id="chat-send-btn" type="button" class="ss-btn ss-btn-accent">Send</button>
             </div>
           </div>
         </section>
@@ -567,6 +653,24 @@ export class DesktopAppController {
     this.marketNoticesTbodyEl = this.root.querySelector('#market-notices-tbody')!;
     this.marketNoticesHeadingEl = this.root.querySelector('#market-notices-heading')!;
     this.marketShowMatchesBtn = this.root.querySelector('#market-show-matches-btn')!;
+
+    this.peopleModeRosterBtn = this.root.querySelector('#people-mode-roster-btn')!;
+    this.peopleModeChatBtn = this.root.querySelector('#people-mode-chat-btn')!;
+    this.peopleRosterWorkspaceEl = this.root.querySelector('#people-roster-workspace')!;
+    this.peopleChatWorkspaceEl = this.root.querySelector('#people-chat-workspace')!;
+    this.partyHeaderEl = this.root.querySelector('#people-party-header')!;
+    this.partyListEl = this.root.querySelector('#people-party-list')!;
+    this.leavePartyBtn = this.root.querySelector('#leave-party-btn')!;
+    this.chatChannelTabsEl = this.root.querySelector('#chat-channel-tabs')!;
+    this.chatAutoTranslateCheckboxEl = this.root.querySelector('#chat-auto-translate-checkbox')!;
+    this.chatShowRawCheckboxEl = this.root.querySelector('#chat-show-raw-checkbox')!;
+    this.chatRefreshBtn = this.root.querySelector('#chat-refresh-btn')!;
+    this.chatStatusLineEl = this.root.querySelector('#chat-status-line')!;
+    this.chatMessagesScrollEl = this.root.querySelector('#chat-messages-scroll')!;
+    this.chatSendChannelSelectEl = this.root.querySelector('#chat-send-channel-select')!;
+    this.chatSendInputEl = this.root.querySelector('#chat-send-input')!;
+    this.chatEncodeZhCheckboxEl = this.root.querySelector('#chat-encode-zh-checkbox')!;
+    this.chatSendBtn = this.root.querySelector('#chat-send-btn')!;
 
     this.bindEvents();
   }
@@ -909,6 +1013,142 @@ export class DesktopAppController {
       this.homeShowPrevious = true;
       this.renderHome();
     });
+
+    // Citizens top mode switch (Citizens & Party vs Live Chat & Translator)
+    this.peopleModeRosterBtn.addEventListener('click', () => {
+      this.setPeopleSubMode('roster');
+    });
+    this.peopleModeChatBtn.addEventListener('click', () => {
+      this.setPeopleSubMode('chat');
+    });
+
+    // Party list interactions (right-click or Actions button)
+    this.partyListEl.addEventListener('contextmenu', (ev) => {
+      const row = (ev.target as HTMLElement).closest<HTMLElement>('[data-party-player-id]');
+      if (!row) return;
+      const pid = row.dataset.partyPlayerId!;
+      const player = this.partyPeople.find((p) => p.id === pid);
+      if (!player) return;
+      ev.preventDefault();
+      this.openContextMenu(player, ev.clientX || 240, ev.clientY || 180);
+    });
+
+    this.partyListEl.addEventListener('click', (ev) => {
+      const btn = (ev.target as HTMLElement).closest<HTMLElement>('[data-party-menu-id]');
+      if (!btn) return;
+      const pid = btn.dataset.partyMenuId!;
+      const player = this.partyPeople.find((p) => p.id === pid);
+      if (!player) return;
+      ev.stopPropagation();
+      const rect = typeof btn.getBoundingClientRect === 'function' ? btn.getBoundingClientRect() : { left: 240, bottom: 180 };
+      this.openContextMenu(player, rect.left, rect.bottom + 4);
+    });
+
+    this.leavePartyBtn.addEventListener('click', () => {
+      void this.bridge.sendCommand({
+        action: 'leave_party',
+        confirmed: true,
+      });
+    });
+
+    // Live Chat controls
+    this.chatChannelTabsEl.addEventListener('click', (ev) => {
+      const tab = (ev.target as HTMLElement).closest<HTMLElement>('[data-channel-id]');
+      if (!tab) return;
+      const channelId = tab.dataset.channelId ?? 'all';
+      this.selectedChatChannelId = channelId;
+      if (channelId !== 'all') {
+        this.selectedSendChannelId = channelId;
+        this.chatSendChannelSelectEl.value = channelId;
+      }
+      this.lastChatSignature = '';
+      this.renderChat();
+    });
+
+    this.chatAutoTranslateCheckboxEl.addEventListener('change', () => {
+      this.chatLiveTranslate = this.chatAutoTranslateCheckboxEl.checked;
+      this.lastChatSignature = '';
+      this.renderChat();
+      void this.bridge.sendCommand({
+        action: 'set_chat_translate',
+        enabled: this.chatLiveTranslate,
+      });
+    });
+
+    this.chatShowRawCheckboxEl.addEventListener('change', () => {
+      this.chatShowRawCodes = this.chatShowRawCheckboxEl.checked;
+      this.lastChatSignature = '';
+      this.renderChat();
+    });
+
+    this.chatRefreshBtn.addEventListener('click', () => {
+      void this.bridge.sendCommand({ action: 'refresh_chat' });
+    });
+
+    this.chatSendChannelSelectEl.addEventListener('change', () => {
+      this.selectedSendChannelId = this.chatSendChannelSelectEl.value;
+    });
+
+    const submitChatMessage = () => {
+      const text = this.chatSendInputEl.value.trim();
+      const groupId = this.chatSendChannelSelectEl.value || this.selectedSendChannelId;
+      if (!groupId) {
+        this.footerStatusEl.textContent = 'Select an active chat channel before sending.';
+        return;
+      }
+      if (!text) return;
+      const encodeZh = this.chatEncodeZhCheckboxEl.checked;
+      this.chatSendInputEl.value = '';
+      void this.bridge.sendCommand({
+        action: 'send_chat_message',
+        group_id: groupId,
+        text,
+        encode_zh: encodeZh,
+        confirmed: true,
+      });
+    };
+
+    this.chatSendBtn.addEventListener('click', submitChatMessage);
+    this.chatSendInputEl.addEventListener('keydown', (ev) => {
+      if ((ev as KeyboardEvent).key === 'Enter') {
+        ev.preventDefault();
+        submitChatMessage();
+      }
+    });
+
+    this.chatMessagesScrollEl.addEventListener('contextmenu', (ev) => {
+      const msgEl = (ev.target as HTMLElement).closest<HTMLElement>('[data-sender-id]');
+      if (!msgEl) return;
+      const senderId = msgEl.dataset.senderId ?? '';
+      const senderHandle = msgEl.dataset.senderHandle ?? senderId;
+      if (!senderId) return;
+      const existing =
+        this.snapshot?.players.find((p) => p.id === senderId) ??
+        this.partyPeople.find((p) => p.id === senderId) ??
+        (this.snapshot?.friend_people ?? []).find((p) => p.id === senderId) ??
+        normalizePlayer({ id: senderId, handle: senderHandle, on_shard: true });
+      ev.preventDefault();
+      this.openContextMenu(existing, ev.clientX || 240, ev.clientY || 180);
+    });
+  }
+
+  public setPeopleSubMode(subMode: 'roster' | 'chat'): void {
+    this.peopleSubMode = subMode;
+    const isChat = subMode === 'chat';
+    this.peopleModeRosterBtn.classList.toggle('is-active', !isChat);
+    this.peopleModeRosterBtn.setAttribute('aria-selected', !isChat ? 'true' : 'false');
+    this.peopleModeChatBtn.classList.toggle('is-active', isChat);
+    this.peopleModeChatBtn.setAttribute('aria-selected', isChat ? 'true' : 'false');
+    this.peopleRosterWorkspaceEl.hidden = isChat;
+    this.peopleChatWorkspaceEl.hidden = !isChat;
+    void this.bridge.sendCommand({
+      action: 'set_chat_active',
+      active: isChat,
+    });
+    if (isChat) {
+      this.lastChatSignature = '';
+      this.renderChat();
+    }
   }
 
   private closeContextMenu(): void {
@@ -921,17 +1161,73 @@ export class DesktopAppController {
   private openContextMenu(player: Player, x: number, y: number): void {
     this.closeContextMenu();
 
-    const menu = document.createElement('div');
+    const doc = this.root.ownerDocument;
+    const menu = doc.createElement('div');
     menu.className = 'ss-context-menu';
     menu.id = 'ss-roster-context-menu';
 
-    const header = document.createElement('div');
+    const header = doc.createElement('div');
     header.className = 'ss-context-menu-header';
     header.textContent = player.handle;
     menu.appendChild(header);
 
+    // Party management options when player is in party
+    if (player.in_party && !player.is_self) {
+      const canManageParty = this.snapshot?.is_party_leader !== false;
+
+      const promoteBtn = doc.createElement('button');
+      promoteBtn.type = 'button';
+      promoteBtn.className = 'ss-context-menu-item';
+      promoteBtn.id = 'ctx-make-party-leader-btn';
+      promoteBtn.textContent = player.is_leader
+        ? 'Already Party Leader'
+        : canManageParty
+          ? 'Make Party Leader'
+          : 'Make Party Leader (Leader Only)';
+      if (player.is_leader || !canManageParty) {
+        promoteBtn.disabled = true;
+      } else {
+        promoteBtn.addEventListener('click', () => {
+          this.closeContextMenu();
+          void this.bridge.sendCommand({
+            action: 'transfer_party_leader',
+            player_id: player.id,
+            handle: player.handle,
+            confirmed: true,
+          });
+        });
+      }
+      menu.appendChild(promoteBtn);
+
+      const kickBtn = doc.createElement('button');
+      kickBtn.type = 'button';
+      kickBtn.className = 'ss-context-menu-item ss-context-menu-danger';
+      kickBtn.id = 'ctx-kick-party-member-btn';
+      kickBtn.textContent = canManageParty
+        ? 'Remove from Party'
+        : 'Remove from Party (Leader Only)';
+      if (!canManageParty) {
+        kickBtn.disabled = true;
+      } else {
+        kickBtn.addEventListener('click', () => {
+          this.closeContextMenu();
+          void this.bridge.sendCommand({
+            action: 'kick_party_member',
+            player_id: player.id,
+            handle: player.handle,
+            confirmed: true,
+          });
+        });
+      }
+      menu.appendChild(kickBtn);
+
+      const partyDiv = doc.createElement('div');
+      partyDiv.className = 'ss-context-menu-divider';
+      menu.appendChild(partyDiv);
+    }
+
     // Friend Request item
-    const friendBtn = document.createElement('button');
+    const friendBtn = doc.createElement('button');
     friendBtn.type = 'button';
     friendBtn.className = 'ss-context-menu-item';
     friendBtn.textContent = 'Send Friend Request';
@@ -951,7 +1247,7 @@ export class DesktopAppController {
     menu.appendChild(friendBtn);
 
     // Invite Party item
-    const partyBtn = document.createElement('button');
+    const partyBtn = doc.createElement('button');
     partyBtn.type = 'button';
     partyBtn.className = 'ss-context-menu-item';
     partyBtn.textContent = 'Invite to Party';
@@ -971,12 +1267,12 @@ export class DesktopAppController {
     menu.appendChild(partyBtn);
 
     // Divider
-    const div1 = document.createElement('div');
+    const div1 = doc.createElement('div');
     div1.className = 'ss-context-menu-divider';
     menu.appendChild(div1);
 
     // Tag Presets Header
-    const tagHeader = document.createElement('div');
+    const tagHeader = doc.createElement('div');
     tagHeader.style.padding = '4px 14px 2px';
     tagHeader.style.fontSize = '11px';
     tagHeader.style.color = 'var(--ss-muted, #94a3b8)';
@@ -984,11 +1280,11 @@ export class DesktopAppController {
     menu.appendChild(tagHeader);
 
     // Preset buttons grid
-    const grid = document.createElement('div');
+    const grid = doc.createElement('div');
     grid.className = 'ss-context-menu-tag-grid';
     const presets = ['Friendly', 'Trader', 'Scout', 'Target', 'Miner', 'Org'];
     for (const preset of presets) {
-      const btn = document.createElement('button');
+      const btn = doc.createElement('button');
       btn.type = 'button';
       btn.className = 'ss-context-menu-tag-btn';
       btn.textContent = preset;
@@ -1006,13 +1302,13 @@ export class DesktopAppController {
     menu.appendChild(grid);
 
     // Custom Tag input row
-    const customRow = document.createElement('div');
+    const customRow = doc.createElement('div');
     customRow.className = 'ss-context-menu-custom-tag';
-    const input = document.createElement('input');
+    const input = doc.createElement('input');
     input.type = 'text';
     input.placeholder = 'Custom tag…';
     input.maxLength = 32;
-    const saveBtn = document.createElement('button');
+    const saveBtn = doc.createElement('button');
     saveBtn.type = 'button';
     saveBtn.textContent = 'Tag';
     const applyCustom = () => {
@@ -1039,7 +1335,7 @@ export class DesktopAppController {
 
     // Clear tag option if player has tags
     if (player.tags && player.tags.length > 0) {
-      const clearBtn = document.createElement('button');
+      const clearBtn = doc.createElement('button');
       clearBtn.type = 'button';
       clearBtn.className = 'ss-context-menu-item';
       clearBtn.style.color = '#f87171';
@@ -1056,18 +1352,24 @@ export class DesktopAppController {
       menu.appendChild(clearBtn);
     }
 
-    // Append to document body and position safely
-    document.body.appendChild(menu);
+    // Append to document body (or root in headless tests) and position safely
+    const host = (doc as Document).body ?? this.root;
+    host.appendChild(menu);
     this.contextMenuEl = menu;
 
-    const rect = menu.getBoundingClientRect();
+    const rect =
+      typeof menu.getBoundingClientRect === 'function'
+        ? menu.getBoundingClientRect()
+        : { width: 220, height: 260 };
+    const winW = typeof window !== 'undefined' && window.innerWidth ? window.innerWidth : 1280;
+    const winH = typeof window !== 'undefined' && window.innerHeight ? window.innerHeight : 800;
     let posX = x;
     let posY = y;
-    if (posX + rect.width > window.innerWidth - 8) {
-      posX = Math.max(8, window.innerWidth - rect.width - 8);
+    if (posX + rect.width > winW - 8) {
+      posX = Math.max(8, winW - rect.width - 8);
     }
-    if (posY + rect.height > window.innerHeight - 8) {
-      posY = Math.max(8, window.innerHeight - rect.height - 8);
+    if (posY + rect.height > winH - 8) {
+      posY = Math.max(8, winH - rect.height - 8);
     }
     menu.style.left = `${posX}px`;
     menu.style.top = `${posY}px`;
@@ -1291,7 +1593,190 @@ export class DesktopAppController {
     );
 
     this.updateTagSelectOptions(snap.tag_options ?? ['Org', 'Friendly', 'Aggressive', 'Trader', 'Friend']);
+    this.renderParty();
+    this.renderChat();
     this.updateStatusAndControls();
+  }
+
+  private renderParty(): void {
+    const snap = this.snapshot;
+    if (!snap) return;
+
+    const rawParty = snap.party_people ?? [];
+    this.partyPeople = rawParty;
+
+    const leaderId = snap.party_leader_id ?? '';
+    const isLeader = Boolean(snap.is_party_leader);
+    const count = rawParty.length;
+
+    if (count <= 1) {
+      this.partyHeaderEl.textContent = 'Party · Solo / none';
+      this.leavePartyBtn.hidden = true;
+    } else {
+      this.partyHeaderEl.textContent = `Party · ${count} members${isLeader ? ' (You are Leader)' : ''}`;
+      this.leavePartyBtn.hidden = false;
+    }
+
+    const partySig = `${snap.session}|${leaderId}|${isLeader ? '1' : '0'}|${rawParty.map((p) => `${p.id}:${p.handle}:${p.is_leader ? '1' : '0'}`).join(',')}`;
+    if (partySig === this.lastPartySignature) {
+      return;
+    }
+    this.lastPartySignature = partySig;
+
+    if (rawParty.length === 0) {
+      this.partyListEl.innerHTML = '<div class="ss-party-empty ss-muted-text">Not in a party. Invite shard citizens or friends below.</div>';
+      return;
+    }
+
+    const doc = this.root.ownerDocument;
+    this.partyListEl.innerHTML = '';
+    for (const p of rawParty) {
+      const card = doc.createElement('div');
+      card.className = `ss-party-card${p.is_leader ? ' is-leader' : ''}${p.is_self ? ' is-self' : ''}`;
+      card.dataset.partyPlayerId = p.id;
+
+      const pColor = personColor(p);
+      const tags = p.tags && p.tags.length > 0 ? p.tags : splitTags(p.tag);
+      const chipsHtml = tags
+        .map((t) => `<span class="ss-tag-chip" style="font-size:10px;height:18px;">${this.escapeHtml(t)}</span>`)
+        .join('');
+
+      card.innerHTML = `
+        <div class="ss-party-card-main">
+          <span class="ss-person-badge" style="color:${pColor.css}">●</span>
+          <div class="ss-player-stack">
+            <div class="ss-party-handle-row">
+              <strong class="ss-player-handle">${this.escapeHtml(p.handle)}</strong>
+              ${p.is_leader ? '<span class="ss-party-leader-badge">★ Leader</span>' : ''}
+              ${p.is_self ? '<span class="ss-party-self-badge">You</span>' : ''}
+            </div>
+            ${chipsHtml ? `<div class="ss-tags-run" style="margin-top:2px;">${chipsHtml}</div>` : ''}
+          </div>
+        </div>
+        <div class="ss-party-card-actions">
+          <button type="button" class="ss-btn ss-btn-xs" data-party-menu-id="${this.escapeHtml(p.id)}" title="Manage member">Actions ▾</button>
+        </div>
+      `;
+      this.partyListEl.appendChild(card);
+    }
+  }
+
+  private renderChat(): void {
+    const snap = this.snapshot;
+    if (!snap) return;
+
+    const channels: ChatChannel[] = snap.chat_channels ?? [];
+    const allMsgs: ChatMessage[] = snap.chat_messages ?? [];
+
+    // Render / update channel pills
+    const tabsDoc = this.root.ownerDocument;
+    const currentTabId = this.selectedChatChannelId;
+
+    let tabsHtml = `<button type="button" class="ss-tab${currentTabId === 'all' ? ' is-active' : ''}" data-channel-id="all">All Channels</button>`;
+    for (const ch of channels) {
+      const active = currentTabId === ch.id ? ' is-active' : '';
+      const badgeCls = `ss-chat-badge-${ch.kind}`;
+      tabsHtml += `<button type="button" class="ss-tab${active}" data-channel-id="${this.escapeHtml(ch.id)}"><span class="ss-chat-kind-badge ${badgeCls}"></span>${this.escapeHtml(ch.label)}</button>`;
+    }
+    if (this.chatChannelTabsEl.innerHTML !== tabsHtml) {
+      this.chatChannelTabsEl.innerHTML = tabsHtml;
+    }
+
+    // Populate compose channel selector options
+    const sendOptionsHtml = [
+      '<option value="">Select channel…</option>',
+      ...channels.map((ch) => `<option value="${this.escapeHtml(ch.id)}">${this.escapeHtml(ch.label)}</option>`),
+    ].join('');
+    if (this.chatSendChannelSelectEl.innerHTML !== sendOptionsHtml) {
+      this.chatSendChannelSelectEl.innerHTML = sendOptionsHtml;
+      if (this.selectedSendChannelId && channels.some((c) => c.id === this.selectedSendChannelId)) {
+        this.chatSendChannelSelectEl.value = this.selectedSendChannelId;
+      } else if (channels.length > 0) {
+        // Default to Global (or first channel)
+        const def = channels.find((c) => c.kind === 'global') ?? channels[0];
+        this.selectedSendChannelId = def.id;
+        this.chatSendChannelSelectEl.value = def.id;
+      }
+    }
+
+    // Status line
+    const activeCh = channels.find((c) => c.id === currentTabId);
+    let statusText = activeCh ? `${activeCh.label} · ${activeCh.member_count ?? 0} members` : `${channels.length} active channels · ${allMsgs.length} messages`;
+    if (snap.chat_loading) statusText += ' · refreshing…';
+    if (snap.chat_sending) statusText += ' · sending message…';
+    if (snap.chat_error) statusText += ` · ${snap.chat_error}`;
+    this.chatStatusLineEl.textContent = statusText;
+
+    // Filter messages by selected channel
+    const visibleMsgs = currentTabId === 'all' ? allMsgs : allMsgs.filter((m) => m.group_id === currentTabId);
+
+    // Compute signature to skip DOM rebuild when no new messages
+    const sig = `${currentTabId}|${this.chatShowRawCodes ? '1' : '0'}|${this.chatLiveTranslate ? '1' : '0'}|${visibleMsgs.map((m) => `${m.id}:${m.content}:${m.translated_content ?? ''}`).join(',')}`;
+    if (sig === this.lastChatSignature) {
+      return;
+    }
+    this.lastChatSignature = sig;
+
+    if (visibleMsgs.length === 0) {
+      this.chatMessagesScrollEl.innerHTML = '<div class="ss-chat-empty ss-muted-text">No chat messages recorded in this channel yet. Send a message below or click Refresh.</div>';
+      return;
+    }
+
+    const wasScrolledToBottom =
+      this.chatMessagesScrollEl.scrollHeight - this.chatMessagesScrollEl.scrollTop - 20 <=
+      this.chatMessagesScrollEl.clientHeight;
+
+    this.chatMessagesScrollEl.innerHTML = '';
+    for (const m of visibleMsgs) {
+      const item = tabsDoc.createElement('div');
+      item.className = `ss-chat-msg ss-chat-kind-${m.channel_kind}${m.is_self ? ' is-self' : ''}`;
+      item.dataset.senderId = m.sender_id;
+      item.dataset.senderHandle = m.sender_handle;
+
+      const timeStr = m.at > 0 ? new Date(m.at * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—';
+      const senderColor = m.is_self ? 'var(--ss-self)' : m.in_party ? 'var(--ss-party)' : m.is_friend ? 'var(--ss-friend)' : 'var(--ss-ink)';
+      const channelBadge = currentTabId === 'all' ? `<span class="ss-chat-channel-tag ss-chat-badge-${m.channel_kind}">${this.escapeHtml(m.channel_label)}</span>` : '';
+
+      const tags = m.sender_tags && m.sender_tags.length > 0 ? m.sender_tags : splitTags(m.sender_tag);
+      const tagsHtml = tags
+        .map((t) => `<span class="ss-tag-chip" style="font-size:9.5px;height:16px;">${this.escapeHtml(t)}</span>`)
+        .join('');
+
+      let translationHtml = '';
+      if (this.chatLiveTranslate && m.translated_content && m.translated_content.trim()) {
+        translationHtml = `
+          <div class="ss-chat-translation">
+            <span class="ss-chat-trans-icon" title="Translated to English">🌐 EN:</span>
+            <span class="ss-chat-trans-text">${this.escapeHtml(m.translated_content)}</span>
+          </div>
+        `;
+      }
+
+      let rawZhHtml = '';
+      if (this.chatShowRawCodes && m.was_zh_encoded && m.raw_content && m.raw_content !== m.content) {
+        rawZhHtml = `<div class="ss-chat-raw-code">${this.escapeHtml(m.raw_content)}</div>`;
+      }
+
+      item.innerHTML = `
+        <div class="ss-chat-msg-header">
+          ${channelBadge}
+          <span class="ss-chat-sender" style="color:${senderColor}">${this.escapeHtml(m.sender_handle)}</span>
+          ${m.is_self ? '<span class="ss-party-self-badge">You</span>' : ''}
+          ${tagsHtml ? `<div class="ss-tags-run">${tagsHtml}</div>` : ''}
+          <span class="ss-chat-time">${timeStr}</span>
+        </div>
+        <div class="ss-chat-body">
+          <div class="ss-chat-text">${this.escapeHtml(m.content)}</div>
+          ${translationHtml}
+          ${rawZhHtml}
+        </div>
+      `;
+      this.chatMessagesScrollEl.appendChild(item);
+    }
+
+    if (wasScrolledToBottom || visibleMsgs.length <= 15) {
+      this.chatMessagesScrollEl.scrollTop = this.chatMessagesScrollEl.scrollHeight;
+    }
   }
 
   private computeRowSignature(p: Player, isSelected: boolean): string {

@@ -14,6 +14,7 @@ export interface Player {
   manual_tag?: string;
   alert?: boolean;
   is_self?: boolean;
+  is_leader?: boolean;
   in_party?: boolean;
   is_friend?: boolean;
   is_org?: boolean;
@@ -26,6 +27,39 @@ export interface Player {
     friend?: RequestReceipt;
     party?: RequestReceipt;
   };
+}
+
+export interface ChatChannel {
+  id: string;
+  kind: 'global' | 'party' | 'ship' | 'dm' | 'group' | string;
+  group_type?: number;
+  name: string;
+  label: string;
+  member_count?: number;
+  leader_urn?: string;
+  updated_at?: number;
+}
+
+export interface ChatMessage {
+  id: string;
+  group_id: string;
+  channel_kind: 'global' | 'party' | 'ship' | 'dm' | 'group' | string;
+  channel_label: string;
+  sender_id: string;
+  sender_handle: string;
+  sender_display_name?: string;
+  sender_tags?: string[];
+  sender_tag?: string;
+  is_self?: boolean;
+  is_friend?: boolean;
+  in_party?: boolean;
+  is_org?: boolean;
+  raw_content: string;
+  content: string;
+  translated_content?: string;
+  was_zh_encoded?: boolean;
+  source_lang?: string;
+  at: number;
 }
 
 export interface QueueRecipientResult {
@@ -364,6 +398,18 @@ export interface PeopleSnapshot {
   friends_at?: number;
   friend_names_error?: string;
   party_known?: boolean;
+  party_people?: Player[];
+  party_group_id?: string;
+  party_leader_id?: string;
+  is_party_leader?: boolean;
+  chat_active?: boolean;
+  chat_auto_translate?: boolean;
+  chat_channels?: ChatChannel[];
+  chat_messages?: ChatMessage[];
+  chat_at?: number;
+  chat_loading?: boolean;
+  chat_sending?: boolean;
+  chat_error?: string;
   social_busy?: boolean;
   status?: string;
   invite_queue?: InviteQueueState;
@@ -387,10 +433,19 @@ export type DesktopCommandAction =
   | 'stage_tag'
   | 'tag'
   | 'tag_many'
+  | 'mark_org'
+  | 'import_org'
   | 'friend'
   | 'friend_many'
   | 'party'
   | 'party_many'
+  | 'kick_party_member'
+  | 'transfer_party_leader'
+  | 'leave_party'
+  | 'set_chat_active'
+  | 'set_chat_translate'
+  | 'refresh_chat'
+  | 'send_chat_message'
   | 'pause_invites'
   | 'resume_invites'
   | 'cancel_invites'
@@ -454,6 +509,13 @@ export interface DesktopCommand {
   format?: 'csv' | 'json' | 'html';
   current_session?: boolean;
   offset?: number;
+  group_id?: string;
+  encode_zh?: boolean;
+  active?: boolean;
+  enabled?: boolean;
+  handle?: string;
+  symbol?: string;
+  tag_label?: string;
 }
 
 export interface DesktopBridge {
@@ -467,6 +529,10 @@ const SOCIAL_ACTIONS = new Set<DesktopCommandAction>([
   'friend_many',
   'party',
   'party_many',
+  'kick_party_member',
+  'transfer_party_leader',
+  'leave_party',
+  'send_chat_message',
 ]);
 
 export function validateOutgoingCommand(command: DesktopCommand): void {
@@ -531,6 +597,9 @@ export function normalizeSnapshot(raw: Partial<PeopleSnapshot>): PeopleSnapshot 
   const players = rawPlayers.map((p) => normalizePlayer(p));
   const actionPeople = (raw.action_people ?? []).map((p) => normalizePlayer(p));
   const friendPeople = (raw.friend_people ?? []).map((p) => normalizePlayer(p));
+  const partyPeople = Array.isArray(raw.party_people)
+    ? raw.party_people.map((p) => normalizePlayer(p))
+    : players.filter((p) => p.in_party);
   const searchPeople = (raw.search ?? []).map((p) => normalizePlayer(p));
   const session = raw.session ?? raw.session_token ?? '';
   return {
@@ -542,7 +611,10 @@ export function normalizeSnapshot(raw: Partial<PeopleSnapshot>): PeopleSnapshot 
     rows: players,
     action_people: actionPeople,
     friend_people: friendPeople,
+    party_people: partyPeople,
     search: searchPeople,
+    chat_channels: raw.chat_channels ?? [],
+    chat_messages: raw.chat_messages ?? [],
     tag_options: raw.tag_options ?? ['Org', 'Friendly', 'Aggressive', 'Trader', 'Friend'],
     action_limit: typeof raw.action_limit === 'number' ? raw.action_limit : ACTION_LIMIT,
     daylight: raw.daylight,
@@ -666,6 +738,47 @@ export class InMemoryDesktopBridge implements DesktopBridge {
       this.applyTagUpdate([command.player_id], command.label ?? '', Boolean(command.clear_tags), command.alert);
     } else if (command.action === 'tag_many' && Array.isArray(command.player_ids)) {
       this.applyTagUpdate(command.player_ids, command.label ?? '', Boolean(command.clear_tags));
+    } else if (command.action === 'kick_party_member' && command.player_id) {
+      const nextParty = (this.snapshot.party_people ?? []).filter((p) => p.id !== command.player_id);
+      const nextPlayers = this.snapshot.players.map((p) =>
+        p.id === command.player_id ? { ...p, in_party: false, relationship: p.is_friend ? 'Friend' : 'Shard' } : p,
+      );
+      this.publish({ party_people: nextParty, players: nextPlayers });
+    } else if (command.action === 'transfer_party_leader' && command.player_id) {
+      const nextParty = (this.snapshot.party_people ?? []).map((p) => ({
+        ...p,
+        is_leader: p.id === command.player_id,
+      }));
+      this.publish({
+        party_people: nextParty,
+        party_leader_id: command.player_id,
+        is_party_leader: false,
+      });
+    } else if (command.action === 'leave_party') {
+      this.publish({ party_people: [], party_group_id: '', party_leader_id: '', is_party_leader: false });
+    } else if (command.action === 'set_chat_active') {
+      this.publish({ chat_active: Boolean(command.active ?? true) });
+    } else if (command.action === 'set_chat_translate') {
+      this.publish({ chat_auto_translate: Boolean(command.enabled ?? true) });
+    } else if (command.action === 'send_chat_message' && command.group_id && command.text) {
+      const ch = (this.snapshot.chat_channels ?? []).find((c) => c.id === command.group_id);
+      const msgs = [...(this.snapshot.chat_messages ?? [])];
+      const text = command.text.trim();
+      const content = command.encode_zh ? `[zh] @IH@E8 (${text})` : text;
+      msgs.push({
+        id: `msg-${msgs.length + 1}`,
+        group_id: command.group_id,
+        channel_kind: ch?.kind ?? 'global',
+        channel_label: ch?.label ?? 'Global',
+        sender_id: 'pilot-000',
+        sender_handle: 'You',
+        is_self: true,
+        raw_content: content,
+        content: text,
+        was_zh_encoded: Boolean(command.encode_zh),
+        at: Date.now() / 1000,
+      });
+      this.publish({ chat_messages: msgs });
     } else if (command.action === 'daylight_preferences' && command.system && command.body && command.site) {
       const prev = this.snapshot.daylight ?? {};
       this.publish({

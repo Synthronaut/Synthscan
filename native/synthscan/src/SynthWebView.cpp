@@ -254,12 +254,14 @@ bool allowedAction(const std::string& action) {
     static const std::set<std::string> allowed = {
         "search", "refresh_people", "refresh_market",
         "stage_people", "unstage_people", "clear_actions", "stage_tag",
-        "tag", "tag_many",
+        "tag", "tag_many", "mark_org", "import_org",
         "friend", "friend_many", "party", "party_many",
+        "kick_party_member", "transfer_party_leader", "leave_party",
+        "set_chat_active", "set_chat_translate", "refresh_chat", "send_chat_message",
         "pause_invites", "resume_invites", "cancel_invites",
         "add_watch", "toggle_watch", "remove_watch", "dismiss_notices",
-        "open_uex_ad", "navigate",
-        "daylight_preferences", "daylight_observe", "daylight_refresh",
+        "open_uex_ad", "navigate", "strings_settings", "strings_details",
+        "daylight_preferences", "daylight_observe", "daylight_refresh", "daylight_copy_forecast",
         "piracy_toggle_wait", "piracy_reset_wait", "piracy_log_pull", "piracy_delete_pull",
         "mission_view", "mission_classify", "mission_export"
     };
@@ -270,7 +272,9 @@ bool validateCommandObject(const Json& command) {
     if (command.kind != Json::Kind::Object) return false;
     auto action = command.textOr("action");
     if (!allowedAction(action)) return false;
-    if (action == "friend" || action == "friend_many" || action == "party" || action == "party_many") {
+    if (action == "friend" || action == "friend_many" || action == "party" || action == "party_many" ||
+        action == "kick_party_member" || action == "transfer_party_leader" || action == "leave_party" ||
+        action == "send_chat_message") {
         if (!flag(command, "confirmed")) return false;
         if (action == "friend_many" || action == "party_many") {
             const auto& ids = field(command, "player_ids").items;

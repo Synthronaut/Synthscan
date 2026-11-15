@@ -12,6 +12,8 @@ class FakeEvent {
   public readonly cancelable: boolean;
   public readonly shiftKey: boolean;
   public target: FakeElement | null = null;
+  public defaultPrevented = false;
+  public cancelBubble = false;
 
   constructor(
     type: string,
@@ -21,6 +23,14 @@ class FakeEvent {
     this.bubbles = Boolean(init?.bubbles);
     this.cancelable = Boolean(init?.cancelable);
     this.shiftKey = Boolean(init?.shiftKey);
+  }
+
+  public preventDefault(): void {
+    if (this.cancelable) this.defaultPrevented = true;
+  }
+
+  public stopPropagation(): void {
+    this.cancelBubble = true;
   }
 }
 
@@ -318,8 +328,22 @@ class FakeElement {
 
 class FakeDocument {
   public activeElement: FakeElement | null = null;
+  public body: FakeElement;
+
+  constructor() {
+    this.body = new FakeElement('body', this);
+  }
+
   public createElement(tag: string): FakeElement {
     return new FakeElement(tag, this);
+  }
+
+  public querySelector(selector: string): FakeElement | null {
+    return this.body.querySelector(selector);
+  }
+
+  public querySelectorAll(selector: string): FakeElement[] {
+    return this.body.querySelectorAll(selector);
   }
 }
 

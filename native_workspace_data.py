@@ -62,11 +62,16 @@ def library_export(destination,game=None,catalog=None,extra_rows=()):
     rows=[]
     public_blueprints=[b for b in c.items if display_name(b.get('name'))]
     excluded=[dict(id=b.get('id'),reason='Unresolved blueprint display name',native_tag=b.get('native_tag','')) for b in c.items if not display_name(b.get('name'))]
+    from game_records import MANUFACTURER_NAMES
     for e in g.entries:
         if e.get('internal') or not display_name(e.get('name')):continue
         icon=g.image_path(e)
         linked=by_item.get(e['id'],[])
-        details=f"{e['name']}\n{e['category']} · {e['type']}\n\nCRAFTING & BLUEPRINTS\n"
+        mfg = e.get('manufacturer', '')
+        mfg_full = MANUFACTURER_NAMES.get(mfg.upper(), '')
+        mfg_search = f"{mfg_full} {mfg}" if mfg_full and mfg_full not in mfg else mfg
+        mfg_label = mfg if (mfg_full and mfg_full in mfg) else (f"{mfg_full} ({mfg})" if mfg_full and mfg else (mfg_full or mfg))
+        details=f"{e['name']}\n{e['category']} · {e['type']}{(' · ' + mfg_label) if mfg_label else ''}\n\nCRAFTING & BLUEPRINTS\n"
         if not linked:details+='No linked creation blueprint in this catalog. This does not prove the item cannot be crafted.\n'
         for blueprint in linked:
             details+=f"\n{blueprint['name']} — blueprint\nRecipe: {blueprint.get('recipe_source','Reference table')}\n"
@@ -76,9 +81,12 @@ def library_export(destination,game=None,catalog=None,extra_rows=()):
         if e['kind']=='Material':
             uses=sorted(material_uses.get(e['name'],[]))
             details+='\n\nUsed to craft:\n'+'\n'.join(uses)
+        search_parts = [e['name'], e['category'], e['type'], mfg_search, *[m.get(k, '') for b in linked for m in c.sources(b) for k in ('title', 'faction', 'system')]]
+        if 'hellion' in e['name'].casefold():
+            search_parts.append('helion')
         rows.append(dict(id=e['id'],item_id=e['id'] if e['kind']=='Item' else '',name=e['name'],kind='Component' if is_component(e) else e['kind'],category=e['category'],detail=details+catalog_label,icon=str(icon) if icon else '',
                          finder_blueprints=finder_blueprints(linked),item_type=e.get('type',''),item_record=e.get('record',''),weapon_stats=e.get('weapon_stats',{}),
-                         search=' '.join([e['name'],e['category'],e['type'],e.get('manufacturer',''),*[m.get(k,'') for b in linked for m in c.sources(b) for k in ('title','faction','system')]])))
+                         search=' '.join(search_parts)))
     game_by_id={e['id']:e for e in g.entries}
     for b in public_blueprints:
         details=f"{b['name']}\n{b['category']} · {b['type']} · Size {b.get('size','?')} · Grade {b.get('grade','?')}\n\nBLUEPRINT UNLOCK SOURCES\n"

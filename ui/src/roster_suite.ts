@@ -26,6 +26,9 @@ export interface RosterSuiteResult {
   confirmed_request_sends_bounded_batch: boolean;
   resize_preserves_state_and_fits: boolean;
   unconfirmed_bridge_call_rejected: boolean;
+  party_box_rendered_and_actions_work: boolean;
+  chat_feed_decodes_and_translates: boolean;
+  chat_compose_sends_message: boolean;
   outgoing_live_requests_sent: number;
   failures: string[];
 }
@@ -335,6 +338,122 @@ export async function runPeopleRosterRegressionSuite(
   }
   check('resize_preserves_state_and_fits', resizeOk);
 
+  // 12. Party box rendering, right-click actions (Make Leader, Kick member)
+  const partyMemberOne = {
+    id: 'pilot-001',
+    handle: 'Pilot_001',
+    tags: ['Friendly'],
+    in_party: true,
+    is_leader: true,
+    on_shard: true,
+  };
+  const partyMemberTwo = {
+    id: 'pilot-002',
+    handle: 'Pilot_002',
+    tags: ['Trader'],
+    in_party: true,
+    is_leader: false,
+    on_shard: true,
+  };
+  bridge.publish({
+    party_people: [partyMemberOne, partyMemberTwo],
+    party_leader_id: 'pilot-001',
+    is_party_leader: false,
+  });
+
+  const partyListEl = container.querySelector('#people-party-list')!;
+  const partyCards = partyListEl.querySelectorAll('.ss-party-card');
+  const partyRenderedOk = partyCards.length === 2;
+
+  // Click Actions button on second party member to open context menu
+  const actionsBtn = container.querySelector<HTMLButtonElement>('[data-party-menu-id="pilot-002"]');
+  actionsBtn?.click();
+  const makeLeaderBtn = container.ownerDocument.querySelector<HTMLButtonElement>('#ctx-make-party-leader-btn');
+  const kickBtn = container.ownerDocument.querySelector<HTMLButtonElement>('#ctx-kick-party-member-btn');
+  const partyContextMenuOk = Boolean(makeLeaderBtn && kickBtn);
+
+  // When not leader, kick button is disabled
+  const kickDisabledWhenNotLeader = kickBtn ? kickBtn.disabled : false;
+
+  // Now simulate user being party leader
+  bridge.publish({
+    is_party_leader: true,
+    party_leader_id: 'pilot-000',
+  });
+  actionsBtn?.click();
+  const kickBtnAsLeader = container.ownerDocument.querySelector<HTMLButtonElement>('#ctx-kick-party-member-btn');
+  kickBtnAsLeader?.click();
+  const kickCommands = bridge.commands.filter((c) => c.action === 'kick_party_member');
+  const kickCommandOk =
+    kickCommands.length === 1 &&
+    kickCommands[0].player_id === 'pilot-002' &&
+    kickCommands[0].confirmed === true;
+
+  const partyBoxOk = check(
+    'party_box_rendered_and_actions_work',
+    partyRenderedOk && partyContextMenuOk && kickDisabledWhenNotLeader && kickCommandOk,
+  );
+
+  // 13. Citizens top mode switch over to Live Chat & Translator view
+  const chatModeBtn = container.querySelector<HTMLButtonElement>('#people-mode-chat-btn')!;
+  chatModeBtn.click();
+  const chatWorkspaceEl = container.querySelector<HTMLElement>('#people-chat-workspace')!;
+  const chatWorkspaceVisible = !chatWorkspaceEl.hidden;
+
+  // Publish channels and translated chat messages
+  bridge.publish({
+    chat_channels: [
+      { id: 'group-global', kind: 'global', name: 'Global', label: 'Global', member_count: 98 },
+      { id: 'group-party', kind: 'party', name: 'Party', label: 'Party', member_count: 2 },
+    ],
+    chat_messages: [
+      {
+        id: 'msg-1',
+        group_id: 'group-global',
+        channel_kind: 'global',
+        channel_label: 'Global',
+        sender_id: 'pilot-088',
+        sender_handle: 'ChinesePilot_88',
+        raw_content: '[zh] @IH@E8',
+        content: '你好',
+        translated_content: 'Hello',
+        was_zh_encoded: true,
+        at: Date.now() / 1000 - 10,
+      },
+    ],
+  });
+
+  const chatFeedEl = container.querySelector('#chat-messages-scroll')!;
+  const chatMsgs = chatFeedEl.querySelectorAll('.ss-chat-msg');
+  const transEl = chatFeedEl.querySelector('.ss-chat-translation');
+  const chatFeedOk = check(
+    'chat_feed_decodes_and_translates',
+    chatWorkspaceVisible &&
+      chatMsgs.length === 1 &&
+      Boolean(transEl && (transEl.textContent ?? '').includes('Hello')),
+  );
+
+  // 14. Chat compose and send
+  const chatInputEl = container.querySelector<HTMLInputElement>('#chat-send-input')!;
+  const chatChannelSelectEl = container.querySelector<HTMLSelectElement>('#chat-send-channel-select')!;
+  const chatSendBtn = container.querySelector<HTMLButtonElement>('#chat-send-btn')!;
+  const chatEncodeZhCheckbox = container.querySelector<HTMLInputElement>('#chat-encode-zh-checkbox')!;
+
+  chatChannelSelectEl.value = 'group-global';
+  chatInputEl.value = 'Hello from SynthScan!';
+  chatEncodeZhCheckbox.checked = true;
+  chatSendBtn.click();
+
+  const sendChatCommands = bridge.commands.filter((c) => c.action === 'send_chat_message');
+  const chatComposeOk = check(
+    'chat_compose_sends_message',
+    sendChatCommands.length === 1 &&
+      sendChatCommands[0].group_id === 'group-global' &&
+      sendChatCommands[0].text === 'Hello from SynthScan!' &&
+      sendChatCommands[0].encode_zh === true &&
+      sendChatCommands[0].confirmed === true,
+  );
+
   controller.destroy();
 
   return {
@@ -361,6 +480,9 @@ export async function runPeopleRosterRegressionSuite(
     confirmed_request_sends_bounded_batch: confirmedRequestOk,
     resize_preserves_state_and_fits: resizeOk,
     unconfirmed_bridge_call_rejected: rejectedUnconfirmed,
+    party_box_rendered_and_actions_work: partyBoxOk,
+    chat_feed_decodes_and_translates: chatFeedOk,
+    chat_compose_sends_message: chatComposeOk,
     outgoing_live_requests_sent: 0,
     failures,
   };

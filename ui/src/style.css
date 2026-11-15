@@ -821,6 +821,307 @@ body,
   color: #000;
 }
 
+.ss-context-menu-danger {
+  color: #f87171 !important;
+}
+
+.ss-context-menu-danger:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.2) !important;
+  color: #fca5a5 !important;
+}
+
+/* ==========================================================================
+   Citizens Tab Sub-Navigation & Party Card Styles
+   ========================================================================== */
+
+.ss-people-subnav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+  margin-bottom: 2px;
+}
+
+.ss-btn-xs {
+  height: 22px;
+  padding: 0 7px;
+  font-size: 11px;
+  border-radius: 5px;
+}
+
+.ss-party-pane {
+  flex-shrink: 0;
+  max-height: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ss-party-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  overflow-y: auto;
+  max-height: 130px;
+  padding-right: 2px;
+}
+
+.ss-party-empty {
+  padding: 8px 4px;
+  font-size: 11.5px;
+  font-style: italic;
+}
+
+.ss-party-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 8px;
+  border-radius: 7px;
+  background: rgba(20, 26, 36, 0.85);
+  border: 1px solid rgba(167, 194, 219, 0.12);
+  transition: background 120ms ease, border-color 120ms ease;
+  user-select: none;
+}
+
+.ss-party-card:hover {
+  background: rgba(30, 39, 54, 0.95);
+  border-color: rgba(98, 204, 255, 0.3);
+}
+
+.ss-party-card.is-leader {
+  border-color: rgba(255, 215, 0, 0.35);
+  background: rgba(36, 32, 20, 0.75);
+}
+
+.ss-party-card.is-self {
+  border-left: 3px solid var(--ss-self);
+}
+
+.ss-party-card-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.ss-party-handle-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ss-party-leader-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(255, 215, 0, 0.2);
+  border: 1px solid rgba(255, 215, 0, 0.4);
+  color: #ffd700;
+  letter-spacing: 0.02em;
+}
+
+.ss-party-self-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(193, 157, 255, 0.2);
+  border: 1px solid rgba(193, 157, 255, 0.4);
+  color: var(--ss-self);
+}
+
+.ss-party-card-actions {
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+/* ==========================================================================
+   Live Chat Feed & Translator Styles
+   ========================================================================== */
+
+.ss-chat-workspace {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+}
+
+.ss-chat-channel-tabs {
+  max-width: 70%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.ss-chat-kind-badge {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-right: 5px;
+}
+
+.ss-chat-badge-global {
+  background: #62ccff;
+  box-shadow: 0 0 6px rgba(98, 204, 255, 0.6);
+}
+
+.ss-chat-badge-party {
+  background: var(--ss-party);
+  box-shadow: 0 0 6px rgba(116, 183, 255, 0.6);
+}
+
+.ss-chat-badge-ship {
+  background: #ffb05a;
+  box-shadow: 0 0 6px rgba(255, 176, 90, 0.6);
+}
+
+.ss-chat-badge-dm {
+  background: #c19dff;
+  box-shadow: 0 0 6px rgba(193, 157, 255, 0.6);
+}
+
+.ss-chat-badge-group {
+  background: #2de17a;
+  box-shadow: 0 0 6px rgba(45, 225, 122, 0.6);
+}
+
+.ss-chat-feed {
+  flex: 1;
+  min-height: 200px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #090c11;
+  border-radius: 9px;
+  border: 1px solid var(--ss-border);
+}
+
+.ss-chat-empty {
+  margin: auto;
+  text-align: center;
+  font-style: italic;
+  padding: 24px;
+}
+
+.ss-chat-msg {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px 9px;
+  border-radius: 8px;
+  background: rgba(18, 24, 34, 0.7);
+  border: 1px solid rgba(167, 194, 219, 0.08);
+  transition: background 100ms ease;
+}
+
+.ss-chat-msg:hover {
+  background: rgba(24, 32, 45, 0.95);
+  border-color: rgba(98, 204, 255, 0.22);
+}
+
+.ss-chat-msg.is-self {
+  border-left: 3px solid var(--ss-self);
+  background: rgba(28, 24, 38, 0.75);
+}
+
+.ss-chat-msg-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11.5px;
+}
+
+.ss-chat-channel-tag {
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: #0b0f15;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.ss-chat-sender {
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ss-chat-sender:hover {
+  text-decoration: underline;
+}
+
+.ss-chat-time {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: var(--ss-muted);
+}
+
+.ss-chat-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-left: 2px;
+}
+
+.ss-chat-text {
+  font-size: 13px;
+  color: #f1f5f9;
+  word-break: break-word;
+  line-height: 1.35;
+  user-select: text;
+}
+
+.ss-chat-translation {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(45, 225, 122, 0.1);
+  border: 1px solid rgba(45, 225, 122, 0.25);
+  font-size: 12px;
+  color: #79e19e;
+  word-break: break-word;
+  user-select: text;
+}
+
+.ss-chat-trans-icon {
+  font-weight: 700;
+  flex-shrink: 0;
+  font-size: 11px;
+}
+
+.ss-chat-trans-text {
+  color: #d1fae5;
+}
+
+.ss-chat-raw-code {
+  font-family: monospace;
+  font-size: 10.5px;
+  color: var(--ss-muted);
+  opacity: 0.65;
+  user-select: text;
+}
+
+.ss-chat-compose {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.ss-chat-channel-select {
+  width: 170px;
+  flex-shrink: 0;
+}
+
 
 /* ==========================================================================
    Day/Night Forecast: Space Aesthetic & Solar Geometry
