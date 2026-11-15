@@ -104,6 +104,17 @@ foreach ($file in $uploadFiles) {
     if ($LASTEXITCODE -ne 0) { throw "Upload failed for $($file.Name)" }
 }
 
+# Upload live data catalogs to /var/www/synthscan/data/
+$dataDir = Join-Path $PSScriptRoot "data"
+if (Test-Path (Join-Path $dataDir "custom_synthstrings.json")) {
+    Write-Host "Uploading custom_synthstrings.json to data hub..."
+    & scp -i $KeyPath -o StrictHostKeyChecking=accept-new (Join-Path $dataDir "custom_synthstrings.json") "${Server}:/var/www/synthscan/data/custom_synthstrings.json"
+}
+if (Test-Path (Join-Path $PSScriptRoot "blueprints_catalog.json")) {
+    Write-Host "Uploading blueprints_catalog.json to data hub..."
+    & scp -i $KeyPath -o StrictHostKeyChecking=accept-new (Join-Path $PSScriptRoot "blueprints_catalog.json") "${Server}:/var/www/synthscan/data/blueprints_catalog.json"
+}
+
 & ssh -i $KeyPath -o StrictHostKeyChecking=accept-new $Server "touch /var/www/synthscan/releases/SynthScan-Setup-Windows-x64.exe && sudo chmod -R a+rX /var/www/synthscan/releases && python3 /home/ubuntu/synthscan/scripts/sync_data.py"
 if ($LASTEXITCODE -ne 0) { throw "Remote manifest refresh failed." }
 

@@ -130,12 +130,14 @@ def apply_all_rules_and_adapt(ini_path=DEFAULT_INI_PATH, sc_dir=DEFAULT_SC_DIR, 
         custom_overrides = {}
 
     # 1. Clean Line-by-Line Rules
+    seen_custom = set()
     for line in lines:
         mod_line, _ = compact_mining_labels(line)
         if "=" in mod_line:
             k_part, _ = mod_line.split("=", 1)
             k_clean = k_part.lstrip("\ufeff")
             if k_clean in custom_overrides:
+                seen_custom.add(k_clean)
                 ending = "\r\n" if mod_line.endswith("\r\n") else "\n" if mod_line.endswith("\n") else ""
                 bom = "\ufeff" if k_part.startswith("\ufeff") else ""
                 mod_line = f"{bom}{k_clean}={custom_overrides[k_clean]}{ending}"
@@ -240,6 +242,10 @@ def apply_all_rules_and_adapt(ini_path=DEFAULT_INI_PATH, sc_dir=DEFAULT_SC_DIR, 
             final_lines.append(new_title)
         else:
             final_lines.append(line)
+
+    for k_custom, v_custom in custom_overrides.items():
+        if k_custom not in seen_custom:
+            final_lines.append(f"{k_custom}={v_custom}\n")
 
     # 3. Write back safely with UTF-8 BOM and LF endings
     try:

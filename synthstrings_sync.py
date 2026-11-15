@@ -121,6 +121,7 @@ def sync_blueprints_to_global_ini(ini_path=DEFAULT_INI_PATH, owned_blueprints=No
     updated_lines = []
     desc_updates = 0
     title_updates = 0
+    seen_custom = set()
 
     for line in lines:
         line, _ = compact_mining_labels(line)
@@ -128,6 +129,7 @@ def sync_blueprints_to_global_ini(ini_path=DEFAULT_INI_PATH, owned_blueprints=No
             k_part, v_part = line.split("=", 1)
             k_clean = k_part.lstrip("\ufeff")
             if k_clean in custom_overrides:
+                seen_custom.add(k_clean)
                 ending = "\r\n" if line.endswith("\r\n") else "\n" if line.endswith("\n") else ""
                 bom = "\ufeff" if k_part.startswith("\ufeff") else ""
                 line = f"{bom}{k_clean}={custom_overrides[k_clean]}{ending}"
@@ -190,6 +192,11 @@ def sync_blueprints_to_global_ini(ini_path=DEFAULT_INI_PATH, owned_blueprints=No
             final_lines.append(new_title)
         else:
             final_lines.append(line)
+
+    # Append any custom overrides not present in base global.ini (new items/unlocalized fixes)
+    for k_custom, v_custom in custom_overrides.items():
+        if k_custom not in seen_custom:
+            final_lines.append(f"{k_custom}={v_custom}\n")
 
     # 5. Write back preserving original BOM presence and LF line endings
     try:

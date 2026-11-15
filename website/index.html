@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SynthScan — Star Citizen Companion, Blueprints &amp; Mining HUD</title>
+  <meta name="description" content="Modular Windows companion for Star Citizen: SynthStrings, Blueprint Library, Mining HUD, Item &amp; Ship Finder, Missions Ledger, External Live Chat &amp; Translator, and Executive Hangar Tracker." />
+  <style>
+    :root {
+      --bg: #080a0f;
+      --bg-elev: #111520;
+      --surface: rgba(16, 20, 30, 0.74);
+      --surface-hover: rgba(22, 28, 42, 0.88);
+      --border: rgba(148, 163, 184, 0.16);
+      --border-strong: rgba(56, 189, 248, 0.45);
+      --text: #eef2f7;
+      --muted: #9aa4b6;
+      --cyan: #38bdf8;
+      --cyan-dim: rgba(56, 189, 248, 0.12);
+      --amber: #f59e0b;
+      --amber-dim: rgba(245, 158, 11, 0.12);
+      --green: #34d399;
+      --discord: #5865f2;
+      --radius: 12px;
+      --font-display: "Bahnschrift", "DIN Alternate", "Segoe UI", system-ui, sans-serif;
+      --font-body: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: var(--font-body);
+      background:
+        radial-gradient(900px 460px at 15% -10%, rgba(56, 189, 248, 0.10), transparent 60%),
+        radial-gradient(760px 420px at 88% 4%, rgba(52, 211, 153, 0.06), transparent 55%),
+        var(--bg);
+      color: var(--text);
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    #quantum-bg {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    header, main {
+      position: relative;
+      z-index: 1;
+    }
+
+    .qt-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 11px;
+      border-radius: 8px;
+      background: rgba(56, 189, 248, 0.10);
+      border: 1px solid rgba(56, 189, 248, 0.28);
+      color: var(--cyan);
+      font-family: var(--font-display);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .qt-toggle:hover {
+      background: rgba(56, 189, 248, 0.18);
+      border-color: rgba(56, 189, 248, 0.55);
+    }
+    .qt-toggle.active {
+      background: rgba(56, 189, 248, 0.24);
+      border-color: var(--cyan);
+      box-shadow: 0 0 16px rgba(56, 189, 248, 0.28);
+      color: #ffffff;
+    }
+
+    a { color: inherit; }
+
+    .container {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* Top Nav */
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      backdrop-filter: blur(14px);
+      background: rgba(15, 16, 19, 0.82);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 64px;
+      gap: 16px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 20px;
+      letter-spacing: 0.02em;
+    }
+    .brand-mark {
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, rgba(56, 189, 248, 0.25), rgba(56, 189, 248, 0.05));
+      border: 1px solid var(--border-strong);
+      display: grid;
+      place-items: center;
+      color: var(--cyan);
+    }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      font-size: 14px;
+      color: var(--muted);
+    }
+    .nav-links a {
+      text-decoration: none;
+      transition: color 0.15s ease;
+    }
+    .nav-links a:hover { color: var(--text); }
+    .nav-discord {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 14px;
+      border-radius: 8px;
+      background: rgba(88, 101, 242, 0.16);
+      border: 1px solid rgba(88, 101, 242, 0.40);
+      color: #dfe3ff !important;
+      font-weight: 600;
+      font-size: 13px;
+      text-decoration: none;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+    .nav-discord:hover {
+      background: rgba(88, 101, 242, 0.28);
+      border-color: rgba(88, 101, 242, 0.7);
+    }
+
+    /* Hero */
+    .hero {
+      padding: 64px 0 40px;
+      display: grid;
+      grid-template-columns: 1.25fr 0.95fr;
+      gap: 32px;
+      align-items: center;
+    }
+    @media (max-width: 880px) {
+      .hero { grid-template-columns: 1fr; padding-top: 40px; }
+      .nav-links .hide-sm { display: none; }
+    }
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--cyan);
+      background: var(--cyan-dim);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      padding: 5px 11px;
+      border-radius: 999px;
+      margin-bottom: 16px;
+    }
+    .eyebrow .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+    }
+    h1 {
+      font-family: var(--font-display);
+      font-size: clamp(32px, 4.4vw, 48px);
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+      margin: 0 0 16px;
+    }
+    .hero p.lead {
+      font-size: 17px;
+      color: var(--muted);
+      margin: 0 0 26px;
+      max-width: 58ch;
+    }
+    .cta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      padding: 12px 20px;
+      border-radius: 9px;
+      font-weight: 600;
+      font-size: 14px;
+      text-decoration: none;
+      border: 1px solid transparent;
+      transition: transform 0.12s ease, background 0.15s ease, border-color 0.15s ease;
+    }
+    .btn:hover { transform: translateY(-1px); }
+    .btn-primary {
+      background: var(--cyan);
+      color: #07121b;
+    }
+    .btn-primary:hover { background: #5ccbff; }
+    .btn-discord {
+      background: var(--discord);
+      color: #ffffff;
+    }
+    .btn-discord:hover { background: #6975f5; }
+    .btn-ghost {
+      background: var(--surface);
+      border-color: var(--border);
+      color: var(--text);
+    }
+    .btn-ghost:hover { border-color: var(--border-strong); }
+    .sub-note {
+      margin-top: 12px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    /* Live Telemetry Panel */
+    .telemetry-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+    }
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .panel-title {
+      font-family: var(--font-display);
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+    .pill-ok {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--green);
+      background: rgba(52, 211, 153, 0.12);
+      border: 1px solid rgba(52, 211, 153, 0.28);
+      padding: 3px 9px;
+      border-radius: 999px;
+    }
+    .stat-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .stat {
+      background: rgba(15, 16, 19, 0.72);
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      padding: 12px 14px;
+    }
+    .stat-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+    }
+    .stat-val {
+      font-family: var(--font-display);
+      font-size: 20px;
+      font-weight: 700;
+      margin-top: 3px;
+      color: var(--text);
+    }
+    .stat-val.mono { font-size: 13px; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; color: var(--cyan); }
+
+    /* Trust / Privacy Banner */
+    .trust-strip {
+      margin: 12px 0 44px;
+      background: var(--amber-dim);
+      border: 1px solid rgba(245, 158, 11, 0.30);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+    }
+    .trust-icon {
+      color: var(--amber);
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .trust-strip strong { color: #fde68a; }
+    .trust-strip p { margin: 0; font-size: 14px; color: #e5d5b3; }
+
+    /* Section Headings */
+    .section-head {
+      margin: 48px 0 20px;
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .section-head h2 {
+      font-family: var(--font-display);
+      font-size: 26px;
+      margin: 0;
+      letter-spacing: -0.01em;
+    }
+    .section-head p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    /* Feature Cards */
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+    @media (max-width: 960px) { .cards { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 640px) { .cards { grid-template-columns: 1fr; } }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      transition: border-color 0.16s ease, background 0.16s ease, transform 0.16s ease;
+    }
+    .card:hover {
+      background: var(--surface-hover);
+      border-color: var(--border-strong);
+      transform: translateY(-2px);
+    }
+    .card-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .card-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 9px;
+      background: var(--cyan-dim);
+      border: 1px solid rgba(56, 189, 248, 0.24);
+      color: var(--cyan);
+      display: grid;
+      place-items: center;
+    }
+    .tag {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: rgba(148, 163, 184, 0.10);
+      color: var(--muted);
+      border: 1px solid var(--border);
+    }
+    .tag.opt {
+      color: #fde68a;
+      background: var(--amber-dim);
+      border-color: rgba(245, 158, 11, 0.28);
+    }
+    .card h3 {
+      font-family: var(--font-display);
+      font-size: 18px;
+      margin: 2px 0 0;
+    }
+    .card p {
+      margin: 0;
+      font-size: 14px;
+      color: var(--muted);
+    }
+    .card ul {
+      margin: 4px 0 0;
+      padding-left: 18px;
+      font-size: 13px;
+      color: #c7d0df;
+    }
+    .card li + li { margin-top: 4px; }
+
+    /* Community CTA */
+    .community-box {
+      margin: 48px 0;
+      background: linear-gradient(135deg, rgba(88, 101, 242, 0.14), rgba(56, 189, 248, 0.08));
+      border: 1px solid rgba(88, 101, 242, 0.35);
+      border-radius: var(--radius);
+      padding: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+    .community-box h2 {
+      font-family: var(--font-display);
+      margin: 0 0 6px;
+      font-size: 22px;
+    }
+    .community-box p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      max-width: 60ch;
+    }
+
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 28px 0 42px;
+      font-size: 13px;
+      color: var(--muted);
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    footer a { color: var(--text); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <canvas id="quantum-bg" aria-hidden="true"></canvas>
+
+  <main class="container">
+    <section class="hero">
+      <div>
+        <div class="eyebrow">
+          <span class="dot"></span>
+          <span>Live Sync · Star Citizen <span id="hero-patch">4.10.3</span></span>
+        </div>
+        <h1>One modular companion for the Verse.</h1>
+        <p class="lead">
+          SynthScan brings blueprint tracking, live mining analysis, mission reputation &amp; aUEC ledgers, item/ship lookup, external live chat &amp; translations, and executive hangar timers into one lightweight Windows app — with automatic catalog updates after every patch.
+        </p>
+        <div class="cta-row">
+          <a id="dl-btn" class="btn btn-primary" href="/releases/SynthScan-Setup-Windows-x64.exe">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Download for Windows (x64)
+          </a>
+          <a class="btn btn-discord" href="https://discord.gg/QfUsPXmfZ" target="_blank" rel="noopener">
+            Discord Community
+          </a>
+          <a class="btn btn-ghost" href="#features">Explore Features</a>
+        </div>
+        <div class="sub-note">One installer · Pick only the modules you want · Local record storage with zero usage analytics.</div>
+      </div>
+
+      <aside class="telemetry-panel" id="updates" aria-label="Live database status">
+        <div class="panel-head">
+          <span class="panel-title">Auto-Updater Feed</span>
+          <span class="pill-ok" id="feed-status">Online</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:14px;padding:12px 14px;background:rgba(15,16,19,0.72);border:1px solid var(--border);border-radius:9px;margin-bottom:14px;">
+          <div style="width:42px;height:42px;border-radius:10px;background:rgba(56,189,248,0.12);border:1px solid rgba(56,189,248,0.30);display:grid;place-items:center;flex-shrink:0;color:var(--cyan);" aria-hidden="true">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="9"></circle>
+              <polygon points="12 5 14.2 10.2 19.5 12 14.2 13.8 12 19 9.8 13.8 4.5 12 9.8 10.2 12 5" fill="currentColor" fill-opacity="0.22"></polygon>
+            </svg>
+          </div>
+          <div style="min-width:0;">
+            <div style="font-family:var(--font-display);font-size:20px;font-weight:700;line-height:1.15;">Star Citizen <span id="stat-build">4.10.3</span></div>
+            <div style="font-size:12px;color:var(--muted);margin-top:3px;">Last sync: <span id="stat-sync" style="color:var(--text);">Checking...</span></div>
+          </div>
+        </div>
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);margin-bottom:8px;">Recently Added</div>
+        <ul id="recent-log" style="margin:0;padding-left:18px;font-size:13px;color:#cbd5e1;line-height:1.6;">
+          <li>Skarnov Raider Camo Rifle &amp; Battery (30 cap)</li>
+          <li>Palatino, Corbel &amp; Tailwind Raider Camo sets</li>
+          <li>M3A / M4A / M5A Cannon Raider Camo blueprints</li>
+          <li>4.10.3 mission pools &amp; clean contract titles</li>
+        </ul>
+      </aside>
+    </section>
+
+    <div class="trust-strip">
+      <div class="trust-icon" aria-hidden="true">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+        </svg>
+      </div>
+      <div>
+        <p><strong>Local-first privacy &amp; optional screen reading:</strong> Live mining screen reading is an optional module that reads the game window locally on your PC, pauses automatically when Star Citizen loses focus, and never uploads frames. All ownership records, ledgers, and history stay on your Windows account.</p>
+      </div>
+    </div>
+
+    <div class="section-head" id="features">
+      <div>
+        <h2>Everything Built Into SynthScan</h2>
+        <p>Uncheck what you don't need during setup — toggle modules anytime in Feature Modules.</p>
+      </div>
+    </div>
+
+    <section class="cards">
+      <article class="card">
+        <div class="card-top">
+          <span class="card-icon" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          </span>
+          <span class="tag">Core</span>
+        </div>
+        <h3>SynthStrings &amp; Reputation</h3>
+        <p>Cleaner in-game text, compressed scanning labels, and live faction standing numbers.</p>
+        <ul>
+          <li>Title tags: <code>[BP: X LEFT]</code> &amp; <code>[ALL BP OWNED]</code></li>
+          <li><code>[OWNED]</code> markers inside mission descriptions</li>
+          <li>Verified rep points &amp; next-rank thresholds beside orgs</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <div class="card-top">
+          <span class="card-icon" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+          </span>
+          <span class="tag">Crafting</span>
+        </div>
+        <h3>Blueprint Library &amp; Recipes</h3>
+        <p>Searchable library of obtainable reward blueprints with full crafting details.</p>
+        <ul>
+          <li>Auto-tracks unlocks from logs + manual check-off</li>
+          <li>Material costs &amp; material-quality stat effects</li>
+          <li>Shows which contracts drop each missing blueprint</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <div class="card-top">
+          <span class="card-icon" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+          </span>
+          <span class="tag opt">Optional Scan</span>
+        </div>
+        <h3>Mining HUD &amp; Rock Scan</h3>
+        <p>Instant rock breakdown, value estimates, and breakability advice while you mine.</p>
+        <ul>
+          <li>Signature recognition &amp; ore %, quality, SCU breakdown</li>
+          <li>Unrefined, refined &amp; UEX market value estimates</li>
+          <li>Mining head &amp; module breakability comparisons</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <div class="card-top">
+          <span class="card-icon" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>
+          </span>
+          <span class="tag">Mining</span>
+        </div>
+        <h3>Trip Planner, Diary &amp; Bookmarks</h3>
+        <p>Plan where to mine, save notable finds, and return to high-value rock clusters.</p>
+        <ul>
+          <li>Finds ore overlaps &amp; secondary material locations</li>
+          <li>Mining diary with personal records &amp; summaries</li>
+          <li>Shareable rock coordinates with shard info</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <div class="card-top">
+          <span class="card-icon" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3h6v4l4 11a2 2 0 0 1-1.9 2.7H6.9A2 2 0 0 1 5 18l4-11V3z"/><line x1="6" y1="14" x2="18" y2="14"/></svg>
+          </span>
+          <span class="tag">Refining</span>
+        </div>
+        <h3>Refinery Planner &amp; Records</h3>
+        <p>Maximize refined yields and never lose track of active refinery jobs.</p>
+        <ul>
+          <li>Compare station bonuses &amp; output before committing</li>
+          <li>Tracks work-order imports &amp; completion notices</li>
+          <li>Logs confirmed collections with quantities &amp; quality</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <div class="card-top">
+          <span class="card-icon" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          </span>
+          <span class="tag">Database</span>
+        </div>
+        <h3>Item, Ship, Wikelo &amp; UEX</h3>
+        <p>Look up ships, gear, Wikelo trades, and live UEX listings in one place.</p>
+        <ul>
+          <li>Ship hardpoints, component stats, shops &amp; prices</li>
+          <li>Direct links to crafting recipes &amp; Wikelo barters</li>
+          <li>UEX player-market watches by material &amp; quality</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <div class="card-top">
+          <span class="card-icon" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          </span>
+          <span class="tag">HUDs</span>
+        </div>
+        <h3>Missions HUD &amp; Ledger</h3>
+        <p>Track active contracts, payouts, and session earnings without leaving the cockpit.</p>
+        <ul>
+          <li>Active payouts, rep rewards, party splits &amp; timers</li>
+          <li>Full aUEC &amp; reputation ledger with export options</li>
+          <li>Session summaries linked to mission outcomes</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <div class="card-top">
+          <span class="card-icon" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </span>
+          <span class="tag">Pyro</span>
+        </div>
+        <h3>Executive Hangars &amp; Compboards</h3>
+        <p>Time contested-zone hangar cycles and track your board sets accurately.</p>
+        <ul>
+          <li>5-light configuration &amp; open/close countdown timer</li>
+          <li>Auto-refreshes community timing &amp; flags stale data</li>
+          <li>Tracks all 7 compboard types &amp; complete sets</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <div class="card-top">
+          <span class="card-icon" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          </span>
+          <span class="tag">Social &amp; Chat</span>
+        </div>
+        <h3>Citizens, Party &amp; External Live Chat</h3>
+        <p>Monitor your shard, manage your party, and run live Star Citizen chat on your second monitor.</p>
+        <ul>
+          <li><strong>External Live Chat:</strong> Global &amp; Party chat with automatic [zh] decoding and live English translation</li>
+          <li><strong>Add Straight from Chat:</strong> Right-click or click any chatter to send friend requests or party invites</li>
+          <li><strong>Party Management:</strong> View your party roster, promote leader, or remove members in seconds</li>
+          <li>Compact ribbon for region, shard ID &amp; timestamped session history</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <div class="card-top">
+          <span class="card-icon" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          </span>
+          <span class="tag">HUDs</span>
+        </div>
+        <h3>Piracy HUD &amp; Interdictions</h3>
+        <p>Dedicated overlay mode for snare and interdiction tracking.</p>
+        <ul>
+          <li>Waiting timer &amp; interdiction-related log reports</li>
+          <li>Switchable, lockable, dockable &amp; collapsible HUD</li>
+          <li>Shares the same clean overlay as Mining &amp; Missions</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <div class="card-top">
+          <span class="card-icon" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+          </span>
+          <span class="tag">Planner</span>
+        </div>
+        <h3>Day / Night Forecast</h3>
+        <p>Check planetary lighting conditions before you plot your quantum route.</p>
+        <ul>
+          <li>Estimates daylight, sunrise &amp; sunset at destinations</li>
+          <li>Built-in solar cycle math for supported moons &amp; sites</li>
+          <li>Plan mining runs or bunker ops in full daylight</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <div class="card-top">
+          <span class="card-icon" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          </span>
+          <span class="tag">QoL &amp; Sync</span>
+        </div>
+        <h3>Automation, Roulette &amp; Updates</h3>
+        <p>Quality-of-life helpers plus automatic app and game-data updates.</p>
+        <ul>
+          <li>Optional auto-accept shares/invites &amp; auto-hide chat</li>
+          <li>Fate Roulette, AFK helper &amp; RSI Launcher auto-start</li>
+          <li>Auto-syncs catalogs from this hub &amp; StarBreaker</li>
+        </ul>
+      </article>
+    </section>
+
+    <section class="community-box">
+      <div>
+        <h2>Need help, patch updates, or want to fly with us?</h2>
+        <p>Join the SynthScan Discord for release announcements, bug reports, mining routes, and feature requests.</p>
+      </div>
+      <a class="btn btn-discord" href="https://discord.gg/QfUsPXmfZ" target="_blank" rel="noopener">
+        Join the Discord Server
+      </a>
+    </section>
+
+    <footer>
+      <span>SynthScan · Unofficial Star Citizen companion · Local-first, no telemetry · <span style="opacity: 0.72;">Bot Created By Synthronaut</span></span>
+      <span>
+        <a href="/releases/">Releases</a> ·
+        <a href="https://discord.gg/QfUsPXmfZ" target="_blank" rel="noopener">Discord</a>
+      </span>
+    </footer>
+  </main>
+
+  <script>
+    fetch('/data/manifest.json', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(m => {
+        const ver = m.game_version || '4.10.3';
+        document.getElementById('stat-build').textContent = ver;
+        document.getElementById('hero-patch').textContent = ver;
+        document.getElementById('stat-sync').textContent = m.updated_at || '—';
+        if (Array.isArray(m.recent_changes) && m.recent_changes.length) {
+          const ul = document.getElementById('recent-log');
+          ul.innerHTML = '';
+          m.recent_changes.slice(0, 5).forEach(item => {
+            const li = document.createElement('li');
+            li.textContent = item;
+            ul.appendChild(li);
+          });
+        }
+        if (m.latest_release && m.latest_release.url) {
+          const btn = document.getElementById('dl-btn');
+          btn.href = m.latest_release.url;
+        }
+      })
+      .catch(() => {
+        document.getElementById('feed-status').textContent = 'Offline';
+        document.getElementById('stat-sync').textContent = 'Unavailable';
+      });
+
+    // Lightweight 3D starfield + Quantum Travel warp canvas
+    (function () {
+      const canvas = document.getElementById('quantum-bg');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d', { alpha: true });
+      const qtBtn = document.getElementById('qt-btn');
+
+      let w = 0, h = 0, cx = 0, cy = 0;
+      const COUNT = 260;
+      const stars = [];
+      const speed = 0.29; // 35% slower cruise drift
+      let rafId = null;
+
+      function resize() {
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        w = window.innerWidth;
+        h = window.innerHeight;
+        cx = w * 0.5;
+        cy = h * 0.5;
+        canvas.width = Math.floor(w * dpr);
+        canvas.height = Math.floor(h * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+
+      function spawn(s, randomZ) {
+        s.x = (Math.random() - 0.5) * 2.4;
+        s.y = (Math.random() - 0.5) * 2.4;
+        s.z = randomZ ? Math.random() * 0.95 + 0.05 : 1;
+        s.pz = s.z;
+        const r = Math.random();
+        s.color = r < 0.30 ? '56, 189, 248' : r < 0.40 ? '245, 158, 11' : '241, 245, 249';
+      }
+
+      for (let i = 0; i < COUNT; i++) {
+        const s = {};
+        spawn(s, true);
+        stars.push(s);
+      }
+
+      function drawFrame() {
+        ctx.clearRect(0, 0, w, h);
+        const fov = Math.max(w, h) * 0.68;
+
+        for (let i = 0; i < COUNT; i++) {
+          const s = stars[i];
+          s.pz = s.z;
+          s.z -= speed * 0.016;
+          if (s.z <= 0.02) {
+            spawn(s, false);
+            continue;
+          }
+
+          const sx = cx + (s.x / s.z) * fov;
+          const sy = cy + (s.y / s.z) * fov;
+          if (sx < -60 || sx > w + 60 || sy < -60 || sy > h + 60) {
+            spawn(s, false);
+            continue;
+          }
+
+          const alpha = Math.min(1, (1 - s.z) * 1.15 + 0.15);
+          const size = Math.max(1.0, (1 - s.z) * 2.5);
+
+          ctx.fillStyle = `rgba(${s.color}, ${alpha})`;
+          ctx.beginPath();
+          ctx.arc(sx, sy, size, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        if (!document.hidden) {
+          rafId = requestAnimationFrame(drawFrame);
+        }
+      }
+
+      resize();
+      window.addEventListener('resize', resize, { passive: true });
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+          cancelAnimationFrame(rafId);
+          rafId = requestAnimationFrame(drawFrame);
+        }
+      });
+
+      rafId = requestAnimationFrame(drawFrame);
+    })();
+  </script>
+</body>
+</html>
