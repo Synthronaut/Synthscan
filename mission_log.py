@@ -406,8 +406,12 @@ class MissionLog:
             if interval['kind'] == 'reputation':
                 for mid in interval.get('missions', []):
                     rep_by_mission.setdefault(mid, []).append(interval)
-        # Load retail price index (cached, refreshed at most once per view call)
-        price_index = load_retail_price_index(self.directory)
+        # Load retail price index (cached with 60s TTL)
+        now_ts = time.time()
+        if self._price_index is None or (now_ts - getattr(self, '_price_index_at', 0)) >= 60:
+            self._price_index = load_retail_price_index(self.directory)
+            self._price_index_at = now_ts
+        price_index = self._price_index
         for window in intervals:
             window['annotation'] = annotations.get(window['id'], {})
             window['classification'] = wallet_classification(window, mission_index, catalog,
@@ -530,8 +534,15 @@ class MissionLog:
         return result
 
     def export(self, path, catalog=None):
-        path = Path(path).resolve()
-        if path.suffix.lower() not in ('.csv', '.json', '.html') or path.parent == self.directory.resolve():
+        raw_path = Path(path)
+        if raw_path.is_symlink():
+            raise ValueError('Choose a regular file export path')
+        path = raw_path.resolve()
+        from installation import ROOT, INSTALL_ROOT
+        app_dirs = {self.directory.resolve(), ROOT.resolve(), INSTALL_ROOT.resolve()}
+        if (path.suffix.lower() not in ('.csv', '.json', '.html')
+                or path.parent in app_dirs
+                or any(path.is_relative_to(d) for d in app_dirs)):
             raise ValueError('Choose a CSV, JSON or HTML export outside the application data folder')
         self.db.execute('SAVEPOINT mission_export')
         try:

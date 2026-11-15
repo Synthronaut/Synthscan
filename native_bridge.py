@@ -302,6 +302,7 @@ def run(data_dir,owner,native=None):
                 if command.exists():
                     try:service.command(json.loads(command.read_text(encoding='utf-8')))
                     except (ValueError,KeyError,TypeError,OSError) as exc:service.note=str(exc)
+                    command.unlink(missing_ok=True)
                 quest_command=directory/'questing_command.json'
                 if quest_command.exists():
                     value=read_shared_json(quest_command) or {}

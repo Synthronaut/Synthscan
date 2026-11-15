@@ -284,7 +284,6 @@ def restore_lines(original,written,current):
         for i,line in enumerate(rows):
             if b'=' not in line:continue
             key=line.partition(b'=')[0].lstrip(b'\xef\xbb\xbf').lower()
-            if key in keys:raise ValueError('Duplicate localization key needs manual review')
             keys[key]=i
         return rows,keys
     base,bkeys=index(original);last,lkeys=index(written);rows,keys=index(current);conflicts=[];remove=set()

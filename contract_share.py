@@ -98,16 +98,10 @@ def sync_user_cfg_displayinfo(game_dir,level,profile=None):
     if after==before:
         return False
     try:
-        from game_text_lifecycle import Manager,INI,CFG,atomic,digest
+        from game_text_lifecycle import INI,atomic
         from localization_lock import localization_lock
         with localization_lock(game/INI):
             atomic(cfg_path,after)
-            if profile is not None:
-                mgr=Manager(game,profile)
-                state=mgr.read()
-                if state and CFG in state.get('files',{}):
-                    state['files'][CFG]['last_sha256']=digest(after)
-                    mgr.store(state)
     except ImportError:
         cfg_path.write_bytes(after)
     return True
@@ -305,7 +299,10 @@ def accept_scan_code(profile):
     """Resolve the Notifications binding, never the separate legacy Invite binding."""
     key='lbracket'
     if profile.exists():
-        root=ET.parse(profile).getroot()
+        raw=profile.read_bytes()
+        if len(raw)>4*1024*1024 or b'<!DOCTYPE' in raw.upper() or b'<!ENTITY' in raw.upper():
+            raise ValueError('Unsupported or oversized actionmaps profile')
+        root=ET.fromstring(raw)
         for mapping in root.findall('.//actionmap'):
             if mapping.get('name')!='default':continue
             for action in mapping.findall('action'):

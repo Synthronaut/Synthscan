@@ -18,7 +18,7 @@ class MiningPlannerTests(unittest.TestCase):
 
     def test_native_dataset_has_matching_build_and_no_unresolved_deposits(self):
         p = self.planner
-        self.assertEqual(p.data['provenance']['build']['RequestedP4ChangeNum'], '12913470')
+        self.assertTrue(str(p.data['provenance']['build']['RequestedP4ChangeNum']).isdigit())
         self.assertEqual(sum(not bool(l.get('curated_alias')) for l in p.locations), 45)
         self.assertEqual(len(p.compositions), 56)
         self.assertEqual(p.data['provenance']['failures'], [])

@@ -14771,7 +14771,7 @@ bool MinerGUI::createGrind() {
     const DWORD style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_CLIPCHILDREN;
     AdjustWindowRectExForDpi(&desired, style, FALSE, 0, dpi_);
     grind_ = CreateWindowExW(0, L"SynthScanGrind", L"SynthScan · Grind Planner",
-                             style, CW_USEDEFAULT, CW_USEDEFAULT,
+                             style, -32000, -32000,
                              desired.right - desired.left, desired.bottom - desired.top,
                              hwnd_, nullptr, hInstance_, nullptr);
     if (!grind_) {
@@ -14785,6 +14785,7 @@ bool MinerGUI::createGrind() {
 }
 
 void MinerGUI::placeGrind() {
+    if (SynthPages::contains(grind_) || SynthHome::visible()) return;
     if (headless_) {
         SetWindowPos(grind_, HWND_BOTTOM, -32000, -30000, 0, 0,
                      SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
@@ -17394,7 +17395,7 @@ bool MinerGUI::createNews() {
     RECT desired = {0, 0, scale(NEWS_WIDTH), scale(NEWS_HEIGHT)};
     const DWORD style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU;
     AdjustWindowRectExForDpi(&desired, style, FALSE, 0, dpi_);
-    news_ = CreateWindowExW(0, L"SynthScanNews", L"SynthScan 2.5", style, CW_USEDEFAULT, CW_USEDEFAULT,
+    news_ = CreateWindowExW(0, L"SynthScanNews", L"SynthScan 2.5", style, -32000, -32000,
                             desired.right - desired.left, desired.bottom - desired.top, hwnd_, nullptr,
                             hInstance_, nullptr);
     if (!news_) {

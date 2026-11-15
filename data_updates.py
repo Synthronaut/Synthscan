@@ -25,7 +25,6 @@ ORACLE_MANIFEST_URL = 'https://synthscan.158-101-88-35.sslip.io/data/manifest.js
 ORACLE_BASE_URL = 'https://synthscan.158-101-88-35.sslip.io'
 ORACLE_FILE_MAP = {
     'blueprints_catalog.json': ROOT / 'blueprints_catalog.json',
-    'crafting_recipes.json': ROOT / 'crafting_recipes.json',
     'mining_hardware.json': ROOT / 'data/mining_hardware.json',
     'material_qualities.json': ROOT / 'data/material_qualities.json',
     'wikelo_data.json': ROOT / 'data/wikelo_data.json',
@@ -169,9 +168,31 @@ def local_reference_status():
                     detail='No complete local reference generation is available. Rebuild local references.')
 
 
+def validate_oracle_payload(name, raw):
+    from update_signing import strict_json
+    data = strict_json(raw)
+    if not isinstance(data, dict) or not data:
+        raise ValueError(f'Invalid root object for {name}')
+    if name == 'custom_synthstrings.json':
+        for k, v in data.items():
+            if not isinstance(k, str) or not isinstance(v, str) or '\n' in k or '\r' in k or '\n' in v or '\r' in v:
+                raise ValueError('Invalid custom_synthstrings entry')
+            k_low = k.split(',')[0].strip().casefold()
+            if ('title' in k_low or k_low.endswith('_name')) and ('potential blueprints' in v.casefold() or 'multiple blueprint pools' in v.casefold()):
+                raise ValueError('Blueprint pool lists are forbidden in title/name keys')
+    elif name == 'blueprints_catalog.json':
+        items = data.get('items', data) if isinstance(data.get('items'), (list, dict)) else data
+        entries = items.values() if isinstance(items, dict) else (items if isinstance(items, list) else [])
+        for entry in entries:
+            if isinstance(entry, dict) and entry.get('isReward') is False:
+                raise ValueError('Non-reward blueprint record rejected in blueprints_catalog.json')
+    return data
+
+
 def sync_oracle_hub():
     """Download and verify updated catalogs from the SynthScan data hub."""
-    manifest = json.loads(download(ORACLE_MANIFEST_URL, limit=1024 * 1024).decode('utf-8'))
+    from update_signing import strict_json
+    manifest = strict_json(download(ORACLE_MANIFEST_URL, limit=1024 * 1024))
     files = manifest.get('files') or {}
     if not isinstance(files, dict) or not files:
         raise ValueError('Empty data hub manifest')
@@ -189,7 +210,7 @@ def sync_oracle_hub():
         raw = download(ORACLE_BASE_URL + rel_url, limit=16 * 1024 * 1024)
         if hashlib.sha256(raw).hexdigest() != expected:
             raise ValueError(f'Checksum mismatch for {name}')
-        json.loads(raw.decode('utf-8'))
+        validate_oracle_payload(name, raw)
         dest.parent.mkdir(parents=True, exist_ok=True)
         tmp = dest.with_suffix(dest.suffix + '.tmp')
         tmp.write_bytes(raw)
@@ -198,7 +219,13 @@ def sync_oracle_hub():
     if 'blueprints_catalog.json' in updated or 'custom_synthstrings.json' in updated:
         try:
             from synthstrings_sync import sync_blueprints_to_global_ini
-            sync_blueprints_to_global_ini()
+            from synthstrings_guard import channels
+            from game_text_lifecycle import enabled
+            for game in channels():
+                if enabled(game):
+                    ini = Path(game) / 'Data/Localization/english/global.ini'
+                    if ini.exists():
+                        sync_blueprints_to_global_ini(str(ini))
         except Exception:
             pass
     rev = str(manifest.get('updated_at') or '')

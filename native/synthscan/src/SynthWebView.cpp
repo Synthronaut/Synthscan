@@ -329,7 +329,7 @@ void sendSnapshotMessage() {
 }
 
 class WebMessageHandler : public ICoreWebView2WebMessageReceivedEventHandler {
-    ULONG ref = 1;
+    ULONG ref = 0;
 public:
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppv) override {
         if (riid == IID_IUnknown || riid == __uuidof(ICoreWebView2WebMessageReceivedEventHandler)) {
@@ -405,7 +405,7 @@ public:
 };
 
 class ControllerCompletedHandler : public ICoreWebView2CreateCoreWebView2ControllerCompletedHandler {
-    ULONG ref = 1;
+    ULONG ref = 0;
     HWND target;
     std::filesystem::path distFolder;
 public:
@@ -462,7 +462,7 @@ public:
 };
 
 class EnvironmentCompletedHandler : public ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler {
-    ULONG ref = 1;
+    ULONG ref = 0;
     HWND target;
     std::filesystem::path distFolder;
 public:
@@ -486,12 +486,16 @@ public:
     }
 };
 
+struct CapturePreviewState {
+    bool done = false;
+    HRESULT hr = E_FAIL;
+};
+
 class CapturePreviewHandler : public ICoreWebView2CapturePreviewCompletedHandler {
-    ULONG ref = 1;
-    bool* doneFlag;
-    HRESULT* outHr;
+    ULONG ref = 0;
+    std::shared_ptr<CapturePreviewState> state;
 public:
-    CapturePreviewHandler(bool* d, HRESULT* h) : doneFlag(d), outHr(h) {}
+    explicit CapturePreviewHandler(std::shared_ptr<CapturePreviewState> s) : state(std::move(s)) {}
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppv) override {
         if (riid == IID_IUnknown || riid == __uuidof(ICoreWebView2CapturePreviewCompletedHandler)) {
             *ppv = static_cast<ICoreWebView2CapturePreviewCompletedHandler*>(this);
@@ -502,8 +506,10 @@ public:
     ULONG STDMETHODCALLTYPE AddRef() override { return ++ref; }
     ULONG STDMETHODCALLTYPE Release() override { ULONG r = --ref; if (!r) delete this; return r; }
     HRESULT STDMETHODCALLTYPE Invoke(HRESULT errorCode) override {
-        if (outHr) *outHr = errorCode;
-        if (doneFlag) *doneFlag = true;
+        if (state) {
+            state->hr = errorCode;
+            state->done = true;
+        }
         return S_OK;
     }
 };
@@ -702,11 +708,10 @@ int preview(const std::filesystem::path& directory) {
     if (g_webview) {
         IStream* memStream = nullptr;
         if (SUCCEEDED(CreateStreamOnHGlobal(nullptr, TRUE, &memStream)) && memStream) {
-            bool capDone = false;
-            HRESULT capHr = E_FAIL;
-            if (SUCCEEDED(g_webview->CapturePreview(0 /* PNG */, memStream, new CapturePreviewHandler(&capDone, &capHr)))) {
-                pumpUntil([&]() { return capDone; }, 5000);
-                if (capDone && SUCCEEDED(capHr)) {
+            auto capState = std::make_shared<CapturePreviewState>();
+            if (SUCCEEDED(g_webview->CapturePreview(0 /* PNG */, memStream, new CapturePreviewHandler(capState)))) {
+                pumpUntil([&]() { return capState->done; }, 5000);
+                if (capState->done && SUCCEEDED(capState->hr)) {
                     HGLOBAL hg = nullptr;
                     if (SUCCEEDED(GetHGlobalFromStream(memStream, &hg)) && hg) {
                         SIZE_T sz = GlobalSize(hg);

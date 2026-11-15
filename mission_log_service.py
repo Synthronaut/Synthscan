@@ -136,10 +136,12 @@ class Logger:
             return
         self.started = started
         self.session = hashlib.sha256((str(self.game_log.resolve())+'|'+str(started)).encode()).hexdigest()[:24]
-        with self.book.db:
-            sessions = self.book.meta('sessions', {})
-            sessions.setdefault(self.session, dict(id=self.session, started_at=started))
-            self.book.set_meta('sessions', sessions)
+        sessions = self.book.meta('sessions', {})
+        if self.session not in sessions:
+            with self.book.db:
+                sessions = self.book.meta('sessions', {})
+                sessions.setdefault(self.session, dict(id=self.session, started_at=started))
+                self.book.set_meta('sessions', sessions)
 
     def changed(self, name):
         try:
@@ -167,7 +169,9 @@ class Logger:
 
     def tail_log(self):
         cursor = self.book.meta('log_cursor', {})
-        position = cursor.get('position', 0) if cursor.get('session') == self.session else 0
+        old_session = cursor.get('session')
+        old_pos = cursor.get('position', 0) if old_session == self.session else 0
+        position = old_pos
         size = self.game_log.stat().st_size
         if position > size:
             position = 0
@@ -184,8 +188,9 @@ class Logger:
                     break
                 self.event_line(raw.decode('utf-8', errors='replace'))
             position = stream.tell()
-        with self.book.db:
-            self.book.set_meta('log_cursor', dict(session=self.session, position=position))
+        if position != old_pos or old_session != self.session:
+            with self.book.db:
+                self.book.set_meta('log_cursor', dict(session=self.session, position=position))
 
     def journal(self, value):
         for mission in value.get('missions', []):
@@ -213,7 +218,8 @@ class Logger:
         path = self.directory/'mission_evidence.jsonl'
         if not path.exists():
             return
-        position = self.book.meta('evidence_position', 0)
+        old_pos = self.book.meta('evidence_position', 0)
+        position = old_pos
         if position > path.stat().st_size:
             position = 0
         with path.open('rb') as stream:
@@ -238,8 +244,9 @@ class Logger:
                 except (ValueError, KeyError, TypeError):
                     pass
             position = stream.tell()
-        with self.book.db:
-            self.book.set_meta('evidence_position', position)
+        if position != old_pos:
+            with self.book.db:
+                self.book.set_meta('evidence_position', position)
 
     def ingest_service(self, value):
         if value.get('own_character_verified') is not True or not value.get('character_key'):

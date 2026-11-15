@@ -15,7 +15,7 @@ HEADING = re.compile(r'<EM4>(?:Potential Blueprints|Multiple Blueprint Pools)(?:
 ITEM = re.compile(r'^(\s*-\s*)(?:\[(?:OWNED|X|✔|\s*)\]\s*)?(.+?)(\s*)$')
 # Remove category annotations, never identity such as (S1) or magazine capacity.
 CATEGORY = re.compile(
-    r'\s*\((?:Cooler|Shield|Shield Generator|Power\s*Plant|Powerplant|Quantum Drive|Salvage Mod|Salvage Module|Mining Laser|Mining Head|Radar|Fuel\s*Nozzles?|Weapon|Armor|Clothing)\)\s*$',
+    r'\s*\((?:Cooler|Shield|Shield Generator|Power\s*Plant|Powerplant|Quantum Drive|Salvage Mod|Salvage Module|Mining Laser|Mining Head|Radar|Fuel\s*Nozzles?|Weapon|Armor|Clothing|Helmet|Torso|Arms|Legs|Undersuit|Attachment|Optic|Barrel|Underbarrel|Magazine|Utility|Medical|Backpack|Ammo)\)\s*$',
     re.I
 )
 BASE_SUFFIX = re.compile(r'\s+Base$', re.I)

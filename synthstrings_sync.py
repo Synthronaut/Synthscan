@@ -43,7 +43,7 @@ def format_blueprint_pool(pool_text: str, owned_names: set):
         return r"\n- " + tag + " " + raw_name + type_tag
 
     # Matches "- Item Name (Type)" or "- [OWNED] Item Name (Type)" or "- [  ] Item Name (Type)"
-    pattern = re.compile(r'\\n\s*-\s*(?:\[(?:OWNED|X|\u2714)\]\s*|\[\s*\]\s*)?([^\(\n\r\\]+?)(\s*\([^\)\\\n\r]+\))?(?=\\n|$)')
+    pattern = re.compile(r'\\n\s*-\s*(?:\[(?:OWNED|X|\u2714)\]\s*|\[\s*\]\s*)?([^\n\r\\]+?)(\s*\([^\)\\\n\r]+\))?(?=\\n|$)')
     new_pool = pattern.sub(repl, pool_text)
     return new_pool, len(have), len(seen)
 
@@ -94,7 +94,10 @@ def sync_blueprints_to_global_ini(ini_path=DEFAULT_INI_PATH, owned_blueprints=No
         owned_names = set(owned_blueprints)
 
     # 2. Read existing global.ini
+    has_bom = False
     try:
+        with open(ini_path, "rb") as bf:
+            has_bom = bf.read(3) == b"\xef\xbb\xbf"
         with open(ini_path, "r", encoding="utf-8-sig", errors="ignore") as f:
             lines = f.readlines()
     except Exception as e:
@@ -188,13 +191,13 @@ def sync_blueprints_to_global_ini(ini_path=DEFAULT_INI_PATH, owned_blueprints=No
         else:
             final_lines.append(line)
 
-    # 5. Write back with UTF-8 BOM and LF line endings
+    # 5. Write back preserving original BOM presence and LF line endings
     try:
         content = "".join(final_lines)
         # Ensure LF line endings
         content = content.replace("\r\n", "\n")
         from game_text_lifecycle import write_localization
-        write_localization(ini_path, content.encode("utf-8-sig"))
+        write_localization(ini_path, content.encode("utf-8-sig" if has_bom else "utf-8"))
     except Exception as e:
         return False, f"Failed to write updated global.ini: {e}", {}
 

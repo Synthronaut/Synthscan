@@ -257,9 +257,8 @@ class SynthScanApp:
         # 7. Start Blueprint Game Log Watcher
         self.bp_manager.start_game_log_watcher(self._on_live_blueprint_unlocked)
 
-        # 8. Start Game Version & Patch Auto-Adapt Sentinel
-        self.patch_watcher = PatchWatcher()
-        self.patch_watcher.start(on_patch_detected_cb=self._on_game_patch_detected, interval_sec=3600)
+        # 8. Game Version & Patch Auto-Adapt is managed by SynthStringsGuard (synthstrings_guard.py)
+        self.patch_watcher = None
 
         mon_count = len(self.monitors)
         ui_mon = self.cfg.get("ui_monitor", 1)

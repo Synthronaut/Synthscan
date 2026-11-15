@@ -65,3 +65,15 @@ mission_capture_status.json
 /ui/node_modules/
 /ui/dist-test/
 /webview2_cache/
+/active_build.json
+/patch_state.json
+/saved_contracts.json
+/blueprint_ownership.json
+/mission_completions.json
+/user_settings.json
+/synthscan_settings.json
+/data/catalogue_current.json
+/data/catalogues/
+/scratch/
+/displayinfo_glyphs.npz
+/*.png

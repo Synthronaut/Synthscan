@@ -100,11 +100,11 @@ $uploadFiles += Get-Item (Join-Path $installerDir "SynthScan-Setup-Windows-x64.e
 # 7. Upload to Oracle server and refresh manifest.json
 foreach ($file in $uploadFiles) {
     Write-Host "Uploading $($file.Name)..."
-    & scp -i $KeyPath -o StrictHostKeyChecking=no $file.FullName "${Server}:${RemoteReleases}"
+    & scp -i $KeyPath -o StrictHostKeyChecking=accept-new $file.FullName "${Server}:${RemoteReleases}"
     if ($LASTEXITCODE -ne 0) { throw "Upload failed for $($file.Name)" }
 }
 
-& ssh -i $KeyPath -o StrictHostKeyChecking=no $Server "touch /var/www/synthscan/releases/SynthScan-Setup-Windows-x64.exe && sudo chmod -R a+rX /var/www/synthscan/releases && python3 /home/ubuntu/synthscan/scripts/sync_data.py"
+& ssh -i $KeyPath -o StrictHostKeyChecking=accept-new $Server "touch /var/www/synthscan/releases/SynthScan-Setup-Windows-x64.exe && sudo chmod -R a+rX /var/www/synthscan/releases && python3 /home/ubuntu/synthscan/scripts/sync_data.py"
 if ($LASTEXITCODE -ne 0) { throw "Remote manifest refresh failed." }
 
 Write-Host "Done! Live at https://synthscan.158-101-88-35.sslip.io/"

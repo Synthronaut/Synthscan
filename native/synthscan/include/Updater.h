@@ -33,6 +33,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <mutex>
 #include <string>
 #include <thread>
 #include <vector>
@@ -98,8 +99,14 @@ public:
     bool apply();
 
     State state() const { return state_.load(); }
-    const Release& latest() const { return latest_; }
-    const std::string& couldNotSay() const { return error_; }
+    Release latest() const {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return latest_;
+    }
+    std::string couldNotSay() const {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return error_;
+    }
     int percent() const { return percent_.load(); }
     // False when update=0, or when the build was never pointed at an
     // address. The window leaves the button out entirely then.
@@ -120,6 +127,7 @@ public:
 private:
     void join();
 
+    mutable std::mutex mutex_;
     std::atomic<State> state_{State::Idle};
     std::atomic<int> percent_{0};
     std::string url_;

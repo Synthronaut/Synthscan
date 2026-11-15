@@ -40,10 +40,11 @@ def refresh_recovery_core(root,profile,active):
         write(incoming/'release_integrity.json',dict(version=value['version'],files=inventory))
         targets['release_integrity.json']=digest(incoming/'release_integrity.json')
         # Preflight every replacement/deletion before the first mutation.
+        oracle_mutable={'blueprints_catalog.json','data/mining_hardware.json','data/material_qualities.json','data/wikelo_data.json','data/executive_hangar_schedule.json','data/daylight_catalogue.json','data/custom_synthstrings.json'}
         for relative,expected in {**previous,**targets}.items():
             safe_member('SynthScan/'+relative);path=root/relative
             if path.exists() and (path.is_symlink() or not path.resolve().is_relative_to(root)):raise ValueError('Linked app file preserved: '+relative)
-            if path.exists() and relative!='release_integrity.json':
+            if path.exists() and relative!='release_integrity.json' and relative not in oracle_mutable:
                 actual=digest(path)
                 if actual not in {previous.get(relative),targets.get(relative)}:raise ValueError('Externally changed app file preserved: '+relative)
         entrypoints={'app_launcher.py','app_updates.py','module_setup.py','release.json','release_integrity.json'}
@@ -111,10 +112,11 @@ def cleanup_legacy_root(root,previous_inventory):
     root=Path(root).resolve();current=load(root/'release_integrity.json').get('files',{})
     previous=load(previous_inventory).get('files',{}) if previous_inventory else {}
     from native_workspace_data import PLAYER_FILES
+    oracle_mutable={'blueprints_catalog.json','data/mining_hardware.json','data/material_qualities.json','data/wikelo_data.json','data/executive_hangar_schedule.json','data/daylight_catalogue.json','data/custom_synthstrings.json'}
     protected=set(PLAYER_FILES)|{'region_config.txt','credentials.json','config.json','loginData.json','owned_blueprints.txt','personal_notes.txt','notes.txt'}
     for relative,expected in previous.items():
         safe_member('SynthScan/'+relative)
-        if relative in current or any(p in protected for p in Path(relative).parts):continue
+        if relative in current or relative in oracle_mutable or any(p in protected for p in Path(relative).parts):continue
         path=root/relative
         if path.exists():
             if path.is_symlink() or not path.resolve().is_relative_to(root) or digest(path)!=expected:

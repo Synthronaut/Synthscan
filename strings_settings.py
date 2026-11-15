@@ -14,6 +14,11 @@ from synthstrings_guard import check_once,view,current_pids
 
 def replace_pack(game,profile=PROFILE,native=None,expected=None,cancel=None):
     manager=Manager(game,profile)
+    state=manager.read()
+    if state and state.get('phase')=='conflict':
+        state['phase']='active'
+        state['conflicts']=[]
+        manager.store(state)
     manager.set_enabled(True)
     config=Path(profile)/'region_config.txt'
     before=config.read_text(encoding='utf-8-sig') if config.exists() else ''

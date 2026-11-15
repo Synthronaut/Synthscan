@@ -53,6 +53,7 @@ PRIVATE.update({'friend_request_attempts.json','friend_request_attempts.json.tmp
 PRIVATE.update({'game_text','localization_backups','uninstall_result.json'})
 PRIVATE.update({'module_selection.json','module_install_error.json','module_text_cleanup.json'})
 PRIVATE.add('validation-install.txt')
+PRIVATE.update({'active_build.json','patch_state.json','saved_contracts.json','blueprint_ownership.json','mission_completions.json','user_settings.json','synthscan_settings.json','catalogues'})
 
 
 def is_private(name):
@@ -76,6 +77,8 @@ def stage_source(destination,edition="full"):
         shutil.copy2(file,destination/file.name)
     for name in ['AGENTS.md','DESIGN.md','LICENSES.md','README.md','CHANGELOG.md','PRIVACY.md','SECURITY.md','BUILDING.md','requirements-release.lock','DISTRIBUTION.md','SERVER_HISTORY.md','update_trust.json','.gitignore']:
         shutil.copy2(ROOT/name,destination/name)
+    if (ROOT/'blueprints_catalog.json').exists():
+        shutil.copy2(ROOT/'blueprints_catalog.json',destination/'blueprints_catalog.json')
     shutil.copy2(ROOT/'requirements-standard.lock',destination/'requirements-standard.lock')
     shutil.copy2(ROOT/'native/synthscan/LICENSE',destination/'LICENSE')
     for name in ['synthscan','mining_worker']:copy_tree(ROOT/'native'/name,destination/'native'/name)

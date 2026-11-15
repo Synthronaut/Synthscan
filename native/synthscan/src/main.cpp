@@ -4118,6 +4118,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     }
 #endif
 
+    // First thing of all, before any flag is looked at: bring across
+    // whatever an older copy left beside the exe. Copied, never moved -
+    // see AppPaths.h. Every path in the app resolves under AppPaths::data()
+    // from here on, so this has to happen before anything reads a file.
+    SCMiner::AppPaths::migrateFromProgramFolder();
+    SetCurrentDirectoryA(getExecutableDir().c_str());
+
     // Release setup uses the same guarded writer as the Blueprints window.
     // It never requests credentials and preserves other localization packs.
     int setupArgc=0;auto setupArgv=CommandLineToArgvW(GetCommandLineW(),&setupArgc);

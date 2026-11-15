@@ -370,7 +370,7 @@ LRESULT CALLBACK recipientsProcedure(HWND hwnd,UINT message,WPARAM wp,LPARAM lp)
     return DefWindowProcW(hwnd,message,wp,lp);
 }
 bool showRecipients(const std::vector<Json>& rows,bool report=false,const std::filesystem::path& previewPath={},bool* resend=nullptr,const std::string& operation="party"){
-    WNDCLASSW cls{};cls.lpfnWndProc=recipientsProcedure;cls.hInstance=GetModuleHandleW(nullptr);cls.lpszClassName=L"SynthScanRecipientsPopup";cls.hCursor=LoadCursor(nullptr,IDC_ARROW);cls.hbrBackground=(HBRUSH)(COLOR_WINDOW+1);RegisterClassW(&cls);
+    WNDCLASSW cls{};cls.lpfnWndProc=recipientsProcedure;cls.hInstance=GetModuleHandleW(nullptr);cls.lpszClassName=L"SynthScanRecipientsPopup";cls.hCursor=LoadCursor(nullptr,IDC_ARROW);cls.hbrBackground=background;RegisterClassW(&cls);
     HWND owner=GetAncestor(page,GA_ROOT);RECT bounds{};GetWindowRect(owner,&bounds);RecipientDialog state;state.report=report;state.queueId=field(model,"invite_queue").textOr("id");for(const auto& row:rows)state.ids.push_back(row.textOr("id"));
     HWND dialog=CreateWindowExW(WS_EX_DLGMODALFRAME|WS_EX_CONTROLPARENT,cls.lpszClassName,report?L"Social action queue":operation=="friend"?L"Confirm friend requests":L"Confirm party invitations",WS_POPUP|WS_CAPTION|WS_SYSMENU,
         bounds.left+std::max(0,int(bounds.right-bounds.left-650)/2),bounds.top+std::max(0,int(bounds.bottom-bounds.top-530)/2),650,530,owner,nullptr,cls.hInstance,&state);
@@ -387,7 +387,7 @@ bool showRecipients(const std::vector<Json>& rows,bool report=false,const std::f
     else {
         // Isolated fixture: render and cancel without showing or sending anything.
         RECT bounds{};GetWindowRect(dialog,&bounds);RECT client{0,0,bounds.right-bounds.left,bounds.bottom-bounds.top};HDC dc=GetWindowDC(dialog),memory=CreateCompatibleDC(dc);HBITMAP bitmap=CreateCompatibleBitmap(dc,client.right,client.bottom);auto old=SelectObject(memory,bitmap);
-        FillRect(memory,&client,(HBRUSH)(COLOR_WINDOW+1));SendMessageW(dialog,WM_PRINT,reinterpret_cast<WPARAM>(memory),PRF_CLIENT|PRF_CHILDREN|PRF_ERASEBKGND|PRF_NONCLIENT);
+        FillRect(memory,&client,background);SendMessageW(dialog,WM_PRINT,reinterpret_cast<WPARAM>(memory),PRF_CLIENT|PRF_CHILDREN|PRF_ERASEBKGND|PRF_NONCLIENT);
         const CLSID png={0x557cf406,0x1a04,0x11d3,{0x9a,0x73,0x00,0x00,0xf8,0x1e,0xf3,0x2e}};bool saved;
         {Gdiplus::Bitmap image(bitmap,nullptr);saved=image.Save(previewPath.c_str(),&png,nullptr)==Gdiplus::Ok;}
         wchar_t first[100]{};ListView_GetItemText(list,0,0,first,100);
@@ -506,7 +506,9 @@ void renderMarket(){
     ListView_DeleteAllItems(child(543));i=0;for(const auto& notice:notices){cell(543,i,0,notice.textOr("title")+" · "+notice.textOr("detail"));cell(543,i,1,age(notice.numberOr("at")));i++;}
     label(590,model.textOr("status"));filling=false;
 }
+bool visible(){return page&&IsWindowVisible(page)!=0;}
 void refresh(bool force=false){
+    if(!force&&!inPreview&&!visible()&&!SynthHome::visible())return;
     auto next=read(folder/L"companion_state.json",8*1024*1024);auto serialized=encode(next);bool changed=serialized!=lastState;
     model=next;lastState=serialized;
     if(mode=="people"){if(changed||force)renderPeople();else selection();}

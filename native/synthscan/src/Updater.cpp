@@ -436,17 +436,26 @@ void Updater::checkInBackground() {
     worker_ = std::thread([this] {
         std::string body, why;
         if (!fetch(url_, body, why, nullptr, 256 * 1024)) {
-            error_ = why;
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                error_ = why;
+            }
             state_ = State::Failed;
             return;
         }
         Release found;
         if (!parseManifest(body, found)) {
-            error_ = "the version file does not read like one";
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                error_ = "the version file does not read like one";
+            }
             state_ = State::Failed;
             return;
         }
-        latest_ = found;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            latest_ = found;
+        }
         state_ = isNewer(found.version, BEDROCK_VERSION) ? State::Available : State::UpToDate;
     });
 }
@@ -457,19 +466,30 @@ void Updater::downloadInBackground() {
     percent_ = 0;
     state_ = State::Downloading;
     worker_ = std::thread([this] {
+        Release target;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            target = latest_;
+        }
         std::string body, why;
-        if (!fetch(latest_.url, body, why, &percent_)) {
-            error_ = why;
+        if (!fetch(target.url, body, why, &percent_)) {
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                error_ = why;
+            }
             state_ = State::Failed;
             return;
         }
         std::string digest = sha256Of(body);
         std::transform(digest.begin(), digest.end(), digest.begin(), ::tolower);
-        std::string want = latest_.sha256;
+        std::string want = target.sha256;
         std::transform(want.begin(), want.end(), want.begin(), ::tolower);
         if (digest.empty() || digest != want) {
             // Not unpacked, not kept: what arrived is not what was promised
-            error_ = "the download does not match its checksum - nothing was unpacked";
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                error_ = "the download does not match its checksum - nothing was unpacked";
+            }
             state_ = State::Failed;
             return;
         }
@@ -477,19 +497,25 @@ void Updater::downloadInBackground() {
         const std::filesystem::path folder = AppPaths::data() / "update";
         std::filesystem::create_directories(folder, ec);
 #ifdef _WIN32
-        const std::filesystem::path zip = folder / ("SynthScan_" + latest_.version + ".zip");
+        const std::filesystem::path zip = folder / ("SynthScan_" + target.version + ".zip");
 #else
-        const std::filesystem::path zip = folder / ("SynthScan-" + latest_.version + "-x86_64.AppImage");
+        const std::filesystem::path zip = folder / ("SynthScan-" + target.version + "-x86_64.AppImage");
 #endif
         std::ofstream out(zip, std::ios::binary | std::ios::trunc);
         if (!out.is_open()) {
-            error_ = "cannot write to " + folder.string();
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                error_ = "cannot write to " + folder.string();
+            }
             state_ = State::Failed;
             return;
         }
         out.write(body.data(), (std::streamsize)body.size());
         out.close();
-        zipPath_ = zip.string();
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            zipPath_ = zip.string();
+        }
         state_ = State::Ready;
     });
 }

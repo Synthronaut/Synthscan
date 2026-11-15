@@ -114,7 +114,7 @@ void showPreview(const std::string& path){
     // into memory so the next card can replace preview.png while this is open.
     {Gdiplus::Bitmap source(wide(path).c_str());if(source.GetLastStatus()!=Gdiplus::Ok){message("Could not load the share preview.");return;}
     picture=std::make_unique<Gdiplus::Bitmap>(source.GetWidth(),source.GetHeight(),PixelFormat32bppARGB);Gdiplus::Graphics copy(picture.get());copy.DrawImage(&source,0,0,source.GetWidth(),source.GetHeight());}
-    if(!preview){WNDCLASSW c{};c.lpfnWndProc=previewProc;c.hInstance=GetModuleHandleW(nullptr);c.lpszClassName=L"SynthScanDiaryPreview";c.hCursor=LoadCursor(nullptr,IDC_ARROW);RegisterClassW(&c);preview=CreateWindowW(c.lpszClassName,L"SynthScan share preview · local only · nothing uploaded",WS_OVERLAPPEDWINDOW,testing?-32000:CW_USEDEFAULT,testing?-32000:CW_USEDEFAULT,px(800),px(740),win,nullptr,c.hInstance,nullptr);BOOL dark=TRUE;DwmSetWindowAttribute(preview,20,&dark,sizeof(dark));}
+    if(!preview){WNDCLASSW c{};c.lpfnWndProc=previewProc;c.hInstance=GetModuleHandleW(nullptr);c.lpszClassName=L"SynthScanDiaryPreview";c.hCursor=LoadCursor(nullptr,IDC_ARROW);c.hbrBackground=bg;RegisterClassW(&c);preview=CreateWindowW(c.lpszClassName,L"SynthScan share preview · local only · nothing uploaded",WS_OVERLAPPEDWINDOW,testing?-32000:CW_USEDEFAULT,testing?-32000:CW_USEDEFAULT,px(800),px(740),win,nullptr,c.hInstance,nullptr);BOOL dark=TRUE;DwmSetWindowAttribute(preview,20,&dark,sizeof(dark));}
     InvalidateRect(preview,nullptr,FALSE);ShowWindow(preview,testing?SW_SHOWNOACTIVATE:SW_SHOW);if(!testing)SetForegroundWindow(preview);
 }
 LRESULT CALLBACK proc(HWND h,UINT m,WPARAM w,LPARAM l){
@@ -149,7 +149,7 @@ void open(){
     if(!win){
         scale=GetDpiForWindow(parent)/96.0;bg=CreateSolidBrush(BG);card=CreateSolidBrush(CARD);
         body=CreateFontW(-px(14),0,0,0,FW_NORMAL,0,0,0,DEFAULT_CHARSET,0,0,CLEARTYPE_QUALITY,0,L"Segoe UI");heading=CreateFontW(-px(25),0,0,0,FW_SEMIBOLD,0,0,0,DEFAULT_CHARSET,0,0,CLEARTYPE_QUALITY,0,L"Segoe UI");
-        WNDCLASSW c{};c.lpfnWndProc=proc;c.hInstance=GetModuleHandleW(nullptr);c.lpszClassName=L"SynthScanMiningDiary";c.hCursor=LoadCursor(nullptr,IDC_ARROW);RegisterClassW(&c);
+        WNDCLASSW c{};c.lpfnWndProc=proc;c.hInstance=GetModuleHandleW(nullptr);c.lpszClassName=L"SynthScanMiningDiary";c.hCursor=LoadCursor(nullptr,IDC_ARROW);c.hbrBackground=bg;RegisterClassW(&c);
         RECT r{0,0,px(1100),px(810)};DWORD style=WS_OVERLAPPED|WS_CAPTION|WS_SYSMENU|WS_MINIMIZEBOX|WS_CLIPCHILDREN;AdjustWindowRectEx(&r,style,FALSE,0);
         win=CreateWindowW(c.lpszClassName,L"SynthScan · Mining diary",style,-32000,-32000,r.right-r.left,r.bottom-r.top,parent,nullptr,c.hInstance,nullptr);
         BOOL dark=TRUE;DwmSetWindowAttribute(win,20,&dark,sizeof(dark));SetWindowDisplayAffinity(win,WDA_EXCLUDEFROMCAPTURE);
