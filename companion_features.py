@@ -169,6 +169,9 @@ class CompanionService:
         self.translator=ChatTranslator(self.directory/'chat_translations_cache.json')
         self.chat_active=False;self.chat_auto_translate=True
         self.chat_channels=[];self.chat_messages=[];self.chat_at=0;self.chat_due=0;self.chat_error=''
+        from voice_dictation import VoiceDictationService
+        self.voice_dictation=VoiceDictationService.get_instance()
+        self.voice_dictating=False;self.last_dictated_text=''
         self.command_dir=self.directory/'companion_commands';self.command_dir.mkdir(exist_ok=True)
     def changed(self):self.revision+=1;self.next_publish=0
     def fetch_org_members(self,symbol,tag_label,alert):
@@ -222,7 +225,7 @@ class CompanionService:
         if not isinstance(identifier,str) or not identifier or len(identifier)>100 or identifier in self.store.data['commands']:return
         if self.store.read_only:raise ValueError('Saved companion records are unavailable.')
         action=command.get('action')
-        if action in ('friend','party','party_many','friend_many','kick_party_member','transfer_party_leader','leave_party','stage_people','stage_tag','pause_invites','resume_invites','cancel_invites','search','refresh_people','refresh_chat','send_chat_message','tag','tag_many','mark_org'):
+        if action in ('friend','party','party_many','friend_many','kick_party_member','transfer_party_leader','leave_party','stage_people','stage_tag','pause_invites','resume_invites','cancel_invites','search','refresh_people','refresh_chat','send_chat_message','start_voice_dictation','stop_voice_dictation','tag','tag_many','mark_org'):
             if not self.session or command.get('session_token')!=self.session:raise ValueError('Session changed. Refresh People before continuing.')
         if action=='stage_people':
             ids=command.get('player_ids');available=self.available_people()
@@ -286,6 +289,31 @@ class CompanionService:
             self.store.data['commands']=(self.store.data['commands']+[identifier])[-1000:];self.store.save()
             self.jobs['chat_send']=(self.pool.submit(self.social,'send_chat',dict(self.context),group_id=group_id,content=content,confirmed=True,encode_zh=encode_zh,translator=self.translator),dict(self.context))
             self.action_status='Sending chat message…'
+        elif action=='start_voice_dictation':
+            ok=self.voice_dictation.start_recording()
+            self.voice_dictating=ok
+            self.action_status='Listening to microphone (Push-To-Talk)…' if ok else 'Microphone unavailable.'
+            self.changed()
+        elif action=='stop_voice_dictation':
+            send=bool(command.get('send',True))
+            group_id=str(command.get('group_id') or '').strip()
+            encode_zh=bool(command.get('encode_zh',False))
+            text=self.voice_dictation.stop_recording_and_recognize()
+            self.voice_dictating=False
+            self.last_dictated_text=text
+            if text:
+                if send and group_id:
+                    if 'chat_send' in self.jobs:
+                        self.action_status=f'Voice: "{text}" (sending queued)'
+                    else:
+                        self.store.data['commands']=(self.store.data['commands']+[identifier])[-1000:];self.store.save()
+                        self.jobs['chat_send']=(self.pool.submit(self.social,'send_chat',dict(self.context),group_id=group_id,content=text,confirmed=True,encode_zh=encode_zh,translator=self.translator),dict(self.context))
+                        self.action_status=f'Voice sent: "{text}"'
+                else:
+                    self.action_status=f'Voice transcribed: "{text}"'
+            else:
+                self.action_status='No speech detected.'
+            self.changed()
         elif action=='search':
             if 'search' in self.jobs:raise ValueError('A player search is already running.')
             query=str(command.get('query','')).strip()
@@ -577,6 +605,7 @@ class CompanionService:
             party_people=party_people,party_group_id=party_group_id,party_leader_id=party_leader_id,is_party_leader=is_party_leader,
             chat_active=self.chat_active,chat_auto_translate=self.chat_auto_translate,chat_channels=self.chat_channels,chat_messages=chat_messages,
             chat_at=self.chat_at,chat_loading='chat' in self.jobs,chat_sending='chat_send' in self.jobs,chat_error=self.chat_error,
+            voice_dictating=self.voice_dictating,last_dictated_text=self.last_dictated_text,voice_available=self.voice_dictation.is_available,
             social_busy='action' in self.jobs,search_busy='search' in self.jobs,batch_results=self.batch_results,invite_queue=queue,
             action_people=[decorate(dict(available.get(p['id'],p))) for p in self.store.data['actions'] if p['id'] in eligible],tag_options=sorted({label for t in tags.values() for label in tag_labels(t['label'])}|set(TAG_PRESETS),key=lambda label:(0 if label=='Org' else 1 if label=='Friend' else 2 if label=='Friendly' else 3,label.casefold())))
         publish_json(self.directory/'companion_state.json',view)

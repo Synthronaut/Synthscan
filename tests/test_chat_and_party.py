@@ -134,6 +134,7 @@ class ChatServiceLiveTests(unittest.TestCase):
 
         global_group = SimpleNamespace(id='group-global-1', type=2, name='Global · pub_ape1a_13165946_060', members=[SimpleNamespace(urn=ME['id'])])
         party_group = SimpleNamespace(id='group-party-1', type=4, name='Party', leader_urn=ME['id'], members=[SimpleNamespace(urn=ME['id'])])
+        ship_group = SimpleNamespace(id='group-ship-1', type=6, name='Ship: Cutlass Black', members=[SimpleNamespace(urn=ME['id'])])
 
         msg1 = SimpleNamespace(
             id='m-1',
@@ -147,7 +148,7 @@ class ChatServiceLiveTests(unittest.TestCase):
 
         def call(domain, service, method, req, confirmed=False):
             if method == 'ListGroups':
-                return SimpleNamespace(groups=[global_group, party_group], page_info=SimpleNamespace(has_next_page=False))
+                return SimpleNamespace(groups=[global_group, party_group, ship_group], page_info=SimpleNamespace(has_next_page=False))
             if method == 'ListMessages':
                 if getattr(req, 'group_id', '') == 'group-global-1':
                     return SimpleNamespace(messages=[msg1], page_info=SimpleNamespace(has_next_page=False))

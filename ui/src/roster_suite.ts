@@ -29,6 +29,7 @@ export interface RosterSuiteResult {
   party_box_rendered_and_actions_work: boolean;
   chat_feed_decodes_and_translates: boolean;
   chat_compose_sends_message: boolean;
+  voice_dictation_works: boolean;
   outgoing_live_requests_sent: number;
   failures: string[];
 }
@@ -454,6 +455,12 @@ export async function runPeopleRosterRegressionSuite(
       sendChatCommands[0].confirmed === true,
   );
 
+  // 15. Voice dictation (Push-to-Talk)
+  const chatVoiceBtn = container.querySelector<HTMLButtonElement>('#chat-voice-btn')!;
+  chatVoiceBtn.click();
+  const voiceCommands = bridge.commands.filter((c) => c.action === 'start_voice_dictation');
+  const voiceOk = check('voice_dictation_works', Boolean(chatVoiceBtn) && voiceCommands.length >= 1);
+
   controller.destroy();
 
   return {
@@ -483,6 +490,7 @@ export async function runPeopleRosterRegressionSuite(
     party_box_rendered_and_actions_work: partyBoxOk,
     chat_feed_decodes_and_translates: chatFeedOk,
     chat_compose_sends_message: chatComposeOk,
+    voice_dictation_works: voiceOk,
     outgoing_live_requests_sent: 0,
     failures,
   };

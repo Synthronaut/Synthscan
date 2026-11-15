@@ -29,6 +29,10 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 html,
 body,
 #app {
@@ -139,6 +143,16 @@ body,
 }
 
 .ss-view[hidden] {
+  display: none !important;
+}
+
+#people-roster-workspace[hidden],
+.ss-people-grid[hidden] {
+  display: none !important;
+}
+
+#people-chat-workspace[hidden],
+.ss-chat-workspace[hidden] {
   display: none !important;
 }
 
@@ -852,23 +866,24 @@ body,
 
 .ss-party-pane {
   flex-shrink: 0;
-  max-height: 180px;
+  max-height: 140px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
+  padding: 8px 10px;
 }
 
 .ss-party-list {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
   overflow-y: auto;
-  max-height: 130px;
+  max-height: 96px;
   padding-right: 2px;
 }
 
 .ss-party-empty {
-  padding: 8px 4px;
+  padding: 4px 2px;
   font-size: 11.5px;
   font-style: italic;
 }
@@ -1120,6 +1135,56 @@ body,
 .ss-chat-channel-select {
   width: 170px;
   flex-shrink: 0;
+}
+
+.ss-btn-voice {
+  background: rgba(98, 204, 255, 0.12);
+  border: 1px solid rgba(98, 204, 255, 0.35);
+  color: var(--ss-accent);
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+  touch-action: none;
+  transition: all 120ms ease;
+  white-space: nowrap;
+}
+
+.ss-btn-voice:hover {
+  background: rgba(98, 204, 255, 0.22);
+  border-color: var(--ss-accent);
+  box-shadow: 0 0 10px rgba(98, 204, 255, 0.25);
+}
+
+.ss-btn-voice.is-recording {
+  background: rgba(239, 68, 68, 0.25) !important;
+  border-color: #ef4444 !important;
+  color: #fca5a5 !important;
+  box-shadow: 0 0 14px rgba(239, 68, 68, 0.6) !important;
+  animation: ssVoicePulse 1.2s infinite ease-in-out;
+}
+
+.ss-voice-pulse {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ef4444;
+  box-shadow: 0 0 8px #ef4444;
+}
+
+@keyframes ssVoicePulse {
+  0% {
+    box-shadow: 0 0 6px rgba(239, 68, 68, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 16px rgba(239, 68, 68, 0.8);
+  }
+  100% {
+    box-shadow: 0 0 6px rgba(239, 68, 68, 0.4);
+  }
 }
 
 

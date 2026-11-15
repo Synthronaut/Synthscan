@@ -410,6 +410,9 @@ export interface PeopleSnapshot {
   chat_loading?: boolean;
   chat_sending?: boolean;
   chat_error?: string;
+  voice_dictating?: boolean;
+  voice_available?: boolean;
+  last_dictated_text?: string;
   social_busy?: boolean;
   status?: string;
   invite_queue?: InviteQueueState;
@@ -446,6 +449,8 @@ export type DesktopCommandAction =
   | 'set_chat_translate'
   | 'refresh_chat'
   | 'send_chat_message'
+  | 'start_voice_dictation'
+  | 'stop_voice_dictation'
   | 'pause_invites'
   | 'resume_invites'
   | 'cancel_invites'
@@ -511,6 +516,7 @@ export interface DesktopCommand {
   offset?: number;
   group_id?: string;
   encode_zh?: boolean;
+  send?: boolean;
   active?: boolean;
   enabled?: boolean;
   handle?: string;
@@ -779,6 +785,29 @@ export class InMemoryDesktopBridge implements DesktopBridge {
         at: Date.now() / 1000,
       });
       this.publish({ chat_messages: msgs });
+    } else if (command.action === 'start_voice_dictation') {
+      this.publish({ voice_dictating: true });
+    } else if (command.action === 'stop_voice_dictation') {
+      const text = 'Voice transmission test message';
+      this.publish({ voice_dictating: false, last_dictated_text: text });
+      if (command.send && command.group_id) {
+        const ch = (this.snapshot.chat_channels ?? []).find((c) => c.id === command.group_id);
+        const msgs = [...(this.snapshot.chat_messages ?? [])];
+        msgs.push({
+          id: `msg-${msgs.length + 1}`,
+          group_id: command.group_id,
+          channel_kind: ch?.kind ?? 'global',
+          channel_label: ch?.label ?? 'Global',
+          sender_id: 'pilot-000',
+          sender_handle: 'You',
+          is_self: true,
+          raw_content: command.encode_zh ? `[zh] @IH@E8 (${text})` : text,
+          content: text,
+          was_zh_encoded: Boolean(command.encode_zh),
+          at: Date.now() / 1000,
+        });
+        this.publish({ chat_messages: msgs });
+      }
     } else if (command.action === 'daylight_preferences' && command.system && command.body && command.site) {
       const prev = this.snapshot.daylight ?? {};
       this.publish({

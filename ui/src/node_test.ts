@@ -65,6 +65,16 @@ class FakeClassList {
   }
 }
 
+class FakeStyle {
+  [key: string]: any;
+  public setProperty(name: string, value: string): void {
+    this[name] = value;
+  }
+  public getPropertyValue(name: string): string {
+    return this[name] || '';
+  }
+}
+
 class FakeElement {
   public readonly tagName: string;
   public readonly ownerDocument: FakeDocument;
@@ -72,7 +82,7 @@ class FakeElement {
   public children: FakeElement[] = [];
   public attributes = new Map<string, string>();
   public dataset: Record<string, string> = {};
-  public style: Record<string, string> = {};
+  public style: any = new FakeStyle();
   public classList = new FakeClassList();
   public hidden = false;
   public disabled = false;

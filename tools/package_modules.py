@@ -30,7 +30,7 @@ OWNERS = {
     'server_hud': {'native_session_hud.py','region_history_hud.py','native_timing.py','frame_telemetry.py','network_protocol.py',
         'tools/live_network_probe.py','tools/analyze_game_network.py','third_party/presentmon/PresentMon-2.6.0-x64.exe','third_party/presentmon/LICENSE.txt','third_party/presentmon/provenance.json'},
     'server_history': {'server_log_manager.py','SERVER_HISTORY.md'},
-    'people': {'companion_features.py','companion_toasts.py','party_invites.py'},
+    'people': {'companion_features.py','companion_toasts.py','party_invites.py','chat_codec.py','data/zh_chat_codes.json','voice_dictation.py'},
     'piracy': {'piracy_watch.py','snare_alert_ui.py','assets/snare_watch.wav'},
     'missions': {'mission_hud.py','mission_log.py','mission_log_service.py','mission_log_report.py','mission_analytics.py','mission_capture.py'},
     'hangars': {'executive_hangar.py','executive_hangar_hud.py','hangar_card.py','hangar_verification.py','hangar_reset_feed.py','compboard_inventory.py','data/executive_hangar_schedule.json'},

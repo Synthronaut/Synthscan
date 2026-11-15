@@ -258,6 +258,7 @@ bool allowedAction(const std::string& action) {
         "friend", "friend_many", "party", "party_many",
         "kick_party_member", "transfer_party_leader", "leave_party",
         "set_chat_active", "set_chat_translate", "refresh_chat", "send_chat_message",
+        "start_voice_dictation", "stop_voice_dictation",
         "pause_invites", "resume_invites", "cancel_invites",
         "add_watch", "toggle_watch", "remove_watch", "dismiss_notices",
         "open_uex_ad", "navigate", "strings_settings", "strings_details",

@@ -47,7 +47,7 @@ PRIVATE.update({'refinery_orders.txt','refinery_orders.txt.tmp'})
 PRIVATE.add('daylight_embed_request.json')
 PRIVATE.update({'mission_hud.json','mission_hud.json.tmp'})
 PRIVATE.update({'companion_private.json','companion_private.json.tmp','companion_state.json','companion_state.json.tmp',
-                'companion_alerts.json','companion_alerts.json.tmp','companion_commands'})
+                'companion_alerts.json','companion_alerts.json.tmp','companion_commands','chat_translations_cache.json'})
 PRIVATE.update({'party_invite_attempts.json','party_invite_attempts.json.tmp'})
 PRIVATE.update({'friend_request_attempts.json','friend_request_attempts.json.tmp'})
 PRIVATE.update({'game_text','localization_backups','uninstall_result.json'})

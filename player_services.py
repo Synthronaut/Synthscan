@@ -383,6 +383,9 @@ class PlayerClient:
             gid=str(getattr(g,'id','') or '')
             if not gid:continue
             gtype=int(getattr(g,'type',0) or 0)
+            if gtype == 6:
+                # Exclude ship channels completely (too many and buggy in-game)
+                continue
             gname=str(getattr(g,'name','') or '').strip()
             chat_enabled=True
             try:
@@ -402,11 +405,6 @@ class PlayerClient:
                 kind='party'
                 label='Party'
                 sort_order=1
-            elif gtype==6:
-                kind='ship'
-                ship_title=gname.split(':',1)[0].strip() if ':' in gname else gname
-                label=f'Ship · {ship_title}' if ship_title else 'Ship'
-                sort_order=2
             elif gtype==5:
                 kind='dm'
                 other_urn=next((m.urn for m in g.members if m.urn!=self.account.subject),'')

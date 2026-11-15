@@ -175,6 +175,9 @@ export class DesktopAppController {
   private chatSendInputEl!: HTMLInputElement;
   private chatEncodeZhCheckboxEl!: HTMLInputElement;
   private chatSendBtn!: HTMLButtonElement;
+  private chatVoiceBtn!: HTMLButtonElement;
+  private isVoiceRecording = false;
+  private voicePressStartTime = 0;
 
   constructor(root: HTMLElement, bridge: DesktopBridge) {
     this.root = root;
@@ -390,7 +393,7 @@ export class DesktopAppController {
           </div>
 
           <!-- Live Chat & Translator Workspace -->
-          <div id="people-chat-workspace" class="ss-card ss-chat-workspace" hidden>
+          <div id="people-chat-workspace" class="ss-card ss-chat-workspace" hidden style="display: none !important;">
             <div class="ss-toolbar-row ss-toolbar-sub">
               <div id="chat-channel-tabs" class="ss-mode-tabs ss-chat-channel-tabs" role="tablist" aria-label="Chat channels">
                 <button type="button" class="ss-tab is-active" data-channel-id="all">All Channels</button>
@@ -416,7 +419,8 @@ export class DesktopAppController {
               <select id="chat-send-channel-select" class="ss-select ss-chat-channel-select" aria-label="Target chat channel">
                 <option value="">Select channel…</option>
               </select>
-              <input id="chat-send-input" class="ss-input ss-grow" type="text" maxlength="480" placeholder="Type message to send to Star Citizen chat… (Enter to send)" autocomplete="off" />
+              <input id="chat-send-input" class="ss-input ss-grow" type="text" maxlength="480" placeholder="Type message or click 🎙️ Talk to speak… (Enter to send)" autocomplete="off" />
+              <button id="chat-voice-btn" type="button" class="ss-btn ss-btn-voice" title="Click &amp; hold to talk, release to send (or click to toggle)">🎙️ Talk</button>
               <label class="ss-checkbox-label" title="Translate outgoing text to Simplified Chinese and encode as [zh] @CODE so Chinese players can read it in-game">
                 <input id="chat-encode-zh-checkbox" type="checkbox" />
                 <span>Send as [zh]</span>
@@ -671,6 +675,7 @@ export class DesktopAppController {
     this.chatSendInputEl = this.root.querySelector('#chat-send-input')!;
     this.chatEncodeZhCheckboxEl = this.root.querySelector('#chat-encode-zh-checkbox')!;
     this.chatSendBtn = this.root.querySelector('#chat-send-btn')!;
+    this.chatVoiceBtn = this.root.querySelector('#chat-voice-btn')!;
 
     this.bindEvents();
   }
@@ -1116,6 +1121,85 @@ export class DesktopAppController {
       }
     });
 
+    const playCommsTone = (type: 'start' | 'end'): void => {
+      try {
+        const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        const now = ctx.currentTime;
+        if (type === 'start') {
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(880, now);
+          osc.frequency.exponentialRampToValueAtTime(1760, now + 0.04);
+          gain.gain.setValueAtTime(0.06, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+          osc.start(now);
+          osc.stop(now + 0.05);
+        } else {
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(1400, now);
+          osc.frequency.exponentialRampToValueAtTime(700, now + 0.06);
+          gain.gain.setValueAtTime(0.06, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
+          osc.start(now);
+          osc.stop(now + 0.07);
+        }
+      } catch {}
+    };
+
+    const startVoice = (ev?: Event): void => {
+      if (ev) ev.preventDefault();
+      if (this.isVoiceRecording) return;
+      this.voicePressStartTime = Date.now();
+      this.isVoiceRecording = true;
+      this.chatVoiceBtn.classList.add('is-recording');
+      this.chatVoiceBtn.innerHTML = '<span class="ss-voice-pulse"></span>🎙️ Recording…';
+      playCommsTone('start');
+      void this.bridge.sendCommand({ action: 'start_voice_dictation' });
+    };
+
+    const stopVoice = (ev?: Event, send = true): void => {
+      if (ev) ev.preventDefault();
+      if (!this.isVoiceRecording) return;
+      this.isVoiceRecording = false;
+      this.chatVoiceBtn.classList.remove('is-recording');
+      this.chatVoiceBtn.innerHTML = '🎙️ Talk';
+      playCommsTone('end');
+      const targetChannelId = this.selectedSendChannelId || this.chatSendChannelSelectEl.value;
+      void this.bridge.sendCommand({
+        action: 'stop_voice_dictation',
+        send,
+        group_id: targetChannelId,
+        encode_zh: this.chatEncodeZhCheckboxEl.checked,
+      });
+    };
+
+    this.chatVoiceBtn.addEventListener('pointerdown', (ev) => {
+      if ((ev as MouseEvent).button === 0) {
+        startVoice(ev);
+      }
+    });
+
+    this.chatVoiceBtn.addEventListener('pointerup', (ev) => {
+      const duration = Date.now() - this.voicePressStartTime;
+      if (duration > 350) {
+        stopVoice(ev, true);
+      }
+    });
+
+    this.chatVoiceBtn.addEventListener('click', (ev) => {
+      const duration = Date.now() - this.voicePressStartTime;
+      if (!this.isVoiceRecording) {
+        startVoice(ev);
+      } else if (duration <= 350) {
+        stopVoice(ev, true);
+      }
+    });
+
     this.chatMessagesScrollEl.addEventListener('contextmenu', (ev) => {
       const msgEl = (ev.target as HTMLElement).closest<HTMLElement>('[data-sender-id]');
       if (!msgEl) return;
@@ -1141,6 +1225,13 @@ export class DesktopAppController {
     this.peopleModeChatBtn.setAttribute('aria-selected', isChat ? 'true' : 'false');
     this.peopleRosterWorkspaceEl.hidden = isChat;
     this.peopleChatWorkspaceEl.hidden = !isChat;
+    if (isChat) {
+      this.peopleRosterWorkspaceEl.style.setProperty('display', 'none', 'important');
+      this.peopleChatWorkspaceEl.style.setProperty('display', 'flex', 'important');
+    } else {
+      this.peopleChatWorkspaceEl.style.setProperty('display', 'none', 'important');
+      this.peopleRosterWorkspaceEl.style.setProperty('display', 'grid', 'important');
+    }
     void this.bridge.sendCommand({
       action: 'set_chat_active',
       active: isChat,
@@ -1595,6 +1686,14 @@ export class DesktopAppController {
     this.updateTagSelectOptions(snap.tag_options ?? ['Org', 'Friendly', 'Aggressive', 'Trader', 'Friend']);
     this.renderParty();
     this.renderChat();
+    if (snap.last_dictated_text && this.chatSendInputEl) {
+      this.chatSendInputEl.value = snap.last_dictated_text;
+    }
+    if (snap.voice_dictating === false && this.isVoiceRecording && this.chatVoiceBtn) {
+      this.isVoiceRecording = false;
+      this.chatVoiceBtn.classList.remove('is-recording');
+      this.chatVoiceBtn.innerHTML = '🎙️ Talk';
+    }
     this.updateStatusAndControls();
   }
 
@@ -1662,11 +1761,15 @@ export class DesktopAppController {
   }
 
   private renderChat(): void {
+    if (this.peopleSubMode !== 'chat') {
+      return;
+    }
     const snap = this.snapshot;
     if (!snap) return;
 
-    const channels: ChatChannel[] = snap.chat_channels ?? [];
-    const allMsgs: ChatMessage[] = snap.chat_messages ?? [];
+    // Filter out ship channels defensively (user requested zero ship channels)
+    const channels: ChatChannel[] = (snap.chat_channels ?? []).filter((ch) => ch.kind !== 'ship');
+    const allMsgs: ChatMessage[] = (snap.chat_messages ?? []).filter((m) => m.channel_kind !== 'ship');
 
     // Render / update channel pills
     const tabsDoc = this.root.ownerDocument;

@@ -73,6 +73,12 @@ mission_capture_status.json
 /user_settings.json
 /synthscan_settings.json
 /data/catalogue_current.json
+/companion_private.json
+/companion_state.json
+/companion_alerts.json
+/companion_commands/
+/session_ribbon.json
+/chat_translations_cache.json
 /data/catalogues/
 /scratch/
 /displayinfo_glyphs.npz
