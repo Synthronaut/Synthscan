@@ -34,6 +34,85 @@ def acceptance_settings(raw):
                 party=raw.get('party_enabled') is True, friend=raw.get('friend_enabled') is True)
 
 
+def displayinfo_setting(raw):
+    """Return configured startup r_DisplayInfo level (0=Off, 1, 2, 3); default 0."""
+    val=raw.get('displayinfo_level',0) if isinstance(raw,dict) else 0
+    if isinstance(val,bool) or not isinstance(val,(int,float)):return 0
+    level=int(val)
+    return level if level in (0,1,2,3) else 0
+
+
+def update_user_cfg_text(raw,level):
+    """Update or remove r_DisplayInfo in user.cfg bytes while preserving all other settings."""
+    level=level if level in (1,2,3) else 0
+    bom=b'\xef\xbb\xbf' if raw.startswith(b'\xef\xbb\xbf') else b''
+    body=raw[len(bom):]
+    nl='\r\n' if (b'\r\n' in body or not body) else '\n'
+    text=body.decode('utf-8',errors='replace')
+    had_trailing_nl=text.endswith('\n')
+    lines=text.replace('\r\n','\n').split('\n')
+    if lines and lines[-1]=='':
+        lines.pop()
+    pattern=re.compile(r'^\s*r_displayinfo\s*=.*$',re.I)
+    out=[]
+    replaced=False
+    for line in lines:
+        if not line.lstrip().startswith((';','#')) and pattern.match(line):
+            if level and not replaced:
+                out.append(f'r_DisplayInfo = {level}')
+                replaced=True
+            continue
+        out.append(line)
+    if level and not replaced:
+        out.append(f'r_DisplayInfo = {level}')
+    if not out:
+        return b''
+    rendered=nl.join(out)+(nl if (had_trailing_nl or level) else '')
+    return bom+rendered.encode('utf-8')
+
+
+def sync_user_cfg_displayinfo(game_dir,level,profile=None):
+    """Apply startup r_DisplayInfo (1/2/3 or 0=remove) to user.cfg safely."""
+    from pathlib import Path
+    try:
+        from installation import ISOLATED_TEST,PROFILE as DEFAULT_PROFILE
+        if ISOLATED_TEST:return False
+        if profile is None:profile=DEFAULT_PROFILE
+    except ImportError:
+        pass
+    game=Path(game_dir)
+    if not game.is_dir():return False
+    cfg_path=game/'user.cfg'
+    try:
+        for item in game.iterdir():
+            if item.name.lower()=='user.cfg' and item.is_file():
+                cfg_path=item
+                break
+    except OSError:
+        pass
+    level=level if level in (1,2,3) else 0
+    if level==0 and not cfg_path.exists():
+        return False
+    before=cfg_path.read_bytes() if cfg_path.exists() else b''
+    after=update_user_cfg_text(before,level)
+    if after==before:
+        return False
+    try:
+        from game_text_lifecycle import Manager,INI,CFG,atomic,digest
+        from localization_lock import localization_lock
+        with localization_lock(game/INI):
+            atomic(cfg_path,after)
+            if profile is not None:
+                mgr=Manager(game,profile)
+                state=mgr.read()
+                if state and CFG in state.get('files',{}):
+                    state['files'][CFG]['last_sha256']=digest(after)
+                    mgr.store(state)
+    except ImportError:
+        cfg_path.write_bytes(after)
+    return True
+
+
 class GlobalChatOnJoin:
     """One F12 attempt per newly loaded join; never retry a toggle key.
 

@@ -286,6 +286,13 @@ def run(data_dir,owner,native=None):
                 if top_hud is None or top_hud.poll() is not None:
                     top_hud=subprocess.Popen([str(Path(sys.executable).with_name('pythonw.exe')),'-B',str(ROOT/top_script),'--owner',str(owner)],
                                              cwd=ROOT,creationflags=subprocess.CREATE_NO_WINDOW,stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+            if enabled('acceptance') and (contract_helper is None or contract_helper.poll() is not None):
+                contract_helper=subprocess.Popen([str(Path(sys.executable).with_name('pythonw.exe')),'-B',str(ROOT/'contract_share_helper.py'),'--owner',str(owner),'--watch'],
+                                                cwd=ROOT,creationflags=subprocess.CREATE_NO_WINDOW,stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+            if enabled('missions') and (mission_logger is None or mission_logger.poll() is not None):
+                mission_logger=subprocess.Popen([str(Path(sys.executable).with_name('pythonw.exe')),'-B',str(ROOT/'mission_log_service.py'),
+                                                 '--directory',str(directory),'--owner',str(owner)],cwd=ROOT,creationflags=subprocess.CREATE_NO_WINDOW,
+                                                stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
             games=game_process_ids()
             service.game_pids=sorted(games)
             try:

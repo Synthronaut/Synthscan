@@ -111,6 +111,11 @@ class Logger:
         self.note = ''
         self.note_at = 0
         self.command_seen = set()
+        self._cached_full = None
+        self._last_db_changes = -1
+        self._last_full_at = 0.0
+        self._view_dirty = True
+        self._last_view_state = None
         if not self.book.meta('recording_since'):
             with self.book.db:
                 self.book.set_meta('recording_since', time.time())
@@ -335,12 +340,14 @@ class Logger:
                                         session=self.session if request.get('current_session') else '',
                                         outcome=request.get('outcome', '') if self.mode in ('all', 'missions', 'rewards') and request.get('outcome', '') in ('completed', 'failed', 'abandoned', 'active') else '',
                                         offset=max(0, int(request.get('offset', 0))))
+                    self._view_dirty = True
                 elif request.get('action') == 'export':
                     count = self.book.export(request['path'], self.catalog)
                     self.note = f'Exported {count} missions and saved evidence.'
                 elif request.get('action') == 'classify_wallet':
                     self.book.annotate(request['change_id'], request['category'], str(request.get('note', '')))
                     self.note = 'Wallet category saved as a player classification.'
+                    self._view_dirty = True
                 else:
                     raise ValueError('Unknown mission-log command')
             except (ValueError, KeyError, OSError, TypeError) as error:
@@ -415,9 +422,29 @@ class Logger:
             except (OSError, ValueError, KeyError, TypeError, sqlite3.Error) as error:
                 self.error = 'Mission capture delayed ('+type(error).__name__+')'
         self.commands()
-        self.book.freeze_definitions(self.catalog)
-        from mission_log_report import present
-        full = self.book.view(self.catalog, now=now, limit=1_000_000)
+        db_changes = self.book.db.total_changes
+        view_state = (self.session, allowed, self.mode, self.direction, self.category,
+                      tuple(sorted(self.filters.items())), self.error, self.wallet_error, self.note)
+        need_full = (
+            self._cached_full is None
+            or self._view_dirty
+            or db_changes != self._last_db_changes
+            or view_state != self._last_view_state
+            or (now - self._last_full_at) >= 15
+        )
+        if need_full:
+            try:
+                self.book.freeze_definitions(self.catalog)
+                self._cached_full = self.book.view(self.catalog, now=now, limit=1_000_000)
+                self._last_db_changes = self.book.db.total_changes
+                self._last_full_at = now
+                self._view_dirty = False
+                self._last_view_state = view_state
+            except (sqlite3.Error, ValueError, OSError) as error:
+                logging.warning('Mission log view failed (%s)', type(error).__name__)
+                if self._cached_full is None:
+                    raise
+        full = self._cached_full
         from mission_hud import snapshot as hud_snapshot
         context = read(self.directory/'session_state.json')
         native = read(self.directory/'native_status.json')
@@ -426,6 +453,9 @@ class Logger:
                            game_running=bool(context.get('game_pids')) and 0 <= now-context.get('written_at', 0) < 5,
                            names=self.catalog.get('_names', {}))
         publish_json(self.directory/'mission_hud.json', hud)
+        if not need_full:
+            return None
+        from mission_log_report import present
         value = (self.book.view(self.catalog, now=now, query='', session=self.filters['session'], outcome=self.filters['outcome'], limit=1_000_000)
                  if self.filters['session'] or self.filters['outcome'] else dict(full))
         if self.filters['outcome']:

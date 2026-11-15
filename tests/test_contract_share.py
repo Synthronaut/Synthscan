@@ -155,5 +155,28 @@ class SocialAcceptanceTests(unittest.TestCase):
         from contract_share import acceptance_settings
         self.assertEqual(acceptance_settings({'enabled':True}),dict(contract=True,party=False,friend=False))
         self.assertEqual(acceptance_settings({'enabled':False,'party_enabled':True}),dict(contract=False,party=True,friend=False))
+    def test_displayinfo_user_cfg_startup_setting(self):
+        import tempfile
+        from pathlib import Path
+        from contract_share import displayinfo_setting,update_user_cfg_text,sync_user_cfg_displayinfo
+        self.assertEqual(displayinfo_setting({}),0)
+        self.assertEqual(displayinfo_setting({'displayinfo_level':3}),3)
+        self.assertEqual(displayinfo_setting({'displayinfo_level':9}),0)
+        base=b'; Comment\ng_language = english\nr_PlanetVolumetricClouds = 0\n'
+        with_di=update_user_cfg_text(base,3)
+        self.assertEqual(with_di,b'; Comment\ng_language = english\nr_PlanetVolumetricClouds = 0\nr_DisplayInfo = 3\n')
+        changed_di=update_user_cfg_text(with_di,1)
+        self.assertEqual(changed_di,b'; Comment\ng_language = english\nr_PlanetVolumetricClouds = 0\nr_DisplayInfo = 1\n')
+        removed_di=update_user_cfg_text(changed_di,0)
+        self.assertEqual(removed_di,base)
+        with tempfile.TemporaryDirectory() as tmp:
+            game=Path(tmp)
+            self.assertFalse(sync_user_cfg_displayinfo(game,0))
+            self.assertFalse((game/'user.cfg').exists())
+            self.assertTrue(sync_user_cfg_displayinfo(game,2))
+            self.assertIn(b'r_DisplayInfo = 2',(game/'user.cfg').read_bytes())
+            self.assertFalse(sync_user_cfg_displayinfo(game,2))
+            self.assertTrue(sync_user_cfg_displayinfo(game,0))
+            self.assertNotIn(b'r_DisplayInfo',(game/'user.cfg').read_bytes())
 
 if __name__=='__main__':unittest.main()

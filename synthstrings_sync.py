@@ -102,6 +102,17 @@ def sync_blueprints_to_global_ini(ini_path=DEFAULT_INI_PATH, owned_blueprints=No
 
     # 3. Process descriptions and map counts by key
     from blueprint_strings import resolve_title_key
+    from mining_labels import compact_mining_labels
+    custom_overrides = {}
+    try:
+        import json
+        from pathlib import Path
+        custom_path = Path(__file__).resolve().parent / "data" / "custom_synthstrings.json"
+        if custom_path.exists():
+            custom_overrides = json.loads(custom_path.read_text(encoding="utf-8"))
+    except Exception:
+        custom_overrides = {}
+
     all_keys = {l.split("=", 1)[0].split(",")[0].strip().casefold() for l in lines if "=" in l}
     mission_counts_sets = {}  # base_key -> (have_set, seen_set)
     updated_lines = []
@@ -109,8 +120,14 @@ def sync_blueprints_to_global_ini(ini_path=DEFAULT_INI_PATH, owned_blueprints=No
     title_updates = 0
 
     for line in lines:
-        from mining_labels import compact_mining_labels
         line, _ = compact_mining_labels(line)
+        if "=" in line:
+            k_part, v_part = line.split("=", 1)
+            k_clean = k_part.lstrip("\ufeff")
+            if k_clean in custom_overrides:
+                ending = "\r\n" if line.endswith("\r\n") else "\n" if line.endswith("\n") else ""
+                bom = "\ufeff" if k_part.startswith("\ufeff") else ""
+                line = f"{bom}{k_clean}={custom_overrides[k_clean]}{ending}"
         # Enforce compressed commodity and HUD scanning tags
         if line.startswith("items_commodities_amiantpod="):
             line = "items_commodities_amiantpod=Pod\n"
@@ -121,6 +138,8 @@ def sync_blueprints_to_global_ini(ini_path=DEFAULT_INI_PATH, owned_blueprints=No
 
         if "Potential Harvestables:" in line:
             line = line.replace("Potential Harvestables:", "Potential Harv:")
+        if "Potential Harv:" in line:
+            line = line.replace("Flareweed Stalk", "Stock").replace("Amiant Pod", "Pod")
 
         if "=" in line:
             k_part, v_part = line.split("=", 1)

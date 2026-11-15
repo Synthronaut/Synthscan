@@ -119,9 +119,26 @@ def apply_all_rules_and_adapt(ini_path=DEFAULT_INI_PATH, sc_dir=DEFAULT_SC_DIR, 
     quazi_cleaned = 0
     harv_cleaned = 0
 
+    from mining_labels import compact_mining_labels
+    custom_overrides = {}
+    try:
+        from pathlib import Path
+        custom_path = Path(__file__).resolve().parent / "data" / "custom_synthstrings.json"
+        if custom_path.exists():
+            custom_overrides = json.loads(custom_path.read_text(encoding="utf-8"))
+    except Exception:
+        custom_overrides = {}
+
     # 1. Clean Line-by-Line Rules
     for line in lines:
-        mod_line = line
+        mod_line, _ = compact_mining_labels(line)
+        if "=" in mod_line:
+            k_part, _ = mod_line.split("=", 1)
+            k_clean = k_part.lstrip("\ufeff")
+            if k_clean in custom_overrides:
+                ending = "\r\n" if mod_line.endswith("\r\n") else "\n" if mod_line.endswith("\n") else ""
+                bom = "\ufeff" if k_part.startswith("\ufeff") else ""
+                mod_line = f"{bom}{k_clean}={custom_overrides[k_clean]}{ending}"
 
         # A. Rock tags
         for pat, rep in ROCK_TAG_RULES:
@@ -157,6 +174,8 @@ def apply_all_rules_and_adapt(ini_path=DEFAULT_INI_PATH, sc_dir=DEFAULT_SC_DIR, 
         if "Potential Harvestables:" in mod_line:
             mod_line = mod_line.replace("Potential Harvestables:", "Potential Harv:")
             harv_cleaned += 1
+        if "Potential Harv:" in mod_line:
+            mod_line = mod_line.replace("Flareweed Stalk", "Stock").replace("Amiant Pod", "Pod")
 
         updated_lines.append(mod_line)
 

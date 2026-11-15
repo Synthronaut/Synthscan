@@ -250,7 +250,7 @@ void create(){
         info.rcWork.left+(info.rcWork.right-info.rcWork.left-width)/2,info.rcWork.top+(info.rcWork.bottom-info.rcWork.top-height)/2,width,height,nullptr,nullptr,cls.hInstance,nullptr);
     BOOL dark=TRUE;DwmSetWindowAttribute(window,20,&dark,sizeof(dark));
     SynthPages::initialize(window);
-    const wchar_t* names[]={L"Home",L"Item & Ship Finder",L"Citizens",L"Mission & Wallet Log",L"Server History",L"Blueprint Library",L"Mining Tools",L"Refinery",L"Executive Hangar",L"Piracy / Flight",L"Day/Night Forecast",L"Automatic Acceptance",L"Fate Roulette",L"Settings"};
+    const wchar_t* names[]={L"Home",L"Item & Ship Finder",L"Citizens",L"Mission & Wallet Log",L"Server History",L"Blueprint Library",L"Mining Tools",L"Refinery",L"Executive Hangar",L"Piracy / Flight",L"Day/Night Forecast",L"Automations",L"Fate Roulette",L"Settings"};
     const char* actions[]={"home","directory","people","mission_log","servers","blueprints","planner","refinery","executive_hangar","hud_piracy","daylight","acceptance","roulette","settings"};
     for(int i=0;i<int(sizeof(names)/sizeof(names[0]));i++)add(strcmp(actions[i],"settings")==0?114:100+i,names[i],actions[i],true);
     add(200,L"Mining HUD\nAutomatic scan reading","hud_mining",false);add(201,L"Finder HUD\nShops & player market","hud_finder",false);

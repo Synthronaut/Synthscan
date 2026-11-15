@@ -31,6 +31,7 @@ ORACLE_FILE_MAP = {
     'wikelo_data.json': ROOT / 'data/wikelo_data.json',
     'executive_hangar_schedule.json': ROOT / 'data/executive_hangar_schedule.json',
     'daylight_catalogue.json': ROOT / 'data/daylight_catalogue.json',
+    'custom_synthstrings.json': ROOT / 'data/custom_synthstrings.json',
 }
 INTERVAL = 6 * 3600
 RETRY = 300
@@ -194,7 +195,7 @@ def sync_oracle_hub():
         tmp.write_bytes(raw)
         os.replace(tmp, dest)
         updated.append(name)
-    if 'blueprints_catalog.json' in updated:
+    if 'blueprints_catalog.json' in updated or 'custom_synthstrings.json' in updated:
         try:
             from synthstrings_sync import sync_blueprints_to_global_ini
             sync_blueprints_to_global_ini()

@@ -3,7 +3,7 @@ from branding import window_icon
 import argparse,ctypes,json,time,logging
 from ctypes import wintypes as w
 from pathlib import Path
-from contract_share import ContractQueue,acceptance_settings,LogRecords,accept_scan_code,ContractSession,accept_blockers,GlobalChatOnJoin
+from contract_share import ContractQueue,acceptance_settings,displayinfo_setting,sync_user_cfg_displayinfo,LogRecords,accept_scan_code,ContractSession,accept_blockers,GlobalChatOnJoin
 
 def main():
     p=argparse.ArgumentParser();p.add_argument('--owner',type=int,required=True);p.add_argument('--watch',action='store_true');a=p.parse_args()
@@ -30,25 +30,36 @@ def main():
     class Input(ctypes.Structure):_fields_=[('type',w.DWORD),('payload',Payload)]
     api.SendInput.argtypes=[w.UINT,ctypes.POINTER(Input),ctypes.c_int];api.SendInput.restype=w.UINT
     api.MapVirtualKeyW.argtypes=[w.UINT,w.UINT];api.MapVirtualKeyW.restype=w.UINT
-    root=tk.Tk();root.withdraw();window_icon(root);root.title('SynthScan — Automatic acceptance');root.geometry('560x410')
+    root=tk.Tk();root.withdraw();window_icon(root);root.title('SynthScan — Automations');root.geometry('560x470')
     try:preferences=read_shared_json(DATA/'contract_share_preferences.json')
     except (OSError,ValueError):preferences={}
     settings=acceptance_settings(preferences)
     switches={kind:tk.BooleanVar(value=value) for kind,value in settings.items()}
     hide_chat=tk.BooleanVar(value=preferences.get('hide_global_chat') is True)
+    di_options=('Off (do not set r_DisplayInfo on boot)',
+                'r_DisplayInfo 1 — Compact FPS & server summary',
+                'r_DisplayInfo 2 — Expanded performance stats',
+                'r_DisplayInfo 3 — Full performance, shard & network stats')
+    di_level=displayinfo_setting(preferences)
+    di_explicit='displayinfo_level' in preferences
+    if di_explicit and di_level in (1,2,3):
+        try:sync_user_cfg_displayinfo(game,di_level,DATA)
+        except OSError:pass
     chat=GlobalChatOnJoin(time.time(),hide_chat.get())
     armed=switches['contract'];q.enabled=settings
-    enabled=armed.get();label=tk.StringVar(value='Starting contract watcher')
+    enabled=armed.get();label=tk.StringVar(value='Starting automations watcher')
     logging.info('Started: enabled=%s owner=%s',enabled,a.owner)
     frame=ttk.Frame(root,padding=18);frame.pack(fill='both',expand=True)
-    ttk.Label(frame,text='Automatic acceptance',font=('Segoe UI',16,'bold')).pack(anchor='w')
-    ttk.Label(frame,text='Choose which incoming requests to accept automatically.\nKeep Star Citizen focused. Menus may block the game accept key.',justify='left').pack(anchor='w',pady=10)
-    snapshot={};context=ContractSession();sampled=0;down=None;disabled_reason='';pause='';decision=''
+    ttk.Label(frame,text='Automations',font=('Segoe UI',16,'bold')).pack(anchor='w')
+    ttk.Label(frame,text='Choose automatic request acceptance, on-join actions, and startup console settings.\nKeep Star Citizen focused. Menus may block the game accept key.',justify='left').pack(anchor='w',pady=10)
+    snapshot={};context=ContractSession();sampled=0;last_di_sync=0;down=None;disabled_reason='';pause='';decision=''
     stop=Signal('contract-share-stop')
     def save_settings():
         q.enabled={kind:var.get() for kind,var in switches.items()}
         chat.set_enabled(hide_chat.get(),time.time())
-        return publish_json(DATA/'contract_share_preferences.json',dict(enabled=q.enabled['contract'],party_enabled=q.enabled['party'],friend_enabled=q.enabled['friend'],hide_global_chat=hide_chat.get()))
+        payload=dict(enabled=q.enabled['contract'],party_enabled=q.enabled['party'],friend_enabled=q.enabled['friend'],hide_global_chat=hide_chat.get())
+        if di_explicit or di_level:payload['displayinfo_level']=di_level
+        return publish_json(DATA/'contract_share_preferences.json',payload)
     def disarm():
         for var in switches.values():var.set(False)
         hide_chat.set(False)
@@ -66,19 +77,32 @@ def main():
         nonlocal reader,disabled_reason
         release_key();q.reset();reader=LogRecords(game/'Game.log');disabled_reason=''
         if not save_settings():
-            disarm();disabled_reason='Could not save automatic acceptance setting'
+            disarm();disabled_reason='Could not save automations setting'
         logging.info('User setting changed: enabled=%s',armed.get())
     for kind,title in (('contract','Automatically accept shared contracts'),('party','Automatically accept party invitations'),('friend','Automatically accept friend requests')):
         ttk.Checkbutton(frame,text=title,variable=switches[kind],command=arm_changed).pack(anchor='w',pady=5)
     ttk.Checkbutton(frame,text='Hide global chat after joining (F12)',variable=hide_chat,command=arm_changed).pack(anchor='w',pady=5)
     ttk.Label(frame,text='Presses F12 once after loading finishes, only while the game is focused.\nApplies to future joins. Keep the game chat toggle bound to F12.',justify='left').pack(anchor='w',pady=5)
+    ttk.Label(frame,text='Startup telemetry overlay (r_DisplayInfo in user.cfg):',justify='left').pack(anchor='w',pady=(8,2))
+    di_combo=ttk.Combobox(frame,values=di_options,state='readonly',width=52)
+    di_combo.current(di_level)
+    def on_di_changed(_event=None):
+        nonlocal di_level,di_explicit
+        idx=di_combo.current()
+        di_level=idx if idx in (0,1,2,3) else 0
+        di_explicit=True
+        save_settings()
+        try:sync_user_cfg_displayinfo(game,di_level,DATA)
+        except OSError:pass
+    di_combo.bind('<<ComboboxSelected>>',on_di_changed)
+    di_combo.pack(anchor='w',pady=(0,6))
     ttk.Label(frame,textvariable=label,wraplength=495,justify='left').pack(anchor='w',pady=12)
     ttk.Label(frame,text='Closing keeps this running. Uncheck to disable. Each request gets\nat most 3 key presses, at least 2 seconds apart; menus may block the game key.',foreground='#777777').pack(anchor='w')
     def hide():
         logging.info('Window hidden: enabled=%s',armed.get());root.withdraw()
     root.protocol('WM_DELETE_WINDOW',hide)
     def tick():
-        nonlocal snapshot,sampled,down,disabled_reason,reader,pause,decision
+        nonlocal snapshot,sampled,last_di_sync,di_level,di_explicit,down,disabled_reason,reader,pause,decision
         if stop.wait(0) or not owner_alive(a.owner):
             release_key();root.destroy();return
         now=time.time()
@@ -89,11 +113,22 @@ def main():
                 preferences=read_shared_json(DATA/'contract_share_preferences.json')
                 external=acceptance_settings(preferences)
                 external_chat=preferences.get('hide_global_chat') is True
+                external_di=displayinfo_setting(preferences)
+                external_di_explicit='displayinfo_level' in preferences
                 if external!=q.enabled or external_chat!=hide_chat.get():
                     release_key();q.reset();reader=LogRecords(game/'Game.log');disabled_reason=''
                     q.enabled=external
                     for kind,value in external.items():switches[kind].set(value)
                     hide_chat.set(external_chat);chat.set_enabled(external_chat,now)
+                if external_di!=di_level or external_di_explicit!=di_explicit:
+                    di_level=external_di;di_explicit=external_di_explicit
+                    di_combo.current(di_level)
+                    if di_explicit:
+                        try:sync_user_cfg_displayinfo(game,di_level,DATA);last_di_sync=now
+                        except OSError:pass
+                elif di_explicit and di_level in (1,2,3) and now-last_di_sync>=5:
+                    try:sync_user_cfg_displayinfo(game,di_level,DATA);last_di_sync=now
+                    except OSError:pass
             valid,changed=context.update(snapshot,a.owner,now)
             if changed:
                 q.reset();reader=LogRecords(game/'Game.log');release_key()

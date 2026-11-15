@@ -613,9 +613,20 @@ void rebuild(int tab){
         auto prefs=read(data/L"contract_share_preferences.json");
         const wchar_t* labels[]={L"Automatically accept shared contracts",L"Automatically accept party invitations",L"Automatically accept friend requests",L"Hide global chat after joining (F12)"};
         const char* keys[]={"enabled","party_enabled","friend_enabled","hide_global_chat"};
-        control(L"STATIC",L"Choose automatic acceptance and on-join actions.",SS_LEFT,28,120,770,28,0);
-        for(int i=0;i<4;++i){control(L"BUTTON",labels[i],BS_AUTOCHECKBOX|WS_TABSTOP,28,174+i*52,760,32,330+i);SendDlgItemMessageW(panel,330+i,BM_SETCHECK,flag(prefs,keys[i],false)?BST_CHECKED:BST_UNCHECKED,0);}
-        control(L"STATIC",L"Keep Star Citizen focused. Game menus can block the accept key; SynthScan retries while the request is still active.\r\nGlobal chat: presses F12 once after loading finishes, only with the game focused. Applies to future joins; keep the chat toggle bound to F12.",SS_LEFT,28,390,770,110,0);
+        control(L"STATIC",L"Choose automatic request acceptance, on-join actions, and startup console settings.",SS_LEFT,28,118,770,26,0);
+        for(int i=0;i<4;++i){control(L"BUTTON",labels[i],BS_AUTOCHECKBOX|WS_TABSTOP,28,158+i*46,760,30,330+i);SendDlgItemMessageW(panel,330+i,BM_SETCHECK,flag(prefs,keys[i],false)?BST_CHECKED:BST_UNCHECKED,0);}
+        control(L"STATIC",L"Startup telemetry overlay (r_DisplayInfo in user.cfg — applied on game boot)",SS_LEFT,28,352,760,24,0);
+        auto di=control(L"COMBOBOX",L"",CBS_DROPDOWNLIST|WS_VSCROLL|WS_TABSTOP,28,380,480,200,336);
+        const wchar_t* diLabels[]={
+            L"Off (default — do not set r_DisplayInfo in user.cfg)",
+            L"r_DisplayInfo 1 — Compact FPS & server summary",
+            L"r_DisplayInfo 2 — Expanded performance stats",
+            L"r_DisplayInfo 3 — Full performance, shard & network stats"
+        };
+        for(auto label:diLabels)SendMessageW(di,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(label));
+        int diLevel=std::clamp(int(prefs.numberOr("displayinfo_level",0)),0,3);
+        SendMessageW(di,CB_SETCURSEL,diLevel,0);
+        control(L"STATIC",L"Keep Star Citizen focused. Game menus can block the accept key; SynthScan retries while the request is still active.\r\nGlobal chat: presses F12 once after loading finishes, only with the game focused. Applies to future joins; keep the chat toggle bound to F12.\r\nStartup r_DisplayInfo writes r_DisplayInfo = 1, 2, or 3 to user.cfg (or removes it when Off) so Star Citizen loads it automatically on boot.",SS_LEFT,28,424,770,120,0);
         return;
     }
     if(tab==6){
@@ -727,13 +738,22 @@ void handleAction(int id){
         hudKeys=candidate;keyError.clear();hudKeyGate=HudHotkeys::Gate{};hudKeyGate.suppressedUntil=GetTickCount64()+250;resetHotkeyRegistration();SetWindowTextW(status,hotkeyStatus().c_str());return;
     }
 
-    if(currentTab==5&&id>=330&&id<=333){
+    if(currentTab==5&&((id>=330&&id<=333)||id==336)){
         auto prefs=read(data/L"contract_share_preferences.json");
         const char* keys[]={"enabled","party_enabled","friend_enabled","hide_global_chat"};
         Json changed=obj({});
         for(int i=0;i<4;++i)changed.members.push_back({keys[i],boolean(SendDlgItemMessageW(panel,330+i,BM_GETCHECK,0,0)==BST_CHECKED)});
-        if(!write(data/L"contract_share_preferences.json",changed))SetWindowTextW(status,L"Could not save automatic acceptance settings.");
-        else SetWindowTextW(status,L"Saved. The background watcher applies this setting immediately.");
+        int diLevel=std::clamp(int(SendDlgItemMessageW(panel,336,CB_GETCURSEL,0,0)),0,3);
+        if(id==336||prefs.find("displayinfo_level")!=nullptr||diLevel>0){
+            changed.members.push_back({"displayinfo_level",num(diLevel)});
+        }
+        if(!write(data/L"contract_share_preferences.json",changed))SetWindowTextW(status,L"Could not save automations settings.");
+        else if(id==336&&diLevel>0){
+            std::wstring msg=L"Saved. r_DisplayInfo = "+std::to_wstring(diLevel)+L" is applied to user.cfg for future game launches.";
+            SetWindowTextW(status,msg.c_str());
+        }else if(id==336){
+            SetWindowTextW(status,L"Saved. Startup r_DisplayInfo removed from user.cfg.");
+        }else SetWindowTextW(status,L"Saved. The background watcher applies this setting immediately.");
         return;
     }
     if(currentTab==6&&(id==334||id==335)){
@@ -773,7 +793,7 @@ void paintPanel(HWND hwnd,HDC dc){RECT rc;GetClientRect(hwnd,&rc);FillRect(dc,&r
 LRESULT CALLBACK panelProc(HWND hwnd,UINT message,WPARAM w,LPARAM l){
     switch(message){
     case WM_SIZE:layoutDirectory();return 0;
-    case WM_COMMAND:{int id=LOWORD(w),code=HIWORD(w);if((id==201&&code==EN_CHANGE)||(id==202&&code==CBN_SELCHANGE)||(id==203&&code==CBN_SELCHANGE)){relatedItemId.clear();if(currentTab==0&&id==202)updateDirectoryCategories();if(currentTab==0||currentTab==2||currentTab==3)SetTimer(hwnd,2,180,nullptr);return 0;}handleAction(id);return 0;}
+    case WM_COMMAND:{int id=LOWORD(w),code=HIWORD(w);if((id==201&&code==EN_CHANGE)||(id==202&&code==CBN_SELCHANGE)||(id==203&&code==CBN_SELCHANGE)){relatedItemId.clear();if(currentTab==0&&id==202)updateDirectoryCategories();if(currentTab==0||currentTab==2||currentTab==3)SetTimer(hwnd,2,180,nullptr);return 0;}if(id==336&&code!=CBN_SELCHANGE)return 0;handleAction(id);return 0;}
     case WM_TIMER:if(w==2){KillTimer(hwnd,2);listRows();}return 0;
     case WM_NOTIFY:{
         auto header=reinterpret_cast<NMHDR*>(l);
@@ -1219,7 +1239,7 @@ int compboardHudPreview(const std::filesystem::path& output){
 }
 void drawQuesting(Gdiplus::Graphics& g,float width,float height,float scale){
     const bool bridgeFresh=testing||(epoch()-lastStateAt>=0&&epoch()-lastStateAt<4&&state.numberOr("owner_pid")==GetCurrentProcessId());
-    const bool ledgerFresh=testing||(epoch()-missionHud.numberOr("written_at")>=0&&epoch()-missionHud.numberOr("written_at")<5&&missionHud.numberOr("owner_pid")==GetCurrentProcessId());
+    const bool ledgerFresh=testing||(epoch()-missionHud.numberOr("written_at")>=0&&epoch()-missionHud.numberOr("written_at")<15&&missionHud.numberOr("owner_pid")==GetCurrentProcessId());
     MissionHud::draw(g,width,scale,missionTab,missionHud,bridgeFresh?field(state,"questing"):Json{},epoch(),ledgerFresh);
 }
 void drawPiracy(Gdiplus::Graphics& g,float width,float height,float scale){
