@@ -26,7 +26,7 @@ FEATURES = {
     'people': ('Citizens', (), ('account',),
         'Citizen tags, relationships, presence and optional social actions.'),
     'piracy': ('Piracy & Flight Telemetry', (), (),
-        'Flight sorties, helm time, fleet usage metrics, wait timer and available game-log reports.'),
+        'Flights, helm time, fleet usage metrics, wait timer and available game-log reports.'),
     'missions': ('Missions & Ledger', (), ('account',),
         'Contracts, durations, wallet and verified reputation changes.'),
     'hangars': ('Hangars & Compboards', (), ('internet',),

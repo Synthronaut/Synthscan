@@ -1241,7 +1241,7 @@ int compboardHudPreview(const std::filesystem::path& output){
         };
         for(int id=31930;id<=31947;++id){auto rect=CompboardHud::control(id);fit&=rect.x>=0&&rect.x+rect.width<=430&&rect.y+rect.height<=360;button(CompboardHud::caption(id,true),rect);}
         button(L"More",{320,8,52,20});button(L"Full",{376,8,46,20});
-        const wchar_t* tabs[]={L"Mining",L"Piracy / Flight",L"Missions",L"Hangars",L"Finder"};for(int i=0;i<5;++i)button(tabs[i],{8+84*i,363,80,22});
+        const wchar_t* tabs[]={L"Mining",L"Flight / Piracy",L"Missions",L"Hangars",L"Finder"};for(int i=0;i<5;++i)button(tabs[i],{8+84*i,363,80,22});
         const CLSID png={0x557cf406,0x1a04,0x11d3,{0x9a,0x73,0x00,0x00,0xf8,0x1e,0xf3,0x2e}};
         saved=bitmap.Save(output.c_str(),&png,nullptr)==Gdiplus::Ok;
     }
@@ -1347,7 +1347,7 @@ void drawPiracy(Gdiplus::Graphics& g,float width,float height,float scale){
 
     if (logicalWidth >= 600) {
         // Desktop Companion / Workspace View (logicalWidth ~ 816)
-        headText("PIRACY / FLIGHT TELEMETRY", 10, 6, 14, &accent, 260, true);
+        headText("FLIGHT / PIRACY TELEMETRY", 10, 6, 14, &accent, 260, true);
         text("AVIONICS & INTERDICTION RADAR", 274, 9, 10, &muted, 220);
         drawJurisdictionBadge(g, jurisdictionBadgeModel(state, joined, epoch()), logicalWidth - 280, 4, 270, scale, epoch());
 
@@ -1355,7 +1355,7 @@ void drawPiracy(Gdiplus::Graphics& g,float width,float height,float scale){
         // Card 1: Active Sortie
         fillRRect(Gdiplus::RectF(10 * scale, 34 * scale, 265 * scale, 76 * scale), 6 * scale, Gdiplus::Color(230, 20, 26, 38));
         strokeRRect(Gdiplus::RectF(10 * scale, 34 * scale, 265 * scale, 76 * scale), 6 * scale, HudTheme::Border);
-        text("ACTIVE SORTIE", 20, 40, 9, &muted, 110);
+        text("ACTIVE FLIGHT", 20, 40, 9, &muted, 110);
         if (fState == "IN_FLIGHT") {
             fillRRect(Gdiplus::RectF(145 * scale, 39 * scale, 120 * scale, 17 * scale), 4 * scale, Gdiplus::Color(60, 103, 213, 154));
             text("● IN FLIGHT", 145, 41, 9, &green, 120, true, true);
@@ -1379,7 +1379,7 @@ void drawPiracy(Gdiplus::Graphics& g,float width,float height,float scale){
         int totalSorties = int(flight.numberOr("total_sorties"));
         int totalJumps = int(flight.numberOr("total_jumps"));
         int totalLosses = int(flight.numberOr("total_losses"));
-        std::string careerStats = std::to_string(totalSorties) + " sorties · " + std::to_string(totalJumps) + " jumps · " + std::to_string(totalLosses) + " losses";
+        std::string careerStats = std::to_string(totalSorties) + " flights · " + std::to_string(totalJumps) + " jumps · " + std::to_string(totalLosses) + " losses";
         text(careerStats, 295, 84, 9, &muted, 225);
 
         // Card 3: Snare / Interdiction Watch
@@ -1422,7 +1422,7 @@ void drawPiracy(Gdiplus::Graphics& g,float width,float height,float scale){
                 int sCount = int(row.numberOr("sorties"));
                 int jCount = int(row.numberOr("jumps"));
                 int cCount = int(row.numberOr("contracts"));
-                std::string sub = std::to_string(sCount) + " sorties · " + std::to_string(jCount) + " quantum jumps · " + std::to_string(cCount) + " contracts";
+                std::string sub = std::to_string(sCount) + " flights · " + std::to_string(jCount) + " quantum jumps · " + std::to_string(cCount) + " contracts";
                 text(sub, 20, yPos + 28, 9, &faint, 360);
             }
         }
@@ -1430,13 +1430,13 @@ void drawPiracy(Gdiplus::Graphics& g,float width,float height,float scale){
         // Right Column: Recent Sorties Ledger
         fillRRect(Gdiplus::RectF(416 * scale, 118 * scale, 390 * scale, 246 * scale), 6 * scale, Gdiplus::Color(210, 16, 22, 32));
         strokeRRect(Gdiplus::RectF(416 * scale, 118 * scale, 390 * scale, 246 * scale), 6 * scale, HudTheme::Border);
-        headText("RECENT SORTIES LEDGER", 426, 126, 11, &accent, 240, true);
+        headText("RECENT FLIGHTS", 426, 126, 11, &accent, 240, true);
         text("TIME & DURATION", 695, 128, 9, &faint, 100, false, true);
 
         const auto& recent = field(flight, "recent").items;
         if (recent.empty()) {
-            text("No recent completed sorties logged.", 426, 175, 11, &muted, 360);
-            text("Completed flight sorties and landing reports will appear here.", 426, 200, 9, &faint, 360);
+            text("No recent completed flights logged.", 426, 175, 11, &muted, 360);
+            text("Completed flights and landing reports will appear here.", 426, 200, 9, &faint, 360);
         } else {
             for (size_t i = 0; i < recent.size() && i < 4; ++i) {
                 const auto& row = recent[i];
@@ -1474,7 +1474,7 @@ void drawPiracy(Gdiplus::Graphics& g,float width,float height,float scale){
     }
 
     // In-Game HUD Overlay (logicalWidth < 600)
-    headText("PIRACY / FLIGHT", 10, 8, 12, &accent, 160, true);
+    headText("FLIGHT / PIRACY", 10, 8, 12, &accent, 160, true);
     drawJurisdictionBadge(g, jurisdictionBadgeModel(state, joined, epoch()), 10, 34, logicalWidth - 20, scale, epoch());
 
     // Active Vessel Card

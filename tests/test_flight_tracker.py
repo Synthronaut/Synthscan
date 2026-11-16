@@ -140,6 +140,54 @@ class TestFlightTracker(unittest.TestCase):
         view4 = reader2.tick(True, "shard-pyro-2")
         self.assertEqual(len(view4['pulls']), 0)
 
+    def test_ship_kills_and_losses(self):
+        combat_log = self.directory / "Combat.log"
+        combat_log.write_bytes(
+            b"""<2026-11-14T09:30:00.000Z> [Notice] <AccountLoginCharacterStatus_Character> Character: createdAt 1 - updatedAt 2 - geid 205621716799 - accountId 3586819 - name Synthronaut - state STATE_CURRENT [Login]
+<2026-11-14T09:31:00.000Z> [Notice] <SHUDEvent_OnNotification> Added notification "You have joined channel 'Anvil Arrow : Synthronaut'." [Notification]
+<2026-11-14T09:32:00.000Z> [Notice] <Calculate Route> Calculate Route to 'Yela' | ANVL_Arrow[100]
+<2026-11-14T09:38:36.761Z> [Notice] <Vehicle Destroyed> Vehicle 'ANVL_Hornet_F7C_PU_AI_CRIM_929636482210' [929636482210] class 'ANVL_Hornet_F7C_PU_AI_CRIM' (owner player [0], driver [0]) destroyed: reason [Combat] level [0] -> [2] flags [4066] killer 'Synthronaut' [205621716799] authority [0] [Team_CGP4][Vehicle]
+<2026-11-14T09:39:10.000Z> [Notice] <Vehicle Destroyed> Vehicle 'DRAK_Cutlass_Black_929311401012' [929311401012] class 'DRAK_Cutlass_Black' (owner player [204821572810], driver [204821572810]) destroyed: reason [Combat] level [0] -> [2] flags [4066] killer 'Synthronaut' [205621716799] authority [0] [Team_CGP4][Vehicle]
+<2026-11-14T09:40:00.000Z> [Notice] <Vehicle Destroyed> Vehicle 'ANVL_Arrow_929000000001' [929000000001] class 'ANVL_Arrow' (owner player [205621716799], driver [205621716799]) destroyed: reason [SelfDestruct] level [0] -> [2] flags [2022] killer 'Synthronaut' [205621716799] authority [0] [Team_CGP4][Vehicle]
+<2026-11-14T09:42:00.000Z> [Notice] <Vehicle Destroyed> Vehicle 'ANVL_Arrow_929000000002' [929000000002] class 'ANVL_Arrow' (owner player [205621716799], driver [205621716799]) destroyed: reason [Combat] level [0] -> [2] flags [4066] killer 'Selsi01' [204717123605] authority [0] [Team_CGP4][Vehicle]
+<2026-11-14T09:42:01.000Z> [Notice] <[ActorState] Dead> [ACTOR STATE][CSCActorControlStateDead::PrePhysicsUpdate] Actor 'Synthronaut' [205621716799] ejected from zone 'ANVL_Arrow_929000000002' [929000000002] to zone 'SolarSystem_1' [1] due to previous zone being in a destroyed vehicle with detached interior. [Actor]
+"""
+        )
+        tracker = FlightTracker(self.directory, combat_log)
+        summary = tracker.summary()
+
+        self.assertEqual(summary['total_ship_kills'], 2)
+        self.assertEqual(summary['ai_ship_kills'], 1)
+        self.assertEqual(summary['player_ship_kills'], 1)
+        self.assertEqual(summary['total_ship_losses'], 2)
+        self.assertEqual(summary['pilot_kia_count'], 1)
+        self.assertEqual(len(summary['combat_log']), 4)
+
+        # Latest event first (destroyed by Selsi01 with pilot K.I.A.)
+        latest = summary['combat_log'][0]
+        self.assertEqual(latest['kind'], 'loss')
+        self.assertEqual(latest['killer'], 'Selsi01')
+        self.assertTrue(latest['pilot_kia'])
+
+        # Persistence check
+        tracker2 = FlightTracker(self.directory, self.directory / "empty.log")
+        summary2 = tracker2.summary()
+        self.assertEqual(summary2['total_ship_kills'], 2)
+        self.assertEqual(summary2['total_ship_losses'], 2)
+
+    def test_short_trips_under_16_seconds_are_ignored(self):
+        short_log = self.directory / "Short.log"
+        short_log.write_bytes(
+            b"""<2026-11-14T10:00:00.000Z> [Notice] <SHUDEvent_OnNotification> Added notification "You have joined channel 'Anvil Arrow : Synthronaut'." [Notification]
+<2026-11-14T10:00:02.000Z> [Notice] <Calculate Route> Calculate Route to 'Yela' | ANVL_Arrow[100]
+<2026-11-14T10:00:12.000Z> [Notice] <Inventory> requested inventory for Location[station_grim_hex_hangar]
+"""
+        )
+        tracker = FlightTracker(self.directory, short_log)
+        summary = tracker.summary()
+        self.assertEqual(summary['total_sorties'], 0)
+        self.assertEqual(len(summary['recent']), 0)
+
 
 if __name__ == '__main__':
     unittest.main()

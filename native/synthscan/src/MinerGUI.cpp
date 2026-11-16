@@ -1113,7 +1113,7 @@ void MinerGUI::createControls() {
         0, 0, 10, 10, hwnd_, (HMENU)ID_BTN_KEYS, hInstance_, nullptr);
 
     CreateWindowW(L"BUTTON",L"Mining",btnStyle,0,0,10,10,hwnd_,(HMENU)31810,hInstance_,nullptr);
-    CreateWindowW(L"BUTTON",L"Piracy / Flight",btnStyle,0,0,10,10,hwnd_,(HMENU)31811,hInstance_,nullptr);
+    CreateWindowW(L"BUTTON",L"Flight / Piracy",btnStyle,0,0,10,10,hwnd_,(HMENU)31811,hInstance_,nullptr);
     CreateWindowW(L"BUTTON",L"Missions",btnStyle,0,0,10,10,hwnd_,(HMENU)31813,hInstance_,nullptr);
     CreateWindowW(L"BUTTON",L"Hangars",btnStyle,0,0,10,10,hwnd_,(HMENU)31818,hInstance_,nullptr);
     CreateWindowW(L"BUTTON",L"Finder",btnStyle,0,0,10,10,hwnd_,(HMENU)31819,hInstance_,nullptr);

@@ -70,7 +70,7 @@ class JournalTests(unittest.TestCase):
 class AlertTests(unittest.TestCase):
     def test_piracy_mode_and_visibility_switch_gate_audio(self):
         self.assertFalse(piracy_alerts_enabled({},True))
-        self.assertTrue(piracy_alerts_enabled(dict(hud_mode='piracy'),True))
+        self.assertFalse(piracy_alerts_enabled(dict(hud_mode='piracy'),True))
         for kw in [dict(hud_mode='mining'),dict(hud_mode='piracy',show_hud=False),dict(hud_mode='piracy',snare_alerts=False)]:self.assertFalse(piracy_alerts_enabled(kw,True))
         self.assertFalse(piracy_alerts_enabled(dict(hud_mode='piracy'),False))
     def snapshot(self):

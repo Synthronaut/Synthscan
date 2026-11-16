@@ -22,9 +22,13 @@ def annotate_names(text, snapshot, factions, scopes, previous=None):
     for key,entry in (previous or {}).get('entries',{}).items():
         key=key.casefold()
         if key not in positions:raise ValueError('Previously annotated name is missing: '+key)
-        if values[key] not in (entry['written'],entry['original']):
-            raise ValueError('Organization name changed outside this patch: '+key)
-        values[key]=entry['original'];restored[key]=entry['original']
+        cur=values[key]
+        orig=entry['original']
+        if cur not in (entry['written'],orig):
+            # Recover if an interrupted/prepared state left a valid SynthScan rep suffix on the same base name.
+            if not (cur.startswith(orig+' (') and re.fullmatch(r'\([^()]*\d[\d,]*\s*/\s*(?:\d[\d,]*|MAX)[^()]*\)',cur[len(orig)+1:])):
+                raise ValueError('Organization name changed outside this patch: '+key)
+        values[key]=orig;restored[key]=orig
     by_entity=defaultdict(list)
     for record in snapshot['records']:
         by_entity[record['entity']].append(record)
@@ -57,8 +61,11 @@ def annotate_names(text, snapshot, factions, scopes, previous=None):
             tracks.append(dict(scope=record['scope'],score=score,next_minimum=target['minimum'] if target else None))
         if pieces:
             original=values[key]
-            # An untracked annotation must not silently become a new base name.
-            if re.search(r'\(.*\d[\d,]*\s*/\s*(?:\d|MAX)',original):
+            # Strip an untracked SynthScan rep suffix if state was lost, rather than deadlocking.
+            m=re.search(r'\s+\(([^()]*\d[\d,]*\s*/\s*(?:\d[\d,]*|MAX)[^()]*)\)$',original)
+            if m:
+                original=original[:m.start()]
+            elif re.search(r'\(.*\d[\d,]*\s*/\s*(?:\d|MAX)',original):
                 raise ValueError('Untracked reputation annotation already exists: '+key)
             written=original+' ('+'; '.join(pieces)+')'
             values[key]=written

@@ -28,8 +28,8 @@ def sync(apply=False):
 def _sync(apply=False):
     paths=reference_paths();game=paths['game']
     snapshot=read_shared_json(DATA/'reputation_snapshot.json',limit=1024*1024)
-    if not 0<=time.time()-snapshot.get('read_at',0)<120:
-        raise ValueError('Refresh reputation first; snapshot must be less than two minutes old')
+    if not snapshot or not snapshot.get('read_at'):
+        raise ValueError('Refresh reputation first; no reputation snapshot is available')
     audit=json.loads(paths['audit'].read_text(encoding='utf-8'))
     manifest=json.loads((game/'build_manifest.id').read_text())
     if manifest['Data']['BuildId']!=audit['build']['BuildId']:
@@ -55,7 +55,11 @@ def _sync(apply=False):
         manager=Manager(game,DATA)
         if not manager.read().get('enabled',True):return dict(applied=False,changed=False,names=0,enabled=False)
         if not publish_json(state_path,state):raise OSError('Could not save restoration journal; game file unchanged')
-        manager.write(INI,after)
+        try:
+            manager.write(INI,after)
+        except Exception:
+            if previous is not None:publish_json(state_path,previous)
+            raise
         state['phase']='applied';publish_json(state_path,state)
     return dict(applied=bool(apply),changed=after!=before,names=len(state['entries']),
                           skipped=state['skipped'],requires_game_text_reload=True,

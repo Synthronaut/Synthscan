@@ -141,11 +141,19 @@ export interface HomeSessionRecap {
   reputation?: HomeRecapReputation[];
 }
 
+export interface HomeRefineryEntry {
+  station: string;
+  count?: number;
+  at?: number;
+  dismissed?: boolean;
+}
+
 export interface HomeOverviewState {
   identity?: string;
   connected?: boolean;
   current?: HomeSessionRecap;
   previous?: HomeSessionRecap;
+  refinery?: HomeRefineryEntry[];
   refinery_notice?: string;
   synthstrings?: {
     title?: string;
@@ -212,6 +220,7 @@ export interface FleetShipEntry {
   jumps: number;
   contracts: number;
   losses: number;
+  kills?: number;
   pct: number;
 }
 
@@ -222,10 +231,28 @@ export interface FlightSortieEntry {
   duration_s: number;
   jumps: number;
   contracts: number;
+  kills?: number;
   destination?: string;
   incident?: string;
   reason?: string;
   time: string;
+}
+
+export interface ShipCombatEntry {
+  id: string;
+  at: number;
+  time: string;
+  kind: 'kill' | 'loss' | string;
+  target_kind?: 'ai' | 'player' | 'self' | string;
+  ship: string;
+  mfg?: string;
+  color?: string;
+  raw_class?: string;
+  reason?: string;
+  killer?: string;
+  killer_is_npc?: boolean;
+  pilot_kia?: boolean;
+  player_ship?: string;
 }
 
 export interface FlightState {
@@ -237,6 +264,7 @@ export interface FlightState {
   active_boarded_s?: number;
   active_jumps?: number;
   active_contracts?: number;
+  active_kills?: number;
   active_route?: string;
   jurisdiction?: string;
   monitored?: boolean | null;
@@ -246,8 +274,14 @@ export interface FlightState {
   total_jumps?: number;
   total_contracts?: number;
   total_losses?: number;
+  total_ship_kills?: number;
+  ai_ship_kills?: number;
+  player_ship_kills?: number;
+  total_ship_losses?: number;
+  pilot_kia_count?: number;
   fleet?: FleetShipEntry[];
   recent?: FlightSortieEntry[];
+  combat_log?: ShipCombatEntry[];
 }
 
 export interface PiracyPullEntry {
@@ -285,6 +319,18 @@ export interface PiracySnapshotPayload {
   game_running?: boolean;
 }
 
+export interface MissionAnalyticsRepTrack {
+  scope: string;
+  scope_display: string;
+  current_rank: string;
+  next_rank: string | null;
+  score: number;
+  next_min: number | null;
+  points_needed: number;
+  progress_pct: number;
+  is_max: boolean;
+}
+
 export interface MissionAnalyticsFaction {
   name: string;
   auec: number;
@@ -298,6 +344,7 @@ export interface MissionAnalyticsFaction {
   rep_score?: number;
   scope?: string;
   is_max_rank?: boolean;
+  rep_tracks?: MissionAnalyticsRepTrack[];
 }
 
 export interface MissionAnalyticsPromotion {
@@ -388,7 +435,7 @@ export interface PeopleSnapshot {
   search?: Player[];
   search_query?: string;
   search_busy?: boolean;
-  tags?: Record<string, { label?: string; handle?: string; alert?: boolean; is_org?: boolean }>;
+  tags?: Record<string, { label?: string; handle?: string; alert?: boolean; is_org?: boolean; is_friend?: boolean; in_party?: boolean; on_shard?: boolean; relationship?: string }>;
   tag_options?: string[];
   action_limit?: number;
   roster_at?: number;
@@ -417,6 +464,7 @@ export interface PeopleSnapshot {
   status?: string;
   invite_queue?: InviteQueueState;
   batch_results?: QueueRecipientResult[];
+  action_log?: ActionLogEntry[];
   watches?: BuyerWatch[];
   notifications?: CompanionNotice[];
   market_items?: MarketCatalogItem[];
@@ -424,6 +472,25 @@ export interface PeopleSnapshot {
   daylight?: DaylightState;
   piracy?: PiracySnapshotPayload;
   mission?: MissionLogState;
+}
+
+export interface ActionLogEntry {
+  id: string;
+  at: number;
+  kind:
+    | 'tag'
+    | 'friend_sent'
+    | 'friend_accepted'
+    | 'friend_rejected'
+    | 'party_sent'
+    | 'party_accepted'
+    | 'party_rejected'
+    | 'party_manage';
+  player_id?: string;
+  handle: string;
+  outcome?: string;
+  detail: string;
+  session_token?: string;
 }
 
 export type DesktopCommandAction =
@@ -458,6 +525,7 @@ export type DesktopCommandAction =
   | 'toggle_watch'
   | 'remove_watch'
   | 'dismiss_notices'
+  | 'clear_action_log'
   | 'open_uex_ad'
   | 'strings_settings'
   | 'strings_details'
@@ -486,6 +554,7 @@ export interface DesktopCommand {
   scope?: 'shard' | 'friends';
   include_org_affiliate?: boolean;
   from_actions?: boolean;
+  allow_friends?: boolean;
   confirmed?: boolean;
   resend?: boolean;
   queue_id?: string;
@@ -496,6 +565,7 @@ export interface DesktopCommand {
   watch_id?: string;
   url?: string;
   target?: string;
+  page?: string;
   system?: string;
   body?: string;
   site?: string;
@@ -621,6 +691,7 @@ export function normalizeSnapshot(raw: Partial<PeopleSnapshot>): PeopleSnapshot 
     search: searchPeople,
     chat_channels: raw.chat_channels ?? [],
     chat_messages: raw.chat_messages ?? [],
+    action_log: Array.isArray(raw.action_log) ? raw.action_log : [],
     tag_options: raw.tag_options ?? ['Org', 'Friendly', 'Aggressive', 'Trader', 'Friend'],
     action_limit: typeof raw.action_limit === 'number' ? raw.action_limit : ACTION_LIMIT,
     daylight: raw.daylight,

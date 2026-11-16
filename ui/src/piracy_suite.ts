@@ -1,6 +1,11 @@
 import { InMemoryDesktopBridge } from './bridge';
 import { DesktopAppController } from './people_controller';
-import { calculateCrewSplit, calculateSnareGeometry } from './piracy_data';
+import {
+  calculateCrewSplit,
+  calculateGpsIntercept,
+  calculateSnareGeometry,
+  parseShowLocationText,
+} from './piracy_data';
 
 export interface PiracySuiteReport {
   passed: boolean;
@@ -141,31 +146,49 @@ export async function runPiracyRegressionSuite(root: HTMLElement): Promise<Pirac
   // Toggle off
   mantisBtn?.click();
 
-  // Subview switching works
-  const opsBtn = root.querySelector('button[data-piracy-subtab="ops"]') as HTMLButtonElement | null;
-  opsBtn?.click();
+  // Subview switching works (Flight first, Piracy second)
   const flightDeck = root.querySelector('#piracy-section-flight') as HTMLElement | null;
-  const opsDeck = root.querySelector('#piracy-section-ops') as HTMLElement | null;
-  checks.subview_switch_works = Boolean(flightDeck?.hidden && !opsDeck?.hidden);
-  const allBtn = root.querySelector('button[data-piracy-subtab="all"]') as HTMLButtonElement | null;
-  allBtn?.click();
+  const piracyDeck = root.querySelector('#piracy-section-piracy') as HTMLElement | null;
+  const flightDefaultOk = Boolean(flightDeck && !flightDeck.hidden && piracyDeck?.hidden);
+  const piracyBtn = root.querySelector('button[data-piracy-subtab="piracy"]') as HTMLButtonElement | null;
+  piracyBtn?.click();
+  const piracySwitchOk = Boolean(flightDeck?.hidden && piracyDeck && !piracyDeck.hidden);
+  checks.subview_switch_works = flightDefaultOk && piracySwitchOk;
 
-  // Pure calculator sanity
+  // Verify jurisdiction badge on Piracy tab
+  checks.telemetry_rendered = Boolean(
+    checks.telemetry_rendered && jurisEl?.textContent?.includes('UNGOVERNED'),
+  );
+
+  // Pure calculator sanity (SnarePlan-style coverage & no QT drive dependency)
   const geomOk = calculateSnareGeometry({
     laneDistanceMkm: 20,
     offsetMkmFromDest: 1.5,
-    doglegKm: 8,
-    targetDriveSpeedKms: 165_000,
+    doglegKm: 4,
     qedRadiusKm: 20,
   });
   const geomMiss = calculateSnareGeometry({
     laneDistanceMkm: 20,
     offsetMkmFromDest: 1.5,
     doglegKm: 25,
-    targetDriveSpeedKms: 165_000,
     qedRadiusKm: 20,
   });
-  checks.snare_geometry_math = geomOk.inRange && !geomMiss.inRange && geomOk.transitSeconds > 100;
+  checks.snare_geometry_math =
+    geomOk.inRange && geomOk.coveragePct === 100 && !geomMiss.inRange && geomMiss.coveragePct === 0;
+
+  // /showlocation GPS parser & 3D spline verification
+  const originPt = parseShowLocationText('Coordinates: x:0 y:0 z:0');
+  const destPt = parseShowLocationText('Coordinates: x:10000000000 y:0 z:0'); // 10 Mkm
+  const shipPt = parseShowLocationText('Coordinates: x:9000000000 y:3000 z:0'); // 1 Mkm from dest, 3 km off-axis
+  const gpsIntercept =
+    originPt && destPt && shipPt ? calculateGpsIntercept(originPt, destPt, shipPt, 20) : null;
+  checks.gps_showlocation_math = Boolean(
+    gpsIntercept &&
+      gpsIntercept.inRange &&
+      gpsIntercept.lateralOffsetKm === 3 &&
+      gpsIntercept.offsetMkmFromDest === 1 &&
+      gpsIntercept.coveragePct === 100,
+  );
 
   const split = calculateCrewSplit({
     totalLootAuec: 2_000_000,
@@ -176,14 +199,9 @@ export async function runPiracyRegressionSuite(root: HTMLElement): Promise<Pirac
   // Bonus = 200k; evenPool = 1.8M / 4 = 450k -> snare = 650k, crew = 450k
   checks.crew_splitter_math = split.snareShareAuec === 650_000 && split.crewMemberShareAuec === 450_000;
 
-  // Prey Appraiser -> Stage in Splitter & Pull Logger
-  const stageBtn = root.querySelector('#piracy-prey-send-btn') as HTMLButtonElement | null;
-  stageBtn?.click();
-  const pullTargetInput = root.querySelector('#piracy-pull-target') as HTMLInputElement | null;
-  const splitLootInput = root.querySelector('#piracy-split-loot-input') as HTMLInputElement | null;
-  checks.prey_appraiser_stages_target = Boolean(
-    pullTargetInput?.value.includes('Hercules') && Number(splitLootInput?.value) > 0,
-  );
+  // Removed targetDriveSpeedKms dropdown & Prey Recon card
+  checks.removed_obsolete_panels =
+    !root.querySelector('#piracy-qtdrive-select') && !root.querySelector('#piracy-prey-select');
 
   // Wait timer command + log pull command + delete pull command
   const toggleWaitBtn = root.querySelector('#piracy-wait-toggle-btn') as HTMLButtonElement | null;

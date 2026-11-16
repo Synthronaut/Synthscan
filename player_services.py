@@ -34,8 +34,10 @@ def save_social_error(directory,error,**context):
     return dict(entry,saved=saved)
 
 PLAYER_PREFIX='urn:sc:global:player:geid:'
-READS={('social','SocialService','ListGroups'),('identity','IdentityService','GetPlayersNames'),
+READS={('social','SocialService','ListGroups'),('social','SocialService','ListPendingInvitations'),
+       ('identity','IdentityService','GetPlayersNames'),
        ('contacts','ContactsService','SearchAccount'),('contacts','ContactsService','ListContacts'),
+       ('contacts','ContactsService','ListPendingFriendRequests'),
        ('chat','ChatService','ListMessages')}
 WRITES={('contacts','ContactsService','SendFriendRequest'),('social','SocialService','InviteToParty'),
         ('social','SocialService','KickGroupMember'),('social','SocialService','TransferGroupLeadership'),
@@ -214,6 +216,40 @@ class PlayerClient:
             party_leader_id=str(getattr(party_group,'leader_urn','') or '') if party_group else ''
             output.update(party=sorted(members),party_at=time.time(),party_group_id=party_group_id,party_leader_id=party_leader_id)
         except Exception:output['party_error']='Party membership unavailable'
+        output['pending_party_out']=[];output['pending_party_known']=False
+        try:
+            pending_party=set();cursor=''
+            for _ in range(4):
+                request=self.message('social','ListPendingInvitationsRequest')();request.group_type=4;request.pagination.first=50
+                if cursor:request.pagination.after=cursor
+                response=self.call('social','SocialService','ListPendingInvitations',request)
+                for inv in getattr(response,'invitations',[]):
+                    if getattr(inv,'from_urn','')==self.account.subject and getattr(inv,'to_urn','').startswith(PLAYER_PREFIX):
+                        pending_party.add(inv.to_urn)
+                if not response.page_info.has_next_page:break
+                next_cursor=response.page_info.end_cursor
+                if not next_cursor or next_cursor==cursor:break
+                cursor=next_cursor
+            output.update(pending_party_out=sorted(pending_party),pending_party_known=True)
+        except Exception:pass
+        output['pending_friend_out']=[];output['pending_friend_known']=False
+        try:
+            pending_friends=set();cursor=''
+            for _ in range(4):
+                request=self.message('contacts','ListPendingFriendRequestsRequest')();request.pagination.first=50
+                if cursor:request.pagination.after=cursor
+                response=self.call('contacts','ContactsService','ListPendingFriendRequests',request)
+                for req in getattr(response,'pending_friend_requests',[]):
+                    sender_pid=getattr(getattr(req,'sender',None),'player_id',0)
+                    recv_pid=getattr(getattr(req,'receiver',None),'player_id',0)
+                    if sender_pid and recv_pid and PLAYER_PREFIX+str(sender_pid)==self.account.subject:
+                        pending_friends.add(PLAYER_PREFIX+str(recv_pid))
+                if not response.page_info.has_next_page:break
+                next_cursor=response.page_info.end_cursor
+                if not next_cursor or next_cursor==cursor:break
+                cursor=next_cursor
+            output.update(pending_friend_out=sorted(pending_friends),pending_friend_known=True)
+        except Exception:pass
         # Resolve the complete contact list without guessing blank/raw-ID names.
         output['friend_rows']=[];output['friend_names_error']=''
         if output['friends_at']:

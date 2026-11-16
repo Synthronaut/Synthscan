@@ -1,5 +1,6 @@
 import {
   ACTION_LIMIT,
+  ActionLogEntry,
   BuyerWatch,
   ChatChannel,
   ChatMessage,
@@ -57,7 +58,7 @@ export class DesktopAppController {
   private partyPeople: Player[] = [];
 
   // Citizens sub-mode ('roster' vs 'chat') and Live Chat state
-  private peopleSubMode: 'roster' | 'chat' = 'roster';
+  private peopleSubMode: 'roster' | 'party' | 'chat' | 'log' = 'roster';
   private selectedChatChannelId = 'all';
   private selectedSendChannelId = '';
   private chatShowRawCodes = false;
@@ -145,6 +146,14 @@ export class DesktopAppController {
   private modalPauseBtn!: HTMLButtonElement;
   private modalStopQueueBtn!: HTMLButtonElement;
   private contextMenuEl: HTMLElement | null = null;
+  private pendingQueueFeedback: { text: string; at: number } | null = null;
+
+  // Actions Log DOM elements
+  private actionLogTbodyEl!: HTMLTableSectionElement;
+  private actionLogCountEl!: HTMLElement;
+  private actionLogFilterEl!: HTMLSelectElement;
+  private actionLogClearBtn!: HTMLButtonElement;
+  private actionLogFilter = 'all';
 
   // Buyer alerts DOM elements
   private marketSearchInputEl!: HTMLInputElement;
@@ -159,9 +168,13 @@ export class DesktopAppController {
 
   // Citizens sub-mode, Party box & Live Chat DOM elements
   private peopleModeRosterBtn!: HTMLButtonElement;
+  private peopleModePartyBtn!: HTMLButtonElement;
   private peopleModeChatBtn!: HTMLButtonElement;
+  private peopleModeLogBtn!: HTMLButtonElement;
   private peopleRosterWorkspaceEl!: HTMLElement;
+  private peoplePartyWorkspaceEl!: HTMLElement;
   private peopleChatWorkspaceEl!: HTMLElement;
+  private peopleLogWorkspaceEl!: HTMLElement;
   private partyHeaderEl!: HTMLElement;
   private partyListEl!: HTMLElement;
   private leavePartyBtn!: HTMLButtonElement;
@@ -266,8 +279,10 @@ export class DesktopAppController {
         <section id="ss-view-people" class="ss-view">
           <div class="ss-toolbar-row ss-people-subnav">
             <div class="ss-mode-tabs" role="tablist" aria-label="Citizens workspace view">
-              <button id="people-mode-roster-btn" type="button" class="ss-tab is-active" role="tab" aria-selected="true">Citizens &amp; Party</button>
+              <button id="people-mode-roster-btn" type="button" class="ss-tab is-active" role="tab" aria-selected="true">Citizens</button>
+              <button id="people-mode-party-btn" type="button" class="ss-tab" role="tab" aria-selected="false">Party</button>
               <button id="people-mode-chat-btn" type="button" class="ss-tab" role="tab" aria-selected="false">Live Chat &amp; Translator</button>
+              <button id="people-mode-log-btn" type="button" class="ss-tab" role="tab" aria-selected="false">Actions Log</button>
             </div>
             <span class="ss-hint-line">Native gRPC social &amp; chat feed · Zero screen capture or OCR</span>
           </div>
@@ -318,19 +333,8 @@ export class DesktopAppController {
               </div>
             </div>
 
-            <!-- Right Column: Party Box + Action List + Tagging & Social Queue -->
+            <!-- Right Column: Action List + Tagging & Social Queue -->
             <div class="ss-right-column">
-              <div class="ss-card ss-party-pane" id="people-party-pane">
-                <div class="ss-pane-meta">
-                  <span id="people-party-header" class="ss-status-line">Party · Solo</span>
-                  <div class="ss-toolbar-row">
-                    <span class="ss-hint-line">Right-click member to make leader or remove</span>
-                    <button id="leave-party-btn" type="button" class="ss-btn ss-btn-xs" hidden>Leave</button>
-                  </div>
-                </div>
-                <div id="people-party-list" class="ss-party-list" role="region" aria-label="Current party members"></div>
-              </div>
-
               <div class="ss-card ss-actions-pane">
                 <div class="ss-toolbar-row">
                   <button id="people-refresh-btn" type="button" class="ss-btn">Refresh shard</button>
@@ -392,6 +396,18 @@ export class DesktopAppController {
             </div>
           </div>
 
+          <!-- Party Workspace (Tab 2) -->
+          <div id="people-party-workspace" class="ss-card ss-party-workspace" hidden style="display: none !important;">
+            <div class="ss-pane-meta">
+              <span id="people-party-header" class="ss-status-line">Party · Solo</span>
+              <div class="ss-toolbar-row">
+                <span class="ss-hint-line">Right-click member or click Actions to make leader or remove</span>
+                <button id="leave-party-btn" type="button" class="ss-btn ss-btn-xs" hidden>Leave</button>
+              </div>
+            </div>
+            <div id="people-party-list" class="ss-party-list ss-party-list-full" role="region" aria-label="Current party members"></div>
+          </div>
+
           <!-- Live Chat & Translator Workspace -->
           <div id="people-chat-workspace" class="ss-card ss-chat-workspace" hidden style="display: none !important;">
             <div class="ss-toolbar-row ss-toolbar-sub">
@@ -426,6 +442,40 @@ export class DesktopAppController {
                 <span>Send as [zh]</span>
               </label>
               <button id="chat-send-btn" type="button" class="ss-btn ss-btn-accent">Send</button>
+            </div>
+          </div>
+
+          <!-- Actions Log Workspace (Tab 4) -->
+          <div id="people-log-workspace" class="ss-card ss-log-workspace" hidden style="display: none !important;">
+            <div class="ss-pane-meta ss-activity-log-header">
+              <div class="ss-toolbar-row">
+                <span class="ss-status-line" id="action-log-title">Actions Log</span>
+                <span class="ss-activity-log-count" id="action-log-count">0</span>
+                <span class="ss-hint-line">Tags, friend &amp; party invites, and accepted / declined responses</span>
+              </div>
+              <div class="ss-toolbar-row">
+                <select id="action-log-filter" class="ss-select ss-select-xs" aria-label="Filter actions log">
+                  <option value="all">All events</option>
+                  <option value="tags">Tags</option>
+                  <option value="friend">Friend invites</option>
+                  <option value="party">Party invites</option>
+                  <option value="responses">Accepted / Declined</option>
+                </select>
+                <button id="action-log-clear-btn" type="button" class="ss-btn ss-btn-xs">Clear log</button>
+              </div>
+            </div>
+            <div id="action-log-body" class="ss-table-scroll ss-activity-log-scroll" tabindex="0" role="region" aria-label="Citizen actions log">
+              <table class="ss-table ss-activity-log-table">
+                <thead>
+                  <tr>
+                    <th class="col-log-time">TIME</th>
+                    <th class="col-log-type">ACTION</th>
+                    <th class="col-log-player">CITIZEN</th>
+                    <th class="col-log-detail">DETAILS</th>
+                  </tr>
+                </thead>
+                <tbody id="action-log-tbody"></tbody>
+              </table>
             </div>
           </div>
         </section>
@@ -487,10 +537,32 @@ export class DesktopAppController {
           </div>
         </section>
 
-        <!-- Home Session Recap View -->
+        <!-- Home Command Dashboard View -->
         <section id="ss-view-home" class="ss-view" hidden>
           <div class="ss-home-grid">
-            <div class="ss-card">
+            <!-- Top Verse Status & In-Game HUD Quick-Launch Strip -->
+            <div class="ss-card ss-home-topbar">
+              <div class="ss-home-status-row">
+                <div class="ss-home-status-left">
+                  <span id="home-conn-pill" class="ss-status-pill is-idle">OFFLINE</span>
+                  <span id="home-shard-text" class="ss-muted-text">Star Citizen not running</span>
+                </div>
+                <span id="home-strings-pill" class="ss-home-strings-pill">Game text OK</span>
+              </div>
+              <div class="ss-home-hud-strip" aria-label="In-game HUD overlays">
+                <span class="ss-home-hud-label">IN-GAME HUDS</span>
+                <button type="button" class="ss-btn ss-btn-sm" data-home-nav="hud_mining">Mining HUD</button>
+                <button type="button" class="ss-btn ss-btn-sm" data-home-nav="hud_finder">Finder HUD</button>
+                <button type="button" class="ss-btn ss-btn-sm" data-home-nav="hud_missions">Missions HUD</button>
+                <button type="button" class="ss-btn ss-btn-sm" data-home-nav="hud_hangars">Hangars HUD</button>
+              </div>
+            </div>
+
+            <!-- Refinery Order Completion Notification -->
+            <div id="home-refinery-banner" class="ss-refinery-banner" style="display:none;"></div>
+
+            <!-- Session Recap Card -->
+            <div class="ss-card ss-home-recap-card">
               <div class="ss-toolbar-row ss-space-between">
                 <h2 class="ss-section-heading">SESSION RECAP</h2>
                 <div class="ss-segmented">
@@ -614,6 +686,11 @@ export class DesktopAppController {
     this.pauseQueueBtn = this.root.querySelector('#pause-queue-btn')!;
     this.cancelQueueBtn = this.root.querySelector('#cancel-queue-btn')!;
 
+    this.actionLogTbodyEl = this.root.querySelector('#action-log-tbody')!;
+    this.actionLogCountEl = this.root.querySelector('#action-log-count')!;
+    this.actionLogFilterEl = this.root.querySelector('#action-log-filter')!;
+    this.actionLogClearBtn = this.root.querySelector('#action-log-clear-btn')!;
+
     this.peopleSectionEl = this.root.querySelector('#ss-view-people')!;
     this.marketSectionEl = this.root.querySelector('#ss-view-market')!;
     this.homeSectionEl = this.root.querySelector('#ss-view-home')!;
@@ -659,9 +736,13 @@ export class DesktopAppController {
     this.marketShowMatchesBtn = this.root.querySelector('#market-show-matches-btn')!;
 
     this.peopleModeRosterBtn = this.root.querySelector('#people-mode-roster-btn')!;
+    this.peopleModePartyBtn = this.root.querySelector('#people-mode-party-btn')!;
     this.peopleModeChatBtn = this.root.querySelector('#people-mode-chat-btn')!;
+    this.peopleModeLogBtn = this.root.querySelector('#people-mode-log-btn')!;
     this.peopleRosterWorkspaceEl = this.root.querySelector('#people-roster-workspace')!;
+    this.peoplePartyWorkspaceEl = this.root.querySelector('#people-party-workspace')!;
     this.peopleChatWorkspaceEl = this.root.querySelector('#people-chat-workspace')!;
+    this.peopleLogWorkspaceEl = this.root.querySelector('#people-log-workspace')!;
     this.partyHeaderEl = this.root.querySelector('#people-party-header')!;
     this.partyListEl = this.root.querySelector('#people-party-list')!;
     this.leavePartyBtn = this.root.querySelector('#leave-party-btn')!;
@@ -737,16 +818,32 @@ export class DesktopAppController {
       this.toggleSelection(id, ev.shiftKey, false);
     });
 
-    // Right-click context menu in Roster table
-    this.rosterTbodyEl.addEventListener('contextmenu', (ev) => {
-      const tr = (ev.target as HTMLElement).closest<HTMLTableRowElement>('tr[data-player-id]');
+    // Right-click context menu in Roster table and Action table
+    const handleTableContextMenu = (ev: MouseEvent, list: Player[]) => {
+      const rawTarget = ev.target as { closest?: unknown; parentElement?: Element | null } | null;
+      const targetEl =
+        rawTarget && typeof rawTarget.closest === 'function'
+          ? (rawTarget as Element)
+          : rawTarget?.parentElement ?? null;
+      const tr = targetEl?.closest<HTMLTableRowElement>('tr[data-player-id]');
       if (!tr) return;
       const id = tr.dataset.playerId!;
-      const player = this.filteredPeople.find((p) => p.id === id);
+      const player = list.find((p) => p.id === id);
       if (!player) return;
 
       ev.preventDefault();
-      this.openContextMenu(player, ev.clientX, ev.clientY);
+      ev.stopPropagation();
+      const rect = typeof tr.getBoundingClientRect === 'function' ? tr.getBoundingClientRect() : null;
+      const x = ev.clientX || (rect ? rect.left + 80 : 240);
+      const y = ev.clientY || (rect ? rect.bottom : 180);
+      this.openContextMenu(player, x, y);
+    };
+
+    this.rosterTbodyEl.addEventListener('contextmenu', (ev) => {
+      handleTableContextMenu(ev, this.filteredPeople);
+    });
+    this.actionTbodyEl.addEventListener('contextmenu', (ev) => {
+      handleTableContextMenu(ev, this.actionPeople);
     });
 
     if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
@@ -915,6 +1012,15 @@ export class DesktopAppController {
       });
     });
 
+    // Actions Log controls
+    this.actionLogFilterEl.addEventListener('change', () => {
+      this.actionLogFilter = this.actionLogFilterEl.value;
+      this.renderActionLog();
+    });
+    this.actionLogClearBtn.addEventListener('click', () => {
+      void this.bridge.sendCommand({ action: 'clear_action_log' });
+    });
+
     // Modal controls
     this.modalCancelBtn.addEventListener('click', () => {
       this.closeModal();
@@ -930,6 +1036,11 @@ export class DesktopAppController {
       const action = this.modalMode === 'confirm_friend' ? 'friend_many' : 'party_many';
       this.closeModal();
       if (ids.length > 0) {
+        this.pendingQueueFeedback = {
+          text: `Queuing ${ids.length} ${action === 'friend_many' ? 'friend request(s)' : 'party invite(s)'}…`,
+          at: Date.now(),
+        };
+        this.updateStatusAndControls();
         void this.bridge.sendCommand({
           action,
           player_ids: ids,
@@ -1018,13 +1129,27 @@ export class DesktopAppController {
       this.homeShowPrevious = true;
       this.renderHome();
     });
+    this.root.querySelectorAll<HTMLButtonElement>('button[data-home-nav]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const page = btn.dataset.homeNav;
+        if (page) {
+          void this.bridge.sendCommand({ action: 'navigate', page });
+        }
+      });
+    });
 
-    // Citizens top mode switch (Citizens & Party vs Live Chat & Translator)
+    // Citizens top mode switch (Citizens vs Party vs Live Chat & Translator vs Actions Log)
     this.peopleModeRosterBtn.addEventListener('click', () => {
       this.setPeopleSubMode('roster');
     });
+    this.peopleModePartyBtn.addEventListener('click', () => {
+      this.setPeopleSubMode('party');
+    });
     this.peopleModeChatBtn.addEventListener('click', () => {
       this.setPeopleSubMode('chat');
+    });
+    this.peopleModeLogBtn.addEventListener('click', () => {
+      this.setPeopleSubMode('log');
     });
 
     // Party list interactions (right-click or Actions button)
@@ -1216,22 +1341,32 @@ export class DesktopAppController {
     });
   }
 
-  public setPeopleSubMode(subMode: 'roster' | 'chat'): void {
+  public setPeopleSubMode(subMode: 'roster' | 'party' | 'chat' | 'log'): void {
     this.peopleSubMode = subMode;
+    const isRoster = subMode === 'roster';
+    const isParty = subMode === 'party';
     const isChat = subMode === 'chat';
-    this.peopleModeRosterBtn.classList.toggle('is-active', !isChat);
-    this.peopleModeRosterBtn.setAttribute('aria-selected', !isChat ? 'true' : 'false');
+    const isLog = subMode === 'log';
+
+    this.peopleModeRosterBtn.classList.toggle('is-active', isRoster);
+    this.peopleModeRosterBtn.setAttribute('aria-selected', isRoster ? 'true' : 'false');
+    this.peopleModePartyBtn.classList.toggle('is-active', isParty);
+    this.peopleModePartyBtn.setAttribute('aria-selected', isParty ? 'true' : 'false');
     this.peopleModeChatBtn.classList.toggle('is-active', isChat);
     this.peopleModeChatBtn.setAttribute('aria-selected', isChat ? 'true' : 'false');
-    this.peopleRosterWorkspaceEl.hidden = isChat;
+    this.peopleModeLogBtn.classList.toggle('is-active', isLog);
+    this.peopleModeLogBtn.setAttribute('aria-selected', isLog ? 'true' : 'false');
+
+    this.peopleRosterWorkspaceEl.hidden = !isRoster;
+    this.peoplePartyWorkspaceEl.hidden = !isParty;
     this.peopleChatWorkspaceEl.hidden = !isChat;
-    if (isChat) {
-      this.peopleRosterWorkspaceEl.style.setProperty('display', 'none', 'important');
-      this.peopleChatWorkspaceEl.style.setProperty('display', 'flex', 'important');
-    } else {
-      this.peopleChatWorkspaceEl.style.setProperty('display', 'none', 'important');
-      this.peopleRosterWorkspaceEl.style.setProperty('display', 'grid', 'important');
-    }
+    this.peopleLogWorkspaceEl.hidden = !isLog;
+
+    this.peopleRosterWorkspaceEl.style.setProperty('display', isRoster ? 'grid' : 'none', 'important');
+    this.peoplePartyWorkspaceEl.style.setProperty('display', isParty ? 'flex' : 'none', 'important');
+    this.peopleChatWorkspaceEl.style.setProperty('display', isChat ? 'flex' : 'none', 'important');
+    this.peopleLogWorkspaceEl.style.setProperty('display', isLog ? 'flex' : 'none', 'important');
+
     void this.bridge.sendCommand({
       action: 'set_chat_active',
       active: isChat,
@@ -1239,6 +1374,10 @@ export class DesktopAppController {
     if (isChat) {
       this.lastChatSignature = '';
       this.renderChat();
+    } else if (isParty) {
+      this.renderParty();
+    } else if (isLog) {
+      this.renderActionLog();
     }
   }
 
@@ -1317,21 +1456,34 @@ export class DesktopAppController {
       menu.appendChild(partyDiv);
     }
 
+    const hasSession = Boolean(this.snapshot?.session && this.snapshot.session.length > 0);
+    const socialBusy = Boolean(this.snapshot?.social_busy);
+
     // Friend Request item
     const friendBtn = doc.createElement('button');
     friendBtn.type = 'button';
     friendBtn.className = 'ss-context-menu-item';
-    friendBtn.textContent = 'Send Friend Request';
-    if (player.is_self || player.is_friend) {
+    friendBtn.textContent = player.friend_requested_before
+      ? 'Send Friend Request (Retry)'
+      : 'Send Friend Request';
+    if (player.is_self || player.is_friend || !hasSession || socialBusy) {
       friendBtn.disabled = true;
       if (player.is_friend) friendBtn.textContent = 'Already Friend';
+      else if (!hasSession) friendBtn.textContent = 'Send Friend Request (Wait for shard)';
+      else if (socialBusy) friendBtn.textContent = 'Send Friend Request (Queue running)';
     } else {
       friendBtn.addEventListener('click', () => {
         this.closeContextMenu();
+        this.pendingQueueFeedback = {
+          text: `Queuing friend request for ${player.handle}…`,
+          at: Date.now(),
+        };
+        this.updateStatusAndControls();
         void this.bridge.sendCommand({
           action: 'friend',
           player_id: player.id,
           confirmed: true,
+          resend: Boolean(player.friend_requested_before),
         });
       });
     }
@@ -1341,17 +1493,26 @@ export class DesktopAppController {
     const partyBtn = doc.createElement('button');
     partyBtn.type = 'button';
     partyBtn.className = 'ss-context-menu-item';
-    partyBtn.textContent = 'Invite to Party';
-    if (player.is_self || player.in_party) {
+    partyBtn.textContent = player.invited_before ? 'Invite to Party (Retry)' : 'Invite to Party';
+    if (player.is_self || player.in_party || !hasSession || socialBusy) {
       partyBtn.disabled = true;
       if (player.in_party) partyBtn.textContent = 'Already in Party';
+      else if (!hasSession) partyBtn.textContent = 'Invite to Party (Wait for shard)';
+      else if (socialBusy) partyBtn.textContent = 'Invite to Party (Queue running)';
     } else {
       partyBtn.addEventListener('click', () => {
         this.closeContextMenu();
+        this.pendingQueueFeedback = {
+          text: `Queuing party invite for ${player.handle}…`,
+          at: Date.now(),
+        };
+        this.updateStatusAndControls();
         void this.bridge.sendCommand({
           action: 'party',
           player_id: player.id,
           confirmed: true,
+          resend: Boolean(player.invited_before),
+          allow_friends: Boolean(player.is_friend),
         });
       });
     }
@@ -1496,7 +1657,7 @@ export class DesktopAppController {
         titleEl.textContent = 'Day/Night Forecast';
         subEl.textContent = 'Destination-first solar geometry. Plan for the light when you arrive.';
       } else if (mode === 'hud_piracy') {
-        titleEl.textContent = 'Piracy & Flight';
+        titleEl.textContent = 'Flight / Piracy';
         subEl.textContent = 'Live Game.log avionics, unmonitored jurisdiction radar, and snare ops.';
       } else if (mode === 'mission_log') {
         titleEl.textContent = 'Mission & Wallet Log';
@@ -1686,6 +1847,7 @@ export class DesktopAppController {
     this.updateTagSelectOptions(snap.tag_options ?? ['Org', 'Friendly', 'Aggressive', 'Trader', 'Friend']);
     this.renderParty();
     this.renderChat();
+    this.renderActionLog();
     if (snap.last_dictated_text && this.chatSendInputEl) {
       this.chatSendInputEl.value = snap.last_dictated_text;
     }
@@ -1695,6 +1857,20 @@ export class DesktopAppController {
       this.chatVoiceBtn.innerHTML = '🎙️ Talk';
     }
     this.updateStatusAndControls();
+  }
+
+  private renderTagChips(tags: string[], fontSize?: number, height?: number): string {
+    const sizeStyle = fontSize && height ? `font-size:${fontSize}px;height:${height}px;line-height:${height - 2}px;` : '';
+    return tags
+      .filter((t) => t && t.trim())
+      .map((t) => {
+        const c = tagColor(t);
+        const bgR = Math.trunc((14 * 4 + c.r) / 5);
+        const bgG = Math.trunc((18 * 4 + c.g) / 5);
+        const bgB = Math.trunc((25 * 4 + c.b) / 5);
+        return `<span class="ss-tag-chip" data-tag="${this.escapeHtml(t)}" style="color:${c.css};background:rgb(${bgR},${bgG},${bgB});border-color:rgba(${c.r},${c.g},${c.b},0.49);${sizeStyle}">${this.escapeHtml(t)}</span>`;
+      })
+      .join('');
   }
 
   private renderParty(): void {
@@ -1716,7 +1892,7 @@ export class DesktopAppController {
       this.leavePartyBtn.hidden = false;
     }
 
-    const partySig = `${snap.session}|${leaderId}|${isLeader ? '1' : '0'}|${rawParty.map((p) => `${p.id}:${p.handle}:${p.is_leader ? '1' : '0'}`).join(',')}`;
+    const partySig = `${snap.session}|${snap.revision ?? 0}|${leaderId}|${isLeader ? '1' : '0'}|${rawParty.map((p) => `${p.id}:${p.handle}:${p.is_leader ? '1' : '0'}:${p.tag ?? ''}`).join(',')}`;
     if (partySig === this.lastPartySignature) {
       return;
     }
@@ -1736,9 +1912,7 @@ export class DesktopAppController {
 
       const pColor = personColor(p);
       const tags = p.tags && p.tags.length > 0 ? p.tags : splitTags(p.tag);
-      const chipsHtml = tags
-        .map((t) => `<span class="ss-tag-chip" style="font-size:10px;height:18px;">${this.escapeHtml(t)}</span>`)
-        .join('');
+      const chipsHtml = this.renderTagChips(tags, 10, 18);
 
       card.innerHTML = `
         <div class="ss-party-card-main">
@@ -1814,7 +1988,7 @@ export class DesktopAppController {
     const visibleMsgs = currentTabId === 'all' ? allMsgs : allMsgs.filter((m) => m.group_id === currentTabId);
 
     // Compute signature to skip DOM rebuild when no new messages
-    const sig = `${currentTabId}|${this.chatShowRawCodes ? '1' : '0'}|${this.chatLiveTranslate ? '1' : '0'}|${visibleMsgs.map((m) => `${m.id}:${m.content}:${m.translated_content ?? ''}`).join(',')}`;
+    const sig = `${currentTabId}|${snap.revision ?? 0}|${this.chatShowRawCodes ? '1' : '0'}|${this.chatLiveTranslate ? '1' : '0'}|${visibleMsgs.map((m) => `${m.id}:${m.content}:${m.translated_content ?? ''}:${(m.sender_tags ?? []).join('-')}`).join(',')}`;
     if (sig === this.lastChatSignature) {
       return;
     }
@@ -1840,10 +2014,29 @@ export class DesktopAppController {
       const senderColor = m.is_self ? 'var(--ss-self)' : m.in_party ? 'var(--ss-party)' : m.is_friend ? 'var(--ss-friend)' : 'var(--ss-ink)';
       const channelBadge = currentTabId === 'all' ? `<span class="ss-chat-channel-tag ss-chat-badge-${m.channel_kind}">${this.escapeHtml(m.channel_label)}</span>` : '';
 
-      const tags = m.sender_tags && m.sender_tags.length > 0 ? m.sender_tags : splitTags(m.sender_tag);
-      const tagsHtml = tags
-        .map((t) => `<span class="ss-tag-chip" style="font-size:9.5px;height:16px;">${this.escapeHtml(t)}</span>`)
-        .join('');
+      let tags: string[] = m.sender_tags && m.sender_tags.length > 0 ? [...m.sender_tags] : splitTags(m.sender_tag);
+      if (tags.length === 0 && snap.tags) {
+        const sid = m.sender_id || '';
+        const bareId = sid.startsWith('urn:sc:global:player:geid:') ? sid.slice('urn:sc:global:player:geid:'.length) : sid;
+        const prefId = sid.startsWith('urn:sc:global:player:geid:') ? sid : (sid ? `urn:sc:global:player:geid:${sid}` : '');
+        const handleLower = (m.sender_handle || '').trim().toLowerCase();
+
+        let foundTag = (sid ? snap.tags[sid] : undefined) || (bareId ? snap.tags[bareId] : undefined) || (prefId ? snap.tags[prefId] : undefined);
+        if (!foundTag && handleLower) {
+          for (const t of Object.values(snap.tags)) {
+            if (t.handle && t.handle.trim().toLowerCase() === handleLower) {
+              foundTag = t;
+              break;
+            }
+          }
+        }
+        if (foundTag) {
+          tags = splitTags(foundTag.label);
+          if (foundTag.is_friend && !tags.includes('Friend')) tags.push('Friend');
+          if (foundTag.in_party && !tags.includes('Party')) tags.push('Party');
+        }
+      }
+      const tagsHtml = this.renderTagChips(tags, 9.5, 16);
 
       let translationHtml = '';
       if (this.chatLiveTranslate && m.translated_content && m.translated_content.trim()) {
@@ -1961,15 +2154,7 @@ export class DesktopAppController {
     tr.style.height = `${ROW_HEIGHT_PX}px`;
 
     const tags = p.tags && p.tags.length > 0 ? p.tags : splitTags(p.tag);
-    const chipsHtml = tags
-      .map((t) => {
-        const c = tagColor(t);
-        const bgR = Math.trunc((14 * 4 + c.r) / 5);
-        const bgG = Math.trunc((18 * 4 + c.g) / 5);
-        const bgB = Math.trunc((25 * 4 + c.b) / 5);
-        return `<span class="ss-tag-chip" data-tag="${this.escapeHtml(t)}" style="color:${c.css};background:rgb(${bgR},${bgG},${bgB});border-color:rgba(${c.r},${c.g},${c.b},0.49)">${this.escapeHtml(t)}</span>`;
-      })
-      .join('');
+    const chipsHtml = this.renderTagChips(tags);
 
     const receipts: string[] = [];
     if (p.requests) {
@@ -2187,22 +2372,123 @@ export class DesktopAppController {
     // Queue controls & summary
     const q = snap.invite_queue;
     const queueActive = Boolean(q && q.active && !q.cancelling);
+    if (this.pendingQueueFeedback && (queueActive || socialBusy || Date.now() - this.pendingQueueFeedback.at > 4500)) {
+      this.pendingQueueFeedback = null;
+    }
     this.viewQueueBtn.disabled = !(snap.batch_results && snap.batch_results.length > 0) && !q?.id;
     this.pauseQueueBtn.disabled = !queueActive;
     this.cancelQueueBtn.disabled = !queueActive;
     this.pauseQueueBtn.textContent = q?.paused ? 'Resume' : 'Pause';
-    this.queueStatusEl.textContent = this.formatQueueSummary(q);
+    if (this.pendingQueueFeedback) {
+      this.queueStatusEl.textContent = this.pendingQueueFeedback.text;
+      this.queueStatusEl.className = 'ss-queue-summary is-queuing';
+    } else {
+      this.queueStatusEl.textContent = this.formatQueueSummary(q);
+      const stateClass = !q?.id
+        ? ''
+        : q.active && q.paused
+          ? 'is-paused'
+          : q.active
+            ? 'is-active'
+            : q.state === 'Completed'
+              ? 'is-done'
+              : 'is-stopped';
+      this.queueStatusEl.className = `ss-queue-summary ${stateClass}`.trim();
+    }
 
     // Footer status
     if (this.footerEl) {
       this.footerEl.hidden = this.activeMode !== 'people';
     }
-    let footer = snap.status ?? 'Ready';
+    let footer = this.pendingQueueFeedback ? this.pendingQueueFeedback.text : (snap.status ?? 'Ready');
     footer += ' · Tagged-citizen alerts report list appearances; the first snapshot stays quiet.';
     if (snap.friends_known === false || snap.party_known === false) {
       footer += ' · Friend / party status is checking or unavailable; unconfirmed rows stay neutral.';
     }
     this.footerStatusEl.textContent = footer;
+  }
+
+  private renderActionLog(): void {
+    const entries: ActionLogEntry[] = this.snapshot?.action_log ?? [];
+    const filtered = entries.filter((entry) => {
+      if (this.actionLogFilter === 'tags') return entry.kind === 'tag';
+      if (this.actionLogFilter === 'friend') {
+        return entry.kind === 'friend_sent' || entry.kind === 'friend_accepted' || entry.kind === 'friend_rejected';
+      }
+      if (this.actionLogFilter === 'party') {
+        return (
+          entry.kind === 'party_sent' ||
+          entry.kind === 'party_accepted' ||
+          entry.kind === 'party_rejected' ||
+          entry.kind === 'party_manage'
+        );
+      }
+      if (this.actionLogFilter === 'responses') {
+        return (
+          entry.kind === 'friend_accepted' ||
+          entry.kind === 'friend_rejected' ||
+          entry.kind === 'party_accepted' ||
+          entry.kind === 'party_rejected'
+        );
+      }
+      return true;
+    });
+
+    this.actionLogCountEl.textContent = String(filtered.length);
+    this.actionLogClearBtn.disabled = entries.length === 0;
+
+    if (filtered.length === 0) {
+      this.actionLogTbodyEl.innerHTML =
+        '<tr><td colspan="4" class="ss-activity-log-empty">No recorded actions yet. Tag citizens or send friend / party invites to log activity here.</td></tr>';
+      return;
+    }
+
+    const badgeFor = (entry: ActionLogEntry): { label: string; cls: string } => {
+      switch (entry.kind) {
+        case 'tag':
+          return { label: entry.outcome === 'Cleared' ? 'Tags Cleared' : 'Tagged', cls: 'is-tag' };
+        case 'friend_sent':
+          return {
+            label: entry.outcome === 'Sent' ? 'Friend Sent' : `Friend (${entry.outcome || 'Note'})`,
+            cls: entry.outcome === 'Sent' ? 'is-sent' : 'is-warn',
+          };
+        case 'friend_accepted':
+          return { label: 'Friend Accepted', cls: 'is-accepted' };
+        case 'friend_rejected':
+          return { label: 'Friend Declined', cls: 'is-declined' };
+        case 'party_sent':
+          return {
+            label: entry.outcome === 'Sent' ? 'Party Sent' : `Party (${entry.outcome || 'Note'})`,
+            cls: entry.outcome === 'Sent' ? 'is-sent' : 'is-warn',
+          };
+        case 'party_accepted':
+          return { label: 'Party Accepted', cls: 'is-accepted' };
+        case 'party_rejected':
+          return { label: 'Party Declined', cls: 'is-declined' };
+        case 'party_manage':
+          return { label: `Party · ${entry.outcome || 'Action'}`, cls: 'is-tag' };
+        default:
+          return { label: entry.outcome || 'Action', cls: 'is-tag' };
+      }
+    };
+
+    this.actionLogTbodyEl.innerHTML = filtered
+      .map((entry) => {
+        const d = new Date(entry.at * 1000);
+        const timeStr = Number.isFinite(d.getTime())
+          ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+          : '';
+        const badge = badgeFor(entry);
+        return `
+          <tr>
+            <td class="col-log-time">${this.escapeHtml(timeStr)}</td>
+            <td class="col-log-type"><span class="ss-log-badge ${badge.cls}">${this.escapeHtml(badge.label)}</span></td>
+            <td class="col-log-player">${this.escapeHtml(entry.handle)}</td>
+            <td class="col-log-detail">${this.escapeHtml(entry.detail)}</td>
+          </tr>
+        `;
+      })
+      .join('');
   }
 
   private formatQueueSummary(q?: InviteQueueState): string {
@@ -2401,6 +2687,84 @@ export class DesktopAppController {
     const rep = session?.reputation ?? [];
     const contracts = session?.contracts_completed ?? 0;
 
+    // Top Verse Status & SynthStrings indicator
+    const connPillEl = this.root.querySelector('#home-conn-pill');
+    const shardTextEl = this.root.querySelector('#home-shard-text');
+    const stringsPillEl = this.root.querySelector('#home-strings-pill');
+    const connected = Boolean(home?.connected || this.snapshot?.piracy?.game_running);
+    if (connPillEl && shardTextEl) {
+      connPillEl.className = `ss-status-pill ${connected ? 'is-flight' : 'is-idle'}`;
+      connPillEl.textContent = connected ? 'ONLINE' : 'OFFLINE';
+      const shardLabel = home?.identity || this.snapshot?.session || '';
+      shardTextEl.textContent = connected
+        ? shardLabel
+          ? `Connected · ${shardLabel}`
+          : 'Star Citizen running'
+        : 'Star Citizen not running';
+    }
+
+    const strings = home?.synthstrings;
+    if (stringsPillEl) {
+      const attention = strings?.status_kind === 'attention';
+      stringsPillEl.className = `ss-home-strings-pill${attention ? ' is-attention' : ''}`;
+      stringsPillEl.textContent = strings?.status_label
+        ? strings.status_label
+        : attention
+          ? 'Game text needs attention'
+          : 'Game text OK';
+    }
+
+    // Refinery order completion banner
+    const refBannerEl = this.root.querySelector('#home-refinery-banner') as HTMLElement | null;
+    if (refBannerEl) {
+      const orders = (home?.refinery ?? []).filter((r) => !r.dismissed && r.station);
+      const fallbackNotice = (home?.refinery_notice ?? '').trim();
+      if (orders.length > 0) {
+        const lines = orders.map((r) => {
+          const count = r.count && r.count > 1 ? `${r.count} refinery orders` : 'Refinery order';
+          return `<strong>${this.escapeHtml(count)} at ${this.escapeHtml(r.station)}</strong> finished`;
+        });
+        refBannerEl.style.display = 'flex';
+        refBannerEl.innerHTML = `
+          <div class="ss-refinery-banner-text">
+            <span class="ss-refinery-badge">REFINERY READY</span>
+            <span>${lines.join(' · ')}</span>
+          </div>
+          <div class="ss-refinery-banner-actions">
+            <button type="button" class="ss-btn ss-btn-sm ss-btn-accent" id="home-open-refinery-btn">Open Refinery</button>
+            <button type="button" class="ss-btn ss-btn-sm" id="home-dismiss-refinery-btn">Dismiss</button>
+          </div>
+        `;
+        refBannerEl.querySelector('#home-open-refinery-btn')?.addEventListener('click', () => {
+          void this.bridge.sendCommand({ action: 'navigate', page: 'refinery' });
+        });
+        refBannerEl.querySelector('#home-dismiss-refinery-btn')?.addEventListener('click', () => {
+          void this.bridge.sendCommand({ action: 'navigate', page: 'dismiss_refinery' });
+        });
+      } else if (fallbackNotice) {
+        refBannerEl.style.display = 'flex';
+        refBannerEl.innerHTML = `
+          <div class="ss-refinery-banner-text">
+            <span class="ss-refinery-badge">REFINERY READY</span>
+            <span>${this.escapeHtml(fallbackNotice)}</span>
+          </div>
+          <div class="ss-refinery-banner-actions">
+            <button type="button" class="ss-btn ss-btn-sm ss-btn-accent" id="home-open-refinery-btn">Open Refinery</button>
+            <button type="button" class="ss-btn ss-btn-sm" id="home-dismiss-refinery-btn">Dismiss</button>
+          </div>
+        `;
+        refBannerEl.querySelector('#home-open-refinery-btn')?.addEventListener('click', () => {
+          void this.bridge.sendCommand({ action: 'navigate', page: 'refinery' });
+        });
+        refBannerEl.querySelector('#home-dismiss-refinery-btn')?.addEventListener('click', () => {
+          void this.bridge.sendCommand({ action: 'navigate', page: 'dismiss_refinery' });
+        });
+      } else {
+        refBannerEl.style.display = 'none';
+        refBannerEl.innerHTML = '';
+      }
+    }
+
     this.root
       .querySelector('#home-session-current')!
       .classList.toggle('is-active', !this.homeShowPrevious);
@@ -2408,20 +2772,57 @@ export class DesktopAppController {
       .querySelector('#home-session-prev')!
       .classList.toggle('is-active', this.homeShowPrevious);
 
+    // Net aUEC from Mission & Wallet Log for the selected session
+    const missionSessions = this.snapshot?.mission?.sessions ?? [];
+    const targetMissionSession = this.homeShowPrevious
+      ? missionSessions[1]
+      : (missionSessions.find((s) => s.id === this.snapshot?.mission?.current_session) ?? missionSessions[0]);
+    const auecWallet = targetMissionSession?.wallet?.find((w) => w.currency.toLowerCase() === 'auec');
+    const netAuec = auecWallet?.delta;
+    const netAuecText =
+      typeof netAuec === 'number'
+        ? `${netAuec > 0 ? '+' : ''}${Math.round(netAuec).toLocaleString('en-US')}`
+        : '—';
+    const netAuecCls =
+      typeof netAuec === 'number' && netAuec !== 0 ? (netAuec > 0 ? ' ss-text-ok' : ' ss-text-bad') : '';
+
+    // Flight sorties & helm time (current session)
+    const flight = this.snapshot?.piracy?.flight;
+    const sortiesCount = !this.homeShowPrevious ? (flight?.total_sorties ?? 0) : null;
+    const helmSec = !this.homeShowPrevious ? (flight?.total_helm_s ?? 0) : 0;
+    const helmLabel =
+      helmSec >= 3600
+        ? `${Math.floor(helmSec / 3600)}h ${Math.floor((helmSec % 3600) / 60)}m`
+        : helmSec >= 60
+          ? `${Math.floor(helmSec / 60)}m`
+          : `${Math.floor(helmSec)}s`;
+
     const metricsEl = this.root.querySelector('#home-metrics-row')!;
     metricsEl.innerHTML = `
       <div class="ss-metric-card">
-        <span class="ss-metric-value">${blueprints.length}</span>
-        <span class="ss-metric-label">Blueprints received</span>
+        <span class="ss-metric-value${netAuecCls}">${this.escapeHtml(netAuecText)}</span>
+        <span class="ss-metric-label">Net aUEC</span>
       </div>
       <div class="ss-metric-card">
         <span class="ss-metric-value">${contracts}</span>
         <span class="ss-metric-label">Contracts completed</span>
       </div>
       <div class="ss-metric-card">
+        <span class="ss-metric-value">${blueprints.length}</span>
+        <span class="ss-metric-label">Blueprints received</span>
+      </div>
+      <div class="ss-metric-card">
         <span class="ss-metric-value">${rep.length}</span>
         <span class="ss-metric-label">Reputation changes</span>
       </div>
+      ${
+        sortiesCount !== null
+          ? `<div class="ss-metric-card">
+              <span class="ss-metric-value">${sortiesCount} <small class="ss-metric-sub">· ${this.escapeHtml(helmLabel)}</small></span>
+              <span class="ss-metric-label">Flights &amp; helm</span>
+            </div>`
+          : ''
+      }
     `;
 
     const bpListEl = this.root.querySelector('#home-blueprints-list')!;
@@ -2441,7 +2842,6 @@ export class DesktopAppController {
             )
             .join('');
 
-    const strings = home?.synthstrings;
     const patchEl = this.root.querySelector('#home-patch-banner') as HTMLElement | null;
     if (patchEl) {
       if (strings?.title && strings.status_kind === 'attention') {

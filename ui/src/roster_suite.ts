@@ -28,8 +28,11 @@ export interface RosterSuiteResult {
   unconfirmed_bridge_call_rejected: boolean;
   party_box_rendered_and_actions_work: boolean;
   chat_feed_decodes_and_translates: boolean;
+  chat_sender_tags_rendered: boolean;
   chat_compose_sends_message: boolean;
   voice_dictation_works: boolean;
+  shard_context_menu_ok: boolean;
+  action_log_ok: boolean;
   outgoing_live_requests_sent: number;
   failures: string[];
 }
@@ -415,6 +418,7 @@ export async function runPeopleRosterRegressionSuite(
         channel_label: 'Global',
         sender_id: 'pilot-088',
         sender_handle: 'ChinesePilot_88',
+        sender_tags: ['Trader', 'Friendly'],
         raw_content: '[zh] @IH@E8',
         content: '你好',
         translated_content: 'Hello',
@@ -432,6 +436,14 @@ export async function runPeopleRosterRegressionSuite(
     chatWorkspaceVisible &&
       chatMsgs.length === 1 &&
       Boolean(transEl && (transEl.textContent ?? '').includes('Hello')),
+  );
+
+  const chatTagChips = chatFeedEl.querySelectorAll('.ss-tag-chip');
+  const chatTagsOk = check(
+    'chat_sender_tags_rendered',
+    chatTagChips.length === 2 &&
+      (chatTagChips[0].textContent ?? '').includes('Trader') &&
+      (chatTagChips[1].textContent ?? '').includes('Friendly'),
   );
 
   // 14. Chat compose and send
@@ -461,10 +473,71 @@ export async function runPeopleRosterRegressionSuite(
   const voiceCommands = bridge.commands.filter((c) => c.action === 'start_voice_dictation');
   const voiceOk = check('voice_dictation_works', Boolean(chatVoiceBtn) && voiceCommands.length >= 1);
 
+  // 16. Right-click context menu straight from shard list + Actions Log
+  container.querySelector<HTMLButtonElement>('#people-mode-roster-btn')!.click();
+  container.querySelector<HTMLButtonElement>('#people-clear-btn')!.click();
+  bridge.publish({
+    session: 'session-ctx',
+    players: [
+      { id: 'urn:sc:global:player:geid:701', handle: 'ShardAce', tags: [], relationship: '—', on_shard: true },
+      { id: 'urn:sc:global:player:geid:702', handle: 'ShardBuddy', tags: ['Friendly'], relationship: '—', on_shard: true },
+    ],
+    action_log: [
+      { id: 'log-1', at: 1700000001, kind: 'tag', handle: 'ShardBuddy', outcome: 'Tagged', detail: 'Tagged: Friendly' },
+      { id: 'log-2', at: 1700000002, kind: 'friend_sent', handle: 'ShardAce', outcome: 'Sent', detail: 'Friend request sent' },
+      { id: 'log-3', at: 1700000003, kind: 'party_accepted', handle: 'ShardAce', outcome: 'Accepted', detail: 'Accepted your party invite' },
+      { id: 'log-4', at: 1700000004, kind: 'friend_rejected', handle: 'ShardBuddy', outcome: 'Declined', detail: 'Friend request declined' },
+    ],
+  });
+  const doc = container.ownerDocument;
+  const shardRow = controller.getRosterRowElement('urn:sc:global:player:geid:701')!;
+  shardRow.dispatchEvent({
+    type: 'contextmenu',
+    bubbles: true,
+    cancelable: true,
+    clientX: 120,
+    clientY: 160,
+    preventDefault() {},
+    stopPropagation() {},
+  } as unknown as MouseEvent);
+  const rosterMenu = doc.querySelector('#ss-roster-context-menu');
+  const menuInviteBtn = Array.from(rosterMenu?.querySelectorAll('button') ?? []).find((b) =>
+    (b.textContent ?? '').includes('Invite to Party'),
+  );
+  menuInviteBtn?.click();
+  const ctxPartyCmds = bridge.commands.filter(
+    (c) => c.action === 'party' && c.player_id === 'urn:sc:global:player:geid:701' && c.confirmed === true,
+  );
+  const queueTextAfterCtx = container.querySelector('#queue-status-text')?.textContent ?? '';
+  const shardContextMenuOk = check(
+    'shard_context_menu_invites_and_shows_queue_feedback',
+    Boolean(rosterMenu) && ctxPartyCmds.length === 1 && queueTextAfterCtx.includes('Queuing party invite for ShardAce'),
+  );
+
+  container.querySelector<HTMLButtonElement>('#people-mode-log-btn')!.click();
+  const logCountAll = container.querySelector('#action-log-count')?.textContent;
+  const logHtmlAll = container.querySelector('#action-log-tbody')?.innerHTML ?? '';
+  const logFilterEl = container.querySelector<HTMLSelectElement>('#action-log-filter')!;
+  logFilterEl.value = 'responses';
+  logFilterEl.dispatchEvent({ type: 'change', bubbles: true } as unknown as Event);
+  const logCountResponses = container.querySelector('#action-log-count')?.textContent;
+  const logClearBtn = container.querySelector<HTMLButtonElement>('#action-log-clear-btn')!;
+  logClearBtn.click();
+  const clearLogCmds = bridge.commands.filter((c) => c.action === 'clear_action_log');
+  const actionLogOk = check(
+    'action_log_renders_filters_and_clears',
+    logCountAll === '4' &&
+      logHtmlAll.includes('ShardAce') &&
+      logCountResponses === '2' &&
+      clearLogCmds.length === 1,
+  );
+
   controller.destroy();
 
   return {
     passed: failures.length === 0,
+    shard_context_menu_ok: shardContextMenuOk,
+    action_log_ok: actionLogOk,
     roster_size: 500,
     initial_created_rows: initialCreatedRows,
     heartbeat_recreated_rows: heartbeatRecreated,
@@ -489,6 +562,7 @@ export async function runPeopleRosterRegressionSuite(
     unconfirmed_bridge_call_rejected: rejectedUnconfirmed,
     party_box_rendered_and_actions_work: partyBoxOk,
     chat_feed_decodes_and_translates: chatFeedOk,
+    chat_sender_tags_rendered: chatTagsOk,
     chat_compose_sends_message: chatComposeOk,
     voice_dictation_works: voiceOk,
     outgoing_live_requests_sent: 0,

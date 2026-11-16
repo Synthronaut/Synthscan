@@ -84,6 +84,17 @@ export async function runMissionRegressionSuite(root: HTMLElement): Promise<Miss
   exportBtn?.click();
   checks.export_sends_format = bridge.commands.some((c) => c.action === 'mission_export' && c.format === 'csv');
 
+  // Subtab switching between Missions & Reputation and Wallet & Cash Flow.
+  const missionsPanel = root.querySelector('#mission-panel-missions') as HTMLElement;
+  const walletPanel = root.querySelector('#mission-panel-wallet') as HTMLElement;
+  const walletTabBtn = root.querySelector('#mission-subtab-wallet') as HTMLButtonElement;
+  const missionsTabBtn = root.querySelector('#mission-subtab-missions') as HTMLButtonElement;
+  const defaultMissionsTab = Boolean(!missionsPanel.hidden && walletPanel.hidden);
+  walletTabBtn.click();
+  const switchedToWallet = Boolean(missionsPanel.hidden && !walletPanel.hidden);
+  missionsTabBtn.click();
+  checks.subtabs_switch_cleanly = defaultMissionsTab && switchedToWallet && !missionsPanel.hidden && walletPanel.hidden;
+
   // Pure helpers.
   const grouped = groupBySession([entries[0], entries[1]] as never, sessions, 's2');
   checks.grouping_single_session_one_divider = grouped.filter((r) => r.kind === 'divider').length === 1;

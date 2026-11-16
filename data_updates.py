@@ -178,7 +178,7 @@ def validate_oracle_payload(name, raw):
             if not isinstance(k, str) or not isinstance(v, str) or '\n' in k or '\r' in k or '\n' in v or '\r' in v:
                 raise ValueError('Invalid custom_synthstrings entry')
             k_low = k.split(',')[0].strip().casefold()
-            if ('title' in k_low or k_low.endswith('_name')) and ('potential blueprints' in v.casefold() or 'multiple blueprint pools' in v.casefold()):
+            if 'desc' not in k_low and re.search(r'(?:title|_name(?:_|$)|_label(?:_|$))', k_low) and ('potential blueprints' in v.casefold() or 'multiple blueprint pools' in v.casefold()):
                 raise ValueError('Blueprint pool lists are forbidden in title/name keys')
     elif name == 'blueprints_catalog.json':
         items = data.get('items', data) if isinstance(data.get('items'), (list, dict)) else data

@@ -232,4 +232,47 @@ class WalletOwnershipTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'ownership'):own_wallet(client)
 
 
+class RetailPriceAndDecayTests(unittest.TestCase):
+    def test_multiple_ships_at_same_price_and_game_vehicle_id_are_matched(self):
+        import tempfile
+        from mission_log import load_retail_price_index, wallet_classification
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / 'directory_vehicles.json').write_text(json.dumps({
+                'rows': [
+                    {'id': 'vehicle-103', 'name': 'MISC Hull B', 'game_vehicle_id': 'uuid-hull-b'},
+                    {'id': 'vehicle-16', 'name': 'Aegis Eclipse', 'game_vehicle_id': 'uuid-eclipse'},
+                ]
+            }), encoding='utf-8')
+            shops = root / 'item_shops'
+            shops.mkdir()
+            (shops / 'vehicle-103.json').write_text(json.dumps({'item_id': 'vehicle-103', 'rows': [{'price': 7541100, 'location': 'Hurston -> New Deal'}]}), encoding='utf-8')
+            (shops / 'uuid-eclipse.json').write_text(json.dumps({'item_id': 'uuid-eclipse', 'rows': [{'price': 7541100, 'location': 'Hurston -> New Deal'}]}), encoding='utf-8')
+            index = load_retail_price_index(root)
+            cls = wallet_classification({'kind': 'wallets', 'track': 'AUEC', 'delta': -7541100}, {}, {}, price_index=index)
+            self.assertEqual(cls['category'], 'vehicle_purchase')
+            self.assertIn('MISC Hull B', cls['item_name'])
+            self.assertIn('Aegis Eclipse', cls['item_name'])
+
+    def test_passive_minus_one_unmatched_reputation_decay_is_bundled_weekly(self):
+        from mission_log_report import present
+        view = {
+            'rows': [],
+            'changes': [
+                {'id': 'c1', 'kind': 'reputation', 'track': f'{ENTITY}|Emergency', 'before': 7656, 'after': 7655, 'delta': -1, 'start': 1794820000, 'end': 1794820030, 'missions': [], 'reason': 'Unmatched balance change'},
+                {'id': 'c2', 'kind': 'reputation', 'track': f'{ENTITY}|Emergency', 'before': 7655, 'after': 7654, 'delta': -1, 'start': 1794821800, 'end': 1794821830, 'missions': [], 'reason': 'Unmatched balance change'},
+                {'id': 'c3', 'kind': 'reputation', 'track': f'{ENTITY}|Emergency', 'before': 7654, 'after': 7854, 'delta': 200, 'start': 1794822000, 'end': 1794822030, 'missions': [], 'reason': 'Unmatched balance change'},
+            ],
+            'sessions': [],
+            'mission_names': {},
+        }
+        report = present(view, CATALOG, mode='all')
+        self.assertEqual(len(report['entries']), 2)
+        self.assertEqual(report['entries'][0]['change_id'], 'c3')
+        decay_entry = report['entries'][1]
+        self.assertTrue(decay_entry['id'].startswith('decay:'))
+        self.assertEqual(decay_entry['cells'][4], '-2')
+        self.assertIn('Weekly decay (2x)', decay_entry['cells'][2])
+
+
 if __name__ == '__main__':unittest.main()

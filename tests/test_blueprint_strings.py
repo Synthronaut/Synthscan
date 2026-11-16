@@ -159,6 +159,30 @@ class BlueprintStringsTests(unittest.TestCase):
         self.assertEqual(stats['complete_missions'], 2)
         self.assertEqual(stats['partial_missions'], 1)
 
+    def test_strips_blueprint_pools_from_suffixed_name_and_label_keys(self):
+        from synthstrings_sync import sync_blueprints_to_global_ini
+        with tempfile.TemporaryDirectory() as tmp:
+            ini = Path(tmp) / 'LIVE' / 'Data' / 'Localization' / 'english' / 'global.ini'
+            ini.parent.mkdir(parents=True)
+            ini.write_text(
+                'RAIN_collectresources_multiple_OLP_name_01 = Vital Resources Needed For Research <EM4>[100 Rep] [BP: 1 LEFT]</EM4>\\n\\n<EM4>Potential Blueprints</EM4>\\n- [  ] LH86 Pistol\n'
+                'RAIN_collectresources_multiple_OLP_desc_01 = Rayari mission desc\\n\\n<EM4>Potential Blueprints</EM4>\\n- [  ] LH86 Pistol\n'
+                'Vaughn_EliminateBoss_FPS_Rockcracker_Warehouse_name_001 = End of a Salamander\\n\\n<EM4>Potential Blueprints</EM4>\\n- [  ] F55 LMG\n'
+                'Vaughn_EliminateBoss_FPS_Rockcracker_Warehouse_desc_001 = Vaughn desc\n'
+                'HUD_Visor_DataDownload_Widget_label,P = Data Transfer\\n\\n<EM4>Potential Blueprints</EM4>\\n- [  ] LH86 Pistol\n',
+                encoding='utf-8',
+            )
+            ok, _msg, _stats = sync_blueprints_to_global_ini(ini, owned_blueprints={'LH86 Pistol'})
+            self.assertTrue(ok)
+            out = ini.read_text(encoding='utf-8')
+            lines = {l.split('=', 1)[0].strip(): l.split('=', 1)[1] for l in out.splitlines() if '=' in l}
+            self.assertNotIn('Potential Blueprints', lines['RAIN_collectresources_multiple_OLP_name_01'])
+            self.assertNotIn('Potential Blueprints', lines['Vaughn_EliminateBoss_FPS_Rockcracker_Warehouse_name_001'])
+            self.assertNotIn('Potential Blueprints', lines['HUD_Visor_DataDownload_Widget_label,P'])
+            self.assertIn('[OWNED] LH86 Pistol', lines['RAIN_collectresources_multiple_OLP_desc_01'])
+            self.assertIn('Potential Blueprints', lines['Vaughn_EliminateBoss_FPS_Rockcracker_Warehouse_desc_001'])
+            self.assertIn('- [  ] F55 LMG', lines['Vaughn_EliminateBoss_FPS_Rockcracker_Warehouse_desc_001'])
+
 
 if __name__ == '__main__':
     unittest.main()

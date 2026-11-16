@@ -6,24 +6,26 @@ import type {
   PiracyPullEntry,
   PiracySnapshotPayload,
   PiracyWatchState,
+  ShipCombatEntry,
 } from './bridge';
 import {
-  COMMODITY_TIERS,
-  PREY_SHIPS,
   QED_SHIPS,
   TRADE_LANE_PRESETS,
   calculateCrewSplit,
+  calculateGpsIntercept,
   calculateSnareGeometry,
   formatAuec,
   formatCompactHours,
   formatDurationHms,
+  parseShowLocationText,
+  type GpsPoint,
 } from './piracy_data';
 
 export interface PiracyViewOptions {
   onNotice?: (msg: string) => void;
 }
 
-export type PiracySubView = 'all' | 'flight' | 'ops';
+export type PiracySubView = 'flight' | 'piracy';
 
 function escapeHtml(text: string): string {
   return String(text ?? '')
@@ -41,6 +43,13 @@ function sanitizeHexColor(raw: string | undefined, fallback = '#62ccff'): string
   return fallback;
 }
 
+function formatGpsKm(pt: GpsPoint): string {
+  const kx = (pt.x / 1000).toFixed(1);
+  const ky = (pt.y / 1000).toFixed(1);
+  const kz = (pt.z / 1000).toFixed(1);
+  return `X:${kx} km · Y:${ky} km · Z:${kz} km`;
+}
+
 export class PiracyViewController {
   private readonly container: HTMLElement;
   private readonly bridge: DesktopBridge;
@@ -51,21 +60,21 @@ export class PiracyViewController {
   private sessionToken = '';
   private gameRunning = false;
 
-  // Local sub-navigation & interactive calculator state
-  private subView: PiracySubView = 'all';
+  // Local sub-navigation & interactive calculator state (Flight first, Piracy second)
+  private subView: PiracySubView = 'flight';
   private selectedHullFocus = '';
+  private combatFilter: 'all' | 'kill' | 'loss' = 'all';
 
   // Snare planner inputs
   private selectedLaneId = TRADE_LANE_PRESETS[0].id;
   private selectedQedId = QED_SHIPS[0].id;
   private offsetMkm = 1.1;
   private doglegKm = 4.0;
-  private targetQtKms = 165_000;
 
-  // Prey appraiser inputs
-  private selectedPreyId = PREY_SHIPS[0].id;
-  private selectedCommodityId = COMMODITY_TIERS[4].id; // Gold default
-  private preyFillPct = 65;
+  // /showlocation GPS coordinate verifier state
+  private gpsOrigin: GpsPoint | null = null;
+  private gpsDest: GpsPoint | null = null;
+  private gpsShip: GpsPoint | null = null;
 
   // Crew cut splitter inputs
   private splitTotalLoot = 2_400_000;
@@ -76,9 +85,9 @@ export class PiracyViewController {
   // Cached DOM references
   private subtabBtns: HTMLButtonElement[] = [];
   private flightSectionEl!: HTMLElement;
-  private opsSectionEl!: HTMLElement;
+  private piracySectionEl!: HTMLElement;
 
-  // Hero telemetry DOM
+  // Hero telemetry DOM (Flight tab)
   private statusPillEl!: HTMLElement;
   private activeShipEl!: HTMLElement;
   private activeMetaEl!: HTMLElement;
@@ -86,44 +95,50 @@ export class PiracyViewController {
   private activeBoardedEl!: HTMLElement;
   private activeJumpsEl!: HTMLElement;
   private activeContractsEl!: HTMLElement;
+  private activeKillsEl!: HTMLElement;
   private activeRouteEl!: HTMLElement;
+  private copyFlightCardBtn!: HTMLButtonElement;
 
+  // Jurisdiction & stakeout DOM (Piracy tab)
   private jurisBadgeEl!: HTMLElement;
   private jurisDetailEl!: HTMLElement;
   private waitTimerEl!: HTMLElement;
   private waitToggleBtn!: HTMLButtonElement;
   private waitResetBtn!: HTMLButtonElement;
-  private copyFlightCardBtn!: HTMLButtonElement;
 
   // Flight telemetry DOM
   private kpiSortiesEl!: HTMLElement;
   private kpiHelmEl!: HTMLElement;
   private kpiJumpsEl!: HTMLElement;
   private kpiContractsEl!: HTMLElement;
+  private kpiKillsEl!: HTMLElement;
+  private kpiLossesEl!: HTMLElement;
   private kpiSurvivalEl!: HTMLElement;
   private donutSvgEl!: HTMLElement;
   private donutCenterValEl!: HTMLElement;
   private donutCenterSubEl!: HTMLElement;
   private fleetListEl!: HTMLElement;
   private sortiesTbodyEl!: HTMLElement;
+  private combatSummaryEl!: HTMLElement;
+  private combatFilterBtns: HTMLButtonElement[] = [];
+  private combatTbodyEl!: HTMLElement;
 
-  // Snare Planner DOM
+  // Snare Planner & GPS Verifier DOM
   private laneSelectEl!: HTMLSelectElement;
   private qedSelectEl!: HTMLSelectElement;
   private offsetInputEl!: HTMLInputElement;
   private doglegInputEl!: HTMLInputElement;
-  private qtDriveSelectEl!: HTMLSelectElement;
   private snareSvgWrapEl!: HTMLElement;
   private snareReadoutEl!: HTMLElement;
   private snareAdviceEl!: HTMLElement;
 
-  // Prey Appraiser DOM
-  private preySelectEl!: HTMLSelectElement;
-  private commoditySelectEl!: HTMLSelectElement;
-  private preyFillInputEl!: HTMLInputElement;
-  private preyFillLabelEl!: HTMLElement;
-  private preyReadoutEl!: HTMLElement;
-  private preySendBtn!: HTMLButtonElement;
+  private gpsInputEl!: HTMLInputElement;
+  private gpsPasteBtn!: HTMLButtonElement;
+  private gpsSetOriginBtn!: HTMLButtonElement;
+  private gpsSetDestBtn!: HTMLButtonElement;
+  private gpsVerifyShipBtn!: HTMLButtonElement;
+  private gpsClearBtn!: HTMLButtonElement;
+  private gpsStatusEl!: HTMLElement;
 
   // Crew Splitter DOM
   private splitLootInputEl!: HTMLInputElement;
@@ -151,6 +166,7 @@ export class PiracyViewController {
     this.bindEvents();
     this.renderStaticCalculators();
     this.renderTelemetry();
+    this.setSubView(this.subView);
   }
 
   public destroy(): void {
@@ -167,8 +183,8 @@ export class PiracyViewController {
       const active = btn.dataset.piracySubtab === next;
       btn.classList.toggle('is-active', active);
     }
-    this.flightSectionEl.hidden = next === 'ops';
-    this.opsSectionEl.hidden = next === 'flight';
+    this.flightSectionEl.hidden = next !== 'flight';
+    this.piracySectionEl.hidden = next !== 'piracy';
   }
 
   public updateFromSnapshot(payload: PiracySnapshotPayload | undefined, sessionToken = ''): void {
@@ -187,17 +203,17 @@ export class PiracyViewController {
     const qedOpts = QED_SHIPS.map(
       (q) => `<option value="${escapeHtml(q.id)}">${escapeHtml(q.name)}</option>`,
     ).join('');
-    const preyOpts = PREY_SHIPS.map(
-      (s) => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name)} (${s.scu} SCU · max ${s.maxBoxScu} SCU crates)</option>`,
-    ).join('');
-    const commodityOpts = COMMODITY_TIERS.map(
-      (c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)} (~${c.avgPricePerScu.toLocaleString('en-US')} aUEC/SCU)</option>`,
-    ).join('');
 
     this.container.innerHTML = `
       <div class="ss-piracy-root">
-        <!-- Top Hero Telemetry & Stakeout Bar -->
-        <div class="ss-piracy-hero-grid">
+        <!-- View Switcher Bar: Flight first, Piracy second -->
+        <div class="ss-piracy-subnav" role="tablist" aria-label="Flight and Piracy sections">
+          <button type="button" class="ss-subtab-btn is-active" data-piracy-subtab="flight">Flight</button>
+          <button type="button" class="ss-subtab-btn" data-piracy-subtab="piracy">Piracy</button>
+        </div>
+
+        <!-- FLIGHT TAB -->
+        <section id="piracy-section-flight" class="ss-piracy-deck">
           <div class="ss-card ss-piracy-vessel-card">
             <div class="ss-piracy-card-head">
               <span id="piracy-flight-state-pill" class="ss-status-pill is-idle">ON FOOT</span>
@@ -226,6 +242,10 @@ export class PiracyViewController {
                 <span class="ss-stat-label">CONTRACTS</span>
                 <strong id="piracy-active-contracts" class="ss-stat-value">0</strong>
               </div>
+              <div class="ss-stat-cell">
+                <span class="ss-stat-label">SHIP KILLS</span>
+                <strong id="piracy-active-kills" class="ss-stat-value">0</strong>
+              </div>
             </div>
             <div class="ss-piracy-route-line">
               <span class="ss-route-k">QT ROUTE:</span>
@@ -233,39 +253,9 @@ export class PiracyViewController {
             </div>
           </div>
 
-          <div class="ss-card ss-piracy-radar-card">
-            <div class="ss-piracy-card-head">
-              <span class="ss-section-tag">JURISDICTION &amp; STAKEOUT</span>
-            </div>
-            <div class="ss-juris-box">
-              <span id="piracy-juris-badge" class="ss-juris-pill is-unknown">AWAITING TRANSITION</span>
-              <p id="piracy-juris-detail" class="ss-muted-text">Reads live Monitored vs. Ungoverned transitions from Game.log instead of unreliable CrimeStat alerts.</p>
-            </div>
-            <div class="ss-wait-box">
-              <div>
-                <span class="ss-stat-label">MANUAL STAKEOUT CLOCK</span>
-                <div id="piracy-wait-timer" class="ss-wait-readout">00:00</div>
-              </div>
-              <div class="ss-wait-actions">
-                <button id="piracy-wait-toggle-btn" type="button" class="ss-btn ss-btn-accent">Start Watch</button>
-                <button id="piracy-wait-reset-btn" type="button" class="ss-btn">Reset</button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- View Switcher Bar -->
-        <div class="ss-piracy-subnav" role="tablist" aria-label="Piracy and Flight sections">
-          <button type="button" class="ss-subtab-btn is-active" data-piracy-subtab="all">Command Overview</button>
-          <button type="button" class="ss-subtab-btn" data-piracy-subtab="flight">Flight &amp; Fleet Telemetry</button>
-          <button type="button" class="ss-subtab-btn" data-piracy-subtab="ops">Snare Ops &amp; Loot Suite</button>
-        </div>
-
-        <!-- Flight & Fleet Telemetry Deck -->
-        <section id="piracy-section-flight" class="ss-piracy-deck">
           <div class="ss-piracy-kpi-row">
             <div class="ss-kpi-tile">
-              <span class="ss-stat-label">TOTAL SORTIES</span>
+              <span class="ss-stat-label">TOTAL FLIGHTS</span>
               <strong id="piracy-kpi-sorties" class="ss-kpi-num">0</strong>
             </div>
             <div class="ss-kpi-tile">
@@ -281,6 +271,14 @@ export class PiracyViewController {
               <strong id="piracy-kpi-contracts" class="ss-kpi-num">0</strong>
             </div>
             <div class="ss-kpi-tile">
+              <span class="ss-stat-label">SHIP KILLS</span>
+              <strong id="piracy-kpi-kills" class="ss-kpi-num">0</strong>
+            </div>
+            <div class="ss-kpi-tile">
+              <span class="ss-stat-label">SHIP LOSSES</span>
+              <strong id="piracy-kpi-losses" class="ss-kpi-num">0</strong>
+            </div>
+            <div class="ss-kpi-tile">
               <span class="ss-stat-label">SURVIVAL RATE</span>
               <strong id="piracy-kpi-survival" class="ss-kpi-num">100%</strong>
             </div>
@@ -290,7 +288,7 @@ export class PiracyViewController {
             <div class="ss-card ss-fleet-card">
               <div class="ss-card-title-row">
                 <h2 class="ss-section-heading">FLEET DISTRIBUTION &amp; HELM SHARE</h2>
-                <span class="ss-hint-line">Click any hull to filter sorties</span>
+                <span class="ss-hint-line">Click any hull to filter flights</span>
               </div>
               <div class="ss-fleet-layout">
                 <div class="ss-donut-stage">
@@ -306,7 +304,7 @@ export class PiracyViewController {
 
             <div class="ss-card ss-sorties-card">
               <div class="ss-card-title-row">
-                <h2 class="ss-section-heading">RECENT SORTIES LEDGER</h2>
+                <h2 class="ss-section-heading">RECENT FLIGHTS</h2>
                 <span class="ss-hint-line">Deterministic Game.log seat &amp; hangar events</span>
               </div>
               <div class="ss-table-scroll ss-piracy-scroll">
@@ -325,33 +323,73 @@ export class PiracyViewController {
               </div>
             </div>
           </div>
+
+          <div class="ss-card ss-combat-log-card">
+            <div class="ss-card-title-row">
+              <h2 class="ss-section-heading">SHIP COMBAT &amp; LOSS LOG</h2>
+              <span id="piracy-combat-summary" class="ss-hint-line">0 kills · 0 losses</span>
+              <span class="ss-grow"></span>
+              <div class="ss-piracy-subnav" role="group" aria-label="Filter ship combat log">
+                <button type="button" class="ss-subtab-btn is-active" data-combat-filter="all">All</button>
+                <button type="button" class="ss-subtab-btn" data-combat-filter="kill">Kills</button>
+                <button type="button" class="ss-subtab-btn" data-combat-filter="loss">Losses</button>
+              </div>
+            </div>
+            <div class="ss-table-scroll ss-piracy-scroll">
+              <table class="ss-table">
+                <thead>
+                  <tr>
+                    <th>Time</th>
+                    <th>Event</th>
+                    <th>Vessel</th>
+                    <th>Cause</th>
+                    <th>Details</th>
+                  </tr>
+                </thead>
+                <tbody id="piracy-combat-tbody"></tbody>
+              </table>
+            </div>
+          </div>
         </section>
 
-        <!-- Piracy Operations & Feasible Unmonitored Interdiction Suite -->
-        <section id="piracy-section-ops" class="ss-piracy-deck">
+        <!-- PIRACY TAB -->
+        <section id="piracy-section-piracy" class="ss-piracy-deck" hidden>
+          <div class="ss-card ss-piracy-radar-card">
+            <div class="ss-piracy-card-head">
+              <span class="ss-section-tag">JURISDICTION &amp; STAKEOUT</span>
+              <span class="ss-grow"></span>
+              <span id="piracy-juris-badge" class="ss-juris-pill is-unknown">AWAITING TRANSITION</span>
+            </div>
+            <div class="ss-piracy-radar-body">
+              <p id="piracy-juris-detail" class="ss-muted-text">Reads live Monitored vs. Ungoverned transitions from Game.log instead of unreliable CrimeStat alerts.</p>
+              <div class="ss-wait-box">
+                <div>
+                  <span class="ss-stat-label">MANUAL STAKEOUT CLOCK</span>
+                  <div id="piracy-wait-timer" class="ss-wait-readout">00:00</div>
+                </div>
+                <div class="ss-wait-actions">
+                  <button id="piracy-wait-toggle-btn" type="button" class="ss-btn ss-btn-accent">Start Watch</button>
+                  <button id="piracy-wait-reset-btn" type="button" class="ss-btn">Reset</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div class="ss-piracy-two-col">
-            <!-- Snare Drop Geometry Planner -->
+            <!-- Snare Drop Geometry & Coverage Planner -->
             <div class="ss-card ss-snare-card">
               <div class="ss-card-title-row">
-                <h2 class="ss-section-heading">QT SNARE GEOMETRY &amp; INTERCEPT PLANNER</h2>
-                <span class="ss-hint-line">Works anywhere in deep or unmonitored space</span>
+                <h2 class="ss-section-heading">QT SNARE GEOMETRY &amp; COVERAGE PLANNER</h2>
+                <span class="ss-hint-line">SnarePlan-style cone coverage + /showlocation check</span>
               </div>
               <div class="ss-form-grid">
                 <label class="ss-field-stack ss-span-2">
                   <span class="ss-field-label">Trade Corridor Preset</span>
                   <select id="piracy-lane-select" class="ss-select">${laneOpts}</select>
                 </label>
-                <label class="ss-field-stack">
+                <label class="ss-field-stack ss-span-2">
                   <span class="ss-field-label">Interdictor / QED Bubble</span>
                   <select id="piracy-qed-select" class="ss-select">${qedOpts}</select>
-                </label>
-                <label class="ss-field-stack">
-                  <span class="ss-field-label">Expected Target QT Drive</span>
-                  <select id="piracy-qtdrive-select" class="ss-select">
-                    <option value="260000">S3 Fast (TS-2 / VK-class ~260k km/s)</option>
-                    <option value="165000" selected>S2 Hauler (Hemera / Crossfield ~165k km/s)</option>
-                    <option value="110000">S1 Industrial (Voyage / Atlas ~110k km/s)</option>
-                  </select>
                 </label>
                 <label class="ss-field-stack">
                   <span class="ss-field-label">Drop Distance Before Dest (Mkm)</span>
@@ -362,35 +400,32 @@ export class PiracyViewController {
                   <input id="piracy-dogleg-input" class="ss-input" type="number" step="0.5" min="0" max="40" value="4.0" />
                 </label>
               </div>
+
+              <!-- /showlocation GPS Coordinate Verifier -->
+              <div class="ss-gps-panel">
+                <div class="ss-gps-head">
+                  <span class="ss-field-label">GPS COVERAGE CHECK (TYPE <code>/showlocation</code> IN GAME CHAT — NO DISPLAYINFO NEEDED)</span>
+                </div>
+                <div class="ss-gps-row">
+                  <input id="piracy-gps-input" class="ss-input ss-grow" type="text" placeholder="Paste /showlocation (e.g. Coordinates: x:... y:... z:...)" />
+                  <button id="piracy-gps-paste-btn" type="button" class="ss-btn ss-btn-sm">Paste</button>
+                </div>
+                <div class="ss-gps-actions">
+                  <button id="piracy-gps-origin-btn" type="button" class="ss-btn ss-btn-sm">Set Origin</button>
+                  <button id="piracy-gps-dest-btn" type="button" class="ss-btn ss-btn-sm">Set Dest</button>
+                  <button id="piracy-gps-verify-btn" type="button" class="ss-btn ss-btn-sm ss-btn-accent">Verify My Position</button>
+                  <button id="piracy-gps-clear-btn" type="button" class="ss-btn ss-btn-sm">Clear</button>
+                </div>
+                <div id="piracy-gps-status" class="ss-gps-status ss-muted-text">Type /showlocation in chat to copy your exact XYZ coordinates, then paste or click Verify My Position.</div>
+              </div>
+
               <div id="piracy-snare-svg-wrap" class="ss-snare-visual"></div>
               <div id="piracy-snare-readout" class="ss-snare-readout"></div>
               <p id="piracy-snare-advice" class="ss-advice-banner"></p>
             </div>
 
-            <!-- Prey Cargo Appraiser + Crew Cut Splitter -->
+            <!-- Crew Cut Splitter + Manual Snare Pull Ledger -->
             <div class="ss-ops-right-col">
-              <div class="ss-card ss-prey-card">
-                <div class="ss-card-title-row">
-                  <h2 class="ss-section-heading">PREY RECON &amp; CARGO APPRAISER</h2>
-                  <button id="piracy-prey-send-btn" type="button" class="ss-btn ss-btn-sm ss-btn-accent">Send to Splitter &amp; Log →</button>
-                </div>
-                <div class="ss-form-grid">
-                  <label class="ss-field-stack ss-span-2">
-                    <span class="ss-field-label">Target Hull</span>
-                    <select id="piracy-prey-select" class="ss-select">${preyOpts}</select>
-                  </label>
-                  <label class="ss-field-stack">
-                    <span class="ss-field-label">Suspected Commodity</span>
-                    <select id="piracy-commodity-select" class="ss-select">${commodityOpts}</select>
-                  </label>
-                  <label class="ss-field-stack">
-                    <span class="ss-field-label">Bay Load Fill (<strong id="piracy-prey-fill-label">65%</strong>)</span>
-                    <input id="piracy-prey-fill-input" class="ss-range" type="range" min="10" max="100" step="5" value="65" />
-                  </label>
-                </div>
-                <div id="piracy-prey-readout" class="ss-prey-readout"></div>
-              </div>
-
               <div class="ss-card ss-split-card">
                 <div class="ss-card-title-row">
                   <h2 class="ss-section-heading">CREW LOOT &amp; SNARE CUT SPLITTER</h2>
@@ -415,42 +450,42 @@ export class PiracyViewController {
                 </div>
                 <div id="piracy-split-summary" class="ss-split-summary"></div>
               </div>
-            </div>
-          </div>
 
-          <!-- Persistent Snare Pull & Hit Ledger -->
-          <div class="ss-card ss-pulls-card">
-            <div class="ss-card-title-row">
-              <h2 class="ss-section-heading">SNARE PULL &amp; INTERDICTION HIT LEDGER</h2>
-              <span id="piracy-pull-kpi" class="ss-status-line">0 pulls logged · 0% catch rate</span>
-            </div>
-            <div class="ss-toolbar-row ss-pull-form">
-              <input id="piracy-pull-target" class="ss-input ss-grow" type="text" placeholder="Target hull (e.g. Crusader C2 Hercules)" />
-              <input id="piracy-pull-lane" class="ss-input ss-grow" type="text" placeholder="Lane (e.g. Monox -> Checkmate)" />
-              <select id="piracy-pull-outcome" class="ss-select" aria-label="Pull outcome">
-                <option value="catch">Catch / Looted</option>
-                <option value="combat">Combat / Destroyed</option>
-                <option value="escaped">Escaped</option>
-                <option value="dry">Dry Pull</option>
-              </select>
-              <input id="piracy-pull-value" class="ss-input ss-input-md" type="number" min="0" step="10000" placeholder="Loot aUEC" />
-              <input id="piracy-pull-notes" class="ss-input ss-grow" type="text" placeholder="Notes (optional)" />
-              <button id="piracy-pull-log-btn" type="button" class="ss-btn ss-btn-accent">Log Pull</button>
-            </div>
-            <div class="ss-table-scroll ss-piracy-pulls-scroll">
-              <table class="ss-table">
-                <thead>
-                  <tr>
-                    <th>Target</th>
-                    <th>Corridor / Lane</th>
-                    <th>Outcome</th>
-                    <th>Loot Value</th>
-                    <th>Notes</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody id="piracy-pulls-tbody"></tbody>
-              </table>
+              <!-- Manual Snare Pull & Hit Ledger -->
+              <div class="ss-card ss-pulls-card">
+                <div class="ss-card-title-row">
+                  <h2 class="ss-section-heading">SNARE PULL &amp; INTERDICTION HIT LEDGER</h2>
+                  <span id="piracy-pull-kpi" class="ss-status-line">0 pulls logged · 0% catch rate</span>
+                </div>
+                <div class="ss-toolbar-row ss-pull-form">
+                  <input id="piracy-pull-target" class="ss-input ss-grow" type="text" placeholder="Target hull (e.g. Crusader C2 Hercules)" />
+                  <input id="piracy-pull-lane" class="ss-input ss-grow" type="text" placeholder="Lane (e.g. Levski -> Pyro GW)" />
+                  <select id="piracy-pull-outcome" class="ss-select" aria-label="Pull outcome">
+                    <option value="catch">Catch / Looted</option>
+                    <option value="combat">Combat / Destroyed</option>
+                    <option value="escaped">Escaped</option>
+                    <option value="dry">Dry Pull</option>
+                  </select>
+                  <input id="piracy-pull-value" class="ss-input ss-input-md" type="number" min="0" step="10000" placeholder="Loot aUEC" />
+                  <input id="piracy-pull-notes" class="ss-input ss-grow" type="text" placeholder="Notes (optional)" />
+                  <button id="piracy-pull-log-btn" type="button" class="ss-btn ss-btn-accent">Log Pull</button>
+                </div>
+                <div class="ss-table-scroll ss-piracy-pulls-scroll">
+                  <table class="ss-table">
+                    <thead>
+                      <tr>
+                        <th>Target</th>
+                        <th>Corridor / Lane</th>
+                        <th>Outcome</th>
+                        <th>Loot Value</th>
+                        <th>Notes</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody id="piracy-pulls-tbody"></tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -459,7 +494,7 @@ export class PiracyViewController {
 
     this.subtabBtns = Array.from(this.container.querySelectorAll<HTMLButtonElement>('button[data-piracy-subtab]'));
     this.flightSectionEl = this.container.querySelector('#piracy-section-flight')!;
-    this.opsSectionEl = this.container.querySelector('#piracy-section-ops')!;
+    this.piracySectionEl = this.container.querySelector('#piracy-section-piracy')!;
 
     this.statusPillEl = this.container.querySelector('#piracy-flight-state-pill')!;
     this.activeShipEl = this.container.querySelector('#piracy-active-ship')!;
@@ -468,41 +503,47 @@ export class PiracyViewController {
     this.activeBoardedEl = this.container.querySelector('#piracy-active-boarded')!;
     this.activeJumpsEl = this.container.querySelector('#piracy-active-jumps')!;
     this.activeContractsEl = this.container.querySelector('#piracy-active-contracts')!;
+    this.activeKillsEl = this.container.querySelector('#piracy-active-kills')!;
     this.activeRouteEl = this.container.querySelector('#piracy-active-route')!;
+    this.copyFlightCardBtn = this.container.querySelector('#piracy-copy-card-btn')!;
 
     this.jurisBadgeEl = this.container.querySelector('#piracy-juris-badge')!;
     this.jurisDetailEl = this.container.querySelector('#piracy-juris-detail')!;
     this.waitTimerEl = this.container.querySelector('#piracy-wait-timer')!;
     this.waitToggleBtn = this.container.querySelector('#piracy-wait-toggle-btn')!;
     this.waitResetBtn = this.container.querySelector('#piracy-wait-reset-btn')!;
-    this.copyFlightCardBtn = this.container.querySelector('#piracy-copy-card-btn')!;
 
     this.kpiSortiesEl = this.container.querySelector('#piracy-kpi-sorties')!;
     this.kpiHelmEl = this.container.querySelector('#piracy-kpi-helm')!;
     this.kpiJumpsEl = this.container.querySelector('#piracy-kpi-jumps')!;
     this.kpiContractsEl = this.container.querySelector('#piracy-kpi-contracts')!;
+    this.kpiKillsEl = this.container.querySelector('#piracy-kpi-kills')!;
+    this.kpiLossesEl = this.container.querySelector('#piracy-kpi-losses')!;
     this.kpiSurvivalEl = this.container.querySelector('#piracy-kpi-survival')!;
     this.donutSvgEl = this.container.querySelector('#piracy-fleet-donut')!;
     this.donutCenterValEl = this.container.querySelector('#piracy-donut-center-val')!;
     this.donutCenterSubEl = this.container.querySelector('#piracy-donut-center-sub')!;
     this.fleetListEl = this.container.querySelector('#piracy-fleet-list')!;
     this.sortiesTbodyEl = this.container.querySelector('#piracy-sorties-tbody')!;
+    this.combatSummaryEl = this.container.querySelector('#piracy-combat-summary')!;
+    this.combatFilterBtns = Array.from(this.container.querySelectorAll<HTMLButtonElement>('button[data-combat-filter]'));
+    this.combatTbodyEl = this.container.querySelector('#piracy-combat-tbody')!;
 
     this.laneSelectEl = this.container.querySelector('#piracy-lane-select')!;
     this.qedSelectEl = this.container.querySelector('#piracy-qed-select')!;
     this.offsetInputEl = this.container.querySelector('#piracy-offset-input')!;
     this.doglegInputEl = this.container.querySelector('#piracy-dogleg-input')!;
-    this.qtDriveSelectEl = this.container.querySelector('#piracy-qtdrive-select')!;
     this.snareSvgWrapEl = this.container.querySelector('#piracy-snare-svg-wrap')!;
     this.snareReadoutEl = this.container.querySelector('#piracy-snare-readout')!;
     this.snareAdviceEl = this.container.querySelector('#piracy-snare-advice')!;
 
-    this.preySelectEl = this.container.querySelector('#piracy-prey-select')!;
-    this.commoditySelectEl = this.container.querySelector('#piracy-commodity-select')!;
-    this.preyFillInputEl = this.container.querySelector('#piracy-prey-fill-input')!;
-    this.preyFillLabelEl = this.container.querySelector('#piracy-prey-fill-label')!;
-    this.preyReadoutEl = this.container.querySelector('#piracy-prey-readout')!;
-    this.preySendBtn = this.container.querySelector('#piracy-prey-send-btn')!;
+    this.gpsInputEl = this.container.querySelector('#piracy-gps-input')!;
+    this.gpsPasteBtn = this.container.querySelector('#piracy-gps-paste-btn')!;
+    this.gpsSetOriginBtn = this.container.querySelector('#piracy-gps-origin-btn')!;
+    this.gpsSetDestBtn = this.container.querySelector('#piracy-gps-dest-btn')!;
+    this.gpsVerifyShipBtn = this.container.querySelector('#piracy-gps-verify-btn')!;
+    this.gpsClearBtn = this.container.querySelector('#piracy-gps-clear-btn')!;
+    this.gpsStatusEl = this.container.querySelector('#piracy-gps-status')!;
 
     this.splitLootInputEl = this.container.querySelector('#piracy-split-loot-input')!;
     this.splitCrewInputEl = this.container.querySelector('#piracy-split-crew-input')!;
@@ -524,7 +565,7 @@ export class PiracyViewController {
   private bindEvents(): void {
     for (const btn of this.subtabBtns) {
       btn.addEventListener('click', () => {
-        const mode = (btn.dataset.piracySubtab as PiracySubView) || 'all';
+        const mode = (btn.dataset.piracySubtab as PiracySubView) || 'flight';
         this.setSubView(mode);
       });
     }
@@ -548,46 +589,92 @@ export class PiracyViewController {
       this.renderTelemetry();
     });
 
+    for (const btn of this.combatFilterBtns) {
+      btn.addEventListener('click', () => {
+        const next = (btn.dataset.combatFilter as 'all' | 'kill' | 'loss') || 'all';
+        this.combatFilter = next;
+        for (const b of this.combatFilterBtns) {
+          b.classList.toggle('is-active', b.dataset.combatFilter === next);
+        }
+        this.renderCombatLog(this.flight.combat_log ?? []);
+      });
+    }
+
     // Snare geometry inputs
     const updateSnare = () => {
       this.selectedLaneId = this.laneSelectEl.value;
       this.selectedQedId = this.qedSelectEl.value;
       this.offsetMkm = Number(this.offsetInputEl.value) || 0.5;
       this.doglegKm = Number(this.doglegInputEl.value) || 0;
-      this.targetQtKms = Number(this.qtDriveSelectEl.value) || 165_000;
       this.renderSnarePlanner();
     };
     this.laneSelectEl.addEventListener('change', updateSnare);
     this.qedSelectEl.addEventListener('change', updateSnare);
-    this.qtDriveSelectEl.addEventListener('change', updateSnare);
     this.offsetInputEl.addEventListener('input', updateSnare);
     this.doglegInputEl.addEventListener('input', updateSnare);
 
-    // Prey Appraiser inputs
-    const updatePrey = () => {
-      this.selectedPreyId = this.preySelectEl.value;
-      this.selectedCommodityId = this.commoditySelectEl.value;
-      this.preyFillPct = Number(this.preyFillInputEl.value) || 50;
-      this.renderPreyAppraiser();
-    };
-    this.preySelectEl.addEventListener('change', updatePrey);
-    this.commoditySelectEl.addEventListener('change', updatePrey);
-    this.preyFillInputEl.addEventListener('input', updatePrey);
-    this.preySendBtn.addEventListener('click', () => {
-      const prey = PREY_SHIPS.find((s) => s.id === this.selectedPreyId) ?? PREY_SHIPS[0];
-      const comm = COMMODITY_TIERS.find((c) => c.id === this.selectedCommodityId) ?? COMMODITY_TIERS[0];
-      const estScu = Math.round((prey.scu * this.preyFillPct) / 100);
-      const estValue = estScu * comm.avgPricePerScu;
-      this.splitTotalLoot = estValue;
-      this.splitLootInputEl.value = String(estValue);
-      this.pullTargetInputEl.value = prey.name;
-      this.pullValueInputEl.value = String(estValue);
-      const lane = TRADE_LANE_PRESETS.find((l) => l.id === this.selectedLaneId);
-      if (lane && !this.pullLaneInputEl.value.trim()) {
-        this.pullLaneInputEl.value = lane.label;
+    // /showlocation GPS coordinate verifier
+    const readGpsFromInput = (): GpsPoint | null => {
+      const pt = parseShowLocationText(this.gpsInputEl.value);
+      if (!pt) {
+        this.notify('Paste valid /showlocation coordinates (e.g. Coordinates: x:... y:... z:...).');
       }
-      this.renderCrewSplitter();
-      this.notify(`Appraised ${prey.name} (${formatAuec(estValue)}) staged in Splitter & Pull Logger.`);
+      return pt;
+    };
+
+    this.gpsPasteBtn.addEventListener('click', () => {
+      const clip = typeof navigator !== 'undefined' ? navigator.clipboard : undefined;
+      if (clip?.readText) {
+        void clip.readText().then(
+          (text) => {
+            this.gpsInputEl.value = text;
+            const pt = parseShowLocationText(text);
+            if (pt) {
+              this.gpsShip = pt;
+              this.applyGpsToPlanner();
+              this.notify('Read /showlocation GPS coordinates from clipboard.');
+            } else {
+              this.notify('Clipboard did not contain /showlocation coordinates.');
+            }
+          },
+          () => {
+            this.gpsInputEl.focus();
+            this.notify('Paste your /showlocation coordinates into the GPS box.');
+          },
+        );
+      } else {
+        this.gpsInputEl.focus();
+      }
+    });
+
+    this.gpsSetOriginBtn.addEventListener('click', () => {
+      const pt = readGpsFromInput();
+      if (!pt) return;
+      this.gpsOrigin = pt;
+      this.applyGpsToPlanner();
+    });
+
+    this.gpsSetDestBtn.addEventListener('click', () => {
+      const pt = readGpsFromInput();
+      if (!pt) return;
+      this.gpsDest = pt;
+      this.applyGpsToPlanner();
+    });
+
+    this.gpsVerifyShipBtn.addEventListener('click', () => {
+      const pt = readGpsFromInput();
+      if (!pt) return;
+      this.gpsShip = pt;
+      this.applyGpsToPlanner();
+    });
+
+    this.gpsClearBtn.addEventListener('click', () => {
+      this.gpsOrigin = null;
+      this.gpsDest = null;
+      this.gpsShip = null;
+      this.gpsInputEl.value = '';
+      this.renderGpsStatus();
+      this.renderSnarePlanner();
     });
 
     // Crew Loot Splitter inputs
@@ -648,9 +735,51 @@ export class PiracyViewController {
     });
   }
 
-  private renderStaticCalculators(): void {
+  private applyGpsToPlanner(): void {
+    const qed = QED_SHIPS.find((q) => q.id === this.selectedQedId) ?? QED_SHIPS[0];
+    if (this.gpsOrigin && this.gpsDest && this.gpsShip) {
+      const intercept = calculateGpsIntercept(this.gpsOrigin, this.gpsDest, this.gpsShip, qed.radiusKm);
+      if (intercept) {
+        this.offsetMkm = Math.max(0.05, intercept.offsetMkmFromDest);
+        this.doglegKm = intercept.lateralOffsetKm;
+        this.offsetInputEl.value = String(this.offsetMkm);
+        this.doglegInputEl.value = String(this.doglegKm);
+      }
+    }
+    this.renderGpsStatus();
     this.renderSnarePlanner();
-    this.renderPreyAppraiser();
+  }
+
+  private renderGpsStatus(): void {
+    const qed = QED_SHIPS.find((q) => q.id === this.selectedQedId) ?? QED_SHIPS[0];
+    const parts: string[] = [];
+    if (this.gpsOrigin) parts.push(`Origin locked (${formatGpsKm(this.gpsOrigin)})`);
+    if (this.gpsDest) parts.push(`Dest locked (${formatGpsKm(this.gpsDest)})`);
+    if (this.gpsShip) parts.push(`Ship GPS: ${formatGpsKm(this.gpsShip)}`);
+
+    if (this.gpsOrigin && this.gpsDest && this.gpsShip) {
+      const intercept = calculateGpsIntercept(this.gpsOrigin, this.gpsDest, this.gpsShip, qed.radiusKm);
+      if (intercept) {
+        this.gpsStatusEl.innerHTML = `<strong class="${intercept.inRange ? 'ss-text-ok' : 'ss-text-bad'}">${intercept.inRange ? 'GPS VERIFIED · IN BUBBLE' : 'GPS OFF-SPLINE'}</strong> · ${intercept.lateralOffsetKm} km off-axis · ${intercept.offsetMkmFromDest} Mkm to Dest (${intercept.progressPct}% along ${intercept.laneDistanceMkm} Mkm lane) · <strong>${intercept.coveragePct}% cone coverage</strong>`;
+        return;
+      }
+    }
+
+    if (parts.length === 0) {
+      this.gpsStatusEl.textContent =
+        'Type /showlocation in chat to copy your exact XYZ coordinates, then paste or click Verify My Position.';
+    } else {
+      const missing: string[] = [];
+      if (!this.gpsOrigin) missing.push('Origin');
+      if (!this.gpsDest) missing.push('Dest');
+      if (!this.gpsShip) missing.push('Ship');
+      this.gpsStatusEl.textContent = `${parts.join(' · ')}${missing.length ? ` — Set ${missing.join(' & ')} for 3D spline check.` : ''}`;
+    }
+  }
+
+  private renderStaticCalculators(): void {
+    this.renderGpsStatus();
+    this.renderSnarePlanner();
     this.renderCrewSplitter();
   }
 
@@ -684,6 +813,7 @@ export class PiracyViewController {
     this.activeBoardedEl.textContent = formatDurationHms(f.active_boarded_s ?? 0);
     this.activeJumpsEl.textContent = String(f.active_jumps ?? 0);
     this.activeContractsEl.textContent = String(f.active_contracts ?? 0);
+    this.activeKillsEl.textContent = String(f.active_kills ?? 0);
     this.activeRouteEl.textContent = f.active_route ? f.active_route : 'No active quantum waypoint';
 
     // Jurisdiction radar
@@ -716,16 +846,21 @@ export class PiracyViewController {
     // Flight KPI ribbon
     const totalSorties = f.total_sorties ?? 0;
     const totalLosses = f.total_losses ?? 0;
+    const totalKills = f.total_ship_kills ?? 0;
+    const shipLosses = f.total_ship_losses ?? totalLosses;
     const survivalPct = totalSorties > 0 ? Math.max(0, Math.round(((totalSorties - totalLosses) / totalSorties) * 100)) : 100;
 
     this.kpiSortiesEl.textContent = String(totalSorties);
     this.kpiHelmEl.textContent = formatCompactHours(f.total_helm_s ?? 0);
     this.kpiJumpsEl.textContent = String(f.total_jumps ?? 0);
     this.kpiContractsEl.textContent = String(f.total_contracts ?? 0);
+    this.kpiKillsEl.textContent = String(totalKills);
+    this.kpiLossesEl.textContent = String(shipLosses);
     this.kpiSurvivalEl.textContent = `${survivalPct}%`;
 
     this.renderFleetCharts(f.fleet ?? [], f.total_helm_s ?? 0);
     this.renderSortiesLedger(f.recent ?? []);
+    this.renderCombatLog(f.combat_log ?? []);
     this.renderPullLedger(w.pulls ?? [], w.pull_stats);
   }
 
@@ -779,7 +914,7 @@ export class PiracyViewController {
             <div class="ss-progress-track">
               <div class="ss-progress-fill" style="width:${Math.max(3, row.pct)}%;background:${color}"></div>
             </div>
-            <div class="ss-fleet-row-meta">${row.sorties} sorties · ${row.jumps} jumps · ${row.contracts} contracts${row.losses > 0 ? ` · ${row.losses} loss` : ''}</div>
+            <div class="ss-fleet-row-meta">${row.sorties} flights · ${row.jumps} jumps · ${row.contracts} contracts${(row.kills ?? 0) > 0 ? ` · ${row.kills} kills` : ''}${row.losses > 0 ? ` · ${row.losses} loss` : ''}</div>
           </button>
         `;
       })
@@ -792,7 +927,7 @@ export class PiracyViewController {
       : recent;
 
     if (rows.length === 0) {
-      this.sortiesTbodyEl.innerHTML = `<tr><td colspan="5" class="ss-muted-text">No sorties recorded${this.selectedHullFocus ? ` for ${escapeHtml(this.selectedHullFocus)}` : ''} yet.</td></tr>`;
+      this.sortiesTbodyEl.innerHTML = `<tr><td colspan="5" class="ss-muted-text">No flights recorded${this.selectedHullFocus ? ` for ${escapeHtml(this.selectedHullFocus)}` : ''} yet.</td></tr>`;
       return;
     }
 
@@ -817,22 +952,83 @@ export class PiracyViewController {
       .join('');
   }
 
+  private renderCombatLog(entries: ShipCombatEntry[]): void {
+    const f = this.flight;
+    const totalKills = f.total_ship_kills ?? 0;
+    const aiKills = f.ai_ship_kills ?? 0;
+    const playerKills = f.player_ship_kills ?? 0;
+    const totalLosses = f.total_ship_losses ?? 0;
+    const kiaCount = f.pilot_kia_count ?? 0;
+
+    const killBreak = totalKills > 0 ? ` (${aiKills} AI · ${playerKills} Player)` : '';
+    const kiaBreak = kiaCount > 0 ? ` (${kiaCount} Pilot K.I.A.)` : '';
+    this.combatSummaryEl.textContent = `${totalKills} kills${killBreak} · ${totalLosses} losses${kiaBreak}`;
+
+    const rows = this.combatFilter === 'all'
+      ? entries
+      : entries.filter((ev) => ev.kind === this.combatFilter);
+
+    if (rows.length === 0) {
+      const label = this.combatFilter === 'kill' ? 'ship kills' : this.combatFilter === 'loss' ? 'ship losses' : 'ship combat events';
+      this.combatTbodyEl.innerHTML = `<tr><td colspan="5" class="ss-muted-text">No ${label} logged yet. Destroyed targets and ship losses stream live from Game.log.</td></tr>`;
+      return;
+    }
+
+    this.combatTbodyEl.innerHTML = rows
+      .map((ev) => {
+        const isKill = ev.kind === 'kill';
+        const badgeCls = isKill ? 'ss-pill-ok' : 'ss-pill-bad';
+        const eventLabel = isKill
+          ? (ev.target_kind === 'player' ? 'PLAYER KILL' : 'SHIP KILL')
+          : (ev.pilot_kia ? 'PILOT K.I.A.' : 'SHIP LOSS');
+        const cause = ev.reason || 'Combat';
+        let details = '';
+        if (isKill) {
+          const kindLabel = ev.target_kind === 'player' ? 'Player-owned hull' : 'AI target';
+          details = ev.player_ship ? `${kindLabel} · from ${ev.player_ship}` : kindLabel;
+        } else {
+          details = ev.killer && ev.killer !== 'Unknown' ? `By ${ev.killer}` : 'Hull destroyed';
+        }
+        return `
+          <tr>
+            <td class="ss-mono">${escapeHtml(ev.time)}</td>
+            <td><span class="ss-outcome-pill ${badgeCls}">${escapeHtml(eventLabel)}</span></td>
+            <td><strong>${escapeHtml(ev.ship)}</strong></td>
+            <td class="ss-muted-text">${escapeHtml(cause)}</td>
+            <td class="ss-muted-text">${escapeHtml(details)}</td>
+          </tr>
+        `;
+      })
+      .join('');
+  }
+
   private renderSnarePlanner(): void {
     const lane = TRADE_LANE_PRESETS.find((l) => l.id === this.selectedLaneId) ?? TRADE_LANE_PRESETS[0];
     const qed = QED_SHIPS.find((q) => q.id === this.selectedQedId) ?? QED_SHIPS[0];
 
+    let effectiveLaneMkm = lane.distanceMkm;
+    if (this.gpsOrigin && this.gpsDest) {
+      const gpsLaneLenM = Math.hypot(
+        this.gpsDest.x - this.gpsOrigin.x,
+        this.gpsDest.y - this.gpsOrigin.y,
+        this.gpsDest.z - this.gpsOrigin.z,
+      );
+      if (gpsLaneLenM >= 1e6) {
+        effectiveLaneMkm = Number((gpsLaneLenM / 1_000_000_000).toFixed(2));
+      }
+    }
+
     const geom = calculateSnareGeometry({
-      laneDistanceMkm: lane.distanceMkm,
+      laneDistanceMkm: effectiveLaneMkm,
       offsetMkmFromDest: this.offsetMkm,
       doglegKm: this.doglegKm,
-      targetDriveSpeedKms: this.targetQtKms,
       qedRadiusKm: qed.radiusKm,
     });
 
     const snareX = 42 + (geom.snarePosPct / 100) * 356;
     const snareY = 64 + Math.min(24, Math.max(-24, (this.doglegKm / 30) * 24));
     const visualRadius = Math.max(10, Math.min(30, qed.radiusKm * 1.4));
-    const bubbleColor = geom.inRange ? '#53d09f' : '#ff6b72';
+    const bubbleColor = geom.inRange ? (geom.coveragePct >= 75 ? '#53d09f' : '#f6b95e') : '#ff6b72';
 
     this.snareSvgWrapEl.innerHTML = `
       <svg class="ss-snare-svg" viewBox="0 0 440 128" aria-label="Quantum Snare corridor geometry diagram">
@@ -849,37 +1045,18 @@ export class PiracyViewController {
         <circle cx="42" cy="64" r="6" fill="#62ccff" />
         <circle cx="398" cy="64" r="7" fill="#53d09f" />
         <text x="42" y="24" fill="#8895a4" font-size="10" text-anchor="middle">ORIGIN</text>
-        <text x="${snareX.toFixed(1)}" y="114" fill="${bubbleColor}" font-size="10" font-weight="700" text-anchor="middle">SNARE (${qed.radiusKm} km)</text>
+        <text x="${snareX.toFixed(1)}" y="114" fill="${bubbleColor}" font-size="10" font-weight="700" text-anchor="middle">SNARE (${qed.radiusKm} km · ${geom.coveragePct}%)</text>
         <text x="398" y="24" fill="#53d09f" font-size="10" text-anchor="middle">DESTINATION</text>
       </svg>
     `;
 
     this.snareReadoutEl.innerHTML = `
-      <div class="ss-mini-metric"><span>LANE EXPOSURE</span><strong>${escapeHtml(lane.comms)}</strong></div>
-      <div class="ss-mini-metric"><span>TARGET TRANSIT</span><strong>${geom.transitSeconds}s</strong></div>
+      <div class="ss-mini-metric"><span>CONE COVERAGE</span><strong class="${geom.coveragePct >= 75 ? 'ss-text-ok' : 'ss-text-bad'}">${geom.coveragePct}%</strong></div>
+      <div class="ss-mini-metric"><span>DRIFT CONE</span><strong>${geom.driftConeWidthKm} km</strong></div>
       <div class="ss-mini-metric"><span>DROP POINT</span><strong>${geom.snarePosPct.toFixed(0)}% al. spline</strong></div>
       <div class="ss-mini-metric"><span>INTERCEPT STATUS</span><strong class="${geom.inRange ? 'ss-text-ok' : 'ss-text-bad'}">${geom.inRange ? 'IN BUBBLE' : 'OUT OF RANGE'}</strong></div>
     `;
     this.snareAdviceEl.textContent = `${geom.dropAdvice} (${lane.note})`;
-  }
-
-  private renderPreyAppraiser(): void {
-    const prey = PREY_SHIPS.find((s) => s.id === this.selectedPreyId) ?? PREY_SHIPS[0];
-    const comm = COMMODITY_TIERS.find((c) => c.id === this.selectedCommodityId) ?? COMMODITY_TIERS[0];
-    const estScu = Math.round((prey.scu * this.preyFillPct) / 100);
-    const estValue = estScu * comm.avgPricePerScu;
-    const maxCrates = Math.max(1, Math.ceil(estScu / prey.maxBoxScu));
-
-    this.preyFillLabelEl.textContent = `${this.preyFillPct}%`;
-    this.preyReadoutEl.innerHTML = `
-      <div class="ss-prey-stats">
-        <div><span>ESTIMATED HAUL</span><strong class="ss-text-accent">${escapeHtml(formatAuec(estValue))}</strong></div>
-        <div><span>CARGO LOAD</span><strong>${estScu} / ${prey.scu} SCU (~${maxCrates}×${prey.maxBoxScu} SCU)</strong></div>
-        <div><span>CREW NEEDED</span><strong>${escapeHtml(prey.recommendedCrew)}</strong></div>
-        <div><span>QT SIZE</span><strong>${escapeHtml(prey.qtSize)}</strong></div>
-      </div>
-      <p class="ss-hint-line ss-prey-note">${escapeHtml(prey.hullNote)} Typical: ${escapeHtml(prey.typicalCargo)}</p>
-    `;
   }
 
   private renderCrewSplitter(): void {
@@ -909,7 +1086,7 @@ export class PiracyViewController {
     this.pullKpiEl.textContent = `${total} pulls · ${rate}% catch rate · ${formatAuec(loot)} stolen`;
 
     if (pulls.length === 0) {
-      this.pullTbodyEl.innerHTML = `<tr><td colspan="6" class="ss-muted-text">No snare pulls logged yet. Stage a ship from Prey Recon or log an interdiction above.</td></tr>`;
+      this.pullTbodyEl.innerHTML = `<tr><td colspan="6" class="ss-muted-text">No snare pulls logged yet. Log an interdiction manually above.</td></tr>`;
       return;
     }
 
@@ -941,9 +1118,10 @@ export class PiracyViewController {
     const top = f.fleet?.[0];
     const pulls = w.pull_stats;
     const lines = [
-      `**SynthScan Flight & Piracy Report**`,
+      `**SynthScan Flight / Piracy Report**`,
       `• Status: ${f.state ?? 'ON_FOOT'} · Vessel: ${f.active_ship && f.active_ship !== '--' ? f.active_ship : 'None'}`,
-      `• Total Sorties: ${f.total_sorties ?? 0} · Helm Time: ${formatCompactHours(f.total_helm_s ?? 0)} · QT Jumps: ${f.total_jumps ?? 0}`,
+      `• Total Flights: ${f.total_sorties ?? 0} · Helm Time: ${formatCompactHours(f.total_helm_s ?? 0)} · QT Jumps: ${f.total_jumps ?? 0}`,
+      `• Ship Combat: ${f.total_ship_kills ?? 0} kills (${f.ai_ship_kills ?? 0} AI · ${f.player_ship_kills ?? 0} Player) · ${f.total_ship_losses ?? f.total_losses ?? 0} losses`,
       top ? `• Most Flown Hull: ${top.name} (${formatCompactHours(top.seconds)}, ${top.pct}%)` : `• Most Flown Hull: None logged yet`,
       pulls ? `• Snare Ledger: ${pulls.catches}/${pulls.total} catches (${pulls.hit_rate}%) · Loot: ${formatAuec(pulls.total_loot_uec)}` : '',
     ];

@@ -81,10 +81,8 @@ def analyze(view, names=None, now=0, days=30):
                     by_faction_records.setdefault(fac_name, []).append(rec)
 
     for fac_name, recs in by_faction_records.items():
-        if fac_name not in factions:
-            primary = primary_record_for_faction(recs)
-            if primary and (primary.get('score') or 0) > 0:
-                bucket(fac_name)
+        if fac_name not in factions and any((r.get('score') or 0) != 0 for r in recs):
+            bucket(fac_name)
 
     ranked = sorted(factions.values(), key=lambda f: (-f['auec'], -abs(f['rep_net']), -(f.get('rep_score') or 0), f['name']))
     for f in ranked:
@@ -92,6 +90,29 @@ def analyze(view, names=None, now=0, days=30):
         f.pop('mission_titles', None)
         recs = by_faction_records.get(f['name'], [])
         primary = primary_record_for_faction(recs)
+        primary_scope = primary.get('scope') if primary else None
+        rep_tracks = []
+        for rec in recs:
+            prog = standing_progression(rec.get('scope'), rec.get('score'))
+            if not prog:
+                continue
+            track_info = dict(
+                scope=rec.get('scope'),
+                scope_display=prog['scope_display'],
+                current_rank=prog['current_rank'],
+                next_rank=prog['next_rank'],
+                score=prog['score'],
+                next_min=prog['next_min'],
+                points_needed=prog['points_needed'],
+                progress_pct=prog['progress_pct'],
+                is_max=prog['is_max'],
+            )
+            if rec.get('scope') == primary_scope:
+                rep_tracks.insert(0, track_info)
+            else:
+                rep_tracks.append(track_info)
+        if rep_tracks:
+            f['rep_tracks'] = rep_tracks
         if primary:
             prog = standing_progression(primary.get('scope'), primary.get('score'))
             if prog:

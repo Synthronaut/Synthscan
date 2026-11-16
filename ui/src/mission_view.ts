@@ -155,7 +155,12 @@ export class MissionViewController {
   private query = '';
 
   private detailVisible = false;
+  private activeSubtab: 'missions' | 'wallet' = 'missions';
 
+  private subtabMissionsBtn!: HTMLButtonElement;
+  private subtabWalletBtn!: HTMLButtonElement;
+  private missionsPanelEl!: HTMLElement;
+  private walletPanelEl!: HTMLElement;
   private kpiEl!: HTMLElement;
   private promotionsEl!: HTMLElement;
   private factionEl!: HTMLElement;
@@ -210,19 +215,19 @@ export class MissionViewController {
   private buildDom(): void {
     this.container.innerHTML = `
       <div class="ss-mission-root">
-        <div id="mission-kpis" class="ss-mission-kpis"></div>
-
-        <div class="ss-card ss-mission-balance-card">
-          <div class="ss-card-title-row">
-            <h2 class="ss-section-heading">WALLET BALANCE HISTORY</h2>
-            <span class="ss-hint-line">Observed aUEC balance from wallet reads</span>
+        <div class="ss-toolbar-row ss-mission-subnav">
+          <div class="ss-mode-tabs" role="tablist" aria-label="Mission and wallet view">
+            <button id="mission-subtab-missions" type="button" class="ss-tab is-active" role="tab" aria-selected="true">Missions &amp; Reputation</button>
+            <button id="mission-subtab-wallet" type="button" class="ss-tab" role="tab" aria-selected="false">Wallet &amp; Cash Flow</button>
           </div>
-          <div id="mission-balance-history" class="ss-chart-box ss-chart-balance"></div>
+          <span class="ss-hint-line">Contracts, reputation progression, and aUEC cash flow</span>
         </div>
 
-        <div id="mission-promotions-banner" class="ss-mission-promotions-banner" style="display:none"></div>
+        <div id="mission-panel-missions" class="ss-mission-subpanel">
+          <div id="mission-kpis" class="ss-mission-kpis"></div>
 
-        <div class="ss-mission-analytics">
+          <div id="mission-promotions-banner" class="ss-mission-promotions-banner" style="display:none"></div>
+
           <div class="ss-card ss-mission-faction-card">
             <div class="ss-card-title-row">
               <h2 class="ss-section-heading">FACTIONS & REPUTATION STANDING</h2>
@@ -230,6 +235,17 @@ export class MissionViewController {
             </div>
             <div id="mission-factions" class="ss-faction-bars"></div>
           </div>
+        </div>
+
+        <div id="mission-panel-wallet" class="ss-mission-subpanel" hidden style="display: none;">
+          <div class="ss-card ss-mission-balance-card">
+            <div class="ss-card-title-row">
+              <h2 class="ss-section-heading">WALLET BALANCE HISTORY</h2>
+              <span class="ss-hint-line">Observed aUEC balance from wallet reads</span>
+            </div>
+            <div id="mission-balance-history" class="ss-chart-box ss-chart-balance"></div>
+          </div>
+
           <div class="ss-card ss-mission-daily-card">
             <div class="ss-card-title-row">
               <h2 class="ss-section-heading">DAILY aUEC FLOW</h2>
@@ -290,6 +306,10 @@ export class MissionViewController {
       </div>
     `;
     const q = <T extends HTMLElement>(sel: string): T => this.container.querySelector(sel) as T;
+    this.subtabMissionsBtn = q('#mission-subtab-missions');
+    this.subtabWalletBtn = q('#mission-subtab-wallet');
+    this.missionsPanelEl = q('#mission-panel-missions');
+    this.walletPanelEl = q('#mission-panel-wallet');
     this.kpiEl = q('#mission-kpis');
     this.promotionsEl = q('#mission-promotions-banner');
     this.factionEl = q('#mission-factions');
@@ -326,7 +346,26 @@ export class MissionViewController {
     });
   }
 
+  public setSubtab(tab: 'missions' | 'wallet'): void {
+    this.activeSubtab = tab;
+    const isMissions = tab === 'missions';
+    this.subtabMissionsBtn.classList.toggle('is-active', isMissions);
+    this.subtabMissionsBtn.setAttribute('aria-selected', isMissions ? 'true' : 'false');
+    this.subtabWalletBtn.classList.toggle('is-active', !isMissions);
+    this.subtabWalletBtn.setAttribute('aria-selected', !isMissions ? 'true' : 'false');
+    this.missionsPanelEl.hidden = !isMissions;
+    this.missionsPanelEl.style.display = isMissions ? 'flex' : 'none';
+    this.walletPanelEl.hidden = isMissions;
+    this.walletPanelEl.style.display = isMissions ? 'none' : 'flex';
+  }
+
   private bindEvents(): void {
+    this.subtabMissionsBtn.addEventListener('click', () => {
+      this.setSubtab('missions');
+    });
+    this.subtabWalletBtn.addEventListener('click', () => {
+      this.setSubtab('wallet');
+    });
     const apply = () => {
       this.query = this.searchEl.value.trim();
       this.mode = this.modeEl.value || 'all';
@@ -486,35 +525,57 @@ export class MissionViewController {
         const rep = f.rep_net ? ` · rep net ${f.rep_net > 0 ? '+' : ''}${Math.round(f.rep_net).toLocaleString('en-US')}` : '';
         const avg = f.avg_per_mission ? ` · avg ${formatAuecPlain(f.avg_per_mission)}` : '';
 
-        let standingHtml = '';
-        if (f.standing) {
-          const rankPill = `<span class="ss-rank-pill" title="Current Standing: ${escapeHtml(f.standing)}">${escapeHtml(f.standing)}</span>`;
-          if (f.is_max_rank) {
-            standingHtml = `
-              <div class="ss-faction-rank-row">
-                <div class="ss-rank-tier-labels">
-                  ${rankPill}
-                  <span class="ss-rank-next-note ss-rank-max">MAX RANK</span>
-                  ${f.rep_score !== undefined ? `<span class="ss-rank-needed">${f.rep_score.toLocaleString('en-US')} rep</span>` : ''}
-                </div>
-              </div>`;
-          } else if (f.next_standing && f.points_to_next !== undefined) {
-            const pct = Math.min(100, Math.max(0, f.rep_progress_pct ?? 0));
-            const neededFormatted = Math.round(f.points_to_next).toLocaleString('en-US');
-            standingHtml = `
-              <div class="ss-faction-rank-row">
-                <div class="ss-rank-tier-labels">
-                  ${rankPill}
-                  <span class="ss-rank-next-arrow">➔</span>
-                  <span class="ss-rank-next-target">${escapeHtml(f.next_standing)}</span>
-                  <span class="ss-rank-needed">${neededFormatted} rep to rank up (${pct}%)</span>
-                </div>
-                <div class="ss-rank-track"><div class="ss-rank-fill" style="width:${pct}%"></div></div>
-              </div>`;
-          } else {
-            standingHtml = `<div class="ss-faction-rank-row"><div class="ss-rank-tier-labels">${rankPill}</div></div>`;
-          }
-        }
+        const tracks = f.rep_tracks && f.rep_tracks.length > 0
+          ? f.rep_tracks
+          : f.standing
+            ? [{
+                scope: f.scope ?? '',
+                scope_display: f.scope ?? '',
+                current_rank: f.standing,
+                next_rank: f.next_standing ?? null,
+                score: f.rep_score ?? 0,
+                next_min: f.rep_score !== undefined && f.points_to_next !== undefined ? f.rep_score + f.points_to_next : null,
+                points_needed: f.points_to_next ?? 0,
+                progress_pct: f.rep_progress_pct ?? 0,
+                is_max: !!f.is_max_rank,
+              }]
+            : [];
+        const showScopeLabel = tracks.length > 1;
+        const standingHtml = tracks
+          .map((t) => {
+            const scopeTag = showScopeLabel && t.scope_display
+              ? `<span class="ss-rank-scope">${escapeHtml(t.scope_display)}</span>`
+              : '';
+            const rankPill = `<span class="ss-rank-pill" title="Current Standing: ${escapeHtml(t.current_rank)}">${escapeHtml(t.current_rank)}</span>`;
+            const scoreStr = t.score.toLocaleString('en-US');
+            if (t.is_max) {
+              return `
+                <div class="ss-faction-rank-row">
+                  <div class="ss-rank-tier-labels">
+                    ${scopeTag}${rankPill}
+                    <span class="ss-rank-next-note ss-rank-max">MAX RANK</span>
+                    <span class="ss-rank-needed">${scoreStr} rep</span>
+                  </div>
+                </div>`;
+            }
+            if (t.next_rank && t.next_min !== null) {
+              const pct = Math.min(100, Math.max(0, t.progress_pct ?? 0));
+              const nextMinStr = t.next_min.toLocaleString('en-US');
+              const neededStr = Math.round(t.points_needed).toLocaleString('en-US');
+              return `
+                <div class="ss-faction-rank-row">
+                  <div class="ss-rank-tier-labels">
+                    ${scopeTag}${rankPill}
+                    <span class="ss-rank-next-arrow">➔</span>
+                    <span class="ss-rank-next-target">${escapeHtml(t.next_rank)}</span>
+                    <span class="ss-rank-needed">${scoreStr} / ${nextMinStr} · ${neededStr} to go (${pct}%)</span>
+                  </div>
+                  <div class="ss-rank-track"><div class="ss-rank-fill" style="width:${pct}%"></div></div>
+                </div>`;
+            }
+            return `<div class="ss-faction-rank-row"><div class="ss-rank-tier-labels">${scopeTag}${rankPill}<span class="ss-rank-needed">${scoreStr} rep</span></div></div>`;
+          })
+          .join('');
 
         return `
           <div class="ss-faction-row">

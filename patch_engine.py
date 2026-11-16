@@ -153,10 +153,10 @@ def apply_all_rules_and_adapt(ini_path=DEFAULT_INI_PATH, sc_dir=DEFAULT_SC_DIR, 
             mod_line, n = re.subn(r'\s*\([rR][aA][wW]\)', '', mod_line)
             raw_cleaned += n
 
-        # C. Quasigrazers -> QzG
+        # C. Quasigrazers -> <EM4>QzG</EM4>
         if "quasigrazer" in mod_line.lower() or "quazigrazer" in mod_line.lower():
             if mod_line.startswith("items_commodities_quasigrazer=") or mod_line.startswith("actor_species_creature_quaziGrazer"):
-                mod_line = re.sub(r'=.*', '=QzG\n', mod_line)
+                mod_line = re.sub(r'=.*', '=<EM4>QzG</EM4>\n', mod_line)
                 quazi_cleaned += 1
             elif "Potential Creatures:" in mod_line:
                 mod_line = re.sub(r'Quasigrazer|Quazigrazer', 'QzG', mod_line, flags=re.IGNORECASE)
@@ -164,10 +164,10 @@ def apply_all_rules_and_adapt(ini_path=DEFAULT_INI_PATH, sc_dir=DEFAULT_SC_DIR, 
 
         # D. Harvestables compression
         if mod_line.startswith("items_commodities_amiantpod="):
-            mod_line = "items_commodities_amiantpod=Pod\n"
+            mod_line = "items_commodities_amiantpod=<EM3>Pod</EM3>\n"
             harv_cleaned += 1
         elif mod_line.startswith("items_commodities_flareweedstalk="):
-            mod_line = "items_commodities_flareweedstalk=Stock\n"
+            mod_line = "items_commodities_flareweedstalk=<EM3>Stock</EM3>\n"
             harv_cleaned += 1
         elif mod_line.startswith("hud_scanning_cat_harvestables="):
             mod_line = "hud_scanning_cat_harvestables=Harv\n"
@@ -199,7 +199,9 @@ def apply_all_rules_and_adapt(ini_path=DEFAULT_INI_PATH, sc_dir=DEFAULT_SC_DIR, 
     partial_count = 0
     post_desc_lines = []
 
+    from synthstrings_sync import strip_blueprint_pool_from_title
     for line in updated_lines:
+        line, _ = strip_blueprint_pool_from_title(line)
         if "Potential Blueprints" in line:
             parts = line.split("Potential Blueprints", 1)
             prefix = parts[0] + "Potential Blueprints"

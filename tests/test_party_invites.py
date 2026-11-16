@@ -334,4 +334,47 @@ class WorkerTests(unittest.TestCase):
         self.assertTrue(all(call.args[0]=='friend' for call in c.send.call_args_list))
 
 
+class ActionLogTests(unittest.TestCase):
+    setUp=QueueServiceTests.setUp
+    tearDown=QueueServiceTests.tearDown
+    command=QueueServiceTests.command
+    def test_single_friend_command_uses_queue_and_logs(self):
+        self.service.command(self.command('friend',player_id=PEOPLE[0]['id'],confirmed=True),1001)
+        self.assertIsNotNone(self.service.invite_queue)
+        self.assertEqual(self.service.invite_queue.operation,'friend')
+        q=self.service.invite_queue;q.before_send(PEOPLE[0]);q.update(dict(PEOPLE[0],outcome='Sent',detail='Friend request sent'))
+        self.service.publish(1002)
+        state=json.loads((Path(self.temp.name)/'companion_state.json').read_text())
+        self.assertTrue(any(e['kind']=='friend_sent' and e['handle']==PEOPLE[0]['handle'] and e['outcome']=='Sent' for e in state['action_log']))
+    def test_tagging_and_clear_log_are_recorded(self):
+        self.service.command(self.command('tag',player_id=PEOPLE[0]['id'],label='Friendly, Trader',alert=True),1001)
+        self.service.publish(1002)
+        state=json.loads((Path(self.temp.name)/'companion_state.json').read_text())
+        self.assertEqual(state['action_log'][0]['kind'],'tag')
+        self.assertEqual(state['action_log'][0]['handle'],PEOPLE[0]['handle'])
+        self.assertIn('Friendly, Trader',state['action_log'][0]['detail'])
+        self.service.command(self.command('clear_action_log'),1003)
+        self.service.publish(1004)
+        state=json.loads((Path(self.temp.name)/'companion_state.json').read_text())
+        self.assertEqual(state['action_log'],[])
+    def test_accepted_and_declined_invites_detected_on_relationships_refresh(self):
+        self.service.awaiting_friend_response.update([PEOPLE[0]['id'],PEOPLE[1]['id']])
+        self.service.awaiting_party_response.update([PEOPLE[1]['id'],PEOPLE[2]['id']])
+        rel1=Future();rel1.set_result(dict(friends=[],friends_at=1001,pending_friend_out=[PEOPLE[0]['id'],PEOPLE[1]['id']],pending_friend_known=True,
+                                           party=[],party_at=1001,pending_party_out=[PEOPLE[1]['id'],PEOPLE[2]['id']],pending_party_known=True))
+        self.service.jobs['relationships']=(rel1,CONTEXT)
+        self.service.tick(CONTEXT,True,1001)
+        rel2=Future();rel2.set_result(dict(friends=[PEOPLE[0]['id']],friends_at=1005,pending_friend_out=[],pending_friend_known=True,
+                                           party=[PEOPLE[2]['id']],party_at=1005,pending_party_out=[],pending_party_known=True))
+        self.service.jobs['relationships']=(rel2,CONTEXT)
+        self.service.tick(CONTEXT,True,1005)
+        self.service.publish(1006)
+        state=json.loads((Path(self.temp.name)/'companion_state.json').read_text())
+        kinds={(e['kind'],e['player_id']) for e in state['action_log']}
+        self.assertIn(('friend_accepted',PEOPLE[0]['id']),kinds)
+        self.assertIn(('friend_rejected',PEOPLE[1]['id']),kinds)
+        self.assertIn(('party_accepted',PEOPLE[2]['id']),kinds)
+        self.assertIn(('party_rejected',PEOPLE[1]['id']),kinds)
+
+
 if __name__=='__main__':unittest.main()

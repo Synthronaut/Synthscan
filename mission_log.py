@@ -50,11 +50,16 @@ def load_retail_price_index(directory):
         try:
             vdata = json.loads(vpath.read_text(encoding='utf-8'))
             for r in vdata.get('rows', []):
-                vmap[r.get('id')] = r.get('name', 'Vehicle')
+                vname = r.get('name', 'Vehicle')
+                if r.get('id'):
+                    vmap[r['id']] = vname
+                if r.get('game_vehicle_id'):
+                    vmap[r['game_vehicle_id']] = vname
         except Exception:
             pass
-    shops_dir = dir_path / 'item_shops'
-    if shops_dir.exists():
+    for shops_dir in (Path('data/item_shops'), dir_path / 'item_shops'):
+        if not shops_dir.exists():
+            continue
         for f in shops_dir.glob('*.json'):
             try:
                 content = json.loads(f.read_text(encoding='utf-8'))
@@ -69,9 +74,10 @@ def load_retail_price_index(directory):
                     p = row.get('price')
                     if p and p > 0:
                         cost = int(round(p))
-                        price_map.setdefault(cost, dict(name=name, category=cat, item_id=item_id,
-                                                        shop=row.get('shop') or row.get('location', '').split('→')[-1].strip(),
-                                                        location=row.get('location')))
+                        shop = row.get('shop') or row.get('location', '').split('→')[-1].strip()
+                        bucket = price_map.setdefault(cost, [])
+                        if not any(m['name'] == name for m in bucket):
+                            bucket.append(dict(name=name, category=cat, item_id=item_id, shop=shop, location=row.get('location')))
             except Exception:
                 pass
     return price_map
@@ -84,10 +90,19 @@ def wallet_classification(window, missions, catalog, rep_by_mission=None, price_
     delta = window.get('delta', 0)
     if delta < 0 and price_index:
         cost = abs(int(round(delta)))
-        match = price_index.get(cost)
-        if match:
-            return dict(category=match['category'], source=f"Retail price match: {match['name']}",
-                        item_name=match['name'], item_id=match.get('item_id'), shop=match.get('shop'),
+        matches = price_index.get(cost)
+        if matches:
+            if isinstance(matches, dict):
+                matches = [matches]
+            names = [m['name'] for m in matches]
+            cat = 'vehicle_purchase' if any(m['category'] == 'vehicle_purchase' for m in matches) else matches[0]['category']
+            if len(names) == 1:
+                return dict(category=cat, source=f"Retail price match: {names[0]}",
+                            item_name=names[0], item_id=matches[0].get('item_id'), shop=matches[0].get('shop'),
+                            price_match=True)
+            label = ' / '.join(names[:3]) + (f' (+{len(names) - 3} more)' if len(names) > 3 else '')
+            return dict(category=cat, source=f"Retail price match (possible: {', '.join(names[:5])})",
+                        item_name=label, item_id=matches[0].get('item_id'), shop=matches[0].get('shop'),
                         price_match=True)
     result = dict(category='unclassified', source='Unclassified')
     if (window.get('kind') != 'wallets' or window.get('track', '').upper() != 'AUEC'

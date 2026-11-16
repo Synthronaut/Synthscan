@@ -38,6 +38,21 @@ class ReputationNameTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             annotate_names(first.replace('Adagio Holdings','Custom name'),self.snapshot,self.factions,self.scopes,state)
 
+    def test_recovers_from_stale_prepared_state_with_older_rep_suffix(self):
+        first,state=annotate_names(self.text,self.snapshot,self.factions,self.scopes)
+        state['entries']['adagio_name']['written']='Adagio Holdings (310 / 800)'
+        self.snapshot['records'][0]['score']=399
+        second,new_state=annotate_names(first,self.snapshot,self.factions,self.scopes,state)
+        self.assertIn('Adagio Holdings (399 / 800)',second)
+        self.assertEqual(new_state['entries']['adagio_name']['original'],'Adagio Holdings')
+
+    def test_recovers_when_previous_state_missing_but_synthscan_suffix_exists(self):
+        first,_=annotate_names(self.text,self.snapshot,self.factions,self.scopes)
+        self.snapshot['records'][0]['score']=450
+        second,new_state=annotate_names(first,self.snapshot,self.factions,self.scopes,None)
+        self.assertIn('Adagio Holdings (450 / 800)',second)
+        self.assertEqual(new_state['entries']['adagio_name']['original'],'Adagio Holdings')
+
     def test_shared_name_key_is_not_annotated(self):
         self.factions['other']=dict(key='@Adagio_Name')
         result,state=annotate_names(self.text,self.snapshot,self.factions,self.scopes)

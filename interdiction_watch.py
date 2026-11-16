@@ -62,7 +62,8 @@ class InterdictionJournal:
                     coverage='Logged English Unauthorized Interdiction notices only; unmonitored/friendly captures may not report')
 
 def piracy_alerts_enabled(settings,game_visible):
-    return bool(settings.get('hud_mode','mining')=='piracy' and settings.get('show_hud',True) and settings.get('snare_alerts',True) and game_visible)
+    # Disabled: CrimeStat interdiction notifications are not a reliable snare detector.
+    return False
 
 class AlertGate:
     """Consume each live alert once; startup/reconnect never replays old sounds."""

@@ -66,8 +66,31 @@ def present(view, catalog=None, mode='all', direction='', category='', query='',
             entries.append(dict(id='mission:'+row['id'], at=row.get('ended_at') or row.get('accepted_at') or row['first_seen_at'],
                                 session=row.get('session', ''), cells=cells, detail=detail))
     if mode in ('all', 'reputation', 'wallet'):
+        decay_weekly = {}
         for change in view.get('changes', []):
             wallet = change['kind'] == 'wallets'
+            if not wallet and change.get('delta') == -1 and change.get('reason') == 'Unmatched balance change' and not change.get('promotion'):
+                iso_year, iso_week, _ = datetime.fromtimestamp(change['end']).isocalendar()
+                bucket_key = (f'{iso_year}-W{iso_week:02d}', change['track'])
+                b = decay_weekly.get(bucket_key)
+                if b is None:
+                    decay_weekly[bucket_key] = dict(
+                        week=bucket_key[0], track=change['track'], count=1, delta=-1,
+                        start=change['start'], end=change['end'],
+                        before=change['before'], after=change['after'],
+                        session=change.get('session', ''),
+                    )
+                else:
+                    b['count'] += 1
+                    b['delta'] += change['delta']
+                    if change['start'] < b['start']:
+                        b['start'] = change['start']
+                        b['before'] = change['before']
+                    if change['end'] >= b['end']:
+                        b['end'] = change['end']
+                        b['after'] = change['after']
+                        b['session'] = change.get('session', '')
+                continue
             annotation = change.get('annotation', {})
             classification = change.get('classification', annotation)
             inferred = classification.get('source') == 'Mission completion correlation'
@@ -117,6 +140,25 @@ def present(view, catalog=None, mode='all', direction='', category='', query='',
             entries.append(dict(id='change:'+change['id'], change_id=change['id'], is_wallet=wallet, category=category_key,
                                 is_promotion=bool(promo), promotion=promo,
                                 session=change.get('session', ''), at=change['end'], cells=cells, detail=detail))
+        if mode in ('all', 'reputation') and not category and direction != 'gains':
+            for (week, track), b in decay_weekly.items():
+                entity, _, scope = track.partition('|')
+                title = f"{names.get(entity, 'Organization')} / {scope}"
+                detail = (f"{title} — Weekly passive decay ({week})\n"
+                          f"Observed net decay: {number(b['delta'], True)} across {b['count']} tick(s)\n"
+                          f"Before: {number(b['before'])} at {clock(b['start'])}\n"
+                          f"After: {number(b['after'])} at {clock(b['end'])}\n"
+                          f"Analysis: Passive reputation decay bundled by week.")
+                if query.casefold() not in detail.casefold():
+                    continue
+                cells = ([clock(b['end']), f"{title} (Weekly decay)", 'Decay',
+                          number(b['before']), number(b['after']), number(b['delta'], True), f"{b['count']} tick(s)", f"Passive decay ({week})"]
+                         if mode == 'reputation' else
+                         [clock(b['end']), 'Reputation', f"{title} · Weekly decay ({b['count']}x)",
+                          'Decay', number(b['delta'], True), '—', f"Passive decay ({week})"])
+                entries.append(dict(id=f"decay:{week}:{track}", is_wallet=False, category='unclassified',
+                                    is_promotion=False, promotion=None,
+                                    session=b['session'], at=b['end'], cells=cells, detail=detail))
     if mode == 'sessions':
         for session in view.get('sessions', []):
             rep = '\n'.join(f"{r['faction']} / {r['scope']}: {number(r['delta'], True)} ({number(r['before'])} → {number(r['after'])}); reads {clock(r['baseline_at'])}–{clock(r['last_read_at'])}" for r in session['reputation']) or 'No verified reputation change recorded.'

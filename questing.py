@@ -140,7 +140,7 @@ class Questing:
             self.label_retry_at=now+3
             help=('Windows blocked game-text updates. Open More → Setup & reputation, then choose Allow game-text access.'
                   if isinstance(exc,PermissionError) else 'Waiting for your signed-in character and a fresh reputation response. If this persists, open More → Setup & reputation and choose Repair setup.')
-            publish_json(self.directory/'reputation_labels_status.json',dict(at=now,ok=False,help=help))
+            publish_json(self.directory/'reputation_labels_status.json',dict(at=now,ok=False,help=help,error=str(exc)))
 
     def load_catalog(self):
         from game_records import GameRecords, walk_nodes

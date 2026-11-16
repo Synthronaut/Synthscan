@@ -74,6 +74,20 @@ class MissionAnalyticsTests(unittest.TestCase):
         self.assertEqual(result['promotions'][0]['rank'], 'Veteran Contractor')
         self.assertEqual(result['promotions'][0]['faction'], 'Hurston Dynamics')
 
+    def test_multiple_rep_tracks_for_same_faction_are_all_included(self):
+        view = self.view()
+        view['latest_reputation'] = {
+            'ent1|FactionReputation': {'entity': 'ent1', 'scope': 'FactionReputation', 'score': 18348},
+            'ent1|Hauling': {'entity': 'ent1', 'scope': 'Hauling', 'score': 19000},
+        }
+        result = analyze(view, {'ent1': 'Headhunters'})
+        by_name = {f['name']: f for f in result['factions']}
+        hh = by_name['Headhunters']
+        self.assertEqual(hh['standing'], 'Veteran Contractor')
+        self.assertEqual(len(hh['rep_tracks']), 2)
+        self.assertEqual([t['scope'] for t in hh['rep_tracks']], ['FactionReputation', 'Hauling'])
+        self.assertEqual(hh['rep_tracks'][1]['score'], 19000)
+
 
 if __name__ == '__main__':
     unittest.main()

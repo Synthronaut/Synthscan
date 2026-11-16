@@ -92,7 +92,7 @@ class PresenceChanges:
 class CompanionStore:
     def __init__(self,directory):
         self.path=Path(directory)/'companion_private.json';self.read_only=False
-        self.data=dict(schema=1,watches=[],tags={},notifications=[],commands=[],actions=[],org_rosters={},org_handles={})
+        self.data=dict(schema=1,watches=[],tags={},notifications=[],commands=[],actions=[],org_rosters={},org_handles={},action_log=[])
         try:
             value=load(self.path,None)
             if value is not None:
@@ -105,6 +105,7 @@ class CompanionStore:
                 if not isinstance(actions,list) or len(actions)>4096 or any(not isinstance(p,dict) or not isinstance(p.get('id'),str) or not isinstance(p.get('handle'),str) for p in actions):raise ValueError('Invalid action list')
                 value.setdefault('org_rosters',{})
                 value.setdefault('org_handles',{})
+                if not isinstance(value.get('action_log'),list):value['action_log']=[]
                 self.data=value
         except (OSError,ValueError,TypeError):self.read_only=True
     def save(self):
@@ -114,6 +115,13 @@ class CompanionStore:
         event=dict(id=uuid.uuid4().hex,kind=kind,title=title,detail=detail,url=url,category=category,at=now,session_token=session_token)
         self.data['notifications']=(self.data['notifications']+[event])[-100:]
         return event
+    def record_action(self,kind,handle,detail,player_id='',outcome='',session_token=None,now=None,dedupe_key=''):
+        now=time.time() if now is None else now
+        log=self.data.setdefault('action_log',[])
+        if dedupe_key and any(entry.get('dedupe_key')==dedupe_key for entry in log):return None
+        entry=dict(id=uuid.uuid4().hex,at=now,kind=kind,player_id=player_id,handle=handle,outcome=outcome,detail=detail,session_token=session_token,dedupe_key=dedupe_key)
+        self.data['action_log']=(log+[entry])[-300:]
+        return entry
     def watch(self,item,quality,price=0,unit=''):
         if type(quality)!=int or not 0<=quality<=1000:raise ValueError('Quality must be a whole number from 0 to 1000; 0 means any.')
         if isinstance(price,bool) or not isinstance(price,(float,int)) or not math.isfinite(price) or price<0:raise ValueError('Enter a valid minimum price.')
@@ -160,6 +168,10 @@ class CompanionService:
             self.action_status=f'Action list limited to the first {MAX_BATCH_REQUESTS} saved players. Review the list before sending.'
         self.search_query='';self.search_limited=False;self.gate=PresenceChanges();self.jobs={};self.next_publish=0
         self.relationships={};self.relationships_due=0
+        self.known_friends=None;self.known_party=None
+        self.pending_friend_out=set();self.pending_party_out=set()
+        self.pending_friend_known=False;self.pending_party_known=False
+        self.awaiting_friend_response=set();self.awaiting_party_response=set()
         self.batch_results=[];self.invited=set()
         self.invite_queue=None;self.invite_history=InviteHistory(directory)
         self.friend_history=InviteHistory(directory,'friend_request_attempts.json');self.friend_requested=set()
@@ -196,8 +208,9 @@ class CompanionService:
         self.invite_queue.due=next_send
         previous=[] if command.get('resend') is True else list(remembered)
         self.jobs['action']=(self.pool.submit(self.social,'friend_many' if operation=='friend' else 'party_many',dict(self.context),people=[dict(p) for p in targets],confirmed=True,previous=previous,
-                            cancel=self.cancel_batch,control=self.invite_queue,require_shard=True,allow_friends=operation=='party' and command.get('from_actions') is True),dict(self.context))
-        self.action_status=f'Queued {len(targets)} player(s). Random 0.09–0.99s gaps; Pause / Cancel is available.'
+                            cancel=self.cancel_batch,control=self.invite_queue,require_shard=True,allow_friends=operation=='party' and (command.get('from_actions') is True or command.get('allow_friends') is True)),dict(self.context))
+        label='friend request' if operation=='friend' else 'party invite'
+        self.action_status=f'Queued {len(targets)} {label}(s). Random 0.09–0.99s gaps; Pause / Cancel is available.'
     def friend_ids(self,now):
         stamp=self.relationships.get('friends_at',0)
         return set(self.relationships.get('friends',[])) if stamp and 0<=now-stamp<120 else set()
@@ -274,10 +287,13 @@ class CompanionService:
             self.jobs['action']=(self.pool.submit(self.social,action,dict(self.context),player_id=player_id,handle=target.get('handle',''),confirmed=True),dict(self.context))
             if action=='kick_party_member':
                 self.action_status=f"Removing {target.get('handle') or player_id} from party…"
+                self.store.record_action('party_manage',target.get('handle') or player_id,'Removed from party',player_id=player_id,outcome='Removed',session_token=self.session,now=now)
             elif action=='transfer_party_leader':
                 self.action_status=f"Making {target.get('handle') or player_id} party leader…"
+                self.store.record_action('party_manage',target.get('handle') or player_id,'Promoted to party leader',player_id=player_id,outcome='Promoted',session_token=self.session,now=now)
             else:
                 self.action_status='Leaving party…'
+                self.store.record_action('party_manage','Party','Left party',player_id='',outcome='Left',session_token=self.session,now=now)
         elif action=='send_chat_message':
             if command.get('confirmed') is not True:raise ValueError('Confirm sending the chat message.')
             if 'chat_send' in self.jobs:raise ValueError('A chat message is already being sent.')
@@ -327,16 +343,15 @@ class CompanionService:
             if action=='tag':
                 labels=tag_labels(command.get('label',''))
                 if 'Friend' in labels:raise ValueError('Friend is automatic from your game friends list; use Friendly for a custom tag.')
-                if labels:self.store.data['tags'][target['id']]=dict(handle=target['handle'],label=', '.join(labels),labels=labels,alert=command.get('alert') is True)
-                else:self.store.data['tags'].pop(target['id'],None)
+                if labels:
+                    self.store.data['tags'][target['id']]=dict(handle=target['handle'],label=', '.join(labels),labels=labels,alert=command.get('alert') is True)
+                    self.store.record_action('tag',target['handle'],'Tagged: '+', '.join(labels),player_id=target['id'],outcome='Tagged',session_token=self.session,now=now)
+                else:
+                    self.store.data['tags'].pop(target['id'],None)
+                    self.store.record_action('tag',target['handle'],'Tags cleared',player_id=target['id'],outcome='Cleared',session_token=self.session,now=now)
             elif action=='party':self.start_party_queue([target],command)
             else:
-                if command.get('confirmed') is not True:raise ValueError('Confirm the selected recipient first.')
-                if 'action' in self.jobs:raise ValueError('A social action is awaiting confirmation from the game service.')
-                # Persist before sending: never automatically retry an uncertain outgoing action.
-                self.store.data['commands']=(self.store.data['commands']+[identifier])[-1000:];self.store.save()
-                self.jobs['action']=(self.pool.submit(self.social,action,dict(self.context),person=dict(target),confirmed=True),dict(self.context))
-                self.action_status='Sending '+('friend request' if action=='friend' else 'party invitation')+' to '+target['handle']+'…'
+                self.start_party_queue([target],command,'friend')
         elif action in ('tag_many','mark_org','party_many','friend_many'):
             ids=command.get('player_ids')
             if not isinstance(ids,list) or not ids or len(ids)>4096 or any(not isinstance(v,str) for v in ids):raise ValueError('Select one or more verified players.')
@@ -363,8 +378,13 @@ class CompanionService:
                     merged=tag_labels(old.get('label','')+', '+', '.join(labels)) if labels else []
                     updates[p['id']]=dict(handle=p['handle'],label=', '.join(merged),labels=merged,alert=old.get('alert',False)) if merged else None
                 for key,value in updates.items():
-                    if value:self.store.data['tags'][key]=value
-                    else:self.store.data['tags'].pop(key,None)
+                    if value:
+                        self.store.data['tags'][key]=value
+                        self.store.record_action('tag',value['handle'],'Tagged: '+value['label'],player_id=key,outcome='Tagged',session_token=self.session,now=now)
+                    else:
+                        old_handle=(self.store.data['tags'].get(key) or {}).get('handle') or available.get(key,{}).get('handle',key)
+                        self.store.data['tags'].pop(key,None)
+                        self.store.record_action('tag',old_handle,'Tags cleared',player_id=key,outcome='Cleared',session_token=self.session,now=now)
                 self.action_status=f'Updated tags for {len(targets)} player(s).'
         elif action=='add_watch':
             catalog=load(self.directory/'finder_market_index.json',{}) or {}
@@ -390,6 +410,7 @@ class CompanionService:
             self.action_status=f'Importing {symbol} members from RSI…'
             self.jobs['import_org']=(self.pool.submit(self.fetch_org_members,symbol,tag_label,alert),dict(symbol=symbol,tag_label=tag_label,alert=alert))
         elif action=='dismiss_notices':self.store.data['notifications']=[]
+        elif action=='clear_action_log':self.store.data['action_log']=[];self.action_status='Actions log cleared.'
         else:raise ValueError('Unknown companion action')
         if identifier not in self.store.data['commands']:self.store.data['commands']=(self.store.data['commands']+[identifier])[-1000:]
         self.store.save();self.changed()
@@ -400,6 +421,7 @@ class CompanionService:
             self.cancel_batch.set()
             if self.invite_queue:self.invite_queue.cancel()
             self.session=token;self.roster=[];self.search=[];self.roster_at=0;self.roster_due=0;self.gate.reset();self.roster_error='';self.relationships={};self.relationships_due=0;self.invited=self.invite_history.ids(token);self.friend_requested=self.friend_history.ids(token);self.batch_results=[];self.invite_queue=None
+            self.known_friends=None;self.known_party=None;self.pending_friend_out=set();self.pending_party_out=set();self.pending_friend_known=False;self.pending_party_known=False;self.awaiting_friend_response=set();self.awaiting_party_response=set()
             self.chat_channels=[];self.chat_messages=[];self.chat_at=0;self.chat_due=0;self.chat_error=''
             self.changed()
             if token and self.store.data.get('actions_session')!=token and not self.store.read_only:
@@ -482,10 +504,46 @@ class CompanionService:
                 elif kind=='relationships':
                     # A failed read invalidates that highlight independently.
                     self.relationships=result
+                    avail=self.available_people()
+                    def handle_for(uid):
+                        return (avail.get(uid) or {}).get('handle') or (uid[len('urn:sc:global:player:geid:'):] if uid.startswith('urn:sc:global:player:geid:') else uid)
+                    log_changed=False
                     if result.get('friends_at'):
-                        allowed={p['id'] for p in self.roster}|set(result.get('friends',[]))
+                        new_friends=set(result.get('friends',[]))
+                        allowed={p['id'] for p in self.roster}|new_friends
                         self.store.data['actions']=[p for p in self.store.data['actions'] if p['id'] in allowed]
+                        if self.known_friends is not None:
+                            for uid in sorted(new_friends-self.known_friends):
+                                if uid in self.awaiting_friend_response or uid in self.friend_requested or uid in self.pending_friend_out:
+                                    self.store.record_action('friend_accepted',handle_for(uid),'Accepted your friend request',player_id=uid,outcome='Accepted',session_token=self.session,now=now)
+                                    self.awaiting_friend_response.discard(uid);log_changed=True
+                        self.known_friends=new_friends
+                        if result.get('pending_friend_known'):
+                            new_pf=set(result.get('pending_friend_out',[]))
+                            if self.pending_friend_known:
+                                for uid in sorted(self.pending_friend_out-new_pf):
+                                    if uid not in new_friends and (uid in self.awaiting_friend_response or uid in self.friend_requested):
+                                        self.store.record_action('friend_rejected',handle_for(uid),'Friend request declined or cancelled',player_id=uid,outcome='Declined',session_token=self.session,now=now)
+                                        self.awaiting_friend_response.discard(uid);log_changed=True
+                            self.pending_friend_out=new_pf;self.pending_friend_known=True
                         self.store.save()
+                    if result.get('party_at'):
+                        new_party=set(result.get('party',[]))
+                        if self.known_party is not None:
+                            for uid in sorted(new_party-self.known_party):
+                                if uid in self.awaiting_party_response or uid in self.invited or uid in self.pending_party_out:
+                                    self.store.record_action('party_accepted',handle_for(uid),'Accepted your party invite',player_id=uid,outcome='Accepted',session_token=self.session,now=now)
+                                    self.awaiting_party_response.discard(uid);log_changed=True
+                        self.known_party=new_party
+                        if result.get('pending_party_known'):
+                            new_pp=set(result.get('pending_party_out',[]))
+                            if self.pending_party_known:
+                                for uid in sorted(self.pending_party_out-new_pp):
+                                    if uid not in new_party and (uid in self.awaiting_party_response or uid in self.invited):
+                                        self.store.record_action('party_rejected',handle_for(uid),'Party invite declined or expired',player_id=uid,outcome='Declined',session_token=self.session,now=now)
+                                        self.awaiting_party_response.discard(uid);log_changed=True
+                            self.pending_party_out=new_pp;self.pending_party_known=True
+                    if log_changed and not self.store.read_only:self.store.save()
                 elif kind=='action':
                     if isinstance(result,dict):
                         self.action_status=result['status'];self.batch_results=result['results']
@@ -517,7 +575,8 @@ class CompanionService:
             self.changed()
         want_people=people_visible or any(t.get('alert') for t in self.store.data['tags'].values())
         if self.session and people_visible and 'relationships' not in self.jobs and now>=self.relationships_due:
-            self.jobs['relationships']=(self.pool.submit(self.social,'relationships',dict(self.context)),dict(self.context));self.relationships_due=now+60
+            rel_interval=15 if (self.awaiting_friend_response or self.awaiting_party_response) else 60
+            self.jobs['relationships']=(self.pool.submit(self.social,'relationships',dict(self.context)),dict(self.context));self.relationships_due=now+rel_interval
         if self.session and want_people and 'roster' not in self.jobs and now>=self.roster_due:
             known={p['id']:p['handle'] for p in self.roster}
             self.jobs['roster']=(self.pool.submit(self.social,'roster',dict(self.context),known=known),dict(self.context));self.roster_due=now+ROSTER_INTERVAL
@@ -544,11 +603,20 @@ class CompanionService:
             self.store.data['request_results_session']=self.session;self.store.data['request_results']={};saved_changed=True
         saved=self.store.data.setdefault('request_results',{})
         if queue and queue.get('operation') in ('friend','party'):
+            operation=queue['operation']
             for row in queue.get('results',[]):
-                if row.get('outcome') in ('Sent','Skipped','Check in game','Not sent'):
-                    person=saved.setdefault(row['id'],{});operation=queue['operation']
+                outcome=row.get('outcome','')
+                if outcome in ('Sent','Skipped','Check in game','Not sent'):
+                    person=saved.setdefault(row['id'],{})
                     if person.get(operation,{}).get('queue_id')!=queue['id']:
-                        person[operation]=dict(queue_id=queue['id'],outcome=row['outcome'],detail=row.get('detail',''),at=now);saved_changed=True
+                        person[operation]=dict(queue_id=queue['id'],outcome=outcome,detail=row.get('detail',''),at=now);saved_changed=True
+                    log_kind='friend_sent' if operation=='friend' else 'party_sent'
+                    if outcome=='Sent':
+                        if operation=='friend':self.awaiting_friend_response.add(row['id'])
+                        else:self.awaiting_party_response.add(row['id'])
+                    detail_text=row.get('detail','') or ('Friend request sent' if operation=='friend' else 'Party invite sent')
+                    if self.store.record_action(log_kind,row.get('handle',row['id']),detail_text,player_id=row['id'],outcome=outcome,session_token=self.session,now=now,dedupe_key=f"{queue['id']}:{operation}:{row['id']}:{outcome}"):
+                        saved_changed=True
         if saved_changed and not self.store.read_only:self.store.save()
         def request_status(identifier):
             if self.store.data.get('request_results_session')!=self.session:return {}
@@ -581,17 +649,26 @@ class CompanionService:
                 party_people.append(dec)
             party_people.sort(key=lambda p:(0 if p.get('is_leader') else 1 if p.get('is_self') else 2,str(p.get('handle','')).casefold()))
         chat_messages=[]
+        tags_by_handle={str(v.get('handle','')).strip().casefold():v for v in tags.values() if v.get('handle')}
         for m in self.chat_messages:
-            sid=m.get('sender_id','')
-            stags=tag_labels(tags.get(sid,{}).get('label','')) if sid in tags else []
-            if sid in friends and 'Friend' not in stags:stags=stags+['Friend']
+            sid=str(m.get('sender_id','') or '')
+            bare_id=sid[len('urn:sc:global:player:geid:'):] if sid.startswith('urn:sc:global:player:geid:') else sid
+            pref_id=sid if sid.startswith('urn:sc:global:player:geid:') else (f"urn:sc:global:player:geid:{sid}" if sid else '')
+            shandle=str(m.get('sender_handle') or '').strip().casefold()
+            tag_entry=tags.get(sid) or (tags.get(bare_id) if bare_id else None) or (tags.get(pref_id) if pref_id else None) or (tags_by_handle.get(shandle) if shandle else None) or {}
+            is_friend=sid in friends or bare_id in friends or (pref_id in friends if pref_id else False)
+            in_party=sid in party or bare_id in party or (pref_id in party if pref_id else False)
+            raw_labels=tag_labels(tag_entry.get('label','')) if tag_entry else []
+            stags=[lbl for lbl in raw_labels if lbl not in ('Friend','Party')]
+            if is_friend and 'Friend' not in stags:stags.append('Friend')
+            if in_party and not m.get('is_self') and 'Party' not in stags:stags.append('Party')
             chat_messages.append(dict(
                 m,
                 sender_tags=stags,
                 sender_tag=', '.join(stags),
-                is_friend=sid in friends,
-                in_party=sid in party,
-                is_org=is_org(tags.get(sid,{})) if sid in tags else False,
+                is_friend=is_friend,
+                in_party=in_party,
+                is_org=is_org(tag_entry) if tag_entry else False,
             ))
         tagged={key:dict(tag,is_friend=key in friends,in_party=key in party,on_shard=key in active,relationship='Party + Friend' if key in party and key in friends else 'Party' if key in party else 'Friend' if key in friends else '—' if friends_known and party_known else 'Unknown') for key,tag in tags.items()}
         notices=self.store.data['notifications']
@@ -607,6 +684,7 @@ class CompanionService:
             chat_at=self.chat_at,chat_loading='chat' in self.jobs,chat_sending='chat_send' in self.jobs,chat_error=self.chat_error,
             voice_dictating=self.voice_dictating,last_dictated_text=self.last_dictated_text,voice_available=self.voice_dictation.is_available,
             social_busy='action' in self.jobs,search_busy='search' in self.jobs,batch_results=self.batch_results,invite_queue=queue,
+            action_log=list(reversed(self.store.data.get('action_log',[])[-200:])),
             action_people=[decorate(dict(available.get(p['id'],p))) for p in self.store.data['actions'] if p['id'] in eligible],tag_options=sorted({label for t in tags.values() for label in tag_labels(t['label'])}|set(TAG_PRESETS),key=lambda label:(0 if label=='Org' else 1 if label=='Friend' else 2 if label=='Friendly' else 3,label.casefold())))
         publish_json(self.directory/'companion_state.json',view)
         publish_json(self.directory/'companion_alerts.json',dict(owner_pid=self.owner,written_at=now,events=notices[-20:]))

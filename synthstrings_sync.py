@@ -16,6 +16,34 @@ from datetime import datetime
 
 DEFAULT_INI_PATH = r"C:\Program Files\Roberts Space Industries\StarCitizen\LIVE\Data\Localization\english\global.ini"
 
+_TITLE_LABEL_KEY_RE = re.compile(r"(?:title|_name(?:_|$)|_label(?:_|$))", re.I)
+_BLUEPRINT_BLOCK_RE = re.compile(r"(?:\\n)*(<EM4>(?:Potential Blueprints|Multiple Blueprint Pools).*)$", re.I)
+
+
+def is_title_or_label_key(k_low: str) -> bool:
+    return "desc" not in k_low and bool(_TITLE_LABEL_KEY_RE.search(k_low))
+
+
+def strip_blueprint_pool_from_title(line: str) -> tuple[str, str]:
+    """Strip any misplaced blueprint pool block from title, name, or label keys."""
+    if "=" not in line:
+        return line, ""
+    k_part, v_part = line.split("=", 1)
+    k_low = k_part.split(",")[0].strip().casefold()
+    if not is_title_or_label_key(k_low):
+        return line, ""
+    v_low = v_part.casefold()
+    if "potential blueprints" not in v_low and "multiple blueprint pools" not in v_low:
+        return line, ""
+    ending = "\r\n" if line.endswith("\r\n") else "\n" if line.endswith("\n") else ""
+    body = v_part[:-len(ending)] if ending else v_part
+    m = _BLUEPRINT_BLOCK_RE.search(body)
+    if not m:
+        return line, ""
+    cleaned = body[:m.start()].rstrip()
+    return f"{k_part}={cleaned}{ending}", m.group(1).strip()
+
+
 def format_blueprint_pool(pool_text: str, owned_names: set):
     """
     Tags each blueprint item in the mission description:
@@ -117,6 +145,18 @@ def sync_blueprints_to_global_ini(ini_path=DEFAULT_INI_PATH, owned_blueprints=No
         custom_overrides = {}
 
     all_keys = {l.split("=", 1)[0].split(",")[0].strip().casefold() for l in lines if "=" in l}
+    moved_pools = {}
+    cleaned_lines = []
+    for line in lines:
+        cleaned_line, moved_block = strip_blueprint_pool_from_title(line)
+        if moved_block and "=" in cleaned_line:
+            k_low = cleaned_line.split("=", 1)[0].split(",")[0].strip().casefold()
+            desc_key = re.sub(r"(_name|_title)(?=_|$)", "_desc", k_low)
+            if desc_key != k_low and desc_key in all_keys:
+                moved_pools.setdefault(desc_key, moved_block)
+        cleaned_lines.append(cleaned_line)
+    lines = cleaned_lines
+
     mission_counts_sets = {}  # base_key -> (have_set, seen_set)
     updated_lines = []
     desc_updates = 0
@@ -127,7 +167,7 @@ def sync_blueprints_to_global_ini(ini_path=DEFAULT_INI_PATH, owned_blueprints=No
         line, _ = compact_mining_labels(line)
         if "=" in line:
             k_part, v_part = line.split("=", 1)
-            k_clean = k_part.lstrip("\ufeff")
+            k_clean = k_part.lstrip("\ufeff").strip()
             if k_clean in custom_overrides:
                 seen_custom.add(k_clean)
                 ending = "\r\n" if line.endswith("\r\n") else "\n" if line.endswith("\n") else ""
@@ -135,9 +175,9 @@ def sync_blueprints_to_global_ini(ini_path=DEFAULT_INI_PATH, owned_blueprints=No
                 line = f"{bom}{k_clean}={custom_overrides[k_clean]}{ending}"
         # Enforce compressed commodity and HUD scanning tags
         if line.startswith("items_commodities_amiantpod="):
-            line = "items_commodities_amiantpod=Pod\n"
+            line = "items_commodities_amiantpod=<EM3>Pod</EM3>\n"
         elif line.startswith("items_commodities_flareweedstalk="):
-            line = "items_commodities_flareweedstalk=Stock\n"
+            line = "items_commodities_flareweedstalk=<EM3>Stock</EM3>\n"
         elif line.startswith("hud_scanning_cat_harvestables="):
             line = "hud_scanning_cat_harvestables=Harv\n"
 
@@ -146,14 +186,14 @@ def sync_blueprints_to_global_ini(ini_path=DEFAULT_INI_PATH, owned_blueprints=No
         if "Potential Harv:" in line:
             line = line.replace("Flareweed Stalk", "Stock").replace("Amiant Pod", "Pod")
 
+        line, _ = strip_blueprint_pool_from_title(line)
         if "=" in line:
             k_part, v_part = line.split("=", 1)
             k_low = k_part.split(",")[0].strip().casefold()
-            if ("title" in k_low or k_low.endswith("_name")) and ("potential blueprints" in v_part.casefold() or "multiple blueprint pools" in v_part.casefold()):
+            if k_low in moved_pools and "potential blueprints" not in v_part.casefold() and "multiple blueprint pools" not in v_part.casefold():
                 ending = "\r\n" if line.endswith("\r\n") else "\n" if line.endswith("\n") else ""
                 body = v_part[:-len(ending)] if ending else v_part
-                cleaned = re.sub(r"\\n\\n<EM4>(?:Potential Blueprints|Multiple Blueprint Pools).*$", "", body, flags=re.I).rstrip()
-                line = f"{k_part}={cleaned}{ending}"
+                line = f"{k_part}={body}\\n\\n{moved_pools[k_low]}{ending}"
 
         if "Potential Blueprints" in line:
             parts = line.split("Potential Blueprints", 1)

@@ -1,37 +1,16 @@
 /**
- * Static reference tables and deterministic calculators for Piracy / Flight operations.
- * Contains verified Star Citizen trade corridors, haulers, snare ships, and commodities
- * designed for interdictions in unmonitored or hackable-array space.
+ * Static reference tables and deterministic calculators for Flight / Piracy operations.
+ * Contains Star Citizen trade corridors (Stanton, Pyro, Nyx & Wikelo Emporiums),
+ * QED interdiction specs, SnarePlan-style coverage geometry, and /showlocation GPS math.
  */
-
-export interface PreyShipSpec {
-  id: string;
-  name: string;
-  mfg: string;
-  color: string;
-  role: string;
-  scu: number;
-  maxBoxScu: number;
-  qtSize: 'S1' | 'S2' | 'S3';
-  recommendedCrew: string;
-  hullNote: string;
-  typicalCargo: string;
-}
 
 export interface TradeLanePreset {
   id: string;
   label: string;
-  system: 'Stanton' | 'Pyro';
+  system: 'Stanton' | 'Pyro' | 'Nyx';
   distanceMkm: number;
   comms: 'Unmonitored' | 'Hackable Array' | 'Monitored';
   note: string;
-}
-
-export interface CommodityTier {
-  id: string;
-  name: string;
-  avgPricePerScu: number;
-  tag: string;
 }
 
 export interface QedShipSpec {
@@ -40,6 +19,12 @@ export interface QedShipSpec {
   radiusKm: number;
   hasSnare: boolean;
   note: string;
+}
+
+export interface GpsPoint {
+  x: number;
+  y: number;
+  z: number;
 }
 
 export const QED_SHIPS: QedShipSpec[] = [
@@ -73,166 +58,55 @@ export const QED_SHIPS: QedShipSpec[] = [
   },
 ];
 
-export const PREY_SHIPS: PreyShipSpec[] = [
-  {
-    id: 'c2',
-    name: 'Crusader C2 Hercules',
-    mfg: 'Crusader',
-    color: '#9ca8ba',
-    role: 'Heavy Freighter',
-    scu: 696,
-    maxBoxScu: 32,
-    qtSize: 'S3',
-    recommendedCrew: '2–4 Pirates (Distortion + Mantis)',
-    hullNote: 'Dual ramp bay makes tractor beam extraction fast via 32 SCU containers.',
-    typicalCargo: 'Gold, Beryl, RMC, Recycled Salvage',
-  },
-  {
-    id: 'caterpillar',
-    name: 'Drake Caterpillar',
-    mfg: 'Drake',
-    color: '#c2a649',
-    role: 'Modular Hauler',
-    scu: 576,
-    maxBoxScu: 24,
-    qtSize: 'S3',
-    recommendedCrew: '2–3 Pirates',
-    hullNote: 'Compartmentalized bays slow extraction; bring an SRV or tractor-equipped Cutlass/C1.',
-    typicalCargo: 'RMC, Beryl, Scrap, Refined Ore',
-  },
-  {
-    id: 'hull_c',
-    name: 'MISC Hull C',
-    mfg: 'MISC',
-    color: '#ec4899',
-    role: 'Bulk Spindle Freighter',
-    scu: 4608,
-    maxBoxScu: 32,
-    qtSize: 'S3',
-    recommendedCrew: '3–6 Pirates + Cargo Hauler Escort',
-    hullNote: 'External spindle 32 SCU crates drop free immediately on soft-death — fastest mass-loot transfer.',
-    typicalCargo: 'Bulk Contract Hauls, Helium, Hydrogen, Titanium',
-  },
-  {
-    id: 'starlancer_max',
-    name: 'MISC Starlancer MAX',
-    mfg: 'MISC',
-    color: '#ec4899',
-    role: 'Long-Range Hauler',
-    scu: 224,
-    maxBoxScu: 32,
-    qtSize: 'S2',
-    recommendedCrew: '2 Pirates',
-    hullNote: 'Belly lift + rear bay; weak rear turret blind spots against nimble interceptors.',
-    typicalCargo: 'Commodity Runs, Refinery Loads',
-  },
-  {
-    id: 'taurus',
-    name: 'RSI Constellation Taurus',
-    mfg: 'RSI',
-    color: '#62ccff',
-    role: 'Armed Freighter',
-    scu: 174,
-    maxBoxScu: 32,
-    qtSize: 'S2',
-    recommendedCrew: '2–3 Pirates',
-    hullNote: 'Heavy S5 pilot guns & S3 shield — use distortion or flank from dorsal thruster arcs.',
-    typicalCargo: 'Gold, Refined Quantanium, Vaughn/Contraband',
-  },
-  {
-    id: 'corsair',
-    name: 'Drake Corsair',
-    mfg: 'Drake',
-    color: '#c2a649',
-    role: 'Explorer / Gunship',
-    scu: 72,
-    maxBoxScu: 32,
-    qtSize: 'S2',
-    recommendedCrew: '2 Pirates',
-    hullNote: 'High forward alpha; fragile wings hold main maneuvering thrusters — focus wings first.',
-    typicalCargo: 'Maze, Slam, ERT Bounty Loot, Quantanium',
-  },
-  {
-    id: 'zeus_cl',
-    name: 'RSI Zeus Mk II CL',
-    mfg: 'RSI',
-    color: '#62ccff',
-    role: 'Medium Freighter',
-    scu: 128,
-    maxBoxScu: 32,
-    qtSize: 'S2',
-    recommendedCrew: '1–2 Pirates',
-    hullNote: 'Built-in cargo tractor turret on dorsal hull; agile solo target.',
-    typicalCargo: 'High-Value Mixed Metals, Commodities',
-  },
-  {
-    id: 'raft',
-    name: 'Argo RAFT',
-    mfg: 'Argo',
-    color: '#f97316',
-    role: 'Industrial Freighter',
-    scu: 96,
-    maxBoxScu: 32,
-    qtSize: 'S2',
-    recommendedCrew: '1–2 Pirates',
-    hullNote: 'Carries three external 32 SCU containers — extremely fast transfer once disabled.',
-    typicalCargo: 'Refined Refinery Work Orders, Beryl, Gold',
-  },
-  {
-    id: 'msr',
-    name: 'Crusader Mercury Star Runner',
-    mfg: 'Crusader',
-    color: '#9ca8ba',
-    role: 'Blockade Runner',
-    scu: 114,
-    maxBoxScu: 16,
-    qtSize: 'S2',
-    recommendedCrew: '2 Pirates (Fast Interceptor Req.)',
-    hullNote: 'Very high SCM/NAV boost speed — keep dampener inside 4 km or strip main engines.',
-    typicalCargo: 'Smuggling Loads, Drugs, High-Margin Ore',
-  },
-  {
-    id: 'cutlass_black',
-    name: 'Drake Cutlass Black',
-    mfg: 'Drake',
-    color: '#c2a649',
-    role: 'Multi-Role Hauler',
-    scu: 46,
-    maxBoxScu: 16,
-    qtSize: 'S2',
-    recommendedCrew: '1–2 Pirates',
-    hullNote: 'Light hull HP; wide sliding side doors make boarding effortless.',
-    typicalCargo: 'ROCs, Salvage RMC, Outpost Commodities',
-  },
-  {
-    id: 'hull_a',
-    name: 'MISC Hull A',
-    mfg: 'MISC',
-    color: '#ec4899',
-    role: 'Starter Freighter',
-    scu: 64,
-    maxBoxScu: 16,
-    qtSize: 'S1',
-    recommendedCrew: '1 Pirate',
-    hullNote: 'Slow S1 QT speed gives generous snare window; exposed external spindles.',
-    typicalCargo: 'Refined Goods, Small Outpost Arbitrage',
-  },
-  {
-    id: 'reclaimer',
-    name: 'Aegis Reclaimer',
-    mfg: 'Aegis',
-    color: '#3b82f6',
-    role: 'Heavy Salvager',
-    scu: 420,
-    maxBoxScu: 16,
-    qtSize: 'S3',
-    recommendedCrew: '3–4 Pirates',
-    hullNote: 'Tanky S3 shields & hull; often packed with printed 16 SCU RMC/CM crates in salvage hold.',
-    typicalCargo: 'RMC, Construction Materials',
-  },
-];
-
 export const TRADE_LANE_PRESETS: TradeLanePreset[] = [
+  {
+    id: 'nyx_levski_pyro_gw',
+    label: 'Levski (Delamar) -> Pyro Gateway',
+    system: 'Nyx',
+    distanceMkm: 12.0,
+    comms: 'Unmonitored',
+    note: 'Lawless Nyx corridor (~12 Gm). Anchor 0.5–1.5 Mkm short of Pyro Gateway to catch outbound haulers.',
+  },
+  {
+    id: 'nyx_levski_stanton_gw',
+    label: 'Levski (Delamar) -> Stanton Gateway',
+    system: 'Nyx',
+    distanceMkm: 13.0,
+    comms: 'Unmonitored',
+    note: 'Primary Stanton–Nyx trade spine (~13 Gm, Agricium & gateway freight). Watch for Pyro Gateway doglegs.',
+  },
+  {
+    id: 'nyx_gw_to_gw',
+    label: 'Stanton Gateway <-> Pyro Gateway (Nyx Transit)',
+    system: 'Nyx',
+    distanceMkm: 18.5,
+    comms: 'Unmonitored',
+    note: 'Direct cross-gateway transit lane through Nyx for multi-system haulers bypassing Levski.',
+  },
+  {
+    id: 'wikelo_hurston_dasi',
+    label: 'Hurston / Stanton GW -> Dasi Station (Wikelo)',
+    system: 'Stanton',
+    distanceMkm: 16.0,
+    comms: 'Hackable Array',
+    note: 'Wikelo barter runners hauling Carinite, Scrip & loot to Dasi near Hurston. Hack array or snare outside planetary sphere.',
+  },
+  {
+    id: 'wikelo_crusader_selo',
+    label: 'Crusader / Yela -> Selo Station (Wikelo)',
+    system: 'Stanton',
+    distanceMkm: 1.8,
+    comms: 'Hackable Array',
+    note: 'Short Yela-sphere approach to Selo Station. Disable ST2-55 / Yela Comm Array or stage an 8.5 km dampener outside armistice.',
+  },
+  {
+    id: 'wikelo_microtech_kinga',
+    label: 'microTech / Pyro GW -> Kinga Station (Wikelo)',
+    system: 'Stanton',
+    distanceMkm: 28.0,
+    comms: 'Hackable Array',
+    note: 'Long inbound Wikelo Emporium approach near microTech. Snare mid-lane outside planetary Comm Array bubbles.',
+  },
   {
     id: 'pyro_monox_checkmate',
     label: 'Monox Outposts -> Checkmate Station',
@@ -291,71 +165,189 @@ export const TRADE_LANE_PRESETS: TradeLanePreset[] = [
   },
 ];
 
-export const COMMODITY_TIERS: CommodityTier[] = [
-  { id: 'quantanium', name: 'Quantanium (Refined)', avgPricePerScu: 24500, tag: 'High-Value Ore' },
-  { id: 'maze', name: 'Maze (Contraband)', avgPricePerScu: 92000, tag: 'High Risk / Smuggle' },
-  { id: 'partillium', name: 'Partillium', avgPricePerScu: 19500, tag: 'Pyro Rare Material' },
-  { id: 'rmc', name: 'Recycled Material Composite (RMC)', avgPricePerScu: 14200, tag: 'Salvage Gold' },
-  { id: 'gold', name: 'Gold', avgPricePerScu: 6900, tag: 'Blue-Chip Cargo' },
-  { id: 'taranite', name: 'Taranite', avgPricePerScu: 9100, tag: 'Refined Ore' },
-  { id: 'beryl', name: 'Beryl', avgPricePerScu: 2700, tag: 'Bulk Commodity' },
-  { id: 'cm', name: 'Construction Materials', avgPricePerScu: 2100, tag: 'Salvage / Bulk' },
-];
-
 export interface SnareGeometryInput {
   laneDistanceMkm: number;
   offsetMkmFromDest: number;
   doglegKm: number;
-  targetDriveSpeedKms: number;
   qedRadiusKm: number;
 }
 
 export interface SnareGeometryResult {
   snarePosPct: number;
-  transitSeconds: number;
   captureWindowSeconds: number;
   driftConeWidthKm: number;
+  driftConeRadiusKm: number;
+  coveragePct: number;
   inRange: boolean;
   dropAdvice: string;
+}
+
+/**
+ * Exact 2D circle-circle overlap ratio: fraction of the QT drift cone cross-section
+ * covered by the QED sphere at lateral offset `d`.
+ */
+function computeConeCoveragePct(qedRadiusKm: number, coneRadiusKm: number, lateralOffsetKm: number): number {
+  const r = Math.max(0.1, qedRadiusKm);
+  const R = Math.max(0.1, coneRadiusKm);
+  const d = Math.abs(lateralOffsetKm);
+  const coneArea = Math.PI * R * R;
+
+  if (d >= r + R) return 0;
+  if (d + R <= r) return 100;
+  if (d + r <= R) return Math.round(((r * r) / (R * R)) * 100);
+
+  const d2 = d * d;
+  const r2 = r * r;
+  const R2 = R * R;
+  const alpha = Math.acos(Math.max(-1, Math.min(1, (d2 + r2 - R2) / (2 * d * r))));
+  const beta = Math.acos(Math.max(-1, Math.min(1, (d2 + R2 - r2) / (2 * d * R))));
+  const overlap =
+    r2 * alpha +
+    R2 * beta -
+    0.5 * Math.sqrt(Math.max(0, (-d + r + R) * (d + r - R) * (d - r + R) * (d + r + R)));
+  return Math.max(0, Math.min(100, Math.round((overlap / coneArea) * 100)));
 }
 
 export function calculateSnareGeometry(input: SnareGeometryInput): SnareGeometryResult {
   const laneMkm = Math.max(0.2, input.laneDistanceMkm);
   const clampedOffset = Math.min(laneMkm * 0.9, Math.max(0.05, input.offsetMkmFromDest));
-  const laneKm = laneMkm * 1_000_000;
-  const speed = Math.max(25_000, input.targetDriveSpeedKms);
 
   // Fractional distance from Origin -> Destination (100% = Dest)
   const snarePosPct = Math.max(5, Math.min(96, ((laneMkm - clampedOffset) / laneMkm) * 100));
-  const transitSeconds = Math.round(laneKm / speed);
 
-  // Typical quantum spline dispersion grows away from destination; tighter closer to destination beacon
+  // Quantum spline dispersion grows away from destination; tighter closer to destination beacon
   const distFromOriginRatio = snarePosPct / 100;
   const baseDispersionKm = Math.min(35, Math.max(1.5, clampedOffset * 1.4));
   const lateralOffsetKm = Math.max(0, input.doglegKm);
   const driftConeWidthKm = Number((baseDispersionKm * (0.4 + 0.6 * (1 - distFromOriginRatio))).toFixed(1));
+  const driftConeRadiusKm = Number(Math.max(0.8, driftConeWidthKm * 0.5).toFixed(1));
   const effectiveMissKm = Math.abs(lateralOffsetKm);
   const inRange = effectiveMissKm <= input.qedRadiusKm;
+  const coveragePct = computeConeCoveragePct(input.qedRadiusKm, driftConeRadiusKm, effectiveMissKm);
 
   // Time target stays inside full QED bubble diameter once dropped/decelerating
   const captureWindowSeconds = Number(((input.qedRadiusKm * 2) / 1.4).toFixed(1));
 
   let dropAdvice = '';
   if (!inRange) {
-    dropAdvice = `Lateral offset (${effectiveMissKm.toFixed(1)} km) exceeds ${input.qedRadiusKm} km bubble. Pull closer to center spline.`;
+    dropAdvice = `Lateral offset (${effectiveMissKm.toFixed(1)} km) exceeds ${input.qedRadiusKm} km bubble. Pull ${(effectiveMissKm - input.qedRadiusKm + 1).toFixed(1)} km closer to center spline.`;
+  } else if (coveragePct < 75) {
+    dropAdvice = `Partial cone coverage (${coveragePct}%): edge trajectories may slip past. Anchor closer to destination or center up on spline.`;
   } else if (clampedOffset > 4) {
-    dropAdvice = 'Mid-lane drop: zero planetary Comm Array coverage in deep space, but QT spread widens — anchor closer to destination beacon if missing.';
+    dropAdvice = `Mid-lane drop (${coveragePct}% cone coverage): outside planetary Comm Array bubbles, but QT spread widens — move closer to destination if targets slip.`;
   } else {
-    dropAdvice = `Convergence trap: ${clampedOffset.toFixed(2)} Mkm before destination catches tight arrival trajectories within the ${input.qedRadiusKm} km QED sphere.`;
+    dropAdvice = `Convergence trap (${coveragePct}% cone coverage): ${clampedOffset.toFixed(2)} Mkm before destination locks tight arrival splines inside your ${input.qedRadiusKm} km QED sphere.`;
   }
 
   return {
     snarePosPct,
-    transitSeconds,
     captureWindowSeconds,
     driftConeWidthKm,
+    driftConeRadiusKm,
+    coveragePct,
     inRange,
     dropAdvice,
+  };
+}
+
+/**
+ * Parse Star Citizen `/showlocation` clipboard output:
+ * - `Coordinates: x:12345.67 y:-89012.34 z:456.78`
+ * - `12345.67, -89012.34, 456.78`
+ * Values are in meters (Star Citizen global system coordinates).
+ */
+export function parseShowLocationText(raw: string): GpsPoint | null {
+  const text = String(raw ?? '').trim();
+  if (!text || text.length > 512) return null;
+
+  const axisMatches = Array.from(
+    text.matchAll(/\b([xyz])\s*[:=]\s*([-+]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d*)?(?:[eE][-+]?\d+)?)/gi),
+  );
+  if (axisMatches.length >= 3) {
+    const vals: Partial<GpsPoint> = {};
+    for (const m of axisMatches) {
+      const axis = m[1].toLowerCase() as 'x' | 'y' | 'z';
+      if (vals[axis] !== undefined) continue;
+      const num = Number(m[2].replace(/,/g, ''));
+      if (!Number.isFinite(num)) return null;
+      vals[axis] = num;
+    }
+    if (vals.x !== undefined && vals.y !== undefined && vals.z !== undefined) {
+      return { x: vals.x, y: vals.y, z: vals.z };
+    }
+  }
+
+  const csvMatch = text.match(
+    /^\s*([-+]?\d+(?:\.\d+)?)\s*[,\s]\s*([-+]?\d+(?:\.\d+)?)\s*[,\s]\s*([-+]?\d+(?:\.\d+)?)\s*$/,
+  );
+  if (csvMatch) {
+    const x = Number(csvMatch[1]);
+    const y = Number(csvMatch[2]);
+    const z = Number(csvMatch[3]);
+    if (Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(z)) {
+      return { x, y, z };
+    }
+  }
+  return null;
+}
+
+export interface GpsInterceptResult {
+  laneDistanceMkm: number;
+  offsetMkmFromDest: number;
+  lateralOffsetKm: number;
+  progressPct: number;
+  distanceFromDestKm: number;
+  inRange: boolean;
+  coveragePct: number;
+}
+
+export function calculateGpsIntercept(
+  origin: GpsPoint,
+  dest: GpsPoint,
+  ship: GpsPoint,
+  qedRadiusKm: number,
+): GpsInterceptResult | null {
+  const dx = dest.x - origin.x;
+  const dy = dest.y - origin.y;
+  const dz = dest.z - origin.z;
+  const lenSq = dx * dx + dy * dy + dz * dz;
+  if (!Number.isFinite(lenSq) || lenSq < 1e6) return null;
+
+  const laneLenM = Math.sqrt(lenSq);
+  const sx = ship.x - origin.x;
+  const sy = ship.y - origin.y;
+  const sz = ship.z - origin.z;
+
+  const tRaw = (sx * dx + sy * dy + sz * dz) / lenSq;
+  const tClamped = Math.max(0, Math.min(1, tRaw));
+  const projX = origin.x + tClamped * dx;
+  const projY = origin.y + tClamped * dy;
+  const projZ = origin.z + tClamped * dz;
+
+  const perpM = Math.hypot(ship.x - projX, ship.y - projY, ship.z - projZ);
+  const distToDestM = Math.hypot(dest.x - projX, dest.y - projY, dest.z - projZ);
+
+  const laneDistanceMkm = Number((laneLenM / 1_000_000_000).toFixed(2));
+  const offsetMkmFromDest = Number((distToDestM / 1_000_000_000).toFixed(2));
+  const lateralOffsetKm = Number((perpM / 1_000).toFixed(2));
+  const progressPct = Number((tClamped * 100).toFixed(1));
+  const distanceFromDestKm = Math.round(distToDestM / 1_000);
+
+  const geom = calculateSnareGeometry({
+    laneDistanceMkm: Math.max(0.2, laneDistanceMkm),
+    offsetMkmFromDest: Math.max(0.05, offsetMkmFromDest),
+    doglegKm: lateralOffsetKm,
+    qedRadiusKm,
+  });
+
+  return {
+    laneDistanceMkm,
+    offsetMkmFromDest,
+    lateralOffsetKm,
+    progressPct,
+    distanceFromDestKm,
+    inRange: geom.inRange,
+    coveragePct: geom.coveragePct,
   };
 }
 

@@ -219,6 +219,78 @@ class CompanionPartyAndChatIntegrationTests(unittest.TestCase):
         self.assertTrue(state['party_people'][0]['is_self'])
         self.assertFalse(state['party_people'][1]['is_leader'])
 
+    def test_companion_chat_messages_decorated_with_sender_tags(self):
+        self.service.store.data['tags'][PERSON['id']] = dict(
+            handle='DemoZebra', label='Trader, Friendly', labels=['Trader', 'Friendly'], alert=False
+        )
+        self.service.store.data['tags']['custom-key-999'] = dict(
+            handle='OtherPilot', label='Pirate', labels=['Pirate'], alert=True
+        )
+        self.service.chat_messages = [
+            dict(
+                id='msg-1',
+                group_id='grp-global',
+                channel_kind='global',
+                channel_label='Global',
+                sender_id=PERSON['id'],
+                sender_handle='DemoZebra',
+                content='Selling cargo at Port Tressler',
+                at=1000,
+            ),
+            dict(
+                id='msg-2',
+                group_id='grp-global',
+                channel_kind='global',
+                channel_label='Global',
+                sender_id=OTHER['id'],
+                sender_handle='OtherPilot',
+                content='Heading to Yela belt',
+                at=1001,
+            ),
+            dict(
+                id='msg-3',
+                group_id='grp-global',
+                channel_kind='global',
+                channel_label='Global',
+                sender_id=ME['id'],
+                sender_handle='Synthronaut',
+                is_self=True,
+                content='Copy that',
+                at=1002,
+            ),
+        ]
+        self.service.relationships = dict(
+            friends_at=1000,
+            friends=[PERSON['id']],
+            party_at=1000,
+            party=[ME['id'], OTHER['id']],
+            party_group_id='grp-party-1',
+            party_leader_id=ME['id'],
+            self_id=ME['id'],
+        )
+        self.service.publish(1001)
+
+        state = json.loads((self.directory / 'companion_state.json').read_text())
+        msgs = state['chat_messages']
+        self.assertEqual(len(msgs), 3)
+
+        # Message 1: DemoZebra (tagged Trader, Friendly + friend)
+        self.assertIn('Trader', msgs[0]['sender_tags'])
+        self.assertIn('Friendly', msgs[0]['sender_tags'])
+        self.assertIn('Friend', msgs[0]['sender_tags'])
+        self.assertTrue(msgs[0]['is_friend'])
+        self.assertFalse(msgs[0]['in_party'])
+
+        # Message 2: OtherPilot (matched by handle -> Pirate + party)
+        self.assertIn('Pirate', msgs[1]['sender_tags'])
+        self.assertIn('Party', msgs[1]['sender_tags'])
+        self.assertTrue(msgs[1]['in_party'])
+        self.assertFalse(msgs[1]['is_friend'])
+
+        # Message 3: Synthronaut (self -> no 'Party' badge added to tags)
+        self.assertTrue(msgs[2]['is_self'])
+        self.assertNotIn('Party', msgs[2]['sender_tags'])
+
 
 if __name__ == '__main__':
     unittest.main()

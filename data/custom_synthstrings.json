@@ -2172,5 +2172,6 @@
   "item_Nameksar_pistol_energy_01_tint03": "Hellion \"Alpine Sunset\" Pistol",
   "item_Descksar_pistol_energy_01_tint03": "Manufacturer: Kastak Arms\\nItem Type: Pistol\\nClass: Energy (Plasma)\\nWeight: 1.20 kg (Speed Impact: ~0.6%)\\n\\nBattery Size: 15\\nRate Of Fire: 240 rpm\\nEffective Range: 45 m\\n\\nThe Hellion (Helion) is Kastak Arms' high-velocity plasma pistol. The Alpine Sunset edition features twilight gradients over snow.",
   "item_Nameksar_pistol_energy_01_mag": "Hellion Pistol Battery (15 cap)",
-  "item_Descksar_pistol_energy_01_mag": "Item Type: Battery\\nCapacity: 15\\nWeight: 0.35 kg (Speed Impact: ~0.2%)\\n\\nReplacement plasma battery for the Kastak Arms Hellion / Helion Pistol."
+  "item_Descksar_pistol_energy_01_mag": "Item Type: Battery\\nCapacity: 15\\nWeight: 0.35 kg (Speed Impact: ~0.2%)\\n\\nReplacement plasma battery for the Kastak Arms Hellion / Helion Pistol.",
+  "soo2_contract_desc,P": "Part 2\\n\\n<EM4>Reputation</EM4>\\nAwards Civilian Defense Force / Emergency reputation per objective, phase, and lieutenant on the server (not as a single contract-completion payout).\\n\\n<EM4>Potential Blueprints</EM4>\\n- [  ] BUL-H4 Armor Snow Camo\\n- [  ] BUL-H4 Helmet Snow Camo\\n- [  ] H4-PBF Ammo Carrier Snow Camo\\n\\n<EM4>Wikelo Turn-In Note</EM4>\\nThe regular base super heavy armor & helmet set from Siege of Orison is required for the Wikelo turn-ins to unlock the Wikelo super heavy blueprints."
 }
