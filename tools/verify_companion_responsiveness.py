@@ -21,7 +21,7 @@ def main():
         if obj.exists() and obj.stat().st_mtime>=source.stat().st_mtime and (source.stem!='companion_responsiveness_probe' or obj.stat().st_mtime>=(SOURCE/'src/SynthCompanion.cpp').stat().st_mtime):continue
         run([str(MSVC/'bin/Hostx64/x64/cl.exe'),'/nologo','/std:c++20','/EHsc','/MD','/O2','/utf-8','/DNOMINMAX','/FI'+str(SOURCE/'include/SynthCompatibility.h'),'/I'+str(SOURCE/'include'),'/c',str(source),'/Fo'+str(obj)],env=env,check=True,timeout=90,creationflags=0x08004000)
     binary=out/'companion_responsiveness_probe.exe'
-    run([str(MSVC/'bin/Hostx64/x64/link.exe'),'/nologo','/OUT:'+str(binary),*map(str,objects),'user32.lib','gdi32.lib','gdiplus.lib','comctl32.lib','uxtheme.lib','shell32.lib','dwmapi.lib','ole32.lib','advapi32.lib','bcrypt.lib'],env=env,check=True,timeout=30,creationflags=0x08004000)
+    run([str(MSVC/'bin/Hostx64/x64/link.exe'),'/nologo','/OUT:'+str(binary),*map(str,objects),'user32.lib','gdi32.lib','gdiplus.lib','comctl32.lib','comdlg32.lib','uxtheme.lib','shell32.lib','dwmapi.lib','ole32.lib','advapi32.lib','bcrypt.lib'],env=env,check=True,timeout=30,creationflags=0x08004000)
     shutil.rmtree(out/'fixture',ignore_errors=True);shutil.rmtree(out/'preview',ignore_errors=True)
     result=subprocess.run([str(binary),str(out/'fixture'),*sys.argv[1:]],capture_output=True,text=True,timeout=24,creationflags=0x08004000)
     print(result.stdout);print(result.stderr)

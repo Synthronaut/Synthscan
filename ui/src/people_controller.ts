@@ -767,7 +767,7 @@ export class DesktopAppController {
       btn.addEventListener('click', () => {
         const target = btn.dataset.nav;
         if (target) {
-          void this.bridge.sendCommand({ action: 'navigate', target });
+          void this.bridge.sendCommand({ action: 'navigate', page: target, target });
         }
       });
     });
@@ -2398,14 +2398,19 @@ export class DesktopAppController {
 
     // Footer status
     if (this.footerEl) {
-      this.footerEl.hidden = this.activeMode !== 'people';
+      this.footerEl.hidden =
+        this.activeMode !== 'people' &&
+        this.activeMode !== 'hud_piracy' &&
+        this.activeMode !== 'mission_log';
     }
-    let footer = this.pendingQueueFeedback ? this.pendingQueueFeedback.text : (snap.status ?? 'Ready');
-    footer += ' · Tagged-citizen alerts report list appearances; the first snapshot stays quiet.';
-    if (snap.friends_known === false || snap.party_known === false) {
-      footer += ' · Friend / party status is checking or unavailable; unconfirmed rows stay neutral.';
+    if (this.activeMode === 'people') {
+      let footer = this.pendingQueueFeedback ? this.pendingQueueFeedback.text : (snap.status ?? 'Ready');
+      footer += ' · Tagged-citizen alerts report list appearances; the first snapshot stays quiet.';
+      if (snap.friends_known === false || snap.party_known === false) {
+        footer += ' · Friend / party status is checking or unavailable; unconfirmed rows stay neutral.';
+      }
+      this.footerStatusEl.textContent = footer;
     }
-    this.footerStatusEl.textContent = footer;
   }
 
   private renderActionLog(): void {

@@ -116,6 +116,10 @@ void mount(HWND page,int cropTop){
         if(cropTop)pages[page].crop=cropTop;
         arrange();
         if(!(GetWindowLongPtrW(page,GWL_STYLE)&WS_VISIBLE))ShowWindow(page,SW_SHOW);
+        if(IsWindowVisible(page)){
+            SendMessageW(page,WM_SHOWWINDOW,TRUE,0);
+            RedrawWindow(page,nullptr,nullptr,RDW_INVALIDATE|RDW_ALLCHILDREN);
+        }
         return;
     }
     HWND previousActive=active;
@@ -140,6 +144,10 @@ void mount(HWND page,int cropTop){
     arrange();
     if(!(GetWindowLongPtrW(page,GWL_STYLE)&WS_VISIBLE))ShowWindow(page,SW_SHOW);
     if(previousActive&&previousActive!=page&&IsWindow(previousActive))ShowWindow(previousActive,SW_HIDE);
+    if(IsWindowVisible(page)){
+        SendMessageW(page,WM_SHOWWINDOW,TRUE,0);
+        RedrawWindow(page,nullptr,nullptr,RDW_INVALIDATE|RDW_ALLCHILDREN);
+    }
 }
 void release(HWND page){
     auto found=pages.find(page);if(found==pages.end())return;auto value=found->second;
@@ -162,6 +170,13 @@ void beginTransition(){
 void endTransition(){
     if(!container||!transitioning)return;transitioning=false;
     if(((GetWindowLongPtrW(container,GWL_STYLE)&WS_VISIBLE)!=0)!=wantVisible)ShowWindow(container,wantVisible?SW_SHOW:SW_HIDE);
+    if(wantVisible&&active&&IsWindow(active)){
+        arrange();
+        RECT r{};GetClientRect(active,&r);
+        SendMessageW(active,WM_SHOWWINDOW,TRUE,0);
+        SendMessageW(active,WM_SIZE,SIZE_RESTORED,MAKELPARAM(r.right,r.bottom));
+        RedrawWindow(active,nullptr,nullptr,RDW_INVALIDATE|RDW_ALLCHILDREN);
+    }
 }
 void scrollTo(int y){
     if(!container||!active)return;

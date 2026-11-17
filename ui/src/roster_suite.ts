@@ -359,6 +359,8 @@ export async function runPeopleRosterRegressionSuite(
     is_leader: false,
     on_shard: true,
   };
+  // 12. Party Box & Party Management Actions (Party Tab)
+  container.querySelector<HTMLButtonElement>('#people-mode-party-btn')!.click();
   bridge.publish({
     party_people: [partyMemberOne, partyMemberTwo],
     party_leader_id: 'pilot-001',
@@ -379,12 +381,13 @@ export async function runPeopleRosterRegressionSuite(
   // When not leader, kick button is disabled
   const kickDisabledWhenNotLeader = kickBtn ? kickBtn.disabled : false;
 
-  // Now simulate user being party leader
+  // Now simulate user being party leader (renderParty replaces innerHTML, so re-query button)
   bridge.publish({
     is_party_leader: true,
     party_leader_id: 'pilot-000',
   });
-  actionsBtn?.click();
+  const actionsBtn2 = container.querySelector<HTMLButtonElement>('[data-party-menu-id="pilot-002"]');
+  actionsBtn2?.click();
   const kickBtnAsLeader = container.ownerDocument.querySelector<HTMLButtonElement>('#ctx-kick-party-member-btn');
   kickBtnAsLeader?.click();
   const kickCommands = bridge.commands.filter((c) => c.action === 'kick_party_member');
@@ -491,15 +494,14 @@ export async function runPeopleRosterRegressionSuite(
   });
   const doc = container.ownerDocument;
   const shardRow = controller.getRosterRowElement('urn:sc:global:player:geid:701')!;
-  shardRow.dispatchEvent({
-    type: 'contextmenu',
-    bubbles: true,
-    cancelable: true,
-    clientX: 120,
-    clientY: 160,
-    preventDefault() {},
-    stopPropagation() {},
-  } as unknown as MouseEvent);
+  shardRow.dispatchEvent(
+    new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      clientX: 120,
+      clientY: 160,
+    }),
+  );
   const rosterMenu = doc.querySelector('#ss-roster-context-menu');
   const menuInviteBtn = Array.from(rosterMenu?.querySelectorAll('button') ?? []).find((b) =>
     (b.textContent ?? '').includes('Invite to Party'),
@@ -519,7 +521,7 @@ export async function runPeopleRosterRegressionSuite(
   const logHtmlAll = container.querySelector('#action-log-tbody')?.innerHTML ?? '';
   const logFilterEl = container.querySelector<HTMLSelectElement>('#action-log-filter')!;
   logFilterEl.value = 'responses';
-  logFilterEl.dispatchEvent({ type: 'change', bubbles: true } as unknown as Event);
+  logFilterEl.dispatchEvent(new Event('change', { bubbles: true }));
   const logCountResponses = container.querySelector('#action-log-count')?.textContent;
   const logClearBtn = container.querySelector<HTMLButtonElement>('#action-log-clear-btn')!;
   logClearBtn.click();

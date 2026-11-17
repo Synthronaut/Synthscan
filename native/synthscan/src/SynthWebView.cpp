@@ -259,7 +259,7 @@ bool allowedAction(const std::string& action) {
         "kick_party_member", "transfer_party_leader", "leave_party",
         "set_chat_active", "set_chat_translate", "refresh_chat", "send_chat_message",
         "start_voice_dictation", "stop_voice_dictation",
-        "pause_invites", "resume_invites", "cancel_invites",
+        "pause_invites", "resume_invites", "cancel_invites", "clear_action_log",
         "add_watch", "toggle_watch", "remove_watch", "dismiss_notices",
         "open_uex_ad", "navigate", "strings_settings", "strings_details",
         "daylight_preferences", "daylight_observe", "daylight_refresh", "daylight_copy_forecast",
@@ -591,6 +591,18 @@ void resize(int width, int height) {
         bool visible = IsWindowVisible(g_parent) != 0;
         g_controller->put_IsVisible(visible ? TRUE : FALSE);
     }
+}
+
+void setVisible(bool visible) {
+    if (!g_controller) return;
+    if (visible && g_parent && IsWindow(g_parent)) {
+        RECT bounds{};
+        GetClientRect(g_parent, &bounds);
+        if (bounds.right > 0 && bounds.bottom > 0) {
+            g_controller->put_Bounds(bounds);
+        }
+    }
+    g_controller->put_IsVisible(visible ? TRUE : FALSE);
 }
 
 void detach() {

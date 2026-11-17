@@ -11,6 +11,7 @@ bool active();
 bool attach(HWND parent, const std::filesystem::path& dataFolder, const std::string& mode, std::function<void(const SynthScan::Json&)> onCommand);
 void pushSnapshot(const std::string& mode, const SynthScan::Json& state, const SynthScan::Json& marketItems, const SynthScan::Json& homeOverview, const SynthScan::Json& daylight = SynthScan::obj({}), const SynthScan::Json& piracy = SynthScan::obj({}), const SynthScan::Json& mission = SynthScan::obj({}));
 void resize(int width, int height);
+void setVisible(bool visible);
 void detach();
 int preview(const std::filesystem::path& directory);
 }

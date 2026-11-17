@@ -210,7 +210,9 @@ void queue(Json command){
     if(!companionState.members.empty())model=companionState;
     double writtenAt=model.numberOr("written_at");
     double diff=now()-writtenAt;
-    if(model.textOr("session_token").empty()||diff<-10||diff>60){
+    const std::string act=command.textOr("action");
+    const bool needsSession=!(act=="add_watch"||act=="toggle_watch"||act=="remove_watch"||act=="refresh_market"||act=="dismiss_notices"||act=="clear_action_log"||act=="import_org");
+    if((needsSession&&model.textOr("session_token").empty())||diff<-10||diff>60){
         label(590,"Companion services unavailable. Please wait for a fresh update.");
         return;
     }
@@ -222,7 +224,12 @@ void queue(Json command){
 }
 void handleWebViewCommand(const Json& command){
     const std::string action=command.textOr("action");
-    if(action=="navigate"){SynthHome::navigate(command.textOr("page"));return;}
+    if(action=="navigate"){
+        std::string dest=command.textOr("page");
+        if(dest.empty())dest=command.textOr("target");
+        if(!dest.empty())SynthHome::navigate(dest);
+        return;
+    }
     if(action=="strings_settings"||action=="strings_details"){SynthHome::navigate(action);return;}
     if(action=="open_uex_ad"){
         auto url=command.textOr("url");
@@ -579,6 +586,13 @@ void createControls(){
 }
 LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM wp,LPARAM lp){
     if(message==WM_SIZE){layout();return 0;}if(message==WM_TIMER){refresh();return 0;}
+    if(message==WM_SHOWWINDOW){
+        if(SynthWebView::active()){
+            if(wp!=FALSE){RECT r{};GetClientRect(hwnd,&r);SynthWebView::resize(r.right,r.bottom);SynthWebView::setVisible(true);}
+            else SynthWebView::setVisible(false);
+        }
+        return 0;
+    }
     if(message==WM_ERASEBKGND)return 1;
     if(message==WM_PAINT||message==WM_PRINTCLIENT){
         PAINTSTRUCT ps{};HDC dc=message==WM_PAINT?BeginPaint(hwnd,&ps):reinterpret_cast<HDC>(wp);
