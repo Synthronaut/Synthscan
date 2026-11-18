@@ -452,6 +452,9 @@ public:
     // The player's blueprint library: one stamp per blueprint ("" = not
     // owned) and a note on where that knowledge comes from
     void setOwnedBlueprints(std::vector<std::string> stamps, const std::string& note);
+    // Wanted/focus blueprints starred by the user for Grind Planner priority
+    void setWantedBlueprints(std::vector<bool> wanted);
+    void toggleBlueprintWanted(int blueprint);
     // The player's rank with each outfit, out of their own logs (see
     // Reputation), for the Grind Planner. `known` false while the logs are
     // still being read, or with none found: nothing is marked open or locked
@@ -509,6 +512,8 @@ public:
     // A blueprint ticked or unticked by hand (index, now owned)
     using OwnedToggleCallback = std::function<void(int, bool)>;
     void setOwnedToggleCallback(OwnedToggleCallback callback) { ownedToggleCallback_ = callback; }
+    using WantedToggleCallback = std::function<void(int, bool)>;
+    void setWantedToggleCallback(WantedToggleCallback callback) { wantedToggleCallback_ = callback; }
     // A backup was put back: what the Application holds of the player's
     // data is read again from the files
     using DataRestoredCallback = std::function<void()>;
@@ -531,9 +536,13 @@ public:
     void keepOverlayAboveGame(bool force=false);
     bool isOverlayMode() const { return overlayMode_; }
     int displayedSignature() const { return currentSignature_; }
+    bool isBlueprintOwned(int blueprint) const { return isOwned(blueprint); }
+    bool isBlueprintWanted(int blueprint) const { return isWanted(blueprint); }
     void openBlueprintLibrary(){if(!craftingVisible_)toggleCrafting();if(crafting_&&!(GetWindowLongPtrW(crafting_,GWL_STYLE)&WS_CHILD))SetForegroundWindow(crafting_);}
+    void openBlueprintRecipe(int index){openBlueprintLibrary();cartOpen_=false;openBlueprint(index);}
     void openRefineryOrders(){if(!refineryVisible_)toggleRefinery();if(refinery_&&!(GetWindowLongPtrW(refinery_,GWL_STYLE)&WS_CHILD))SetForegroundWindow(refinery_);}
     void openMiningPlanner(){if(!plannerVisible_)togglePlanner();if(planner_&&!(GetWindowLongPtrW(planner_,GWL_STYLE)&WS_CHILD))SetForegroundWindow(planner_);}
+    void openOreInPlanner(const std::string& material){openMiningPlanner();showOreFinderFor(material);}
     void setCaptureFailed(bool failed);
     // The overlay out of screen captures while live mode is on, in them otherwise
     void keepOutOfCaptures();
@@ -893,6 +902,7 @@ private:
     bool resultsOutOfPlace_ = false;   // ...and it explains none of the matches
     // "not in NYX" or "not at Pyro II (Monox)": what a dimmed result is outside of
     std::wstring outOfScopeNote(const AnalysisResult& result) const;
+    std::wstring groundSubLine(const AnalysisResult& result, Gdiplus::Color& outColor) const;
     KeepRecordingCallback keepRecordingCallback_;
     SnapshotCallback snapshotCallback_;
 
@@ -1122,6 +1132,9 @@ private:
     std::vector<std::string> plannerTargets_;
     std::string plannerMineral_ = "Quantainium";   // whose places are listed
     std::string plannerSystem_ = "ALL";           // ALL / STANTON / PYRO / NYX
+    int plannerCat_ = 0;                          // 0 All / 1 Ship / 2 Hand&ROC / 3 Harv
+    int plannerListScroll_ = 0;
+    Gdiplus::RectF plannerLeftRect_;
     // Set from a [[place]] link: the finder then lists what is mined HERE
     std::string plannerPlace_;
     void showPlaceFinderFor(const std::string& place);
@@ -1280,7 +1293,7 @@ private:
     POINT hoverGrind_ = {-1, -1};
     // 1 system chip, 2 a set, 3 the notice, 4 the finder, 5 a set the same
     // runs pay into, 6 a rank picked, 7 "Open to me", 8 back to the logs,
-    // 9 an outfit in the rank line
+    // 9 an outfit in the rank line, 10 "Wanted only" filter, 11 toggle blueprint wanted
     struct GrindHit { Gdiplus::RectF rect; int kind; int value; };
     std::vector<GrindHit> grindHits_;
     // The player's ranks, see setRanks
@@ -1291,6 +1304,7 @@ private:
     // "Open to me": only the sets with a mission the player is offered at
     // their rank with its outfit
     bool grindOpenOnly_ = false;
+    bool grindWantedOnly_ = false;
     // The player's standing on an outfit's ladder - what the logs say, or
     // the bottom of it with nothing behind it
     Standing standingOn(int faction, int ladder) const;
@@ -1318,6 +1332,7 @@ private:
         int poolFirst, poolCount;
         int poolSize;      // the true size, entries the files do not name included
         int missing;       // named entries not in the library
+        int wanted = 0;    // unowned entries in this pool starred as wanted
         int chance;        // % the contract pays out a blueprint at all
         int respawn;       // minutes after a run until it is offered again
         int missions;      // how many contracts feed the set
@@ -1416,6 +1431,7 @@ private:
     bool craftSnap_ = true;          // sliders step instead of running free
     bool caretOn_ = true;            // the search caret, blinking on a timer
     std::vector<std::string> owned_; // per blueprint: when it was received, "" = not owned
+    std::vector<bool> wantedBps_;    // per blueprint: starred in Blueprints or Grind Planner
     std::string ownedNote_;          // where the library knowledge comes from
     int craftOwned_ = 0;             // 0 every blueprint, 1 owned only, 2 missing only
     // 0 every blueprint, 1 only the ones a contract hands out. A recipe the
@@ -1423,12 +1439,21 @@ private:
     // to earn it; one switch, since "any" is it being off.
     int craftContract_ = 0;
     OwnedToggleCallback ownedToggleCallback_;
+    WantedToggleCallback wantedToggleCallback_;
     DataRestoredCallback dataRestoredCallback_;
     UiScaleCallback uiScaleCallback_;
     void stepUiScale(int direction);   // one notch bigger or smaller
     void resizeForScale();             // the windows follow the zoom
     bool isOwned(int blueprint) const {
         return blueprint >= 0 && blueprint < (int)owned_.size() && !owned_[blueprint].empty();
+    }
+    bool isWanted(int blueprint) const {
+        return blueprint >= 0 && blueprint < (int)wantedBps_.size() && wantedBps_[blueprint];
+    }
+    int wantedCount() const {
+        int n = 0;
+        for (int i = 0; i < (int)wantedBps_.size(); i++) if (wantedBps_[i] && !isOwned(i)) n++;
+        return n;
     }
     int ownedCount() const {
         int n = 0;
@@ -1502,12 +1527,26 @@ private:
     bool lookingOpen_ = false;              // the panel is down over the window
     std::wstring lookingSearch_;            // what has been typed into it
     Gdiplus::RectF lookingField_;           // the field it hangs from, as last painted
-    struct LookHit { Gdiplus::RectF rect; int kind; std::string name; };   // 0 an ore, 1 clear
+    struct LookHit { Gdiplus::RectF rect; int kind; std::string name; };   // 0 an ore, 1 clear, 2 cyan, 3 red
     std::vector<LookHit> lookHits_;
     void loadLookingFor();
     void saveLookingFor();
     bool lookingForOre(const std::string& mineral) const;
     void toggleLookingFor(const std::string& mineral);
+    std::vector<std::string> synthCyan_;
+    std::vector<std::string> synthRed_;
+    std::map<std::string, std::string> synthAmounts_;
+    std::string synthBlueprint_;
+    void loadSynthTargets();
+    void saveSynthTargets();
+    bool isSynthCyan(const std::string& name) const;
+    bool isSynthRed(const std::string& name) const;
+    void toggleSynthCyan(const std::string& name);
+    void toggleSynthRed(const std::string& name);
+    void toggleSynthBlueprint(int blueprint);
+    void targetSynthCart();
+    void clearSynthTargets();
+    void showColorTargetMenu(HWND hwnd, const std::string& material);
     void setLookingOpen(bool open);
     // Every name a scan can ever hand back - the ores and the three ground
     // families - in alphabetical order. Picking anything else would be

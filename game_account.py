@@ -49,8 +49,9 @@ class OwnAccount:
             for dep in d.dependency: add(dep)
             self.pool.AddSerializedFile(d.SerializeToString()); added.add(name)
         for name in ('sc/external/services/mission_service/v1/api.proto', 'sc/external/services/reputation/v1/api.proto'): add(name)
-        if 'sc/external/services/ledger/v1/api.proto' in descriptors:
-            add('sc/external/services/ledger/v1/api.proto')
+        for optional_proto in ('sc/external/services/ledger/v1/api.proto', 'sc/external/services/blueprint_library/v1/api.proto', 'sc/external/services/entitygraph/v1/api.proto', 'sc/external/services/entitlement/v2/api.proto'):
+            if optional_proto in descriptors:
+                add(optional_proto)
         self.factory = message_factory.GetMessageClass
         self.channel = grpc.secure_channel(endpoint.netloc, grpc.ssl_channel_credentials())
 
@@ -61,14 +62,60 @@ class OwnAccount:
         from account_permission import require_account_access
         require_account_access()
         # This allowlist prevents accidental invocation of a mutating RPC.
-        if (service, method) not in {('MissionService', 'QueryActiveMissions'), ('MissionService', 'QueryMissions'), ('ReputationService', 'QueryReputations'), ('LedgerService', 'GetFunds')}:
+        if (service, method) not in {
+            ('MissionService', 'QueryActiveMissions'),
+            ('MissionService', 'QueryMissions'),
+            ('ReputationService', 'QueryReputations'),
+            ('LedgerService', 'GetFunds'),
+            ('BlueprintLibraryService', 'QueryBlueprintEntries'),
+            ('EntityGraphService', 'GetInventories'),
+            ('EntityGraphService', 'EntityQuery'),
+        }:
             raise ValueError('Read method not allowed')
         if service == 'LedgerService' and (domain != 'ledger' or request.ledger_name):
             raise ValueError('Only the authenticated own-wallet lookup is allowed')
+        if service == 'BlueprintLibraryService' and domain != 'blueprint_library':
+            raise ValueError('Unexpected blueprint service domain')
+        if service == 'EntityGraphService':
+            if domain != 'entitygraph':
+                raise ValueError('Unexpected entitygraph service domain')
+            own_geid = self.subject.rsplit(':', 1)[-1]
+            if method == 'GetInventories' and request.body.owner_id != own_geid:
+                raise ValueError('Only own-character inventory list is allowed')
+            if method == 'EntityQuery':
+                q = request.body.query
+                pf = q.filter.property_filter
+                vals = list(pf.values)
+                if (
+                    request.body.scope.type != 2
+                    or not q.inventory_id.startswith(own_geid + ':')
+                    or pf.property != 'owner_id'
+                    or len(vals) != 1
+                    or vals[0].string_value != own_geid
+                ):
+                    raise ValueError('Only own-character inventory queries are allowed')
         prefix = 'sc.external.services.' + domain + '.v1.'
         response = self.factory(self.pool.FindMessageTypeByName(prefix + method + 'Response'))
+        rpc_timeout = 20 if service == 'EntityGraphService' else 8
         return self.channel.unary_unary('/' + prefix + service + '/' + method,
-            request_serializer=lambda v: v.SerializeToString(), response_deserializer=response.FromString)(request, timeout=8, metadata=self.metadata)
+            request_serializer=lambda v: v.SerializeToString(), response_deserializer=response.FromString)(request, timeout=rpc_timeout, metadata=self.metadata)
+
+    def read_stream(self, domain, service, method, request, version='v2'):
+        from account_permission import require_account_access
+        require_account_access()
+        if (domain, service, method, version) not in {
+            ('entitlement', 'ExternalEntitlementService', 'QueryEntitlementsStream', 'v2'),
+            ('entitlement', 'ExternalEntitlementService', 'QuerySnapshotsWithEntitlementsStream', 'v2'),
+        }:
+            raise ValueError('Read stream method not allowed')
+        prefix = f'sc.external.services.{domain}.{version}.'
+        response = self.factory(self.pool.FindMessageTypeByName(prefix + method + 'Response'))
+        stream = self.channel.unary_stream(
+            '/' + prefix + service + '/' + method,
+            request_serializer=lambda v: v.SerializeToString(),
+            response_deserializer=response.FromString,
+        )(request, timeout=20, metadata=self.metadata)
+        return list(stream)
 
     def close(self):
         self.channel.close()

@@ -54,6 +54,7 @@ PRIVATE.update({'game_text','localization_backups','uninstall_result.json'})
 PRIVATE.update({'module_selection.json','module_install_error.json','module_text_cleanup.json'})
 PRIVATE.add('validation-install.txt')
 PRIVATE.update({'active_build.json','patch_state.json','saved_contracts.json','blueprint_ownership.json','mission_completions.json','user_settings.json','synthscan_settings.json','catalogues'})
+PRIVATE.update({'knick_knacks_state.json','knick_knacks_state.json.tmp','knick_knacks_commands','roulette_history.json','roulette_history.json.tmp'})
 
 
 def is_private(name):

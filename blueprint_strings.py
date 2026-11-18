@@ -160,7 +160,22 @@ def sync_blueprint_text(ini, owned_names, profile=None):
         return stats
 
 
-def native_owned_names(path):
+def synced_blueprint_names(directory):
+    """Names from verified BlueprintLibraryService snapshot, if present."""
+    path = Path(directory) / 'blueprint_library_snapshot.json'
+    if not path.exists():
+        return set()
+    try:
+        from telemetry_ipc import read_shared_json
+        data = read_shared_json(path, limit=4 * 1024 * 1024) or {}
+        if not data.get('own_character_verified'):
+            return set()
+        return {str(n).strip() for n in (data.get('names') or []) if str(n).strip()}
+    except Exception:
+        return set()
+
+
+def native_owned_names(path, return_denied=False):
     """Native records only; missing/incomplete files must never mean zero owned."""
     raw = Path(path).read_bytes()
     if not raw.endswith(b'\n'):
@@ -175,7 +190,8 @@ def native_owned_names(path):
                 raise ValueError('Incomplete blueprint record; retrying')
             (owned if fields[0] == 'owned' else denied).add(fields[2])
     denied_keys = {normalise_name(n) for n in denied}
-    return {n for n in owned if normalise_name(n) not in denied_keys}
+    filtered = {n for n in owned if normalise_name(n) not in denied_keys}
+    return (filtered, denied_keys) if return_denied else filtered
 
 
 class BlueprintTextSync:
@@ -196,17 +212,24 @@ class BlueprintTextSync:
         name = channel.name.upper()
         filename = 'owned_blueprints.txt' if name in ('LIVE', 'HOTFIX') else f'owned_blueprints_{name}.txt'
         library = self.directory / filename
+        synced = self.directory / 'blueprint_library_snapshot.json'
         from game_text_lifecycle import enabled
         if not enabled(channel,self.directory):
             publish_json(self.directory/'blueprint_strings_status.json',dict(at=now,ok=True,enabled=False,changed=False));return
         ini = channel / 'Data/Localization/english/global.ini'
         def stamp():
-            return (library.stat().st_mtime_ns, library.stat().st_size, ini.stat().st_mtime_ns, ini.stat().st_size)
+            syn_st = synced.stat() if (name in ('LIVE', 'HOTFIX') and synced.exists()) else None
+            return (library.stat().st_mtime_ns, library.stat().st_size, ini.stat().st_mtime_ns, ini.stat().st_size,
+                    syn_st.st_mtime_ns if syn_st else 0)
         try:
             before = stamp()
             if before == self.stamp:
                 return
-            owned = native_owned_names(library)
+            owned, denied_keys = native_owned_names(library, return_denied=True)
+            if name in ('LIVE', 'HOTFIX'):
+                for sname in synced_blueprint_names(self.directory):
+                    if normalise_name(sname) not in denied_keys:
+                        owned.add(sname)
             stats = sync_blueprint_text(ini, owned, self.directory)
             after = stamp()
             if after[:2] != before[:2]:

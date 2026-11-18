@@ -3,6 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 import json
 import math
 from pathlib import Path
+import random
 from threading import Event
 import time
 import uuid
@@ -12,6 +13,8 @@ from party_invites import InviteHistory,PartyInviteQueue,validate_batch_size,MAX
 
 MARKET_INTERVAL=1800
 ROSTER_INTERVAL=30
+PARTY_SHARE_MIN_INTERVAL=570.0  # 9m 30s
+PARTY_SHARE_MAX_INTERVAL=630.0  # 10m 30s
 TAG_PRESETS=('Org','Enemy Org','Friend','Friendly','Aggressive','Trader','Org Affiliate','Crew','Buyer','Avoid')
 
 
@@ -184,6 +187,8 @@ class CompanionService:
         from voice_dictation import VoiceDictationService
         self.voice_dictation=VoiceDictationService.get_instance()
         self.voice_dictating=False;self.last_dictated_text=''
+        self.party_auto_share=False;self.party_auto_share_due=0.0
+        self.party_auto_share_last_at=0.0;self.party_auto_share_status=''
         self.command_dir=self.directory/'companion_commands';self.command_dir.mkdir(exist_ok=True)
     def changed(self):self.revision+=1;self.next_publish=0
     def fetch_org_members(self,symbol,tag_label,alert):
@@ -238,7 +243,7 @@ class CompanionService:
         if not isinstance(identifier,str) or not identifier or len(identifier)>100 or identifier in self.store.data['commands']:return
         if self.store.read_only:raise ValueError('Saved companion records are unavailable.')
         action=command.get('action')
-        if action in ('friend','party','party_many','friend_many','kick_party_member','transfer_party_leader','leave_party','stage_people','stage_tag','pause_invites','resume_invites','cancel_invites','search','refresh_people','refresh_chat','send_chat_message','start_voice_dictation','stop_voice_dictation','tag','tag_many','mark_org'):
+        if action in ('friend','party','party_many','friend_many','kick_party_member','transfer_party_leader','leave_party','share_party_contracts','stage_people','stage_tag','pause_invites','resume_invites','cancel_invites','search','refresh_people','refresh_chat','send_chat_message','start_voice_dictation','stop_voice_dictation','tag','tag_many','mark_org'):
             if not self.session or command.get('session_token')!=self.session:raise ValueError('Session changed. Refresh People before continuing.')
         if action=='stage_people':
             ids=command.get('player_ids');available=self.available_people()
@@ -294,6 +299,37 @@ class CompanionService:
             else:
                 self.action_status='Leaving party…'
                 self.store.record_action('party_manage','Party','Left party',player_id='',outcome='Left',session_token=self.session,now=now)
+        elif action=='share_party_contracts':
+            if command.get('confirmed') is not True:raise ValueError('Confirm sharing active contracts with the party.')
+            if 'party_share' in self.jobs:raise ValueError('Contract share is already in progress.')
+            if not self.session:raise ValueError('Join Star Citizen before sharing contracts.')
+            party_set=set(self.relationships.get('party',[]))
+            self_id=str(self.relationships.get('self_id','') or '')
+            if len([uid for uid in party_set if uid and uid!=self_id])==0:
+                raise ValueError('Join a party with other players first.')
+            self.store.data['commands']=(self.store.data['commands']+[identifier])[-1000:];self.store.save()
+            self.jobs['party_share']=(self.pool.submit(self.social,'share_party_contracts',dict(self.context),confirmed=True),dict(self.context))
+            self.action_status='Sharing active contracts with party…'
+            self.party_auto_share_status='Sharing active contracts with party…'
+            if self.party_auto_share:
+                self.party_auto_share_due=now+random.uniform(PARTY_SHARE_MIN_INTERVAL,PARTY_SHARE_MAX_INTERVAL)
+        elif action=='set_auto_share_contracts':
+            enabled=bool(command.get('enabled',False))
+            self.party_auto_share=enabled
+            if enabled:
+                self.party_auto_share_due=now+random.uniform(PARTY_SHARE_MIN_INTERVAL,PARTY_SHARE_MAX_INTERVAL)
+                if command.get('share_now') and self.session and 'party_share' not in self.jobs:
+                    party_set=set(self.relationships.get('party',[]))
+                    self_id=str(self.relationships.get('self_id','') or '')
+                    if [uid for uid in party_set if uid and uid!=self_id]:
+                        self.jobs['party_share']=(self.pool.submit(self.social,'share_party_contracts',dict(self.context),confirmed=True),dict(self.context))
+                        self.party_auto_share_status='Auto-share enabled · sharing now…'
+                if not self.party_auto_share_status:
+                    self.party_auto_share_status='Auto-share enabled (9m30s–10m30s jittered interval).'
+            else:
+                self.party_auto_share_due=0.0
+                self.party_auto_share_status='Auto-share paused.'
+            self.changed()
         elif action=='send_chat_message':
             if command.get('confirmed') is not True:raise ValueError('Confirm sending the chat message.')
             if 'chat_send' in self.jobs:raise ValueError('A chat message is already being sent.')
@@ -560,11 +596,21 @@ class CompanionService:
                 elif kind=='chat_send':
                     self.action_status='Chat message sent.'
                     self.chat_due=0
+                elif kind=='party_share':
+                    msg=result.get('status') or 'Shared active contracts with party.'
+                    self.action_status=msg
+                    self.party_auto_share_status=msg
+                    self.party_auto_share_last_at=result.get('at',now)
+                    self.store.record_action('party_share','Party',msg,player_id='',outcome=f"Shared {result.get('shared',0)}",session_token=self.session,now=now)
+                    if not self.store.read_only:self.store.save()
             except Exception as error:
                 message=str(error)[:240] if isinstance(error,ValueError) else 'Refresh unavailable. Previous data retained.'
                 if kind=='roster':self.roster_error=message;self.gate.reset()
                 elif kind=='relationships':self.relationships={}
                 elif kind=='chat':self.chat_error=message
+                elif kind=='party_share':
+                    self.action_status=message
+                    self.party_auto_share_status=message
                 elif kind.startswith('market:'):
                     for watch in self.store.data['watches']:
                         if watch['item_id']==int(kind.split(':')[1]):watch.update(error='UEX refresh unavailable; cached matches retained.',due_at=now+MARKET_INTERVAL)
@@ -574,7 +620,7 @@ class CompanionService:
                     if kind=='action' and self.invite_queue:self.invite_queue.finish(error=message)
             self.changed()
         want_people=people_visible or any(t.get('alert') for t in self.store.data['tags'].values())
-        if self.session and people_visible and 'relationships' not in self.jobs and now>=self.relationships_due:
+        if self.session and (people_visible or self.party_auto_share) and 'relationships' not in self.jobs and now>=self.relationships_due:
             rel_interval=15 if (self.awaiting_friend_response or self.awaiting_party_response) else 60
             self.jobs['relationships']=(self.pool.submit(self.social,'relationships',dict(self.context)),dict(self.context));self.relationships_due=now+rel_interval
         if self.session and want_people and 'roster' not in self.jobs and now>=self.roster_due:
@@ -583,6 +629,13 @@ class CompanionService:
         if self.session and people_visible and self.chat_active and 'chat' not in self.jobs and now>=self.chat_due:
             known={p['id']:p['handle'] for p in self.available_people().values() if p.get('id') and p.get('handle')}
             self.jobs['chat']=(self.pool.submit(self.social,'chat_snapshot',dict(self.context),known=known,translator=self.translator,auto_translate=self.chat_auto_translate),dict(self.context));self.chat_due=now+4
+        if self.session and self.party_auto_share and 'party_share' not in self.jobs and self.party_auto_share_due>0 and now>=self.party_auto_share_due:
+            self_id=str(self.relationships.get('self_id','') or '')
+            has_mates=any(uid and uid!=self_id for uid in self.party_ids(now))
+            self.party_auto_share_due=now+random.uniform(PARTY_SHARE_MIN_INTERVAL,PARTY_SHARE_MAX_INTERVAL)
+            if has_mates:
+                self.jobs['party_share']=(self.pool.submit(self.social,'share_party_contracts',dict(self.context),confirmed=True),dict(self.context))
+                self.party_auto_share_status='Auto-sharing active contracts with party…'
         if not self.store.read_only and not any(k.startswith('market:') for k in self.jobs):
             for watch in self.store.data['watches']:
                 if watch['enabled'] and now>=watch.get('due_at',0):
@@ -680,6 +733,9 @@ class CompanionService:
             org_rosters=self.store.data.get('org_rosters',{}),
             friends_known=friends_known,party_known=party_known,friend_people=[decorate(p) for p in sorted(available.values(),key=lambda p:p['handle'].casefold()) if p['id'] in friends],friend_names_error=relations.get('friend_names_error',''),
             party_people=party_people,party_group_id=party_group_id,party_leader_id=party_leader_id,is_party_leader=is_party_leader,
+            party_auto_share=self.party_auto_share,party_auto_share_due=self.party_auto_share_due,
+            party_auto_share_last_at=self.party_auto_share_last_at,party_auto_share_status=self.party_auto_share_status,
+            party_share_busy=('party_share' in self.jobs),
             chat_active=self.chat_active,chat_auto_translate=self.chat_auto_translate,chat_channels=self.chat_channels,chat_messages=chat_messages,
             chat_at=self.chat_at,chat_loading='chat' in self.jobs,chat_sending='chat_send' in self.jobs,chat_error=self.chat_error,
             voice_dictating=self.voice_dictating,last_dictated_text=self.last_dictated_text,voice_available=self.voice_dictation.is_available,

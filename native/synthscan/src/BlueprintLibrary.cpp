@@ -3,9 +3,14 @@
 #include "AppPaths.h"
 #include "CraftingData.h"
 #include "GameTextMarks.h"
+#include "MiniJson.h"
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstring>
 #include <ctime>
 #include <fstream>
@@ -505,7 +510,14 @@ void BlueprintLibrary::load() {
     }
     loadArchive();
     loadRanks();
+    loadWanted();
     trades_.load(AppPaths::file(channelFile(TradeBook::FILE_NAME).c_str()));
+    syncedSnapshotStamp_ = 0;
+    repSnapshotStamp_ = 0;
+    if (channel_.empty() || channel_.rfind("LIVE", 0) == 0) {
+        mergeSyncedSnapshot(AppPaths::file("blueprint_library_snapshot.json"));
+        mergeReputationSnapshot(AppPaths::file("reputation_snapshot.json"));
+    }
     dirty_ = false;
 }
 
@@ -956,7 +968,24 @@ std::vector<Standing> BlueprintLibrary::standings() const {
         (void)key;
         events.push_back(e);
     }
-    return Reputation::standings(events, rankSettings_, countsFrom());
+    std::vector<Standing> out = Reputation::standings(events, rankSettings_, countsFrom());
+    for (const auto& [key, score] : liveStandings_) {
+        const int faction = key.first, ladder = key.second;
+        auto it = std::find_if(out.begin(), out.end(), [&](const Standing& s) {
+            return s.faction == faction && s.ladder == ladder;
+        });
+        if (it == out.end()) {
+            Standing s;
+            s.faction = faction;
+            s.ladder = ladder;
+            out.push_back(s);
+            it = std::prev(out.end());
+        }
+        it->reputation = score;
+        it->rank = Reputation::rankOf(ladder, score);
+        it->live = true;
+    }
+    return out;
 }
 
 int BlueprintLibrary::countsFrom() const {
@@ -1090,6 +1119,20 @@ bool BlueprintLibrary::poll() {
         // look would weigh every backup against every one queued
         if (backlog_.empty() && ++ticks_ % 15 == 0) queueHistory();
     }
+    if (channel_.empty() || channel_.rfind("LIVE", 0) == 0) {
+        const auto bpSnap = AppPaths::file("blueprint_library_snapshot.json");
+        const std::int64_t bpT = writeTime(bpSnap);
+        if (bpT > 0 && bpT != syncedSnapshotStamp_) {
+            syncedSnapshotStamp_ = bpT;
+            if (mergeSyncedSnapshot(bpSnap)) changed = true;
+        }
+        const auto repSnap = AppPaths::file("reputation_snapshot.json");
+        const std::int64_t repT = writeTime(repSnap);
+        if (repT > 0 && repT != repSnapshotStamp_) {
+            repSnapshotStamp_ = repT;
+            mergeReputationSnapshot(repSnap);
+        }
+    }
     // a backup read saves every fiftieth time, not on every tick
     if (dirty_ && !fromHistory) save();
     return changed;
@@ -1100,7 +1143,7 @@ std::vector<std::string> BlueprintLibrary::stamps() const {
     for (const auto& [index, e] : owned_) {
         if (index >= 0 && index < CRAFT_BLUEPRINT_COUNT) {
             const bool assumed = e.source.rfind("assumed: ", 0) == 0;
-            out[index] = e.stamp + (e.source == "hand" ? " (by hand)" : assumed ? " (assumed)" : "");
+            out[index] = e.stamp + (e.source == "hand" ? " (by hand)" : e.source == "synced" ? " (synced)" : assumed ? " (assumed)" : "");
         }
     }
     return out;
@@ -1140,6 +1183,165 @@ int BlueprintLibrary::assumedCount() const {
 std::string BlueprintLibrary::sourceOf(int blueprint) const {
     const auto it = owned_.find(blueprint);
     return it == owned_.end() ? std::string() : it->second.source;
+}
+
+int BlueprintLibrary::syncedCount() const {
+    int n = 0;
+    for (const auto& [index, e] : owned_) {
+        (void)index;
+        if (e.source == "synced") n++;
+    }
+    return n;
+}
+
+namespace {
+
+bool readSnapshotJson(const std::filesystem::path& path, JsonValue& out) {
+    std::string text;
+#ifdef _WIN32
+    HANDLE file = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                              nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file == INVALID_HANDLE_VALUE) return false;
+    LARGE_INTEGER sz{};
+    bool ok = GetFileSizeEx(file, &sz) && sz.QuadPart >= 0 && sz.QuadPart <= 16 * 1024 * 1024;
+    if (ok) {
+        text.resize((size_t)sz.QuadPart);
+        DWORD got = 0;
+        ok = ReadFile(file, text.data(), (DWORD)text.size(), &got, nullptr) && got == text.size();
+    }
+    CloseHandle(file);
+    if (!ok) return false;
+#else
+    std::ifstream in(path, std::ios::binary);
+    if (!in.is_open()) return false;
+    std::ostringstream buf;
+    buf << in.rdbuf();
+    text = buf.str();
+#endif
+    std::string why;
+    return parseJson(text, out, why);
+}
+
+int findFactionByName(const std::string& name) {
+    if (name.empty()) return -1;
+    std::string low = name;
+    for (char& c : low) c = (char)std::tolower((unsigned char)c);
+    for (int i = 0; i < REP_FACTION_COUNT; i++) {
+        std::string cand = REP_FACTIONS[i].name;
+        for (char& c : cand) c = (char)std::tolower((unsigned char)c);
+        if (cand == low) return i;
+    }
+    return -1;
+}
+
+int findLadderBySnapshot(const std::string& standingId, const std::string& scopeDisplay, const std::string& scope) {
+    if (!standingId.empty()) {
+        const int byGuid = Reputation::ladderByGuid(standingId);
+        if (byGuid >= 0) return byGuid;
+    }
+    const std::string target = !scopeDisplay.empty() ? scopeDisplay : (scope == "FactionReputation" ? "Standing" : scope);
+    std::string low = target;
+    for (char& c : low) c = (char)std::tolower((unsigned char)c);
+    for (int i = 0; i < REP_LADDER_COUNT; i++) {
+        std::string cand = REP_LADDERS[i].name;
+        for (char& c : cand) c = (char)std::tolower((unsigned char)c);
+        if (cand == low) return i;
+    }
+    return -1;
+}
+
+}  // namespace
+
+bool BlueprintLibrary::mergeSyncedSnapshot(const std::filesystem::path& path) {
+    JsonValue root;
+    if (!readSnapshotJson(path, root)) return false;
+    const JsonValue* verified = root.find("own_character_verified");
+    if (!verified || verified->kind != JsonValue::Kind::Bool || !verified->boolean) return false;
+    const JsonValue* names = root.find("names");
+    if (!names || names->kind != JsonValue::Kind::Array) return false;
+    bool added = false;
+    const std::string stamp = now();
+    for (const JsonValue& item : names->items) {
+        if (item.kind != JsonValue::Kind::String || item.text.empty()) continue;
+        const std::string key = normalise(item.text);
+        if (denied_.count(key)) continue;
+        const auto it = byName_.find(key);
+        if (it == byName_.end()) continue;
+        const auto own = owned_.find(it->second);
+        if (own == owned_.end() || own->second.source.rfind("assumed: ", 0) == 0) {
+            owned_[it->second] = Entry{stamp, "synced", CRAFT_BLUEPRINTS[it->second].name};
+            added = true;
+            dirty_ = true;
+        }
+    }
+    if (added) save();
+    return added;
+}
+
+bool BlueprintLibrary::mergeReputationSnapshot(const std::filesystem::path& path) {
+    JsonValue root;
+    if (!readSnapshotJson(path, root)) return false;
+    const JsonValue* verified = root.find("own_character_verified");
+    if (!verified || verified->kind != JsonValue::Kind::Bool || !verified->boolean) return false;
+    const JsonValue* records = root.find("records");
+    if (!records || records->kind != JsonValue::Kind::Array) return false;
+    std::map<std::pair<int, int>, long long> next;
+    for (const JsonValue& rec : records->items) {
+        if (rec.kind != JsonValue::Kind::Object) continue;
+        const int faction = findFactionByName(rec.textOr("faction_name"));
+        if (faction < 0) continue;
+        const int ladder = findLadderBySnapshot(rec.textOr("standing_id"), rec.textOr("scope_display"), rec.textOr("scope"));
+        if (ladder < 0) continue;
+        const JsonValue* score = rec.find("score");
+        if (!score || score->kind != JsonValue::Kind::Number) continue;
+        next[{faction, ladder}] = (long long)std::llround(score->number);
+    }
+    if (next == liveStandings_) return false;
+    liveStandings_ = std::move(next);
+    ranksChanged_ = true;
+    return true;
+}
+
+void BlueprintLibrary::loadWanted() {
+    wantedNames_.clear();
+    std::ifstream in(AppPaths::file(channelFile("wanted_blueprints.txt").c_str()));
+    std::string line;
+    while (std::getline(in, line)) {
+        while (!line.empty() && (line.back() == '\r' || line.back() == '\n')) line.pop_back();
+        if (line.empty() || line[0] == '#') continue;
+        wantedNames_.insert(normalise(line));
+    }
+}
+
+void BlueprintLibrary::saveWanted() {
+    std::ofstream out(AppPaths::file(channelFile("wanted_blueprints.txt").c_str()), std::ios::trunc);
+    if (!out.is_open()) return;
+    out << "# SynthScan wanted blueprints - starred in Blueprints or Grind Planner.\n";
+    for (const std::string& key : wantedNames_) {
+        const auto it = byName_.find(key);
+        out << (it != byName_.end() ? CRAFT_BLUEPRINTS[it->second].name : key) << "\n";
+    }
+}
+
+bool BlueprintLibrary::isWanted(int blueprint) const {
+    if (blueprint < 0 || blueprint >= CRAFT_BLUEPRINT_COUNT) return false;
+    return wantedNames_.count(normalise(CRAFT_BLUEPRINTS[blueprint].name)) > 0;
+}
+
+void BlueprintLibrary::setWanted(int blueprint, bool wanted) {
+    if (blueprint < 0 || blueprint >= CRAFT_BLUEPRINT_COUNT) return;
+    const std::string key = normalise(CRAFT_BLUEPRINTS[blueprint].name);
+    if (wanted) wantedNames_.insert(key);
+    else wantedNames_.erase(key);
+    saveWanted();
+}
+
+std::vector<bool> BlueprintLibrary::wantedFlags() const {
+    std::vector<bool> out(CRAFT_BLUEPRINT_COUNT, false);
+    for (int i = 0; i < CRAFT_BLUEPRINT_COUNT; i++) {
+        if (wantedNames_.count(normalise(CRAFT_BLUEPRINTS[i].name)) > 0) out[i] = true;
+    }
+    return out;
 }
 
 }  // namespace SCMiner

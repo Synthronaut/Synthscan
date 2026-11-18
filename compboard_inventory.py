@@ -122,16 +122,80 @@ class CompboardInventory:
         self.db.close()
 
 
-class CompboardHudCommands:
-    """One pending native-HUD edit, using the same revision-checked inventory.
+_EXEC_REWARD_SHIPS_SPEC = (
+    (2651921316, 'Anvil F7A Hornet Mk II (PYAM Exec)', 'Fighter'),
+    (981430424, 'Anvil F8C Lightning (PYAM Exec)', 'Fighter'),
+    (3494349459, 'Drake Corsair (PYAM Exec)', 'Exploration'),
+    (4155388182, 'Drake Cutlass Black (PYAM Exec)', 'Multi-Role'),
+    (1054717367, 'Gatac Syulen (PYAM Exec)', 'Starter / Cargo'),
+    (3428858608, 'Mirai Guardian MX Wikelo War Special', 'Combat'),
+    (2002062392, 'RSI Meteor PYAM Exec', 'Combat'),
+    (1109514387, 'RSI Scorpius Stealth (PYAM Exec)', 'Fighter'),
+)
 
-    Commands are never retried against a newer revision. Replaying a command
-    after a helper restart cannot apply the same edit twice.
-    """
+
+def auto_compboard_counts(directory):
+    """Return live [board1..board7] counts from synced knick_knacks_state.json, or None if unavailable."""
+    from telemetry_ipc import read_shared_json
+    path = Path(directory) / 'knick_knacks_state.json'
+    if not path.exists():
+        return None
+    try:
+        state = read_shared_json(path, limit=16 * 1024 * 1024) or {}
+    except (OSError, ValueError):
+        return None
+    if not isinstance(state, dict) or state.get('status') != 'ok':
+        return None
+    counts = [0] * 7
+    for item in state.get('items') or ():
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get('name') or '')
+        if not name.startswith('DCHS-0') or len(name) < 7 or not ('1' <= name[6] <= '7'):
+            continue
+        idx = int(name[6]) - 1
+        counts[idx] += max(1, int(item.get('quantity') or 1))
+    owned_qty_by_crc: dict[int, int] = {}
+    for row in state.get('account_items') or ():
+        if isinstance(row, dict):
+            c = int(row.get('crc') or 0)
+            if c:
+                owned_qty_by_crc[c] = max(owned_qty_by_crc.get(c, 0), max(1, int(row.get('quantity') or 1)))
+    for s in state.get('ships') or ():
+        if isinstance(s, dict) and s.get('owned'):
+            c = int(s.get('crc') or 0)
+            if c:
+                owned_qty_by_crc[c] = max(owned_qty_by_crc.get(c, 0), max(1, int(s.get('quantity') or 1)))
+    exec_ships = [
+        {
+            'crc': crc,
+            'name': name,
+            'role': role,
+            'owned': crc in owned_qty_by_crc,
+            'quantity': owned_qty_by_crc.get(crc, 0),
+        }
+        for crc, name, role in _EXEC_REWARD_SHIPS_SPEC
+    ]
+    return dict(
+        counts=counts,
+        revision=int(state.get('updated_at') or 1),
+        complete_sets=min(counts),
+        total=sum(counts),
+        can_undo=False,
+        auto_synced=True,
+        exec_ships=exec_ships,
+    )
+
+
+class CompboardHudCommands:
+    """Publishes Executive Hangar Comp Board counts (live EntityGraph auto-sync when online)."""
     def __init__(self, directory, owner):
         self.directory=Path(directory);self.owner=owner;self.last_id='';self.result={}
 
     def tick(self, now):
+        auto_state = auto_compboard_counts(self.directory)
+        if auto_state is not None:
+            return dict(at=now, owner_pid=self.owner, result=self.result, **auto_state)
         from telemetry_ipc import read_shared_json
         try:command=read_shared_json(self.directory/'compboard_hud_command.json',limit=16384) or {}
         except (OSError,ValueError):command={}

@@ -68,6 +68,22 @@ if (root) {
         });
 
     const controller = new DesktopAppController(root, bridge);
+    if (hasWebViewHost) {
+      window.addEventListener('mousedown', (ev: MouseEvent) => {
+        if (ev.button === 3 || ev.button === 4) {
+          ev.preventDefault();
+        }
+      });
+      window.addEventListener('mouseup', (ev: MouseEvent) => {
+        if (ev.button === 3) {
+          ev.preventDefault();
+          void bridge.sendCommand({ action: 'nav_back' });
+        } else if (ev.button === 4) {
+          ev.preventDefault();
+          void bridge.sendCommand({ action: 'nav_forward' });
+        }
+      });
+    }
     (window as unknown as Record<string, unknown>).__synthscanDesktop = {
       controller,
       bridge,

@@ -10,6 +10,8 @@
 #include <atomic>
 #include <cwctype>
 #include <algorithm>
+#include <map>
+#include <mutex>
 #include <sstream>
 #include <iomanip>
 #include <chrono>
@@ -20,6 +22,10 @@ using namespace SynthScan;
 struct Row {Json value;std::wstring name,hay,display;};
 using Index=std::vector<Row>;
 std::shared_ptr<const Index> index,shown;
+std::mutex sourceMutex;
+std::vector<Row> catalogRows,inventoryRows;
+std::map<std::wstring,double> inventoryQtyByNormName;
+bool inventorySynced=false;
 std::vector<size_t> matches;
 HWND owner=nullptr,window=nullptr,search=nullptr,previousForeground=nullptr;
 HFONT font=nullptr;HBRUSH fieldBrush=nullptr;
@@ -92,9 +98,15 @@ std::string blueprintText(const Json& row,const Ownership& owned){
     return out.str();
 }
 
+bool isPlayerInventoryRow(const Json& row){return row.textOr("kind")=="Player Inventory";}
 void render(){
     if(!shown||selected>=shown->size())return;
     const auto& row=(*shown)[selected].value;
+    if(isPlayerInventoryRow(row)){
+        auto next=std::string("inv:")+row.textOr("id")+":"+std::to_string(int(row.numberOr("inventory_total")));
+        if(next!=rendered){rendered=std::move(next);repaint();}
+        return;
+    }
     // Keep the body empty until price and recipe details can appear together.
     auto next=loading?std::string():(playerMarket?marketText:shopText)+"\n"+blueprintText(row,ownership);
     if(next!=rendered){rendered=std::move(next);repaint();}
@@ -114,6 +126,7 @@ void releaseInput(){
 void requestPrices(const Json& row){
     requestId="finder:"+std::to_string(GetTickCount64())+":"+row.textOr("id");
     loading=true;retrying=false;loadingStarted=GetTickCount64();shopView=obj({});marketView=obj({});marketLinks=arr();linkHits.clear();contentHeight=viewHeight=0;
+    if(isPlayerInventoryRow(row)){loading=false;KillTimer(window,LOADING_TIMER);return;}
     auto cacheKey=row.textOr("id")+"|"+row.textOr("item_id")+"|"+row.textOr("market_identity")+"|"+(playerMarket?"market":"shops")+"|"+std::to_string(qualityMinimum);
     if(const auto* cached=recentResult(readyResults,cacheKey,loadingStarted)){
         loading=false;if(playerMarket){marketText=cached->text;marketLinks=cached->links;marketView=cached->view;}else{shopText=cached->text;shopView=cached->view;}
@@ -158,7 +171,8 @@ void choose(int match){
     if(match<0||match>=int(matches.size())||!shown)return;
     selected=matches[match];const auto& row=(*shown)[selected].value;
     qualityMinimum=0;qualityDropdown=false;qualityOffset=0;
-    if(row.textOr("kind")=="Market item")playerMarket=true;
+    if(isPlayerInventoryRow(row))playerMarket=false;
+    else if(row.textOr("kind")=="Market item")playerMarket=true;
     pendingSearch=false;KillTimer(window,1);updating=true;
     SetWindowTextW(search,wide(row.textOr("name")).c_str());SendMessageW(search,EM_SETSEL,0,-1);updating=false;
     dropdown=false;scroll=0;requestPrices(row);render();SetFocus(window);repaint();
@@ -179,12 +193,14 @@ void paint(HWND hwnd){
     PAINTSTRUCT ps{};HDC dc=BeginPaint(hwnd,&ps);RECT r{};GetClientRect(hwnd,&r);
     if(r.right>0&&r.bottom>0){
         Gdiplus::Bitmap buffer(r.right,r.bottom,PixelFormat32bppPARGB);Gdiplus::Graphics g(&buffer);g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);g.SetTextRenderingHint(Gdiplus::TextRenderingHintClearTypeGridFit);HudTheme::backdrop(g,{0,0,float(r.right),float(r.bottom)});
-        float w=float(r.right),h=float(r.bottom),pad=12*ui;linkHits.clear();float contentTop=(playerMarket?137.f:99.f)*ui;
+        float w=float(r.right),h=float(r.bottom),pad=12*ui;linkHits.clear();
+        const bool selectedInv=!dropdown&&shown&&selected<shown->size()&&isPlayerInventoryRow((*shown)[selected].value);
+        float contentTop=(selectedInv?62.f:(playerMarket?137.f:99.f))*ui;
         rounded(g,{pad,6*ui,w-pad*2,43*ui},10*ui,Gdiplus::Color(255,34,37,43));
         Gdiplus::Pen pen(GetFocus()==search?ACCENT:MUTED,1.5f*ui);
         g.DrawEllipse(&pen,pad+12*ui,19*ui,11*ui,11*ui);g.DrawLine(&pen,pad+22*ui,29*ui,pad+27*ui,34*ui);
         float ax=w-pad-18*ui;g.DrawLine(&pen,ax-4*ui,25*ui,ax,29*ui);g.DrawLine(&pen,ax,29*ui,ax+4*ui,25*ui);
-        if(!dropdown){
+        if(!dropdown&&!selectedInv){
             rounded(g,{pad,58*ui,97*ui,29*ui},6*ui,playerMarket?CARD:Gdiplus::Color(255,46,50,58));
             rounded(g,{pad+105*ui,58*ui,158*ui,29*ui},6*ui,playerMarket?Gdiplus::Color(255,46,50,58):CARD);
             words(g,L"SHOPS",pad+14*ui,65*ui,80*ui,10,playerMarket?MUTED:ACCENT,true);
@@ -206,7 +222,10 @@ void paint(HWND hwnd){
                 if(at==highlighted)rounded(g,{pad,y,w-pad*2,41*ui},8*ui,Gdiplus::Color(255,46,50,58));
                 const auto& value=(*shown)[matches[at]].value;
                 words(g,wide(value.textOr("name")),pad+12*ui,y+3*ui,w-pad*2-24*ui,13,INK);
-                words(g,wide(value.textOr("kind")),pad+12*ui,y+23*ui,w-pad*2-24*ui,10,at==highlighted?ACCENT:MUTED);
+                std::string kindSub=isPlayerInventoryRow(value)
+                    ?("Player Inventory · "+FinderCards::money(value.numberOr("inventory_total"))+"× owned · "+value.textOr("category"))
+                    :value.textOr("kind");
+                words(g,wide(kindSub),pad+12*ui,y+23*ui,w-pad*2-24*ui,10,at==highlighted?ACCENT:(isPlayerInventoryRow(value)?Gdiplus::Color(255,92,215,162):MUTED));
             }
         }else if(qualityDropdown){
             auto choices=qualityChoices();
@@ -242,18 +261,29 @@ void paint(HWND hwnd){
             }
             if(!loading){
                 FinderCards::Canvas cards{g,w,ui};cards.clipTop=contentTop;cards.clipBottom=h-6*ui;
-                const auto& wikelo=field(row,"wikelo_turnin");
-                bool isWikelo=!wikelo.textOr("task").empty()||row.textOr("category")=="Wikelo Barter Ships"||row.textOr("id").find("wikelo-")==0;
-                if(isWikelo){
-                    y=cards.wikeloTurnin(row,y);
-                    y=cards.mounts(row,y);
-                }else if(row.textOr("kind")=="Blueprint"){
-                    y=cards.note("Crafting recipe and acquisition sources",y);
-                }else if(playerMarket){
-                    if(marketView.numberOr("presentation_schema")==1)y=cards.market(marketView,y,qualityMinimum);
-                    else y=cards.note("Player-market presentation unavailable; refreshing automatically.",y);
-                }else{y=cards.shops(shopView,y);y=cards.mounts(row,y);}
-                y=cards.blueprints(row,y,ownership);
+                if(isPlayerInventoryRow(row)){
+                    y=cards.playerInventory(row,y);
+                }else{
+                    const auto& wikelo=field(row,"wikelo_turnin");
+                    bool isWikelo=!wikelo.textOr("task").empty()||row.textOr("category")=="Wikelo Barter Ships"||row.textOr("id").find("wikelo-")==0;
+                    if(isWikelo){
+                        auto ownedLookup=[&](const std::string& itemName)->double{
+                            std::lock_guard<std::mutex> lock(sourceMutex);
+                            if(!inventorySynced)return -1.0;
+                            auto key=normalize(wide(itemName));
+                            auto it=inventoryQtyByNormName.find(key);
+                            return it!=inventoryQtyByNormName.end()?it->second:0.0;
+                        };
+                        y=cards.wikeloTurnin(row,y,ownedLookup);
+                        y=cards.mounts(row,y);
+                    }else if(row.textOr("kind")=="Blueprint"){
+                        y=cards.note("Crafting recipe and acquisition sources",y);
+                    }else if(playerMarket){
+                        if(marketView.numberOr("presentation_schema")==1)y=cards.market(marketView,y,qualityMinimum);
+                        else y=cards.note("Player-market presentation unavailable; refreshing automatically.",y);
+                    }else{y=cards.shops(shopView,y);y=cards.mounts(row,y);}
+                    y=cards.blueprints(row,y,ownership);
+                }
                 for(const auto& link:cards.links)linkHits.push_back({link.rect,link.url});
             }
             contentHeight=y+scroll-contentTop;viewHeight=h-contentTop-6*ui;g.Restore(state);
@@ -303,7 +333,8 @@ LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM w,LPARAM l){
         if(y<51){SetFocus(search);suggestions();return 0;}
         SetFocus(hwnd);
         if(dropdown){int at=listOffset+int((y-79)/44);if(y>=79&&at>=0&&at<int(matches.size()))choose(at);return 0;}
-        if(y>=58&&y<=87){
+        const bool selectedInv=shown&&selected<shown->size()&&isPlayerInventoryRow((*shown)[selected].value);
+        if(!selectedInv&&y>=58&&y<=87){
             if(x>=r.right/ui-85){openMarketPage("https://uexcorp.space/marketplace/");return 0;}
             bool next=x>=117;if(x>=12&&x<=275&&next!=playerMarket){playerMarket=next;updateMarketChoice();}return 0;
         }
@@ -385,17 +416,94 @@ void create(){
     SendMessageW(search,EM_SETLIMITTEXT,120,0);SendMessageW(search,EM_SETCUEBANNER,TRUE,(LPARAM)L"Search ships, components, items…");
     SetWindowSubclass(search,editProcedure,1,0);layout();
 }
+void rebuildIndexLocked(){
+    auto next=std::make_shared<Index>();
+    next->reserve(catalogRows.size()+inventoryRows.size());
+    for(const auto& r:catalogRows)next->push_back(r);
+    for(const auto& r:inventoryRows)next->push_back(r);
+    std::atomic_store(&index,std::shared_ptr<const Index>(std::move(next)));
+}
 }
 void initialize(HWND parent,const std::filesystem::path& data,Ownership callback){owner=parent;directory=data;ownership=std::move(callback);}
 void prepare(const SCMiner::JsonValue& library){
-    auto next=std::make_shared<Index>();
+    std::vector<Row> built;
     for(const auto& row:SynthScan::field(library,"rows").items){
         auto kind=row.textOr("kind");if((kind!="Item"&&kind!="Component"&&kind!="Ship"&&kind!="Vehicle"&&kind!="Market item")||row.textOr("item_id").empty())continue;
         auto name=SynthScan::wide(row.textOr("name"));Row item;item.value=SynthScan::obj({{"id",SynthScan::field(row,"id")},{"item_id",SynthScan::field(row,"item_id")},{"name",SynthScan::field(row,"name")},
             {"kind",SynthScan::field(row,"kind")},{"category",SynthScan::field(row,"category")},{"ship_stats",SynthScan::field(row,"ship_stats")},{"ship_overview",SynthScan::field(row,"ship_overview")},{"finder_blueprints",SynthScan::field(row,"finder_blueprints")},{"market_item_id",SynthScan::field(row,"market_item_id")},{"market_identity",SynthScan::field(row,"market_identity")},{"market_board",SynthScan::field(row,"market_board")},{"quality_values",SynthScan::field(row,"quality_values")}});
-        item.name=normalize(name);item.hay=normalize(SynthScan::wide(row.textOr("search",row.textOr("name")+" "+row.textOr("category"))));item.display=name+L" · "+SynthScan::wide(kind);next->push_back(std::move(item));
+        item.name=normalize(name);item.hay=normalize(SynthScan::wide(row.textOr("search",row.textOr("name")+" "+row.textOr("category"))));item.display=name+L" · "+SynthScan::wide(kind);built.push_back(std::move(item));
     }
-    std::atomic_store(&index,std::shared_ptr<const Index>(std::move(next)));
+    std::lock_guard<std::mutex> lock(sourceMutex);
+    catalogRows=std::move(built);
+    rebuildIndexLocked();
+}
+void setInventory(const SCMiner::JsonValue& knickKnacks){
+    struct Grouped {
+        std::string name,catLabel,tags;
+        double total=0;
+        std::vector<SynthScan::Json> stacks;
+    };
+    std::map<std::string,Grouped> byName;
+    for(const auto& entry:SynthScan::field(knickKnacks,"items").items){
+        auto nm=entry.textOr("name");
+        if(nm.empty())continue;
+        auto catLabel=entry.textOr("category_label","Cargo & Other");
+        std::string key=nm+"|"+catLabel;
+        auto& grp=byName[key];
+        if(grp.name.empty()){
+            grp.name=nm;grp.catLabel=catLabel;
+            std::vector<std::string> tlist;
+            if(SynthScan::flag(entry,"is_wikelo"))tlist.push_back("Wikelo");
+            if(SynthScan::flag(entry,"is_crafting"))tlist.push_back("Crafting");
+            if(SynthScan::flag(entry,"is_comp_board"))tlist.push_back("Comp Board");
+            for(size_t i=0;i<tlist.size();++i)grp.tags+=(i?" · ":"")+tlist[i];
+        }
+        double qty=std::max(1.0,entry.numberOr("quantity",1));
+        grp.total+=qty;
+        grp.stacks.push_back(SynthScan::obj({
+            {"location_name",SynthScan::str(entry.textOr("location_name","Unknown Location"))},
+            {"system",SynthScan::str(entry.textOr("system"))},
+            {"container",SynthScan::str(entry.textOr("container","Local Storage"))},
+            {"quantity",SynthScan::num(qty)}
+        }));
+    }
+    std::vector<Row> built;
+    std::map<std::wstring,double> qtyMap;
+    built.reserve(byName.size());
+    for(auto& [key,grp]:byName){
+        std::sort(grp.stacks.begin(),grp.stacks.end(),[](const auto& a,const auto& b){
+            return a.numberOr("quantity",0)>b.numberOr("quantity",0);
+        });
+        auto stacksArr=SynthScan::arr();
+        std::string searchHay=grp.name+" "+grp.catLabel+" "+grp.tags+" player inventory knick knacks";
+        for(const auto& st:grp.stacks){
+            stacksArr.items.push_back(st);
+            searchHay+=" "+st.textOr("location_name")+" "+st.textOr("system");
+        }
+        Row item;
+        item.value=SynthScan::obj({
+            {"id",SynthScan::str("knick-knack:"+key)},
+            {"item_id",SynthScan::str("knick-knack")},
+            {"name",SynthScan::str(grp.name)},
+            {"kind",SynthScan::str("Player Inventory")},
+            {"category",SynthScan::str(grp.catLabel)},
+            {"inventory_total",SynthScan::num(grp.total)},
+            {"inventory_tags",SynthScan::str(grp.tags)},
+            {"inventory_stacks",stacksArr}
+        });
+        auto wname=SynthScan::wide(grp.name);
+        item.name=normalize(wname);
+        qtyMap[item.name]+=grp.total;
+        item.hay=normalize(SynthScan::wide(searchHay));
+        item.display=wname+L" · Player Inventory";
+        built.push_back(std::move(item));
+    }
+    const bool synced=SynthScan::flag(knickKnacks,"auto_synced")||knickKnacks.textOr("status")=="ok"||!built.empty();
+    std::lock_guard<std::mutex> lock(sourceMutex);
+    inventoryRows=std::move(built);
+    inventoryQtyByNormName=std::move(qtyMap);
+    inventorySynced=synced;
+    rebuildIndexLocked();
 }
 
 void sync(bool show){
@@ -569,6 +677,15 @@ bool selfTest(){
     shown=testIndex;selected=0;
     auto qc=qualityChoices();
     if(qc.size()!=9||qc[0]!=0||qc[1]!=325||qc[8]!=1000)return false;
+    auto kkItems=arr();
+    kkItems.items.push_back(obj({{"name",str("MG Scrip")},{"category_label",str("Wikelo Turn-Ins")},{"location_name",str("Orbituary")},{"system",str("Pyro")},{"container",str("Local Storage")},{"quantity",num(278)},{"is_wikelo",SynthScan::boolean(true)}}));
+    kkItems.items.push_back(obj({{"name",str("MG Scrip")},{"category_label",str("Wikelo Turn-Ins")},{"location_name",str("New Babbage")},{"system",str("Stanton")},{"container",str("Persistent Hangar")},{"quantity",num(12)},{"is_wikelo",SynthScan::boolean(true)}}));
+    setInventory(obj({{"items",kkItems}}));
+    auto merged=std::atomic_load(&index);
+    if(!merged)return false;
+    auto scripMatches=find(*merged,L"scrip");
+    if(scripMatches.empty()||!isPlayerInventoryRow((*merged)[scripMatches[0]].value)||(*merged)[scripMatches[0]].value.numberOr("inventory_total")!=290)return false;
+    setInventory(obj({}));
     return true;
 }
 }

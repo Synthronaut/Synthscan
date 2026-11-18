@@ -9,7 +9,52 @@ import logging
 from pathlib import Path
 
 _SCOPES_CACHE = None
+_CATALOG_CACHE = None
 _LOGGER = logging.getLogger('synthscan.reputation')
+
+SCOPE_DISPLAY_OVERRIDES = {
+    'Faction_Band_0': 'Standing',
+    'Faction_Band_1': 'Standing',
+    'Faction_Band_2': 'Standing',
+    'Faction_Band_3': 'Standing',
+    'Faction_Band_4': 'Standing',
+    'Guild': 'Guild Standing',
+    'FPS_Combat': 'FPS Combat',
+    'NPC_Fired': 'Contract Status',
+    'HoverTimeTrial': 'Hover Time Trial',
+    'Racing_HeadHunter': 'Racing',
+    'WheeledTimeTrial': 'Wheeled Time Trial',
+    'ShipCombat': 'Ship Combat',
+    'ShipCombat_HeadHunters': 'Ship Combat',
+    'ShipCombat_RoughAndReady': 'Ship Combat',
+    'ShipCombat_XenoThreat': 'Ship Combat',
+    'Worker': 'Labor & Trade',
+}
+
+
+def humanize_scope_name(name):
+    """Turn a raw scope identifier into a readable label."""
+    if not name:
+        return 'Reputation'
+    return SCOPE_DISPLAY_OVERRIDES.get(name) or str(name).replace('_', ' ').strip() or 'Reputation'
+
+
+def load_reputation_catalog():
+    """Load the shipped fallback reputation catalog (factions + scopes)."""
+    global _CATALOG_CACHE
+    if _CATALOG_CACHE is not None:
+        return _CATALOG_CACHE
+    path = Path(__file__).resolve().parent / 'data' / 'reputation_catalog.json'
+    try:
+        data = json.loads(path.read_text(encoding='utf-8'))
+        _CATALOG_CACHE = {
+            'factions_by_geid': dict(data.get('factions_by_geid') or {}),
+            'factions_by_urn': dict(data.get('factions_by_urn') or {}),
+            'scopes': dict(data.get('scopes') or {}),
+        }
+    except Exception:
+        _CATALOG_CACHE = {'factions_by_geid': {}, 'factions_by_urn': {}, 'scopes': {}}
+    return _CATALOG_CACHE
 
 # Scopes prioritised for player-facing rank progression
 PREFERRED_CAREER_SCOPES = (
@@ -55,6 +100,10 @@ def load_scopes(audit_path=None):
                 path = candidate
 
     if not path or not path.exists():
+        fallback = load_reputation_catalog().get('scopes') or {}
+        if fallback:
+            _SCOPES_CACHE = fallback
+            return _SCOPES_CACHE
         _LOGGER.warning('reputation_ranks: audit.json not found at %s', path)
         return {}
 
@@ -78,7 +127,7 @@ def load_scopes(audit_path=None):
             standings.sort(key=lambda item: item['minimum'])
             scopes_dict[name] = {
                 'name': name,
-                'display_name': s.get('display_name') or name,
+                'display_name': (s.get('display_name') or '').strip() or humanize_scope_name(name),
                 'localization_key': s.get('localization_key', ''),
                 'standings': standings
             }
@@ -86,7 +135,7 @@ def load_scopes(audit_path=None):
         return _SCOPES_CACHE
     except Exception as exc:
         _LOGGER.exception('Failed to load reputation scopes: %s', exc)
-        return {}
+        return load_reputation_catalog().get('scopes') or {}
 
 
 def standing_progression(scope_name, score):

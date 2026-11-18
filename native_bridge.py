@@ -265,6 +265,8 @@ def run(data_dir,owner,native=None):
     if enabled('hangars'):
         from feature_services import HangarRunner
         extras.append(HangarRunner(directory,owner))
+    from knick_knacks import KnickKnacksRunner
+    extras.append(KnickKnacksRunner(directory,owner))
     from finder_services import FinderServices
     finder_services=FinderServices(item_directory,finder_market,extras=extras)
     finder_services.current_patch=updates.local.get('patch','')

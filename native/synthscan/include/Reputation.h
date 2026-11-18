@@ -57,6 +57,7 @@ struct Standing {
     bool set = false;
     std::string setStamp;
     int proven = -1;                 // the highest rank a contract taken proves, -1 none
+    bool live = false;               // true when backed by live ReputationService snapshot
 };
 
 namespace Reputation {

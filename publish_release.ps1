@@ -114,6 +114,12 @@ if (Test-Path (Join-Path $PSScriptRoot "blueprints_catalog.json")) {
     Write-Host "Uploading blueprints_catalog.json to data hub..."
     & scp -i $KeyPath -o StrictHostKeyChecking=accept-new (Join-Path $PSScriptRoot "blueprints_catalog.json") "${Server}:/var/www/synthscan/data/blueprints_catalog.json"
 }
+foreach ($extraCatalog in @("ship_catalog.json", "knick_knacks_catalog.json")) {
+    if (Test-Path (Join-Path $dataDir $extraCatalog)) {
+        Write-Host "Uploading $extraCatalog to data hub..."
+        & scp -i $KeyPath -o StrictHostKeyChecking=accept-new (Join-Path $dataDir $extraCatalog) "${Server}:/var/www/synthscan/data/$extraCatalog"
+    }
+}
 
 & ssh -i $KeyPath -o StrictHostKeyChecking=accept-new $Server "touch /var/www/synthscan/releases/SynthScan-Setup-Windows-x64.exe && sudo chmod -R a+rX /var/www/synthscan/releases && python3 /home/ubuntu/synthscan/scripts/sync_data.py"
 if ($LASTEXITCODE -ne 0) { throw "Remote manifest refresh failed." }

@@ -165,6 +165,14 @@ public:
     int ownedCount() const { return (int)owned_.size(); }
     int byHandCount() const;
     int assumedCount() const;
+    int syncedCount() const;
+    bool hasLiveRanks() const { return !liveStandings_.empty(); }
+    // Wanted/focus blueprints starred by the player for Grind Planner priority
+    bool isWanted(int blueprint) const;
+    void setWanted(int blueprint, bool wanted);
+    std::vector<bool> wantedFlags() const;
+    bool mergeSyncedSnapshot(const std::filesystem::path& path);
+    bool mergeReputationSnapshot(const std::filesystem::path& path);
     // A contract completed without a blueprint: what it pays out of is
     // owned. Returns how many that made new. Public for the self-test.
     int assume(const ContractScan::Unpaid& unpaid);
@@ -257,10 +265,16 @@ private:
     std::map<std::string, RankEvent> rankEvents_;  // 'a' or 'c', then the MissionId
     std::vector<std::string> toRankArchive_;
     std::vector<RankSetting> rankSettings_;
+    std::map<std::pair<int, int>, long long> liveStandings_;
+    std::set<std::string> wantedNames_;
+    std::int64_t syncedSnapshotStamp_ = 0;
+    std::int64_t repSnapshotStamp_ = 0;
     bool ranksChanged_ = false;
     void takeRankEvents(ContractScan& scan);
     bool keepRankEvent(const RankEvent& e);
     void loadRanks();
+    void loadWanted();
+    void saveWanted();
     void flushRankArchive();
     void saveRankSettings();
     std::string channelFile(const char* base) const;   // "my_ranks.txt" -> "my_ranks_PTU.txt" on the PTU

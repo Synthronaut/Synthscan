@@ -421,13 +421,132 @@ export interface MissionLogState {
   count?: number;
 }
 
+export interface KnickKnackLocationSummary {
+  id: string;
+  name: string;
+  system: string;
+  unique: number;
+  quantity: number;
+}
+
+export interface KnickQualityTier {
+  quality: number;
+  units: number;
+  uscu: number;
+  scu: number;
+}
+
+export interface KnickCraftIngredient {
+  name: string;
+  quality: number;
+  amount: number;
+}
+
+export interface KnickKnackItem {
+  crc: number;
+  name: string;
+  category:
+    | 'ship_components'
+    | 'mining_crafting'
+    | 'wikelo'
+    | 'comp_boards'
+    | 'gear_weapons'
+    | 'other'
+    | string;
+  category_label: string;
+  sub_type: string;
+  manufacturer: string;
+  size: number | null;
+  grade: number | null;
+  is_wikelo: boolean;
+  is_crafting: boolean;
+  is_comp_board: boolean;
+  is_ship_component: boolean;
+  is_crafted?: boolean;
+  crafted_quality?: number | null;
+  crafted_ingredients?: KnickCraftIngredient[];
+  is_cargo_scu?: boolean;
+  quality_tiers?: KnickQualityTier[];
+  total_uscu?: number;
+  total_scu?: number;
+  max_quality?: number | null;
+  min_quality?: number | null;
+  location_id: string;
+  location_name: string;
+  system: string;
+  storage_kind: string;
+  container: string;
+  quantity: number;
+}
+
+export interface KnickAccountItem {
+  crc: number;
+  name: string;
+  category: 'ships' | 'paints' | 'ship_components' | 'gear_weapons' | 'flair' | string;
+  category_label: string;
+  sub_type: string;
+  manufacturer: string;
+  size: number | null;
+  grade: number | null;
+  source_kind: 'rsi_hangar' | 'ingame_ltp' | string;
+  source_label: string;
+  status_label: string;
+  real_money?: boolean;
+  created_at?: string;
+  quantity: number;
+}
+
+export interface KnickShipEntry {
+  crc: number;
+  name: string;
+  company: string;
+  role: string;
+  owned: boolean;
+  ownership: 'ingame_earned' | 'pledged' | 'unowned' | string;
+  ownership_label: string;
+  channel: 'dealership' | 'wikelo' | 'exec_hangar' | 'rsi_hangar' | 'ingame' | string;
+  channel_label: string;
+  also_wikelo?: boolean;
+  price_auec: number;
+  dealer_label: string;
+  recipe: string;
+  scu: number;
+  quantity: number;
+}
+
+export interface KnickKnacksState {
+  schema?: number;
+  status: string;
+  message?: string;
+  syncing?: boolean;
+  updated_at?: number;
+  mounted_excluded_count?: number;
+  total_quantity?: number;
+  unique_items?: number;
+  locations: KnickKnackLocationSummary[];
+  category_counts: Record<string, number>;
+  items: KnickKnackItem[];
+  account_counts?: Record<string, number>;
+  account_items?: KnickAccountItem[];
+  ship_counts?: Record<string, number>;
+  ships?: KnickShipEntry[];
+}
+
 export interface PeopleSnapshot {
   revision: number;
   owner_pid?: number;
   written_at?: number;
   session: string;
   session_token?: string;
-  mode?: 'people' | 'buyer_alerts' | 'home' | 'settings' | 'daylight' | 'hud_piracy' | 'mission_log';
+  mode?:
+    | 'people'
+    | 'buyer_alerts'
+    | 'home'
+    | 'settings'
+    | 'daylight'
+    | 'hud_piracy'
+    | 'mission_log'
+    | 'knick_knacks';
   players: Player[];
   rows?: Player[];
   action_people?: Player[];
@@ -449,6 +568,11 @@ export interface PeopleSnapshot {
   party_group_id?: string;
   party_leader_id?: string;
   is_party_leader?: boolean;
+  party_auto_share?: boolean;
+  party_auto_share_due?: number;
+  party_auto_share_last_at?: number;
+  party_auto_share_status?: string;
+  party_share_busy?: boolean;
   chat_active?: boolean;
   chat_auto_translate?: boolean;
   chat_channels?: ChatChannel[];
@@ -472,6 +596,7 @@ export interface PeopleSnapshot {
   daylight?: DaylightState;
   piracy?: PiracySnapshotPayload;
   mission?: MissionLogState;
+  knick_knacks?: KnickKnacksState;
 }
 
 export interface ActionLogEntry {
@@ -485,7 +610,8 @@ export interface ActionLogEntry {
     | 'party_sent'
     | 'party_accepted'
     | 'party_rejected'
-    | 'party_manage';
+    | 'party_manage'
+    | 'party_share';
   player_id?: string;
   handle: string;
   outcome?: string;
@@ -512,6 +638,8 @@ export type DesktopCommandAction =
   | 'kick_party_member'
   | 'transfer_party_leader'
   | 'leave_party'
+  | 'share_party_contracts'
+  | 'set_auto_share_contracts'
   | 'set_chat_active'
   | 'set_chat_translate'
   | 'refresh_chat'
@@ -540,6 +668,9 @@ export type DesktopCommandAction =
   | 'mission_view'
   | 'mission_classify'
   | 'mission_export'
+  | 'knick_knacks_refresh'
+  | 'nav_back'
+  | 'nav_forward'
   | 'navigate';
 
 export interface DesktopCommand {
@@ -589,6 +720,7 @@ export interface DesktopCommand {
   send?: boolean;
   active?: boolean;
   enabled?: boolean;
+  share_now?: boolean;
   handle?: string;
   symbol?: string;
   tag_label?: string;
@@ -608,6 +740,7 @@ const SOCIAL_ACTIONS = new Set<DesktopCommandAction>([
   'kick_party_member',
   'transfer_party_leader',
   'leave_party',
+  'share_party_contracts',
   'send_chat_message',
 ]);
 
@@ -697,6 +830,7 @@ export function normalizeSnapshot(raw: Partial<PeopleSnapshot>): PeopleSnapshot 
     daylight: raw.daylight,
     piracy: raw.piracy,
     mission: raw.mission,
+    knick_knacks: raw.knick_knacks,
   };
 }
 
@@ -833,6 +967,19 @@ export class InMemoryDesktopBridge implements DesktopBridge {
       });
     } else if (command.action === 'leave_party') {
       this.publish({ party_people: [], party_group_id: '', party_leader_id: '', is_party_leader: false });
+    } else if (command.action === 'share_party_contracts') {
+      const mates = (this.snapshot.party_people ?? []).filter((p) => !p.is_self);
+      this.publish({
+        party_auto_share_last_at: Date.now() / 1000,
+        party_auto_share_status: `Shared active contracts with ${mates.length} party member(s).`,
+      });
+    } else if (command.action === 'set_auto_share_contracts') {
+      const on = Boolean(command.enabled);
+      this.publish({
+        party_auto_share: on,
+        party_auto_share_due: on ? Date.now() / 1000 + 600 : 0,
+        party_auto_share_status: on ? 'Auto-share enabled (9m30s–10m30s jittered interval).' : 'Auto-share paused.',
+      });
     } else if (command.action === 'set_chat_active') {
       this.publish({ chat_active: Boolean(command.active ?? true) });
     } else if (command.action === 'set_chat_translate') {
@@ -1057,6 +1204,8 @@ export class WebViewDesktopBridge implements DesktopBridge {
             daylight: (record.daylight as DaylightState | undefined) ?? stateObj.daylight,
             piracy: (record.piracy as PiracySnapshotPayload | undefined) ?? stateObj.piracy,
             mission: (record.mission as MissionLogState | undefined) ?? stateObj.mission,
+            knick_knacks:
+              (record.knick_knacks as KnickKnacksState | undefined) ?? stateObj.knick_knacks,
           });
           for (const listener of this.listeners) {
             listener(this.snapshot);

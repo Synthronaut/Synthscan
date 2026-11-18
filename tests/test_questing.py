@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
-from questing import Questing, mission_event, own_missions
+from questing import Questing, mission_event, own_missions, own_blueprints
 from types import SimpleNamespace as NS
 
 MID='a953281c-f34f-45ad-9793-094de0c9a2fb'
@@ -126,5 +126,27 @@ class QuestingTest(unittest.TestCase):
                 if method=='QueryActiveMissions':return NS(mission_ids=[NS(mission_id=MID)])
                 return NS(missions=[NS(mission_id=MID,participants=[NS(player_urn='another-character')])])
         with self.assertRaisesRegex(ValueError,'own participation'):own_missions(Client())
+
+    def test_own_blueprints_paginates_and_resolves_names(self):
+        class Query:
+            def __init__(self):
+                self.query=NS(pagination=NS(first=0,after=''))
+        pages=[
+            NS(results=[NS(blueprint_id='UUID-1',tier=1,remaining_uses=-1,source=1)],
+               page_info=NS(has_next_page=True,end_cursor='c1')),
+            NS(results=[NS(blueprint_id='UUID-2',tier=0,remaining_uses=3,source=2)],
+               page_info=NS(has_next_page=False,end_cursor='')),
+        ]
+        class Client:
+            subject='urn:sc:global:player:geid:123'
+            def message(self,name):return Query()
+            def read(self,domain,service,method,q):
+                self.calls=getattr(self,'calls',0)+1
+                return pages[self.calls-1]
+        snap=own_blueprints(Client(),{'uuid-1':'Antium Core','uuid-2':'Parallax Energy Assault Rifle'})
+        self.assertTrue(snap['own_character_verified'])
+        self.assertEqual(snap['count'],2)
+        self.assertEqual(snap['resolved_count'],2)
+        self.assertEqual(snap['names'],['Antium Core','Parallax Energy Assault Rifle'])
 
 if __name__=='__main__':unittest.main()

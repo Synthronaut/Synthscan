@@ -112,7 +112,31 @@ class SessionOverview:
         self.dirty=True
 
     def view(self,names=None,scopes=None):
-        names=names or {};scopes=scopes or {}
+        try:
+            from reputation_ranks import humanize_scope_name, load_reputation_catalog
+            fallback=load_reputation_catalog()
+        except Exception:
+            fallback={'factions_by_geid':{},'factions_by_urn':{},'scopes':{}}
+            def humanize_scope_name(value):return str(value or 'Reputation').replace('_',' ').strip() or 'Reputation'
+        merged_names=dict(fallback.get('factions_by_geid') or {})
+        merged_urns=dict(fallback.get('factions_by_urn') or {})
+        for k,v in (names or {}).items():
+            if v and not str(v).startswith('@'):
+                if ':' in str(k):merged_urns[str(k)]=v
+                else:merged_names[str(k)]=v
+        merged_scopes=dict(fallback.get('scopes') or {})
+        for k,v in (scopes or {}).items():
+            if isinstance(v,dict):
+                merged=dict(merged_scopes.get(k) or {},**v)
+                if not (merged.get('display_name') or '').strip():
+                    merged['display_name']=humanize_scope_name(k)
+                merged_scopes[k]=merged
+        def resolve_faction(entity):
+            entity=str(entity or '')
+            geid=entity.rsplit(':',1)[-1]
+            name=merged_urns.get(entity) or merged_names.get(geid)
+            if name and not str(name).startswith('@'):return name
+            return f'Organization {geid[-6:]}' if geid else 'Organization'
         def run(value):
             if not value:return None
             changes=[];before=value.get('rep_start');after=value.get('rep_latest')
@@ -122,8 +146,10 @@ class SessionOverview:
                     if not old:continue
                     delta=record['score']-old['score']
                     if delta:
-                        changes.append(dict(faction=names.get(record['entity'].rsplit(':',1)[-1],'Faction name pending'),
-                            scope=scopes.get(record['scope'],{}).get('display_name','Reputation'),delta=delta,
+                        scope_key=record.get('scope','')
+                        scope_label=(merged_scopes.get(scope_key) or {}).get('display_name') or humanize_scope_name(scope_key)
+                        changes.append(dict(faction=resolve_faction(record.get('entity','')),
+                            scope=scope_label,delta=delta,
                             before=old['score'],after=record['score'],standing_changed=old['standing_id']!=record['standing_id'],
                             standing=record['standing'].get('name','')))
             changes.sort(key=lambda r:-r['delta'])

@@ -8,6 +8,7 @@ namespace SynthFinder {
 using Ownership=std::function<int(int,const std::string&)>;
 void initialize(HWND owner,const std::filesystem::path& data,Ownership ownership);
 void prepare(const SCMiner::JsonValue& library);
+void setInventory(const SCMiner::JsonValue& knickKnacks);
 void sync(bool visible);
 void activationChanged(bool active);
 bool key(UINT message,WPARAM value,HWND target);

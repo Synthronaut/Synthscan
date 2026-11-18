@@ -99,6 +99,87 @@ def own_reputation(client):
                 character_key=hashlib.sha256(client.subject.encode()).hexdigest(),
                 own_character_verified=True, complete=True, records=records)
 
+
+def load_blueprint_guid_map():
+    """Map CraftingBlueprintRecord UUIDs (lowercase) -> item display names."""
+    mapping = {}
+    catalog_path = ROOT / 'data' / 'local_game_catalog.json'
+    if catalog_path.exists():
+        try:
+            data = json.loads(catalog_path.read_text(encoding='utf-8'))
+            for bp in data.get('blueprints', []):
+                nid = str(bp.get('native_id') or '').strip().lower()
+                name = str(bp.get('name') or '').strip()
+                if nid and name:
+                    mapping[nid] = name
+        except (OSError, ValueError, TypeError):
+            pass
+    try:
+        from game_records import GameRecords
+        from installation import reference_paths
+        paths = reference_paths()
+        bp_root = paths['records'] / 'libs/foundry/records/crafting/blueprints'
+        if bp_root.exists() and paths['localization'].exists():
+            store = GameRecords(paths['records'], paths['localization'])
+            for path in bp_root.rglob('*.json'):
+                try:
+                    raw = store.read(path)
+                    guid = str(raw.get('_RecordId_') or '').strip().lower()
+                    if not guid or guid in mapping:
+                        continue
+                    creation = (raw.get('_RecordValue_') or {}).get('blueprint', {}).get('processSpecificData', {})
+                    if creation.get('_Type_') == 'CraftingProcess_Creation':
+                        name = store.item(creation['entityClass']).get('name', '').strip()
+                        if name:
+                            mapping[guid] = name
+                except Exception:
+                    continue
+    except Exception:
+        pass
+    return mapping
+
+
+def own_blueprints(client, guid_names=None):
+    """Read the signed-in character's owned blueprint library from CIG services."""
+    guid_names = guid_names or {}
+    q = client.message('sc.external.services.blueprint_library.v1.QueryBlueprintEntriesRequest')
+    q.query.pagination.first = 100
+    entries, cursors = [], set()
+    for _ in range(50):
+        response = client.read('blueprint_library', 'BlueprintLibraryService', 'QueryBlueprintEntries', q)
+        for item in response.results:
+            bid = str(getattr(item, 'blueprint_id', '') or '').strip().lower()
+            if not bid:
+                continue
+            entries.append(dict(
+                id=bid,
+                name=guid_names.get(bid, ''),
+                tier=int(getattr(item, 'tier', 0) or 0),
+                remaining_uses=int(getattr(item, 'remaining_uses', -1)),
+                source=int(getattr(item, 'source', 0) or 0),
+            ))
+        if not response.page_info.has_next_page:
+            break
+        cursor = response.page_info.end_cursor
+        if not cursor or cursor in cursors:
+            raise ValueError('Invalid blueprint pagination')
+        cursors.add(cursor)
+        q.query.pagination.after = cursor
+    else:
+        raise ValueError('Blueprint pagination limit')
+    names = sorted({e['name'] for e in entries if e.get('name')})
+    return dict(
+        schema=1,
+        source='authenticated_blueprint_library_service',
+        read_at=time.time(),
+        character_key=hashlib.sha256(client.subject.encode()).hexdigest(),
+        own_character_verified=True,
+        count=len(entries),
+        resolved_count=sum(1 for e in entries if e.get('name')),
+        names=names,
+        entries=entries,
+    )
+
 class Questing:
     def __init__(self, directory, log):
         self.directory = Path(directory); self.log = Path(log)
@@ -106,7 +187,16 @@ class Questing:
         self.journal = {}; self.selected = ''; self.service = []; self.read_at = 0
         self.error = ''; self.next_poll = 0; self.future = None
         self.pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix='questing-read')
-        self.catalog = {}; self.catalog_by_title = {}; self.balance_names = {}; self.scopes = {}
+        try:
+            from reputation_ranks import load_reputation_catalog
+            fallback = load_reputation_catalog()
+        except Exception:
+            fallback = {'factions_by_geid': {}, 'scopes': {}}
+        self.catalog = {}; self.catalog_by_title = {}
+        self.balance_names = dict(fallback.get('factions_by_geid') or {})
+        self.scopes = dict(fallback.get('scopes') or {})
+        self.blueprint_guid_names = None
+        self._last_blueprints = None
         self.label_stamp=None;self.label_retry_at=0
         self.game_running=False
 
@@ -151,11 +241,22 @@ class Questing:
         if manifest['Data']['BuildId'] != audit['build']['BuildId']:
             raise ValueError('Game build changed; reward catalog requires extraction')
         store = GameRecords(paths['records'],paths['localization'])
-        catalog={};catalog_by_title={};balance_names={}
-        scopes = {s['name']:s for s in audit['scopes']}
+        catalog={};catalog_by_title={}
+        balance_names=dict(self.balance_names)
+        scopes=dict(self.scopes)
+        for s in audit['scopes']:
+            if s.get('name'):
+                merged=dict(scopes.get(s['name']) or {}, **s)
+                if not (merged.get('display_name') or '').strip():
+                    from reputation_ranks import humanize_scope_name
+                    merged['display_name']=humanize_scope_name(s['name'])
+                scopes[s['name']]=merged
         for p in (store.root/'libs/foundry/records/factions/factionreputation').rglob('*.json'):
             v = store.read(p)['_RecordValue_']
-            if v.get('GEID'): balance_names[str(v['GEID'])] = store.text(v.get('displayName'))
+            if v.get('GEID'):
+                txt = store.text(v.get('displayName'))
+                if txt and not txt.startswith('@'):
+                    balance_names[str(v['GEID'])] = txt
         for m in audit['missions']:
             v = store.read(store.root/m['source'])['_RecordValue_']
             # Keep outcome identity explicit until its enum mapping is validated.
@@ -235,6 +336,14 @@ class Questing:
         try:
             # Balance refresh must not depend on mission/catalog availability.
             snapshot=own_reputation(client)
+            for rec in snapshot.get('records') or []:
+                ent = str(rec.get('entity') or '')
+                geid = ent.rsplit(':', 1)[-1] if ':' in ent else ent
+                if geid in self.balance_names and not rec.get('faction_name'):
+                    rec['faction_name'] = self.balance_names[geid]
+                scope_info = self.scopes.get(rec.get('scope') or '')
+                if isinstance(scope_info, dict) and scope_info.get('display_name') and not rec.get('scope_display'):
+                    rec['scope_display'] = scope_info['display_name']
             errors=[]
             if not self.catalog:
                 try:self.load_catalog()
@@ -246,6 +355,12 @@ class Questing:
             snapshot['mission_error'] = '; '.join(errors)
             try: snapshot['wallet'] = own_wallet(client)
             except Exception as exc: snapshot['wallet_error'] = 'Wallet read unavailable ('+type(exc).__name__+')'
+            try:
+                if self.blueprint_guid_names is None:
+                    self.blueprint_guid_names = load_blueprint_guid_map()
+                self._last_blueprints = own_blueprints(client, self.blueprint_guid_names)
+            except Exception:
+                self._last_blueprints = None
             return missions, snapshot, '; '.join(errors)
         finally: client.close()
 
@@ -259,6 +374,8 @@ class Questing:
                 self.service, snapshot, mission_error = self.future.result()
                 if not publish_json(self.directory/'reputation_snapshot.json', snapshot):
                     raise OSError('Could not publish refreshed reputation')
+                if isinstance(self._last_blueprints, dict):
+                    publish_json(self.directory/'blueprint_library_snapshot.json', self._last_blueprints)
                 self.read_at = snapshot['read_at']; self.error=mission_error
                 publish_json(self.directory/'mission_service_snapshot.json', dict(
                     character_key=snapshot.get('character_key'), read_at=snapshot.get('mission_read_at', self.read_at),

@@ -66,5 +66,17 @@ class OverviewTests(unittest.TestCase):
         restored=SessionOverview(self.root,self.log);restored.save()
         self.assertTrue(restored.view()['history_warning']);self.assertEqual(path.read_text(),'broken')
 
+    def test_known_geid_resolves_without_runtime_catalog(self):
+        snap_a=dict(source='authenticated_reputation_service',own_character_verified=True,complete=True,character_key='one',read_at=1794118200,
+                    records=[dict(entity='urn:sc:reputations:org:geid:199998949490',scope='Emergency',score=100,standing_id='s0',standing={'name':'Neutral'})])
+        snap_b=dict(source='authenticated_reputation_service',own_character_verified=True,complete=True,character_key='one',read_at=1794118260,
+                    records=[dict(entity='urn:sc:reputations:org:geid:199998949490',scope='Emergency',score=93,standing_id='s0',standing={'name':'Neutral'})])
+        self.book.reputation(snap_a);self.book.reputation(snap_b)
+        changes=self.book.view()['current']['reputation']
+        self.assertEqual(len(changes),1)
+        self.assertEqual(changes[0]['faction'],'Civilian Defense Force')
+        self.assertEqual(changes[0]['scope'],'Emergency Support')
+        self.assertEqual(changes[0]['delta'],-7)
+
 
 if __name__=='__main__':unittest.main()

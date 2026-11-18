@@ -21,7 +21,7 @@
 
 namespace SCMiner {
 
-enum class MiningFamily { Ship, ROC, FPS };
+enum class MiningFamily { Ship, ROC, FPS, Harvestable };
 
 struct OreLocation {
     const char* mineral;
@@ -357,7 +357,97 @@ inline const std::vector<OreLocation> ORE_LOCATIONS = {
     {"Tungsten", MiningFamily::Ship, "Lagrange F", "Stanton", "lagrange", "HUR-L2, ARC-L1, ARC-L2, ARC-L4", 28.5},
     {"Tungsten", MiningFamily::Ship, "Pyro V-c (Adir)", "Pyro", "moon", "", 28.5},
     {"Tungsten", MiningFamily::Ship, "Pyro V-d (Fairo)", "Pyro", "moon", "", 28.5},
+    // Planetary & cave harvestables (chance = 0.0 when game extract has no spawn weight)
+    {"Amiant Pod", MiningFamily::Harvestable, "Pyro III (Bloom)", "Pyro", "planet", "", 0.0},
+    {"Decari Pod", MiningFamily::Harvestable, "Pyro I", "Pyro", "planet", "", 0.0},
+    {"Degnous Root", MiningFamily::Harvestable, "Hurston", "Stanton", "planet", "", 0.0},
+    {"Flareweed Stalk", MiningFamily::Harvestable, "Pyro III (Bloom)", "Pyro", "planet", "", 0.0},
+    {"Fotia Seedpod", MiningFamily::Harvestable, "Pyro I", "Pyro", "planet", "", 0.0},
+    {"Golden Medmon", MiningFamily::Harvestable, "Hurston", "Stanton", "planet", "", 0.0},
+    {"Golden Medmon", MiningFamily::Harvestable, "microTech", "Stanton", "planet", "", 0.0},
+    {"Heart of the Woods", MiningFamily::Harvestable, "microTech", "Stanton", "planet", "", 0.0},
+    {"Pingala Seeds", MiningFamily::Harvestable, "Pyro II (Monox)", "Pyro", "planet", "", 0.0},
+    {"Pitambu", MiningFamily::Harvestable, "Hurston", "Stanton", "planet", "", 0.0},
+    {"Pitambu", MiningFamily::Harvestable, "microTech", "Stanton", "planet", "", 0.0},
+    {"Prota", MiningFamily::Harvestable, "Hurston", "Stanton", "planet", "", 0.0},
+    {"Revenant Pod", MiningFamily::Harvestable, "Hurston", "Stanton", "planet", "", 0.0},
+    {"Stone Bug Shell", MiningFamily::Harvestable, "Daymar", "Stanton", "cave", "", 0.0},
+    {"Sunset Berries", MiningFamily::Harvestable, "microTech", "Stanton", "planet", "", 0.0},
+    {"Wuotan Seeds", MiningFamily::Harvestable, "Pyro I", "Pyro", "planet", "", 0.0},
+    {"Amioshi Plague", MiningFamily::Harvestable, "Aberdeen", "Stanton", "cave", "", 0.0},
+    {"Amioshi Plague", MiningFamily::Harvestable, "Arial", "Stanton", "cave", "", 0.0},
+    {"Amioshi Plague", MiningFamily::Harvestable, "Cellin", "Stanton", "cave", "", 0.0},
+    {"Amioshi Plague", MiningFamily::Harvestable, "Clio", "Stanton", "cave", "", 0.0},
+    {"Amioshi Plague", MiningFamily::Harvestable, "Daymar", "Stanton", "cave", "", 0.0},
+    {"Amioshi Plague", MiningFamily::Harvestable, "Hurston", "Stanton", "cave", "", 0.0},
+    {"Amioshi Plague", MiningFamily::Harvestable, "Ita", "Stanton", "cave", "", 0.0},
+    {"Amioshi Plague", MiningFamily::Harvestable, "Magda", "Stanton", "cave", "", 0.0},
+    {"Amioshi Plague", MiningFamily::Harvestable, "Wala", "Stanton", "cave", "", 0.0},
+    {"Amioshi Plague", MiningFamily::Harvestable, "microTech", "Stanton", "cave", "", 0.0},
+    {"Amioshi Plague", MiningFamily::Harvestable, "Pyro I", "Pyro", "cave", "", 0.0},
+    {"Amioshi Plague", MiningFamily::Harvestable, "Pyro II (Monox)", "Pyro", "cave", "", 0.0},
+    {"Amioshi Plague", MiningFamily::Harvestable, "Pyro III (Bloom)", "Pyro", "cave", "", 0.0},
+    {"Amioshi Plague", MiningFamily::Harvestable, "Pyro IV", "Pyro", "cave", "", 0.0},
+    {"Amioshi Plague", MiningFamily::Harvestable, "Pyro V-a (Ignis)", "Pyro", "cave", "", 0.0},
+    {"Amioshi Plague", MiningFamily::Harvestable, "Pyro V-b (Vatra)", "Pyro", "cave", "", 0.0},
+    {"Amioshi Plague", MiningFamily::Harvestable, "Pyro V-c (Adir)", "Pyro", "cave", "", 0.0},
+    {"Amioshi Plague", MiningFamily::Harvestable, "Pyro V-d (Fairo)", "Pyro", "cave", "", 0.0},
+    {"Amioshi Plague", MiningFamily::Harvestable, "Pyro V-e (Fuego)", "Pyro", "cave", "", 0.0},
+    {"Amioshi Plague", MiningFamily::Harvestable, "Pyro V-f (Vuur)", "Pyro", "cave", "", 0.0},
+    {"Amioshi Plague", MiningFamily::Harvestable, "Pyro VI (Terminus)", "Pyro", "cave", "", 0.0},
+    {"Bluemoon Fungus", MiningFamily::Harvestable, "Aberdeen", "Stanton", "cave", "", 0.0},
+    {"Bluemoon Fungus", MiningFamily::Harvestable, "Arial", "Stanton", "cave", "", 0.0},
+    {"Bluemoon Fungus", MiningFamily::Harvestable, "Cellin", "Stanton", "cave", "", 0.0},
+    {"Bluemoon Fungus", MiningFamily::Harvestable, "Clio", "Stanton", "cave", "", 0.0},
+    {"Bluemoon Fungus", MiningFamily::Harvestable, "Daymar", "Stanton", "cave", "", 0.0},
+    {"Bluemoon Fungus", MiningFamily::Harvestable, "Hurston", "Stanton", "cave", "", 0.0},
+    {"Bluemoon Fungus", MiningFamily::Harvestable, "Ita", "Stanton", "cave", "", 0.0},
+    {"Bluemoon Fungus", MiningFamily::Harvestable, "Magda", "Stanton", "cave", "", 0.0},
+    {"Bluemoon Fungus", MiningFamily::Harvestable, "Wala", "Stanton", "cave", "", 0.0},
+    {"Bluemoon Fungus", MiningFamily::Harvestable, "microTech", "Stanton", "cave", "", 0.0},
+    {"Bluemoon Fungus", MiningFamily::Harvestable, "Pyro I", "Pyro", "cave", "", 0.0},
+    {"Bluemoon Fungus", MiningFamily::Harvestable, "Pyro II (Monox)", "Pyro", "cave", "", 0.0},
+    {"Bluemoon Fungus", MiningFamily::Harvestable, "Pyro III (Bloom)", "Pyro", "cave", "", 0.0},
+    {"Bluemoon Fungus", MiningFamily::Harvestable, "Pyro IV", "Pyro", "cave", "", 0.0},
+    {"Bluemoon Fungus", MiningFamily::Harvestable, "Pyro V-a (Ignis)", "Pyro", "cave", "", 0.0},
+    {"Bluemoon Fungus", MiningFamily::Harvestable, "Pyro V-b (Vatra)", "Pyro", "cave", "", 0.0},
+    {"Bluemoon Fungus", MiningFamily::Harvestable, "Pyro V-c (Adir)", "Pyro", "cave", "", 0.0},
+    {"Bluemoon Fungus", MiningFamily::Harvestable, "Pyro V-d (Fairo)", "Pyro", "cave", "", 0.0},
+    {"Bluemoon Fungus", MiningFamily::Harvestable, "Pyro V-e (Fuego)", "Pyro", "cave", "", 0.0},
+    {"Bluemoon Fungus", MiningFamily::Harvestable, "Pyro V-f (Vuur)", "Pyro", "cave", "", 0.0},
+    {"Bluemoon Fungus", MiningFamily::Harvestable, "Pyro VI (Terminus)", "Pyro", "cave", "", 0.0},
+    {"Ranta Dung", MiningFamily::Harvestable, "Aberdeen", "Stanton", "cave", "", 0.0},
+    {"Ranta Dung", MiningFamily::Harvestable, "Arial", "Stanton", "cave", "", 0.0},
+    {"Ranta Dung", MiningFamily::Harvestable, "Cellin", "Stanton", "cave", "", 0.0},
+    {"Ranta Dung", MiningFamily::Harvestable, "Clio", "Stanton", "cave", "", 0.0},
+    {"Ranta Dung", MiningFamily::Harvestable, "Daymar", "Stanton", "cave", "", 0.0},
+    {"Ranta Dung", MiningFamily::Harvestable, "Hurston", "Stanton", "cave", "", 0.0},
+    {"Ranta Dung", MiningFamily::Harvestable, "Ita", "Stanton", "cave", "", 0.0},
+    {"Ranta Dung", MiningFamily::Harvestable, "Magda", "Stanton", "cave", "", 0.0},
+    {"Ranta Dung", MiningFamily::Harvestable, "Wala", "Stanton", "cave", "", 0.0},
+    {"Ranta Dung", MiningFamily::Harvestable, "microTech", "Stanton", "cave", "", 0.0},
+    {"Ranta Dung", MiningFamily::Harvestable, "Pyro I", "Pyro", "cave", "", 0.0},
+    {"Ranta Dung", MiningFamily::Harvestable, "Pyro II (Monox)", "Pyro", "cave", "", 0.0},
+    {"Ranta Dung", MiningFamily::Harvestable, "Pyro III (Bloom)", "Pyro", "cave", "", 0.0},
+    {"Ranta Dung", MiningFamily::Harvestable, "Pyro IV", "Pyro", "cave", "", 0.0},
+    {"Ranta Dung", MiningFamily::Harvestable, "Pyro V-a (Ignis)", "Pyro", "cave", "", 0.0},
+    {"Ranta Dung", MiningFamily::Harvestable, "Pyro V-b (Vatra)", "Pyro", "cave", "", 0.0},
+    {"Ranta Dung", MiningFamily::Harvestable, "Pyro V-c (Adir)", "Pyro", "cave", "", 0.0},
+    {"Ranta Dung", MiningFamily::Harvestable, "Pyro V-d (Fairo)", "Pyro", "cave", "", 0.0},
+    {"Ranta Dung", MiningFamily::Harvestable, "Pyro V-e (Fuego)", "Pyro", "cave", "", 0.0},
+    {"Ranta Dung", MiningFamily::Harvestable, "Pyro V-f (Vuur)", "Pyro", "cave", "", 0.0},
+    {"Ranta Dung", MiningFamily::Harvestable, "Pyro VI (Terminus)", "Pyro", "cave", "", 0.0},
 };
+
+inline std::vector<std::string> harvestableNames() {
+    std::vector<std::string> names;
+    for (const auto& row : ORE_LOCATIONS) {
+        if (row.family != MiningFamily::Harvestable) continue;
+        if (std::find(names.begin(), names.end(), row.mineral) == names.end()) names.push_back(row.mineral);
+    }
+    std::sort(names.begin(), names.end());
+    return names;
+}
 
 // Every location where the mineral occurs in this family, best chance first
 inline std::vector<OreLocation> locationsFor(const std::string& mineral, MiningFamily family) {

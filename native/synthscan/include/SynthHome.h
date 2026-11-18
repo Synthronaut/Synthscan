@@ -16,6 +16,8 @@ bool active();
 HWND pageHost();
 void selectPage(const std::string& name);
 void navigate(const std::string& name);
+bool navigateBack();
+bool navigateForward();
 std::string selectedPage();
 int paintCheck(const std::filesystem::path& output);
 }

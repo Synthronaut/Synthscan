@@ -39,10 +39,15 @@
 #include <cmath>
 #include <ctime>
 #include <filesystem>
+#include <fstream>
 #include <initializer_list>
 #include <set>
 #include <sstream>
+#include <thread>
 #include <cstdlib>
+#include "SynthJson.h"
+#include "ManagedGameTexts.h"
+#include "SynthMenu.h"
 #include <fstream>
 #include <iomanip>
 #include <algorithm>
@@ -122,6 +127,7 @@ const Gdiplus::Color COL_TEXT_DIM(160, 166, 176);
 const Gdiplus::Color COL_TEXT_FAINT(108, 115, 127);
 const Gdiplus::Color COL_ACCENT(98,204,255);
 const Gdiplus::Color COL_ACCENT_HI(163,229,255);  // the blue under the pointer
+const Gdiplus::Color COL_CYAN(110, 224, 245);
 const Gdiplus::Color COL_ORANGE(98,204,255);
 const Gdiplus::Color COL_GREEN(96, 202, 132);
 const Gdiplus::Color COL_RED(234, 94, 86);
@@ -345,6 +351,22 @@ void drawButton(Gdiplus::Graphics& g, const Gdiplus::RectF& r, const wchar_t* la
     centred.SetFormatFlags(Gdiplus::StringFormatFlagsNoWrap);
     Gdiplus::SolidBrush brush(ink);
     g.DrawString(label, -1, &font, r, &centred, &brush);
+}
+
+void drawColorPill(Gdiplus::Graphics& g, const Gdiplus::RectF& r, const wchar_t* label,
+                   const Gdiplus::Font& font, const Gdiplus::Color& activeColor, bool on, bool hot, float radius) {
+    if (on) {
+        fillRoundRect(g, r, radius, hot ? tint(activeColor, 220) : activeColor);
+    } else {
+        fillRoundRect(g, r, radius, hot ? COL_HOVER : COL_CARD_HI);
+        strokeRoundRect(g, r, radius, hot ? tint(activeColor, 180) : tint(COL_TEXT_FAINT, 120));
+    }
+    Gdiplus::StringFormat centred;
+    centred.SetAlignment(Gdiplus::StringAlignmentCenter);
+    centred.SetLineAlignment(Gdiplus::StringAlignmentCenter);
+    centred.SetFormatFlags(Gdiplus::StringFormatFlagsNoWrap);
+    Gdiplus::SolidBrush ink(on ? COL_ACCENT_INK : (hot ? activeColor : COL_TEXT_FAINT));
+    g.DrawString(label, -1, &font, r, &centred, &ink);
 }
 
 // ---- frosted glass --------------------------------------------------------
@@ -1030,6 +1052,7 @@ bool MinerGUI::initialize(HINSTANCE hInstance) {
     layoutControls();
     loadCart();   // what was on the shopping list when the app was last shut
     loadLookingFor();   // ...and which ores were being watched for
+    loadSynthTargets(); // ...and in-game Cyan/Red SynthStrings targets
     loadLoadout();      // ...and what the ship was carrying
 
     isOpen_ = true;
@@ -1389,7 +1412,7 @@ void MinerGUI::placeOreRowsButton() {
     auto boardPixel=[&](int value){return int(std::lround(value*boardScale));};
     for(int id=31930;id<=31947;++id){
         HWND button=GetDlgItem(hwnd_,id);
-        const bool visible=overlayMode_&&SynthScan::hangarsMode()&&(id==31930||SynthScan::hangarInventoryMode());
+        const bool visible=overlayMode_&&SynthScan::hangarsMode()&&id==31930;
         if(visible){
             const auto rect=CompboardHud::control(id,int(std::lround(hangarClient.right/boardScale)));
             SetWindowTextW(button,CompboardHud::caption(id,SynthScan::hangarInventoryMode()));
@@ -1915,12 +1938,8 @@ void MinerGUI::setUexPrices(bool enabled, std::shared_ptr<const UexPrices> price
 // (setPlanPulseForShot).
 void MinerGUI::keepPlanPulse() {
     if (!planner_) return;
-    if (plannerVisible_ && uexEnabled_ && uexPrices_ && !uexPrices_->empty() && !headless_) {
-        SetTimer(planner_, TIMER_PLAN_PULSE, 600, nullptr);
-    } else {
-        KillTimer(planner_, TIMER_PLAN_PULSE);
-        planPulse_ = false;
-    }
+    KillTimer(planner_, TIMER_PLAN_PULSE);
+    planPulse_ = false;
 }
 
 void MinerGUI::setPlanPulseForShot(bool on) {
@@ -2450,6 +2469,8 @@ LRESULT CALLBACK MinerGUI::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARA
 }
 
 LRESULT MinerGUI::handleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+    LRESULT menuResult = 0;
+    if (SynthMenus::message(uMsg, wParam, lParam, menuResult)) return menuResult;
     switch (uMsg) {
         case WM_WINDOWPOSCHANGED:
             HudFeather::sync(hwnd,overlayMode_&&!headless_,scaleF(1)*overlayZoom_);
@@ -2665,13 +2686,17 @@ LRESULT MinerGUI::handleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
             break;
 
         case WM_RBUTTONDOWN: {
-            // The only thing the right button does anywhere in the window:
-            // take one module back off the head. A left click adds, because
-            // the same module can go in more than one slot, so removing
-            // needed a gesture of its own.
-            if (!loadoutOpen_) break;
             const float px = (float)(short)LOWORD(lParam);
             const float py = (float)(short)HIWORD(lParam);
+            if (lookingOpen_) {
+                for (const auto& hit : lookHits_) {
+                    if (hit.kind == 0 && hit.rect.Contains(px, py)) {
+                        showColorTargetMenu(hwnd, hit.name);
+                        return 0;
+                    }
+                }
+            }
+            if (!loadoutOpen_) break;
             for (const auto& hit : loadoutHits_) {
                 if (hit.kind != 1 || !hit.rect.Contains(px, py)) continue;
                 const MiningModule* m = &MINING_MODULES[hit.value];
@@ -3613,7 +3638,17 @@ void MinerGUI::drawLookingPanel(Gdiplus::Graphics& g, int cw, int ch) {
             if (row.Y + rowH > listBottom + 0.5f) break;
             anyShown = true;
             const bool on = lookingForOre(name);
-            if (isHot(hoverMain_, row)) fillRoundRect(g, row, scaleF(R_CONTROL), COL_HOVER);
+            const bool isCyan = isSynthCyan(name);
+            const bool isRed = isSynthRed(name);
+            if (isCyan) {
+                fillRoundRect(g, row, scaleF(R_CONTROL), tint(COL_CYAN, 26));
+                strokeRoundRect(g, row, scaleF(R_CONTROL), COL_CYAN, scaleF(1.3f));
+            } else if (isRed) {
+                fillRoundRect(g, row, scaleF(R_CONTROL), tint(COL_RED, 26));
+                strokeRoundRect(g, row, scaleF(R_CONTROL), COL_RED, scaleF(1.3f));
+            } else if (isHot(hoverMain_, row)) {
+                fillRoundRect(g, row, scaleF(R_CONTROL), COL_HOVER);
+            }
             // a tick box, filled when the ore is being watched for
             Gdiplus::RectF box(row.X + scaleF(4), row.Y + rowH / 2 - scaleF(6), scaleF(12), scaleF(12));
             if (on) {
@@ -3643,7 +3678,7 @@ void MinerGUI::drawLookingPanel(Gdiplus::Graphics& g, int cw, int ch) {
 
     // ...and the way out, along the bottom
     const float footY = panel.Y + panel.Height - scaleF(26);
-    g.DrawString(L"click an ore to watch for it  \u00B7  Esc closes", -1, &subFont,
+    g.DrawString(L"click to watch  \u00B7  right-click: Cyan / Red in-game (restart game to apply)", -1, &subFont,
                  Gdiplus::PointF(panel.X + pad, footY + scaleF(4)), &faintBrush);
     if (!lookingFor_.empty()) {
         // red, like the ticks it throws away - and a neutral face would be
@@ -6242,6 +6277,22 @@ int MinerGUI::drawResults(Gdiplus::Graphics& g, int cw, int yPos) {
             std::wstring rarity = L"  \u00B7  " + toW(rarityName(result.rarity));
             g.DrawString(rarity.c_str(), -1, &infoFont,
                          Gdiplus::PointF(M + scaleF(30) + measured.Width - scaleF(4), y + scaleF(24)), &rarityBrush);
+        } else if (!dimmed) {
+            Gdiplus::Color gc = COL_TEXT_DIM;
+            const std::wstring ground = groundSubLine(result, gc);
+            if (!ground.empty()) {
+                Gdiplus::RectF measured;
+                g.MeasureString(info.str().c_str(), -1, &infoFont, Gdiplus::PointF(0, 0), &measured);
+                const float gx = M + scaleF(30) + measured.Width - scaleF(4);
+                const float gw = (std::max)(scaleF(40), M + rowW - scaleF(68) - gx);
+                Gdiplus::SolidBrush gBrush(gc);
+                Gdiplus::StringFormat gFmt;
+                gFmt.SetFormatFlags(Gdiplus::StringFormatFlagsNoWrap);
+                gFmt.SetTrimming(Gdiplus::StringTrimmingEllipsisCharacter);
+                const std::wstring line = L"  \u00B7  " + ground;
+                g.DrawString(line.c_str(), -1, &infoFont, Gdiplus::RectF(gx, y + scaleF(24), gw, scaleF(15)),
+                             &gFmt, &gBrush);
+            }
         }
 
         // Probability, right-aligned; rows outside the system carry none
@@ -7374,8 +7425,14 @@ void MinerGUI::cartAdd(int blueprint, int delta) {
 
 std::vector<std::string> MinerGUI::detectableOres() {
     std::vector<std::string> names;
-    for (const auto& m : MINERAL_SIGNATURES) names.push_back(m.name);
-    for (const auto& f : SPECIAL_SIGNATURES) names.push_back(f.name);
+    auto pushUnique = [&](const std::string& n) {
+        if (!n.empty() && std::find(names.begin(), names.end(), n) == names.end()) names.push_back(n);
+    };
+    for (const auto& m : MINERAL_SIGNATURES) pushUnique(m.name);
+    for (const auto& f : SPECIAL_SIGNATURES) pushUnique(f.name);
+    for (const auto& g : ROC_MINERALS) pushUnique(g);
+    for (const auto& g : FPS_MINERALS) pushUnique(g);
+    for (const auto& h : harvestableNames()) pushUnique(h);
     std::sort(names.begin(), names.end());
     return names;
 }
@@ -7403,6 +7460,15 @@ std::vector<MinerGUI::LookingGroup> MinerGUI::lookingGroups() {
     other.colour = COL_TEXT_FAINT;
     for (const auto& f : SPECIAL_SIGNATURES) other.names.push_back(f.name);
     if (!other.names.empty()) out.push_back(std::move(other));
+    LookingGroup handAndJunk;
+    handAndJunk.heading = L"HAND MINEABLES & SURFACE";
+    handAndJunk.colour = COL_TEXT_FAINT;
+    for (const char* n : {"Aphorite", "Beradom", "Carinite", "Dolivine", "Feynmaline",
+                          "Glacosite", "Hadanite", "Janalite", "Sadaryx",
+                          "Quasigrazer", "Kopion", "Harvestables"}) {
+        handAndJunk.names.push_back(n);
+    }
+    out.push_back(std::move(handAndJunk));
     return out;
 }
 
@@ -7456,6 +7522,244 @@ void MinerGUI::saveLookingFor() {
     out << "# one of them is what the marker says. One name per line; delete\n";
     out << "# the file to clear the lot, or edit it by hand if you would rather.\n";
     for (const auto& o : lookingFor_) out << o << "\n";
+}
+
+void MinerGUI::loadSynthTargets() {
+    synthCyan_.clear();
+    synthRed_.clear();
+    synthAmounts_.clear();
+    synthBlueprint_.clear();
+    const auto path = AppPaths::data() / L"synthstrings_targets.json";
+    auto root = SynthScan::read(path);
+    for (const auto& item : SynthScan::field(root, "cyan").items) {
+        if (item.kind == SynthScan::Json::Kind::String && !item.text.empty()) synthCyan_.push_back(item.text);
+    }
+    for (const auto& item : SynthScan::field(root, "red").items) {
+        if (item.kind == SynthScan::Json::Kind::String && !item.text.empty()) synthRed_.push_back(item.text);
+    }
+    for (const auto& kv : SynthScan::field(root, "amounts").members) {
+        if (kv.second.kind == SynthScan::Json::Kind::String && !kv.second.text.empty()) {
+            synthAmounts_[kv.first] = kv.second.text;
+        }
+    }
+    synthBlueprint_ = root.textOr("blueprint", "");
+}
+
+void MinerGUI::saveSynthTargets() {
+    auto cyanArr = SynthScan::arr();
+    for (const auto& s : synthCyan_) cyanArr.items.push_back(SynthScan::str(s));
+    auto redArr = SynthScan::arr();
+    for (const auto& s : synthRed_) redArr.items.push_back(SynthScan::str(s));
+    auto amtObj = SynthScan::obj();
+    for (const auto& kv : synthAmounts_) amtObj.members.push_back({kv.first, SynthScan::str(kv.second)});
+    auto bpVal = synthBlueprint_.empty() ? SynthScan::Json{} : SynthScan::str(synthBlueprint_);
+    auto payload = SynthScan::obj({
+        {"cyan", std::move(cyanArr)},
+        {"red", std::move(redArr)},
+        {"amounts", std::move(amtObj)},
+        {"blueprint", bpVal}
+    });
+    const auto dataDir = AppPaths::data();
+    const auto path = dataDir / L"synthstrings_targets.json";
+    SynthScan::write(path, payload);
+    const auto program = AppPaths::program();
+    std::thread([program, dataDir]() {
+        auto runtime = SynthScan::read(program / L"native_runtime.json");
+        auto root = std::filesystem::u8path(runtime.textOr("workspace"));
+        auto python = SynthScan::wide(runtime.textOr("pythonw"));
+        auto script = root / L"mining_labels.py";
+        if (python.empty() || !std::filesystem::is_regular_file(script)) return;
+        std::wstring cmd = textArg(python) + L" -I -B " + textArg(script.wstring()) +
+                           L" --apply --profile " + textArg(dataDir.wstring());
+        STARTUPINFOW startup{sizeof(startup)};
+        PROCESS_INFORMATION proc{};
+        if (CreateProcessW(python.c_str(), cmd.data(), nullptr, nullptr, FALSE,
+                           CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY_CLASS, nullptr,
+                           root.c_str(), &startup, &proc)) {
+            CloseHandle(proc.hThread);
+            WaitForSingleObject(proc.hProcess, 30000);
+            CloseHandle(proc.hProcess);
+        }
+    }).detach();
+}
+
+static bool containsIgnoreCase(const std::vector<std::string>& list, const std::string& name) {
+    for (const auto& item : list) {
+        if (_stricmp(item.c_str(), name.c_str()) == 0) return true;
+    }
+    return false;
+}
+
+static bool eraseIgnoreCase(std::vector<std::string>& list, const std::string& name) {
+    for (size_t i = 0; i < list.size(); i++) {
+        if (_stricmp(list[i].c_str(), name.c_str()) == 0) {
+            list.erase(list.begin() + (long)i);
+            return true;
+        }
+    }
+    return false;
+}
+
+bool MinerGUI::isSynthCyan(const std::string& name) const {
+    return containsIgnoreCase(synthCyan_, name);
+}
+
+bool MinerGUI::isSynthRed(const std::string& name) const {
+    return containsIgnoreCase(synthRed_, name);
+}
+
+void MinerGUI::toggleSynthCyan(const std::string& name) {
+    if (name.empty()) return;
+    eraseIgnoreCase(synthRed_, name);
+    if (!eraseIgnoreCase(synthCyan_, name)) {
+        synthCyan_.push_back(name);
+    } else {
+        for (auto it = synthAmounts_.begin(); it != synthAmounts_.end(); ) {
+            if (_stricmp(it->first.c_str(), name.c_str()) == 0) it = synthAmounts_.erase(it);
+            else ++it;
+        }
+        if (synthCyan_.empty()) synthBlueprint_.clear();
+    }
+    saveSynthTargets();
+}
+
+void MinerGUI::toggleSynthRed(const std::string& name) {
+    if (name.empty()) return;
+    eraseIgnoreCase(synthCyan_, name);
+    for (auto it = synthAmounts_.begin(); it != synthAmounts_.end(); ) {
+        if (_stricmp(it->first.c_str(), name.c_str()) == 0) it = synthAmounts_.erase(it);
+        else ++it;
+    }
+    if (synthCyan_.empty()) synthBlueprint_.clear();
+    if (!eraseIgnoreCase(synthRed_, name)) {
+        synthRed_.push_back(name);
+    }
+    saveSynthTargets();
+}
+
+void MinerGUI::toggleSynthBlueprint(int blueprint) {
+    if (blueprint < 0 || blueprint >= CRAFT_BLUEPRINT_COUNT) return;
+    const CraftBlueprint& bp = CRAFT_BLUEPRINTS[blueprint];
+    if (synthBlueprint_ == bp.name) {
+        synthCyan_.clear();
+        synthAmounts_.clear();
+        synthBlueprint_.clear();
+        saveSynthTargets();
+        return;
+    }
+    std::vector<double> scu(CRAFT_MATERIAL_COUNT, 0.0);
+    std::vector<int> units(CRAFT_MATERIAL_COUNT, 0);
+    for (int s = 0; s < bp.count; s++) {
+        const CraftSlot& in = CRAFT_SLOTS[bp.first + s];
+        if (in.scu > 0) scu[in.material] += (double)in.scu;
+        else units[in.material] += (int)in.units;
+    }
+    synthCyan_.clear();
+    synthAmounts_.clear();
+    synthBlueprint_ = bp.name;
+    for (int m = 0; m < CRAFT_MATERIAL_COUNT; m++) {
+        if (scu[m] <= 0.0 && units[m] <= 0) continue;
+        const std::string matName = CRAFT_MATERIALS[m].locationName;
+        eraseIgnoreCase(synthRed_, matName);
+        if (!containsIgnoreCase(synthCyan_, matName)) synthCyan_.push_back(matName);
+        std::ostringstream amt;
+        if (scu[m] > 0.0) {
+            amt << std::fixed << std::setprecision(scu[m] < 1.0 ? 2 : 1) << scu[m] << " SCU";
+        } else {
+            amt << units[m] << " pcs";
+        }
+        synthAmounts_[matName] = amt.str();
+    }
+    saveSynthTargets();
+}
+
+void MinerGUI::targetSynthCart() {
+    if (cart_.empty()) return;
+    if (synthBlueprint_ == "__CART__") {
+        synthCyan_.clear();
+        synthAmounts_.clear();
+        synthBlueprint_.clear();
+        saveSynthTargets();
+        return;
+    }
+    std::vector<double> scu(CRAFT_MATERIAL_COUNT, 0.0);
+    std::vector<int> units(CRAFT_MATERIAL_COUNT, 0);
+    for (const auto& line : cart_) {
+        if (line.blueprint < 0 || line.blueprint >= CRAFT_BLUEPRINT_COUNT) continue;
+        const CraftBlueprint& bp = CRAFT_BLUEPRINTS[line.blueprint];
+        for (int s = 0; s < bp.count; s++) {
+            const CraftSlot& in = CRAFT_SLOTS[bp.first + s];
+            if (in.scu > 0) scu[in.material] += (double)in.scu * line.count;
+            else units[in.material] += (int)in.units * line.count;
+        }
+    }
+    synthCyan_.clear();
+    synthAmounts_.clear();
+    synthBlueprint_ = "__CART__";
+    for (int m = 0; m < CRAFT_MATERIAL_COUNT; m++) {
+        if (scu[m] <= 0.0 && units[m] <= 0) continue;
+        const std::string matName = CRAFT_MATERIALS[m].locationName;
+        eraseIgnoreCase(synthRed_, matName);
+        if (!containsIgnoreCase(synthCyan_, matName)) synthCyan_.push_back(matName);
+        std::ostringstream amt;
+        if (scu[m] > 0.0) {
+            amt << std::fixed << std::setprecision(scu[m] < 1.0 ? 2 : 1) << scu[m] << " SCU";
+        } else {
+            amt << units[m] << " pcs";
+        }
+        synthAmounts_[matName] = amt.str();
+    }
+    saveSynthTargets();
+}
+
+void MinerGUI::clearSynthTargets() {
+    synthCyan_.clear();
+    synthRed_.clear();
+    synthAmounts_.clear();
+    synthBlueprint_.clear();
+    saveSynthTargets();
+}
+
+void MinerGUI::showColorTargetMenu(HWND hwnd, const std::string& material) {
+    if (material.empty()) return;
+    HMENU menu = CreatePopupMenu();
+    const bool cyan = isSynthCyan(material);
+    const bool red = isSynthRed(material);
+    const std::wstring wname = toW(material);
+    AppendMenuW(menu, MF_STRING | (cyan ? MF_CHECKED : 0), 1, (L"Target " + wname + L"  \u2192  Cyan").c_str());
+    AppendMenuW(menu, MF_STRING | (red ? MF_CHECKED : 0), 2, (L"Target " + wname + L"  \u2192  Red").c_str());
+    if (cyan || red) {
+        AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+        AppendMenuW(menu, MF_STRING, 3, L"Clear color");
+    }
+    if (!synthCyan_.empty() || !synthRed_.empty()) {
+        AppendMenuW(menu, MF_STRING, 4, L"Clear all in-game colors");
+    }
+    AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+    AppendMenuW(menu, MF_STRING | MF_GRAYED, 0, L"Restart Star Citizen to apply text changes");
+    POINT pt{};
+    GetCursorPos(&pt);
+    const int choice = SynthMenus::track(menu, TPM_RETURNCMD | TPM_RIGHTBUTTON, pt.x, pt.y, 0, hwnd, nullptr);
+    DestroyMenu(menu);
+    if (choice == 1) toggleSynthCyan(material);
+    else if (choice == 2) toggleSynthRed(material);
+    else if (choice == 3) {
+        eraseIgnoreCase(synthCyan_, material);
+        eraseIgnoreCase(synthRed_, material);
+        for (auto it = synthAmounts_.begin(); it != synthAmounts_.end(); ) {
+            if (_stricmp(it->first.c_str(), material.c_str()) == 0) it = synthAmounts_.erase(it);
+            else ++it;
+        }
+        if (synthCyan_.empty()) synthBlueprint_.clear();
+        saveSynthTargets();
+    } else if (choice == 4) {
+        clearSynthTargets();
+    } else {
+        return;
+    }
+    if (hwnd_) InvalidateRect(hwnd_, nullptr, TRUE);
+    if (planner_) InvalidateRect(planner_, nullptr, TRUE);
+    if (crafting_) InvalidateRect(crafting_, nullptr, TRUE);
 }
 
 // The loadout, in a file a person can read and fix. The ids are the ones the
@@ -7783,6 +8087,22 @@ void MinerGUI::setOwnedBlueprints(std::vector<std::string> stamps, const std::st
     if (grind_) InvalidateRect(grind_, nullptr, TRUE);
 }
 
+void MinerGUI::setWantedBlueprints(std::vector<bool> wanted) {
+    wantedBps_ = std::move(wanted);
+    if (crafting_) InvalidateRect(crafting_, nullptr, TRUE);
+    if (grind_) InvalidateRect(grind_, nullptr, TRUE);
+}
+
+void MinerGUI::toggleBlueprintWanted(int blueprint) {
+    if (blueprint < 0 || blueprint >= CRAFT_BLUEPRINT_COUNT) return;
+    if ((int)wantedBps_.size() < CRAFT_BLUEPRINT_COUNT) wantedBps_.resize(CRAFT_BLUEPRINT_COUNT, false);
+    const bool now = !wantedBps_[blueprint];
+    wantedBps_[blueprint] = now;
+    if (wantedToggleCallback_) wantedToggleCallback_(blueprint, now);
+    if (crafting_) InvalidateRect(crafting_, nullptr, TRUE);
+    if (grind_) InvalidateRect(grind_, nullptr, TRUE);
+}
+
 void MinerGUI::toggleBlueprintOwned(int blueprint) {
     if (blueprint < 0 || blueprint >= CRAFT_BLUEPRINT_COUNT) return;
     if ((int)owned_.size() < CRAFT_BLUEPRINT_COUNT) owned_.resize(CRAFT_BLUEPRINT_COUNT);
@@ -7978,27 +8298,17 @@ void MinerGUI::openBlueprint(int index) {
 void MinerGUI::showOreFinderFor(const std::string& material) {
     if (material.empty()) return;
     plannerPlace_.clear();   // back to the ore-first list
-    // The finder lists ship ore by name; ROC and hand-mined gems live under
-    // their own families, and it shows those as a family list
-    if (locationsFor(material, MiningFamily::Ship).empty()) {
-        if (!locationsFor(material, MiningFamily::ROC).empty()) {
-            plannerMineral_ = "ROC deposits";
-            plannerSystem_ = "ALL";
-            if (!plannerVisible_) togglePlanner();
-            else if (planner_) { InvalidateRect(planner_, nullptr, TRUE); SetForegroundWindow(planner_); }
-            return;
-        }
-        if (!locationsFor(material, MiningFamily::FPS).empty()) {
-            plannerMineral_ = "Hand minables";
-            plannerSystem_ = "ALL";
-            if (!plannerVisible_) togglePlanner();
-            else if (planner_) { InvalidateRect(planner_, nullptr, TRUE); SetForegroundWindow(planner_); }
-            return;
-        }
+    if (locationsFor(material, MiningFamily::Ship).empty() &&
+        locationsFor(material, MiningFamily::ROC).empty() &&
+        locationsFor(material, MiningFamily::FPS).empty() &&
+        locationsFor(material, MiningFamily::Harvestable).empty()) {
         return;   // nothing known: leave the finder where it was
     }
     plannerMineral_ = material;
     plannerSystem_ = "ALL";
+    plannerCat_ = 0;
+    plannerListScroll_ = 0;
+    plannerUex_ = false;
     if (!plannerVisible_) {
         togglePlanner();
     } else if (planner_) {
@@ -8441,8 +8751,18 @@ void MinerGUI::paintCraftingList(Gdiplus::Graphics& g, int cw, int ch) {
         Gdiplus::RectF row(M, y, leftW, mrowH);
         const bool hot = isHot(hoverCraft_, row);
         const bool narrows = chosen && index >= 0;
+        const bool synthMat = (kind == 0 && !craftByComponent_ && index >= 0 && index < CRAFT_MATERIAL_COUNT);
+        const bool isCyan = synthMat && isSynthCyan(CRAFT_MATERIALS[index].locationName);
+        const bool isRed = synthMat && isSynthRed(CRAFT_MATERIALS[index].locationName);
         if (narrows) {
             selectionFrame(g, row, scaleF(R_CONTROL));
+            if (isCyan || isRed) {
+                const Gdiplus::RectF inner(row.X + scaleF(1.5f), row.Y + scaleF(1.5f),
+                                           row.Width - scaleF(3.0f), row.Height - scaleF(3.0f));
+                strokeRoundRect(g, inner, scaleF(R_CONTROL), tint(isCyan ? COL_CYAN : COL_RED, 220));
+            }
+        } else if (isCyan || isRed) {
+            selectionFrame(g, row, scaleF(R_CONTROL), isCyan ? COL_CYAN : COL_RED);
         } else if (chosen) {
             // a firm rim, so it does not read as the row under the pointer
             fillRoundRect(g, row, scaleF(R_CONTROL), COL_HOVER);
@@ -8947,11 +9267,24 @@ void MinerGUI::paintCraftingList(Gdiplus::Graphics& g, int cw, int ch) {
         g.DrawString(type.c_str(), -1, &subFont,
                      Gdiplus::PointF(rx + inset + scaleF(16) + measured.Width, ry + scaleF(4)), &faintBrush);
 
-        // The figures end a clear gap short of the stepper, which ends the
-        // same margin short of the row's right edge as the tick box starts
-        // from its left
+        // The figures end a clear gap short of the want star and stepper, which
+        // ends the same margin short of the row's right edge as the tick box
+        // starts from its left
         const float stepX = rx + rw - inset - cartW;
-        const float figW = stepX - scaleF(12) - rx;
+        const float starSize = scaleF(22);
+        const float starX = stepX - scaleF(28);
+        const float figW = starX - scaleF(10) - rx;
+        {
+            const Gdiplus::RectF starRect(starX, ry + scaleF(5), starSize, starSize);
+            const bool wantOn = isWanted(index);
+            const bool starHot = isHot(hoverCraft_, starRect);
+            if (wantOn || starHot) {
+                fillRoundRect(g, starRect, scaleF(4), wantOn ? tint(COL_ACCENT, starHot ? 64 : 42) : COL_CARD_HI);
+            }
+            const wchar_t* glyph = wantOn ? L"\u2605" : L"\u2606";
+            g.DrawString(glyph, -1, &nameFont, starRect, &centre, wantOn ? &accentBrush : (starHot ? &textBrush : &faintBrush));
+            craftHits_.push_back({starRect, 36, index});
+        }
         std::wstring time;
         if (bp.seconds >= 3600) time = std::to_wstring(bp.seconds / 3600) + L" h " +
                                        std::to_wstring((bp.seconds % 3600) / 60) + L" min";
@@ -9168,6 +9501,33 @@ void MinerGUI::paintCraftingList(Gdiplus::Graphics& g, int cw, int ch) {
 
             g.DrawString(L"WHAT TO MINE FOR ALL OF IT", -1, &smallFont, Gdiplus::PointF(ix, ry), &faintBrush);
             {
+                Gdiplus::RectF hw;
+                g.MeasureString(L"WHAT TO MINE FOR ALL OF IT", -1, &smallFont, Gdiplus::PointF(0, 0), &hw);
+                const bool cartCyan = (synthBlueprint_ == "__CART__");
+                const wchar_t* cLabel = cartCyan ? L"Cyan target \u2713" : L"Target Cyan in-game";
+                Gdiplus::RectF tw;
+                g.MeasureString(cLabel, -1, &subFont, Gdiplus::PointF(0, 0), &tw);
+                Gdiplus::RectF cBtn(ix + hw.Width + scaleF(12), ry - scaleF(4), tw.Width + scaleF(18), scaleF(20));
+                const bool cHot = isHot(hoverCraft_, cBtn);
+                if (cartCyan) {
+                    selectionFrame(g, cBtn, scaleF(R_CONTROL), COL_CYAN);
+                } else {
+                    fillRoundRect(g, cBtn, scaleF(R_CONTROL), cHot ? COL_HOVER : COL_CARD_HI);
+                    strokeRoundRect(g, cBtn, scaleF(R_CONTROL), cHot ? tint(COL_CYAN, 180) : COL_BORDER);
+                }
+                Gdiplus::SolidBrush cyanBrush(COL_CYAN);
+                Gdiplus::StringFormat btnMid;
+                btnMid.SetAlignment(Gdiplus::StringAlignmentCenter);
+                btnMid.SetLineAlignment(Gdiplus::StringAlignmentCenter);
+                g.DrawString(cLabel, -1, &subFont, cBtn, &btnMid,
+                             cartCyan ? &cyanBrush : (cHot ? &textBrush : &dimBrush));
+                craftHits_.push_back({cBtn, 48, 0});
+                if (cartCyan) {
+                    g.DrawString(L"restart game to apply", -1, &subFont,
+                                 Gdiplus::PointF(cBtn.GetRight() + scaleF(8), ry), &faintBrush);
+                }
+            }
+            {
                 std::wstring t;
                 if (seconds >= 3600) t = std::to_wstring(seconds / 3600) + L" h " +
                                          std::to_wstring((seconds % 3600) / 60) + L" min at the bench";
@@ -9339,8 +9699,13 @@ void MinerGUI::paintCraftingList(Gdiplus::Graphics& g, int cw, int ch) {
                 const int m = order[i];
                 // the ore finder knows where it comes out of the ground, and
                 // the name lights up as the link it is
-                const Gdiplus::RectF link(ix - scaleF(6), ry, iw * 0.4f, mrow);
+                const Gdiplus::RectF link(ix - scaleF(6), ry, (std::min)(iw * 0.4f, xMined - ix), mrow);
                 const bool hot = isHot(hoverCraft_, link);
+                const bool isCyan = isSynthCyan(CRAFT_MATERIALS[m].locationName);
+                const bool isRed = isSynthRed(CRAFT_MATERIALS[m].locationName);
+                if (isCyan || isRed) {
+                    selectionFrame(g, link, scaleF(R_CONTROL), isCyan ? COL_CYAN : COL_RED);
+                }
                 Gdiplus::SolidBrush chipBrush(getMineralColor(CRAFT_MATERIALS[m].name));
                 g.FillEllipse(&chipBrush, ix, ry + scaleF(6), scaleF(8), scaleF(8));
                 g.DrawString(toW(CRAFT_MATERIALS[m].name).c_str(), -1, &rowFont,
@@ -9480,10 +9845,8 @@ void MinerGUI::paintCraftingList(Gdiplus::Graphics& g, int cw, int ch) {
 
     const float fy = (float)ch - scaleF(24);
     hairline(g, M, fy - scaleF(10), (float)cw - M);
-    g.DrawString(cartOpen_ ? L"Click a recipe to open it  \u00B7  a material for where to mine it"
-                           L"  \u00B7  B / Esc close"
-                           : L"Click a blueprint for its slots  \u00B7  + adds it to the shopping "
-                             L"list  \u00B7  B / Esc close",
+    g.DrawString(cartOpen_ ? L"Click recipe to open  \u00B7  material for locations  \u00B7  Right-click material: Cyan/Red (restart game)  \u00B7  B / Esc"
+                           : L"Click blueprint for slots  \u00B7  Right-click material: Cyan/Red (restart game)  \u00B7  + shopping list  \u00B7  B / Esc",
                  -1, &subFont, Gdiplus::PointF(M, fy), &faintBrush);
     Gdiplus::RectF fr(M, fy, (float)cw - 2 * M, scaleF(16));
     std::wstring src = L"game data  \u00B7  " + toW(CRAFT_DATA_VERSION);
@@ -10019,6 +10382,35 @@ void MinerGUI::paintCraftingDetail(Gdiplus::Graphics& g, int cw, int ch) {
             craftHits_.push_back({b, 11, i});
             px += scaleF(i == 0 ? 56 : 60);
         }
+
+        // Target all materials for this blueprint in Cyan (with needed amounts)
+        px += scaleF(10);
+        const bool bpCyan = (synthBlueprint_ == bp.name);
+        const wchar_t* bpBtnLabel = bpCyan ? L"Cyan target \u2713" : L"Target Cyan in-game";
+        Gdiplus::RectF bpBtnW;
+        g.MeasureString(bpBtnLabel, -1, &buttonFont, Gdiplus::PointF(0, 0), &bpBtnW);
+        Gdiplus::RectF bpTargetBtn(px, py, bpBtnW.Width + scaleF(22), scaleF(26));
+        const bool bpHot = isHot(hoverCraft_, bpTargetBtn);
+        if (bpCyan) {
+            selectionFrame(g, bpTargetBtn, radius, COL_CYAN);
+            Gdiplus::SolidBrush cyanBrush(COL_CYAN);
+            g.DrawString(bpBtnLabel, -1, &buttonFont, bpTargetBtn, &centered, &cyanBrush);
+        } else {
+            fillRoundRect(g, bpTargetBtn, radius, bpHot ? COL_HOVER : COL_CARD);
+            strokeRoundRect(g, bpTargetBtn, radius, bpHot ? tint(COL_CYAN, 180) : COL_BORDER);
+            g.DrawString(bpBtnLabel, -1, &buttonFont, bpTargetBtn, &centered, bpHot ? &textBrush : &dimBrush);
+        }
+        craftHits_.push_back({bpTargetBtn, 45, craftOpen_});
+
+        Gdiplus::RectF hintRect(bpTargetBtn.GetRight() + scaleF(10), py,
+                                (std::max)(0.0f, (float)cw - M - (bpTargetBtn.GetRight() + scaleF(10))), scaleF(26));
+        Gdiplus::StringFormat hintFmt;
+        hintFmt.SetLineAlignment(Gdiplus::StringAlignmentCenter);
+        hintFmt.SetTrimming(Gdiplus::StringTrimmingEllipsisCharacter);
+        hintFmt.SetFormatFlags(Gdiplus::StringFormatFlagsNoWrap);
+        g.DrawString(bpCyan ? L"Restart Star Citizen to show Cyan labels"
+                            : L"Right-click material: Cyan/Red  \u00B7  restart game",
+                     -1, &subFont, hintRect, &hintFmt, &faintBrush);
     }
 
     hairline(g, M, py + scaleF(34), (float)cw - M);
@@ -10086,14 +10478,19 @@ void MinerGUI::paintCraftingDetail(Gdiplus::Graphics& g, int cw, int ch) {
         Gdiplus::Color matColor = getMineralColor(mat.name);
         Gdiplus::SolidBrush matBrush(matColor);
         const float my = y + scaleF(36);
-        g.FillEllipse(&matBrush, left + scaleF(1), my + scaleF(6), scaleF(9), scaleF(9));
-        g.DrawString(matName.c_str(), -1, &rowFont, Gdiplus::PointF(left + scaleF(16), my), &textBrush);
         Gdiplus::RectF nameW;
         g.MeasureString(matName.c_str(), -1, &rowFont, Gdiplus::PointF(0, 0), &nameW);
+        Gdiplus::RectF matHit(left + scaleF(12), my - scaleF(2), nameW.Width + scaleF(12), scaleF(24));
+        const bool isCyan = isSynthCyan(mat.locationName);
+        const bool isRed = isSynthRed(mat.locationName);
+        if (isCyan || isRed) {
+            selectionFrame(g, matHit, scaleF(R_CONTROL), isCyan ? COL_CYAN : COL_RED);
+        }
+        g.FillEllipse(&matBrush, left + scaleF(1), my + scaleF(6), scaleF(9), scaleF(9));
+        g.DrawString(matName.c_str(), -1, &rowFont, Gdiplus::PointF(left + scaleF(16), my), &textBrush);
         // The underline says it can be clicked
         Gdiplus::Pen matPen(Gdiplus::Color(120, matColor.GetR(), matColor.GetG(), matColor.GetB()), 1.0f);
         g.DrawLine(&matPen, left + scaleF(16), my + scaleF(20), left + scaleF(16) + nameW.Width, my + scaleF(20));
-        Gdiplus::RectF matHit(left + scaleF(12), my - scaleF(2), nameW.Width + scaleF(12), scaleF(24));
         craftHits_.push_back({matHit, 3, slot.material});
 
         std::wstringstream amount;
@@ -10546,6 +10943,8 @@ int MinerGUI::stepQuality(int quality, int qMin, int qMax, bool up, bool big) {
 }
 
 LRESULT MinerGUI::handleCraftingMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+    LRESULT menuResult = 0;
+    if (SynthMenus::message(uMsg, wParam, lParam, menuResult)) return menuResult;
     auto qualityFromX = [&](const CraftHit& hit, float px) {
         const CraftBlueprint& bp = CRAFT_BLUEPRINTS[craftOpen_];
         const CraftSlot& slot = CRAFT_SLOTS[bp.first + hit.value];
@@ -10711,6 +11110,10 @@ LRESULT MinerGUI::handleCraftingMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
                     // and tells the window back what came of it
                     gameTextsOn_ = !gameTextsOn_;
                     if (onGameTexts_) onGameTexts_(gameTextsOn_);
+                } else if (hit.kind == 45) {
+                    toggleSynthBlueprint(hit.value);
+                } else if (hit.kind == 48) {
+                    targetSynthCart();
                 } else if (hit.kind == 26) {
                     craftSystem_ = hit.value;
                     craftScroll_ = 0;
@@ -10731,6 +11134,8 @@ LRESULT MinerGUI::handleCraftingMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
                     craftFactionPick_ = (hit.value == 1);
                 } else if (hit.kind == 17) {
                     toggleBlueprintOwned(hit.value);
+                } else if (hit.kind == 36) {
+                    toggleBlueprintWanted(hit.value);
                 } else if (hit.kind == 14) {
                     craftSourceOpen_ = -1;
                 } else if (hit.kind == 13) {
@@ -10800,6 +11205,19 @@ LRESULT MinerGUI::handleCraftingMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
                 }
             }
             return 0;
+        }
+        case WM_RBUTTONDOWN: {
+            const float px = (float)(short)LOWORD(lParam);
+            const float py = (float)(short)HIWORD(lParam);
+            for (const auto& hit : craftHits_) {
+                if (!hit.rect.Contains(px, py)) continue;
+                if (((hit.kind == 0 && !craftByComponent_) || hit.kind == 3) &&
+                    hit.value >= 0 && hit.value < CRAFT_MATERIAL_COUNT) {
+                    showColorTargetMenu(hwnd, CRAFT_MATERIALS[hit.value].locationName);
+                    return 0;
+                }
+            }
+            break;
         }
         case WM_LBUTTONUP:
             if (craftDrag_ >= 0) {
@@ -12165,6 +12583,18 @@ void MinerGUI::drawCompact(Gdiplus::Graphics& g, int cw, int ch) {
             Gdiplus::SolidBrush rarityBrush(rc);
             g.DrawString(toW(rarityName(result.rarity)).c_str(), -1, &infoFont,
                          Gdiplus::PointF(textX, y + scaleF(20)), &rarityBrush);
+        } else if (!dimmed) {
+            Gdiplus::Color gc = COL_TEXT_DIM;
+            const std::wstring ground = groundSubLine(result, gc);
+            if (!ground.empty()) {
+                Gdiplus::SolidBrush gBrush(gc);
+                Gdiplus::StringFormat gFmt;
+                gFmt.SetFormatFlags(Gdiplus::StringFormatFlagsNoWrap);
+                gFmt.SetTrimming(Gdiplus::StringTrimmingEllipsisCharacter);
+                const float subW = (std::max)(scaleF(40), M + rowW - scaleF(8) - rightW.Width - scaleF(12) - textX);
+                g.DrawString(ground.c_str(), -1, &infoFont,
+                             Gdiplus::RectF(textX, y + scaleF(20), subW, scaleF(15)), &gFmt, &gBrush);
+            }
         }
 
         Gdiplus::StringFormat rightAlign;
@@ -12386,6 +12816,8 @@ void MinerGUI::togglePlanner() {
 }
 
 LRESULT MinerGUI::handlePlannerMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+    LRESULT menuResult = 0;
+    if (SynthMenus::message(uMsg, wParam, lParam, menuResult)) return menuResult;
     switch (uMsg) {
         case WM_PAINT: {
             PAINTSTRUCT ps;
@@ -12413,9 +12845,31 @@ LRESULT MinerGUI::handlePlannerMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPAR
             }
             break;
         }
-        case WM_MOUSEWHEEL:
+        case WM_MOUSEWHEEL: {
+            POINT pt{(short)LOWORD(lParam), (short)HIWORD(lParam)};
+            ScreenToClient(hwnd, &pt);
+            if (!plannerUex_ && plannerLeftRect_.Contains((float)pt.x, (float)pt.y)) {
+                const int notches = GET_WHEEL_DELTA_WPARAM(wParam) / WHEEL_DELTA;
+                plannerListScroll_ = (std::max)(0, plannerListScroll_ - notches * 2);
+                InvalidateRect(hwnd, nullptr, TRUE);
+                return 0;
+            }
             if (HWND p = GetParent(hwnd)) return SendMessageW(p, uMsg, wParam, lParam);
             break;
+        }
+        case WM_RBUTTONDOWN: {
+            if (uexCard_.step) return 0;
+            const float px = (float)(short)LOWORD(lParam);
+            const float py = (float)(short)HIWORD(lParam);
+            for (const auto& hit : planHits_) {
+                if (!hit.rect.Contains(px, py)) continue;
+                if (hit.kind == 0 || hit.kind == 10) {
+                    showColorTargetMenu(hwnd, hit.value);
+                    return 0;
+                }
+            }
+            return 0;
+        }
         case WM_LBUTTONDOWN: {
             SetFocus(hwnd);
             const float px = (float)(short)LOWORD(lParam);
@@ -12467,14 +12921,18 @@ LRESULT MinerGUI::handlePlannerMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPAR
                 if (hit.kind == 1) {
                     plannerUex_ = false;
                     plannerSystem_ = hit.value;
-                    // The ore that was picked may not be mined here at all;
-                    // leaving it selected answers with an empty column
+                    plannerListScroll_ = 0;
                     if (!plannerMineral_.empty() && plannerMineral_ != "ROC deposits" &&
                         plannerMineral_ != "Hand minables" &&
                         !oreInSystem(plannerMineral_, plannerSystem_)) {
                         plannerMineral_.clear();
                     }
                     plannerPlace_.clear();
+                } else if (hit.kind == 11) {
+                    plannerUex_ = false;
+                    plannerPlace_.clear();
+                    plannerCat_ = std::clamp(std::stoi(hit.value), 0, 3);
+                    plannerListScroll_ = 0;
                 }
                 else if (hit.kind == 3) {
                     // ...and the main window has to hear about it: the field
@@ -12491,7 +12949,11 @@ LRESULT MinerGUI::handlePlannerMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPAR
                     ShellExecuteW(hwnd, L"open", toW(hit.value).c_str(), nullptr, nullptr, SW_SHOWNORMAL);
                     return 0;
                 }
-                else plannerMineral_ = hit.value;
+                else {
+                    plannerUex_ = false;
+                    plannerPlace_.clear();
+                    plannerMineral_ = hit.value;
+                }
                 InvalidateRect(hwnd, nullptr, TRUE);
                 return 0;
             }
@@ -13173,7 +13635,7 @@ void MinerGUI::paintPlanner(HDC hdc) {
                                      4, "https://uexcorp.space"});
             }
         }
-        g.DrawString(L"pick an ore before the trip \u00B7 the places whose rocks carry it as their main ore, best chance first",
+        g.DrawString(L"pick an ore  \u00B7  right-click an ore to mark Cyan or Red in-game (restart game to apply)",
                      -1, &subFont, Gdiplus::PointF(M + scaleF(15), (float)scale(36)), &dimBrush);
 
         // System tabs: words, the one in use bright with an amber bar lying
@@ -13222,42 +13684,142 @@ void MinerGUI::paintPlanner(HDC hdc) {
         // one window would each say the card is about them.
         const bool byPlace = !plannerPlace_.empty();
 
-        // The ore that fetches most once refined, of those listed: its row
-        // blinks red - by the best price UEX knows for a SCU of it, anywhere
-        std::string paysMost;
-        if (uexEnabled_ && uexPrices_) {
-            std::vector<std::string> listed;
-            for (const auto& m : MINERAL_SIGNATURES) {
-                if (oreInSystem(m.name, plannerSystem_)) listed.push_back(m.name);
-            }
-            paysMost = uexPrices_->mostValuable(listed);
-        }
         planBlinkRow_ = Gdiplus::RectF();
 
-        // Left column: the ship ores by rarity, then the ground families
-        const float listTop = (float)scale(108);
         const float leftW = scaleF(214);
+        // Category pills for the left column: All | Ship | Hand/ROC | Harv
+        {
+            const wchar_t* cats[4] = {L"All", L"Ship", L"Hand/ROC", L"Harv"};
+            float cx = M;
+            const float catY = (float)scale(94), catH = scaleF(20);
+            for (int c = 0; c < 4; c++) {
+                Gdiplus::RectF tw;
+                g.MeasureString(cats[c], -1, &subFont, Gdiplus::PointF(0, 0), &tw);
+                const float cwCat = tw.Width + scaleF(12);
+                Gdiplus::RectF tab(cx, catY, cwCat, catH);
+                const bool on = (plannerCat_ == c);
+                const bool hot = isHot(hoverPlan_, tab);
+                if (on) selectionFrame(g, tab, scaleF(R_CONTROL), COL_ACCENT);
+                else fillRoundRect(g, tab, scaleF(R_CONTROL), hot ? COL_HOVER : COL_CARD);
+                g.DrawString(cats[c], -1, &subFont, tab, &centered,
+                             on ? &accentBrush : (hot ? &textBrush : &dimBrush));
+                planHits_.push_back({tab, 11, std::to_string(c)});
+                cx += cwCat + scaleF(4);
+            }
+        }
+
+        // Left column: ship ores, ROC & hand mineables, and harvestables
+        const float listTop = (float)scale(122);
         const float rowH = scaleF(21), groupH = scaleF(20);
-        float y = listTop;
+        const float listBottom = (float)planH - scaleF(22);
+        plannerLeftRect_ = Gdiplus::RectF(M, listTop, leftW, listBottom - listTop);
+        struct LeftEntry {
+            bool isHeader = false;
+            std::wstring headText;
+            Gdiplus::Color headColor = COL_TEXT_DIM;
+            std::string name;
+            Gdiplus::Color chipColor = COL_TEXT_DIM;
+            std::wstring right;
+            int kind = 0;
+            bool chosen = false;
+        };
+        std::vector<LeftEntry> leftItems;
+        auto pushHeader = [&](const std::wstring& h, const Gdiplus::Color& c) {
+            leftItems.push_back({true, h, c, "", c, L"", -1, false});
+        };
+        auto pushOre = [&](const std::string& name, const Gdiplus::Color& chipColor, const std::wstring& right,
+                           int kind, bool chosen) {
+            leftItems.push_back({false, L"", chipColor, name, chipColor, right, kind, chosen});
+        };
+
         const Rarity order[5] = {Rarity::Legendary, Rarity::Epic, Rarity::Rare, Rarity::Uncommon, Rarity::Common};
-        auto oreRow = [&](const std::string& name, const Gdiplus::Color& chipColor, const std::wstring& right,
-                          int kind, bool chosen) {
+        if (plannerCat_ == 0 || plannerCat_ == 1) {
+            for (Rarity rarity : order) {
+                int inGroup = 0;
+                for (const auto& m : MINERAL_SIGNATURES) {
+                    if (m.rarity == rarity && oreInSystem(m.name, plannerSystem_)) inGroup++;
+                }
+                if (!inGroup) continue;
+                std::wstring head = toW(rarityName(rarity));
+                std::transform(head.begin(), head.end(), head.begin(), ::towupper);
+                pushHeader(head, getRarityColor(rarity));
+                for (const auto& m : MINERAL_SIGNATURES) {
+                    if (m.rarity != rarity || !oreInSystem(m.name, plannerSystem_)) continue;
+                    pushOre(m.name, getMineralColor(m.name), formatNumber(m.baseSignature), 0,
+                            !byPlace && plannerMineral_ == m.name);
+                }
+            }
+        }
+        if (plannerCat_ == 0 || plannerCat_ == 2) {
+            if (familyInSystem((int)MiningFamily::ROC, plannerSystem_)) {
+                pushHeader(L"ROC MINEABLES", COL_ACCENT);
+                pushOre("ROC deposits", COL_ACCENT, L"4,000 / node", 2, !byPlace && plannerMineral_ == "ROC deposits");
+                for (const std::string& gem : ROC_MINERALS) {
+                    if (!oreInSystem(gem, plannerSystem_)) continue;
+                    pushOre(gem, getMineralColor(gem), L"4,000", 0, !byPlace && plannerMineral_ == gem);
+                }
+            }
+            if (familyInSystem((int)MiningFamily::FPS, plannerSystem_)) {
+                pushHeader(L"HAND MINEABLES", COL_GREEN);
+                pushOre("Hand minables", COL_GREEN, L"3,000 / node", 2, !byPlace && plannerMineral_ == "Hand minables");
+                for (const std::string& gem : FPS_MINERALS) {
+                    if (!oreInSystem(gem, plannerSystem_)) continue;
+                    pushOre(gem, getMineralColor(gem), L"3,000", 0, !byPlace && plannerMineral_ == gem);
+                }
+            }
+        }
+        if (plannerCat_ == 0 || plannerCat_ == 3) {
+            const auto harvs = harvestableNames();
+            bool anyHarv = false;
+            for (const auto& h : harvs) {
+                if (oreInSystem(h, plannerSystem_)) { anyHarv = true; break; }
+            }
+            if (anyHarv) {
+                pushHeader(L"HARVESTABLES", COL_YELLOW);
+                for (const std::string& h : harvs) {
+                    if (!oreInSystem(h, plannerSystem_)) continue;
+                    pushOre(h, COL_YELLOW, L"2,000", 0, !byPlace && plannerMineral_ == h);
+                }
+            }
+        }
+
+        const int maxVisible = (std::max)(1, (int)((listBottom - listTop) / rowH));
+        const int maxScroll = (std::max)(0, (int)leftItems.size() - maxVisible);
+        plannerListScroll_ = std::clamp(plannerListScroll_, 0, maxScroll);
+
+        float y = listTop;
+        bool clippedBottom = false;
+        for (int idx = plannerListScroll_; idx < (int)leftItems.size(); idx++) {
+            const LeftEntry& it = leftItems[(size_t)idx];
+            const float h = it.isHeader ? groupH : rowH;
+            if (y + h > listBottom) { clippedBottom = true; break; }
+            if (it.isHeader) {
+                if (idx > plannerListScroll_) y += scaleF(3);
+                if (y + groupH > listBottom) { clippedBottom = true; break; }
+                Gdiplus::SolidBrush headBrush(it.headColor);
+                g.DrawString(it.headText.c_str(), -1, &smallFont, Gdiplus::PointF(M, y + scaleF(4)), &headBrush);
+                y += groupH;
+                continue;
+            }
+            const std::string& name = it.name;
+            const int kind = it.kind;
+            const bool chosen = it.chosen;
             Gdiplus::RectF row(M, y, leftW, rowH);
-            if (!chosen && isHot(hoverPlan_, row)) fillRoundRect(g, row, scaleF(R_CONTROL), COL_CARD_HI);
-            // the ore that fetches most: red over whatever else the row is,
-            // beating as a wanted ore beats in the reader, its frame with it
-            const bool most = !paysMost.empty() && name == paysMost;
-            if (most) {
-                if (planPulse_) fillRoundRect(g, row, scaleF(R_CONTROL), tint(COL_RED, 58));
-                strokeRoundRect(g, row, scaleF(R_CONTROL), planPulse_ ? COL_RED : tint(COL_RED, 170),
-                                planPulse_ ? scaleF(1.6f) : 1.0f);
-                planBlinkRow_ = row;
+            const bool targetCyan = (kind == 0) && isSynthCyan(name);
+            const bool targetRed = (kind == 0) && isSynthRed(name);
+            if (!chosen && !targetCyan && !targetRed && isHot(hoverPlan_, row)) {
+                fillRoundRect(g, row, scaleF(R_CONTROL), COL_CARD_HI);
+            }
+            if (chosen) {
+                fillRoundRect(g, row, scaleF(R_CONTROL), tint(COL_TEXT, 18));
+            }
+            if (targetCyan) {
+                selectionFrame(g, row, scaleF(R_CONTROL), COL_CYAN);
+            } else if (targetRed) {
+                selectionFrame(g, row, scaleF(R_CONTROL), COL_RED);
             } else if (chosen) {
                 selectionFrame(g, row, scaleF(R_CONTROL));
             }
-            // A tick box in front of every ore puts it on the list: ticked, a
-            // marker that says this ore blinks red in the reader. The box takes
-            // the click; the rest of the row still picks the ore.
             const bool watched = lookingForOre(watchName(name));
             Gdiplus::RectF box(M + scaleF(8), y + rowH / 2 - scaleF(6), scaleF(12), scaleF(12));
             if (watched) {
@@ -13269,52 +13831,21 @@ void MinerGUI::paintPlanner(HDC hdc) {
                 fillRoundRect(g, box, scaleF(2), COL_CARD);
                 strokeRoundRect(g, box, scaleF(2), isHot(hoverPlan_, row) ? COL_TEXT_FAINT : COL_BORDER);
             }
-            // the chip red while the blink is on, so the row reads as one thing
-            Gdiplus::SolidBrush chip((most && planPulse_) ? COL_RED : chipColor);
+            Gdiplus::SolidBrush chip(targetCyan ? COL_CYAN : (targetRed ? COL_RED : it.chipColor));
             g.FillEllipse(&chip, M + scaleF(26), y + rowH / 2 - scaleF(3), scaleF(6), scaleF(6));
             g.DrawString(toW(name).c_str(), -1, &rowFont, Gdiplus::PointF(M + scaleF(38), y + scaleF(2)),
-                         (chosen || most) ? &textBrush : &dimBrush);
+                         (chosen || targetCyan || targetRed) ? &textBrush : &dimBrush);
             Gdiplus::RectF sig(M, y + scaleF(4), leftW - scaleF(8), rowH);
-            g.DrawString(right.c_str(), -1, &numFont, sig, &rightAlign, &faintBrush);
+            g.DrawString(it.right.c_str(), -1, &numFont, sig, &rightAlign, &faintBrush);
             planHits_.push_back({box, 3, name});   // before the row, so the box wins the click
             planHits_.push_back({row, kind, name});
             y += rowH;
-        };
-        for (Rarity rarity : order) {
-            // Counted first: a heading with nothing under it reads worse than
-            // no heading at all, and with a system picked most groups lose
-            // members - Stanton has no Legendary ore of its own.
-            int inGroup = 0;
-            for (const auto& m : MINERAL_SIGNATURES) {
-                if (m.rarity == rarity && oreInSystem(m.name, plannerSystem_)) inGroup++;
-            }
-            if (!inGroup) continue;
-            std::wstring head = toW(rarityName(rarity));
-            std::transform(head.begin(), head.end(), head.begin(), ::towupper);
-            Gdiplus::SolidBrush headBrush(getRarityColor(rarity));
-            g.DrawString(head.c_str(), -1, &smallFont, Gdiplus::PointF(M, y + scaleF(4)), &headBrush);
-            y += groupH;
-            for (const auto& m : MINERAL_SIGNATURES) {
-                if (m.rarity != rarity) continue;
-                if (!oreInSystem(m.name, plannerSystem_)) continue;
-                oreRow(m.name, getMineralColor(m.name), formatNumber(m.baseSignature), 0,
-                       !byPlace && plannerMineral_ == m.name);
-            }
         }
-        const bool anyRoc = familyInSystem((int)MiningFamily::ROC, plannerSystem_);
-        const bool anyFps = familyInSystem((int)MiningFamily::FPS, plannerSystem_);
-        if (anyRoc || anyFps) {
-            y += scaleF(4);
-            g.DrawString(L"GROUND", -1, &smallFont, Gdiplus::PointF(M, y + scaleF(4)), &faintBrush);
-            y += groupH;
-            if (anyRoc) {
-                oreRow("ROC deposits", COL_ACCENT, L"4,000 / node", 2,
-                       !byPlace && plannerMineral_ == "ROC deposits");
-            }
-            if (anyFps) {
-                oreRow("Hand minables", COL_GREEN, L"3,000 / node", 2,
-                       !byPlace && plannerMineral_ == "Hand minables");
-            }
+        if (clippedBottom || plannerListScroll_ > 0) {
+            std::wstring navHint = (plannerListScroll_ > 0 && clippedBottom) ? L"\u2191\u2193 scroll list"
+                                 : clippedBottom ? L"\u2193 scroll for more"
+                                                 : L"\u2191 scroll up";
+            g.DrawString(navHint.c_str(), -1, &subFont, Gdiplus::PointF(M, listBottom + scaleF(2)), &faintBrush);
         }
 
         // The UEX tab puts the marketplace where the places are
@@ -13355,10 +13886,20 @@ void MinerGUI::paintPlanner(HDC hdc) {
 
             const bool roc = (plannerMineral_ == "ROC deposits");
             const bool fps = (plannerMineral_ == "Hand minables");
-            std::vector<OreLocation> rows = byPlace ? oresAt(plannerPlace_, MiningFamily::Ship)
-                                          : roc ? bestOfFamily(MiningFamily::ROC)
-                                          : fps ? bestOfFamily(MiningFamily::FPS)
-                                                : locationsFor(plannerMineral_, MiningFamily::Ship);
+            std::vector<OreLocation> rows;
+            if (byPlace) {
+                for (MiningFamily fam : {MiningFamily::Ship, MiningFamily::ROC, MiningFamily::FPS, MiningFamily::Harvestable}) {
+                    for (const auto& r : oresAt(plannerPlace_, fam)) rows.push_back(r);
+                }
+            } else if (roc) {
+                rows = bestOfFamily(MiningFamily::ROC);
+            } else if (fps) {
+                rows = bestOfFamily(MiningFamily::FPS);
+            } else if (!plannerMineral_.empty()) {
+                for (MiningFamily fam : {MiningFamily::Ship, MiningFamily::ROC, MiningFamily::FPS, MiningFamily::Harvestable}) {
+                    for (const auto& r : locationsFor(plannerMineral_, fam)) rows.push_back(r);
+                }
+            }
             if (plannerSystem_ != "ALL") {
                 rows.erase(std::remove_if(rows.begin(), rows.end(), [&](const OreLocation& o) {
                                return _stricmp(o.system, plannerSystem_.c_str()) != 0;
@@ -13367,11 +13908,6 @@ void MinerGUI::paintPlanner(HDC hdc) {
 
             float ry = listTop + scaleF(28);
             const float prowH = scaleF(27);
-            // Each row's words: the name, and after it in the small face what
-            // kind of place it is, which ones a generic name stands for, and the
-            // system. Where the two do not fit beside the figure, the small words
-            // take a second line under the name (Lagrange C names five points, the
-            // Pyro belt a sentence).
             struct PlaceWords { std::wstring name, sub; bool twoLines = false; };
             std::vector<PlaceWords> words;
             const float lineH = scaleF(14);   // the second line
@@ -13382,11 +13918,16 @@ void MinerGUI::paintPlanner(HDC hdc) {
                 for (const OreLocation& row : rows) {
                     PlaceWords w;
                     w.name = byPlace ? toW(row.mineral) : toW(row.location);
-                    if (roc || fps) w.name += L"  ·  " + toW(row.mineral);
+                    if (roc || fps) w.name += L"  \u00B7  " + toW(row.mineral);
+                    const wchar_t* famTag = row.family == MiningFamily::ROC ? L"roc"
+                                          : row.family == MiningFamily::FPS ? L"fps"
+                                          : row.family == MiningFamily::Harvestable ? L"harv"
+                                          : L"";
                     w.sub = toW(row.kind);
-                    if (row.note[0]) w.sub += L"  ·  " + toW(row.note);
-                    if (plannerSystem_ == "ALL") w.sub += L"  ·  " + toW(row.system);
-                    if (byPlace) w.sub = toW(row.system) + L"  ·  " + toW(row.kind);
+                    if (*famTag && !roc && !fps) w.sub = std::wstring(famTag) + L"  \u00B7  " + w.sub;
+                    if (row.note[0]) w.sub += L"  \u00B7  " + toW(row.note);
+                    if (plannerSystem_ == "ALL") w.sub += L"  \u00B7  " + toW(row.system);
+                    if (byPlace) w.sub = (*famTag ? std::wstring(famTag) + L"  \u00B7  " : L"") + toW(row.system) + L"  \u00B7  " + toW(row.kind);
                     Gdiplus::RectF nameW, subW;
                     g.MeasureString(w.name.c_str(), -1, &placeFont, Gdiplus::PointF(0, 0), &nameW);
                     g.MeasureString(w.sub.c_str(), -1, &subFont, Gdiplus::PointF(0, 0), &subW);
@@ -13394,15 +13935,12 @@ void MinerGUI::paintPlanner(HDC hdc) {
                     words.push_back(std::move(w));
                 }
             }
-            // Under the places, for a ship's ore: what a rock of it is made of,
-            // part by part, and at what quality each part comes (ROCK_PARTS) -
-            // why the scan panel lists the same ore twice, and where the quality
-            // a recipe asks for is to be had. Worked out first: the list above
-            // gives way to it.
             struct PartLine { std::wstring name, share, quality; };
             std::vector<PartLine> partLines;
             std::wstring sideNote;
-            if (!byPlace && !roc && !fps) {
+            std::wstring rockCardTitle = L"IN A ROCK OF  \u00B7";
+            std::wstring rockCardRight = L"share of the rock  \u00B7  quality";
+            if (!byPlace && !roc && !fps && !plannerMineral_.empty()) {
                 auto shareOf = [](float low, float high) {
                     auto one = [](float v) {
                         wchar_t text[16];
@@ -13413,7 +13951,6 @@ void MinerGUI::paintPlanner(HDC hdc) {
                     };
                     return one(low) + L"\u2013" + one(high) + L" %";
                 };
-                // the rocks this ore is a side ore of, by its share of them
                 std::vector<std::pair<std::wstring, std::vector<std::wstring>>> hosts;
                 const RockPart* sidePart = nullptr;
                 for (int i = 0; i < ROCK_PART_COUNT; i++) {
@@ -13438,7 +13975,6 @@ void MinerGUI::paintPlanner(HDC hdc) {
                         if (h) sideNote += L", ";
                         sideNote += hosts[h].first + L" of ";
                         const auto& rocks = hosts[h].second;
-                        // "an Ouratite rock", "an Aluminium rock"
                         if (rocks.size() == 1) {
                             const wchar_t first = rocks[0].empty() ? L'x' : (wchar_t)::towlower(rocks[0][0]);
                             sideNote += std::wstring(L"aeiou").find(first) != std::wstring::npos ? L"an " : L"a ";
@@ -13450,6 +13986,71 @@ void MinerGUI::paintPlanner(HDC hdc) {
                         sideNote += rocks.size() == 1 ? L" rock" : L" rocks";
                     }
                     if (sidePart) sideNote += L" \u2014 " + rockPartQuality(*sidePart) + L".";
+                }
+                if (partLines.empty()) {
+                    const bool isRocGem = !locationsFor(plannerMineral_, MiningFamily::ROC).empty();
+                    const bool isFpsGem = !locationsFor(plannerMineral_, MiningFamily::FPS).empty();
+                    const bool isHarv = !locationsFor(plannerMineral_, MiningFamily::Harvestable).empty();
+                    int bpCount = 0;
+                    for (int m = 0; m < CRAFT_MATERIAL_COUNT; m++) {
+                        if (_stricmp(CRAFT_MATERIALS[m].locationName, plannerMineral_.c_str()) == 0 ||
+                            _stricmp(CRAFT_MATERIALS[m].name, plannerMineral_.c_str()) == 0) {
+                            bpCount = CRAFT_MATERIALS[m].blueprints;
+                            break;
+                        }
+                    }
+                    if (isRocGem || isFpsGem) {
+                        rockCardTitle = L"DEPOSIT & QUALITY  \u00B7";
+                        rockCardRight = L"mining stats  \u00B7  quality bands";
+                        std::wstring sigStr = (isRocGem && isFpsGem) ? L"3,000\u20134,000"
+                                            : isRocGem ? L"4,000 / node" : L"3,000 / node";
+                        std::wstring famLabel = (isRocGem && isFpsGem) ? L"ROC & FPS"
+                                              : isRocGem ? L"ROC vehicle" : L"FPS hand";
+                        partLines.push_back({L"Signature", sigStr, famLabel});
+
+                        std::string lowerMat = plannerMineral_;
+                        for (char& ch : lowerMat) ch = (char)std::tolower((unsigned char)ch);
+                        const MineableElement* el = nullptr;
+                        for (int i = 0; i < MINEABLE_ELEMENT_COUNT; i++) {
+                            const std::string id = MINEABLE_ELEMENTS[i].id;
+                            if (id == "minableelement_fps_" + lowerMat || id == "minableelement_groundvehicle_" + lowerMat) {
+                                el = &MINEABLE_ELEMENTS[i];
+                                break;
+                            }
+                        }
+                        if (el) {
+                            std::wstringstream st;
+                            st << L"Inst " << (int)(el->instability + 0.5f);
+                            std::wstringstream res;
+                            res << L"Res " << (int)(el->resistance * 100.0f + 0.5f) << L" %";
+                            partLines.push_back({L"Properties", st.str(), res.str()});
+                        }
+                        for (int i = 0; i < HAND_MINING_BANDS_COUNT; i++) {
+                            if (_stricmp(HAND_MINING_BANDS[i].ore, plannerMineral_.c_str()) == 0) {
+                                std::wstringstream qb;
+                                for (int k = 0; k < 8; k++) {
+                                    if (k) qb << L" \u00B7 ";
+                                    qb << HAND_MINING_BANDS[i].bands[k];
+                                }
+                                partLines.push_back({L"Quality bands", L"", qb.str()});
+                                break;
+                            }
+                        }
+                        if (bpCount > 0) {
+                            partLines.push_back({L"Crafting", L"", L"Used in " + std::to_wstring(bpCount) + L" blueprints"});
+                        }
+                    } else if (isHarv) {
+                        rockCardTitle = L"HARVESTABLE  \u00B7";
+                        rockCardRight = L"signal  \u00B7  in-game label";
+                        partLines.push_back({L"Signature", L"2,000 / node", L"Surface / cave"});
+                        std::wstring tag = isSynthCyan(plannerMineral_) ? L"Cyan target (<EM1>)"
+                                         : isSynthRed(plannerMineral_) ? L"Red target (<EM4>)"
+                                                                       : L"Yellow default (<EM3>)";
+                        partLines.push_back({L"In-game color", L"", tag});
+                        if (bpCount > 0) {
+                            partLines.push_back({L"Crafting", L"", L"Used in " + std::to_wstring(bpCount) + L" blueprints"});
+                        }
+                    }
                 }
             }
             const float partH = scaleF(20);
@@ -13547,9 +14148,21 @@ void MinerGUI::paintPlanner(HDC hdc) {
                             sellTail += L".";
                         }
                     } else {
-                        const auto& offers = uexPrices_->offersFor(plannerMineral_);
+                        std::string uexKey = plannerMineral_;
+                        const std::vector<UexOffer>* offersPtr = &uexPrices_->offersFor(plannerMineral_);
+                        if (offersPtr->empty()) {
+                            for (const char* suffix : {" (Ore)", " (Raw)"}) {
+                                const auto& candidate = uexPrices_->offersFor(plannerMineral_ + suffix);
+                                if (!candidate.empty()) {
+                                    offersPtr = &candidate;
+                                    uexKey = plannerMineral_ + suffix;
+                                    break;
+                                }
+                            }
+                        }
+                        const auto& offers = *offersPtr;
                         if (offers.empty()) {
-                            sellNote = L"No terminal has reported buying refined " + toW(plannerMineral_) +
+                            sellNote = L"No terminal has reported buying " + toW(plannerMineral_) +
                                        L" in the last 30 days.";
                         }
                         bool homeListed = false;
@@ -13560,7 +14173,7 @@ void MinerGUI::paintPlanner(HDC hdc) {
                             }
                         }
                         if (!offers.empty() && !homeListed) {
-                            if (const UexOffer* home = uexPrices_->bestIn(plannerMineral_, currentSystem_)) {
+                            if (const UexOffer* home = uexPrices_->bestIn(uexKey, currentSystem_)) {
                                 SellLine line = lineOf(toW(home->terminal), *home, L"best in your system  \u00B7  ");
                                 line.home = true;
                                 sellLines.push_back(std::move(line));
@@ -13669,7 +14282,12 @@ void MinerGUI::paintPlanner(HDC hdc) {
                     // the row the pointer is on, so the name and its figure stay
                     // on one line for the eye
                     Gdiplus::RectF band(rx - scaleF(8), ry, rw + scaleF(16), rowH);
-                    if (isHot(hoverPlan_, band)) fillRoundRect(g, band, scaleF(R_CONTROL), COL_HOVER);
+                    const bool gemCyan = (roc || fps || byPlace) && isSynthCyan(row.mineral);
+                    const bool gemRed = (roc || fps || byPlace) && isSynthRed(row.mineral);
+                    if (gemCyan) selectionFrame(g, band, scaleF(R_CONTROL), COL_CYAN);
+                    else if (gemRed) selectionFrame(g, band, scaleF(R_CONTROL), COL_RED);
+                    else if (isHot(hoverPlan_, band)) fillRoundRect(g, band, scaleF(R_CONTROL), COL_HOVER);
+                    if (roc || fps || byPlace) planHits_.push_back({band, 10, row.mineral});
                 }
                 g.DrawString(w.name.c_str(), -1, &placeFont, Gdiplus::PointF(rx, ry + scaleF(3)), &textBrush);
                 if (w.twoLines) {
@@ -13681,10 +14299,15 @@ void MinerGUI::paintPlanner(HDC hdc) {
                     g.DrawString(w.sub.c_str(), -1, &subFont, Gdiplus::PointF(rx + measured.Width, ry + scaleF(6)),
                                  &dimBrush);
                 }
-                std::wstringstream pct;
-                pct << std::fixed << std::setprecision(1) << row.chance << L" %";
-                Gdiplus::RectF pctRect(rx, ry + scaleF(3), rw, prowH);
-                g.DrawString(pct.str().c_str(), -1, &pctFont, pctRect, &rightAlign, &textBrush);
+                if (row.chance > 0.0) {
+                    std::wstringstream pct;
+                    pct << std::fixed << std::setprecision(1) << row.chance << L" %";
+                    Gdiplus::RectF pctRect(rx, ry + scaleF(3), rw, prowH);
+                    g.DrawString(pct.str().c_str(), -1, &pctFont, pctRect, &rightAlign, &textBrush);
+                } else {
+                    Gdiplus::RectF pctRect(rx, ry + scaleF(5), rw, prowH);
+                    g.DrawString(toW(row.kind).c_str(), -1, &subFont, pctRect, &rightAlign, &dimBrush);
+                }
                 // No rule under the row: the figure on the right says the same thing,
                 // and a stack of part-width lines reads as a fence. The row under the
                 // pointer lifts instead.
@@ -13703,7 +14326,7 @@ void MinerGUI::paintPlanner(HDC hdc) {
                 cardLight(g, rockCard, scaleF(R_CARD), scaleF(44));
                 strokeRoundRect(g, rockCard, scaleF(R_CARD), COL_BORDER);
                 float py = rockCard.Y + scaleF(10);
-                const std::wstring label2 = L"IN A ROCK OF  \u00B7";
+                const std::wstring label2 = rockCardTitle;
                 std::wstring ore = toW(plannerMineral_);
                 std::transform(ore.begin(), ore.end(), ore.begin(), ::towupper);
                 g.DrawString(label2.c_str(), -1, &smallFont, Gdiplus::PointF(rx, py), &faintBrush);
@@ -13713,7 +14336,7 @@ void MinerGUI::paintPlanner(HDC hdc) {
                     g.DrawString(ore.c_str(), -1, &smallFont, Gdiplus::PointF(rx + measured.Width + scaleF(3), py),
                                  &textBrush);
                 }
-                g.DrawString(L"share of the rock  \u00B7  quality", -1, &subFont,
+                g.DrawString(rockCardRight.c_str(), -1, &subFont,
                              Gdiplus::RectF(rx, py + scaleF(1), rw, scaleF(14)), &rightAlign, &faintBrush);
                 py += scaleF(24);
                 for (const PartLine& part : partLines) {
@@ -13945,13 +14568,8 @@ void MinerGUI::paintPlanner(HDC hdc) {
             footerRoom = lx - scaleF(12);
         }
         // the left's words, as many of them as end before it
-        std::wstring footer = L"F / Esc close  \u00B7  tick an ore to have it blink in the reader";
-        if (!paysMost.empty()) {
-            const std::wstring longer = footer + L"  \u00B7  red: sells for the most right now";
-            Gdiplus::RectF longW;
-            g.MeasureString(longer.c_str(), -1, &subFont, Gdiplus::PointF(0, 0), &longW);
-            if (M + longW.Width <= footerRoom) footer = longer;
-        }
+        std::wstring footer = L"F / Esc close  \u00B7  right-click ore: Cyan / Red in-game (restart game to apply)";
+        (void)footerRoom;
         g.DrawString(footer.c_str(), -1, &subFont, Gdiplus::PointF(M, fy), &faintBrush);
         // Report to UEX, over everything else
         if (uexCard_.step) drawUexCard(g, cw, planH, uexCard_, hoverPlan_);
@@ -14151,7 +14769,30 @@ bool MinerGUI::anyPart(const std::string& name,
 
 bool MinerGUI::blinkFor(const AnalysisResult& result, bool* fromCart, bool* fromOrder) const {
     const bool cart = anyPart(result.name, [this](const std::string& n) { return wantedByCart(n); });
-    const bool picked = anyPart(result.name, [this](const std::string& n) { return lookingForOre(n); });
+    auto watchedHere = [this](const std::string& n) {
+        if (lookingForOre(n)) return true;
+        const std::string bare = bareMaterial(n);
+        const bool roc = (bare == "ROC Deposit");
+        const bool hand = (bare == "FPS Minable");
+        if (!roc && !hand) return false;
+        const MiningFamily fam = roc ? MiningFamily::ROC : MiningFamily::FPS;
+        const std::string place = SynthScan::utf8(placeOre_);
+        const auto& gems = roc ? ROC_MINERALS : FPS_MINERALS;
+        for (const std::string& gem : gems) {
+            if (!lookingForOre(gem)) continue;
+            if (place.empty()) {
+                for (const auto& loc : ORE_LOCATIONS) {
+                    if (loc.family == fam && _stricmp(loc.mineral, gem.c_str()) == 0) return true;
+                }
+            } else {
+                for (const auto& loc : oresAt(place, fam)) {
+                    if (_stricmp(loc.mineral, gem.c_str()) == 0) return true;
+                }
+            }
+        }
+        return false;
+    };
+    const bool picked = anyPart(result.name, watchedHere);
     const bool order = !contractsNow_.empty() &&
                        anyPart(result.name, [this](const std::string& n) { return wantedByOrder(n); });
     if (fromCart) *fromCart = cart;
@@ -14518,12 +15159,20 @@ std::vector<MinerGUI::GrindSet> MinerGUI::grindSets(bool filtered) const {
         for (int k = 0; k < set.poolCount; k++) {
             const std::vector<int>* named = blueprintsNamed(CRAFT_POOL_ITEMS[set.poolFirst + k]);
             bool have = false;
+            bool wantItem = false;
             if (named) {
-                for (int b : *named) have = have || isOwned(b);
+                for (int b : *named) {
+                    have = have || isOwned(b);
+                    wantItem = wantItem || isWanted(b);
+                }
             }
-            if (!have) set.missing++;
+            if (!have) {
+                set.missing++;
+                if (wantItem) set.wanted++;
+            }
         }
         if (!set.missing) continue;
+        if (filtered && grindWantedOnly_ && set.wanted == 0 && onlyGroup < 0) continue;
 
         for (int i : group) {
             const CraftSource& src = CRAFT_SOURCES[i];
@@ -14645,9 +15294,11 @@ std::vector<MinerGUI::GrindSet> MinerGUI::grindSets(bool filtered) const {
         set.runs = (double)set.missing * 100.0 / (double)set.chance;
         out.push_back(set);
     }
-    // Where the player is, first - that is the window's promise - and within
-    // that the set with the most to gain
+    // Starred wanted sets first, then where the player is, and within that the
+    // set with the most to gain
     std::stable_sort(out.begin(), out.end(), [](const GrindSet& a, const GrindSet& b) {
+        if ((a.wanted > 0) != (b.wanted > 0)) return a.wanted > 0;
+        if (a.wanted != b.wanted) return a.wanted > b.wanted;
         if ((a.inSystem > 0) != (b.inSystem > 0)) return a.inSystem > 0;
         if (a.missing != b.missing) return a.missing > b.missing;
         if (a.runs != b.runs) return a.runs < b.runs;
@@ -15087,8 +15738,8 @@ void MinerGUI::paintGrindList(Gdiplus::Graphics& g, int cw, int ch) {
         chip(L"Where I am", 0);
         for (int i = 1; i <= 3; i++) chip(CRAFT_SYSTEM_NAMES[i], i);
         chip(L"Everywhere", 4);
-        // ...and apart from them a switch of its own: only the sets with a
-        // mission the game offers the player at their rank
+        // ...and apart from them switches of their own: "Open to me" (by rank)
+        // and "Wanted" (starred in Blueprints or right in this card)
         if (ranksKnown_) {
             fx += scaleF(10);
             const wchar_t* label = L"Open to me";
@@ -15104,6 +15755,25 @@ void MinerGUI::paintGrindList(Gdiplus::Graphics& g, int cw, int ch) {
             }
             grindHits_.push_back({box, 7, 0});
             fx += box.Width + scaleF(6);
+        }
+        {
+            const int wc = wantedCount();
+            const std::wstring wlabel = wc > 0 ? (L"\u2605 Wanted (" + std::to_wstring(wc) + L")") : std::wstring(L"\u2605 Wanted");
+            Gdiplus::RectF w;
+            g.MeasureString(wlabel.c_str(), -1, &chipFont, Gdiplus::PointF(0, 0), &w);
+            const float boxW = w.Width + scaleF(20);
+            if (fx + boxW + scaleF(8) < edge - scaleF(250)) {
+                const Gdiplus::RectF box(fx, fy, boxW, chipH);
+                const bool hot = isHot(hoverGrind_, box);
+                if (grindWantedOnly_) {
+                    drawButton(g, box, wlabel.c_str(), chipFont, ButtonKind::Selected, hot, chipH / 2.0f);
+                } else {
+                    fillRoundRect(g, box, chipH / 2.0f, hot ? COL_HOVER : COL_CARD_HI);
+                    g.DrawString(wlabel.c_str(), -1, &chipFont, box, &centre, wc > 0 ? &accentBrush : (hot ? &textBrush : &dimBrush));
+                }
+                grindHits_.push_back({box, 10, 0});
+                fx += box.Width + scaleF(6);
+            }
         }
 
         // The finder, at the row's right. Any part of a mission's name, a
@@ -15289,12 +15959,18 @@ void MinerGUI::paintGrindList(Gdiplus::Graphics& g, int cw, int ch) {
     tagFormat.SetLineAlignment(Gdiplus::StringAlignmentCenter);
     tagFormat.SetFormatFlags(Gdiplus::StringFormatFlagsNoWrap);
     tagFormat.SetTrimming(Gdiplus::StringTrimmingEllipsisCharacter);
-    auto tags = [&](const std::vector<std::wstring>& lit, const std::vector<std::wstring>& rest, float x0,
+    struct GrindTag {
+        std::wstring label;
+        int bpIndex = -1;
+        bool wanted = false;
+    };
+    auto tags = [&](const std::vector<GrindTag>& lit, const std::vector<GrindTag>& rest, float x0,
                     float y0, bool draw) {
         float x = x0, ty = y0;
-        auto one = [&](const std::wstring& name, bool hit) {
+        auto one = [&](const GrindTag& item, bool hit) {
+            const std::wstring text = item.wanted ? (L"\u2605 " + item.label) : item.label;
             Gdiplus::RectF w;
-            g.MeasureString(name.c_str(), -1, &bodyFont, Gdiplus::PointF(0, 0), &w);
+            g.MeasureString(text.c_str(), -1, &bodyFont, Gdiplus::PointF(0, 0), &w);
             const float tw = (std::min)(w.Width + scaleF(14), textW);
             if (x > x0 && x + tw > x0 + textW) {
                 x = x0;
@@ -15302,14 +15978,17 @@ void MinerGUI::paintGrindList(Gdiplus::Graphics& g, int cw, int ch) {
             }
             if (draw) {
                 const Gdiplus::RectF tag(x, ty, tw, tagH);
-                // pills, like the same blueprints on a contract's card
-                fillRoundRect(g, tag, tagH / 2.0f, hit ? tint(COL_ACCENT, 36) : COL_CARD_HI);
-                g.DrawString(name.c_str(), -1, &bodyFont, tag, &tagFormat, hit ? &accentBrush : &dimBrush);
+                const bool hot = isHot(hoverGrind_, tag);
+                const bool litUp = hit || item.wanted;
+                // pills, like the same blueprints on a contract's card; click toggles Want
+                fillRoundRect(g, tag, tagH / 2.0f, litUp ? tint(COL_ACCENT, hot ? 56 : 36) : (hot ? COL_HOVER : COL_CARD_HI));
+                g.DrawString(text.c_str(), -1, &bodyFont, tag, &tagFormat, litUp ? &accentBrush : (hot ? &textBrush : &dimBrush));
+                if (item.bpIndex >= 0) grindHits_.push_back({tag, 11, item.bpIndex});
             }
             x += tw + tagGap;
         };
-        for (const auto& name : lit) one(name, true);
-        for (const auto& name : rest) one(name, false);
+        for (const auto& item : lit) one(item, true);
+        for (const auto& item : rest) one(item, false);
         return (lit.empty() && rest.empty()) ? 0.0f : ty + tagH - y0;
     };
     int drawn = 0;
@@ -15318,7 +15997,7 @@ void MinerGUI::paintGrindList(Gdiplus::Graphics& g, int cw, int ch) {
         const CraftSource& src = CRAFT_SOURCES[set.best];
         const bool open = (grindOpen_ == i);
 
-        std::vector<std::wstring> hits, stillMissing;
+        std::vector<GrindTag> hits, stillMissing;
         std::wstring whereLine;
         if (open) {
             const std::wstring needle = foldForSearch(grindQuery_);
@@ -15326,13 +16005,20 @@ void MinerGUI::paintGrindList(Gdiplus::Graphics& g, int cw, int ch) {
                 const char* name = CRAFT_POOL_ITEMS[set.poolFirst + k];
                 const std::vector<int>* named = blueprintsNamed(name);
                 bool have = false;
+                bool wantItem = false;
+                int primaryBp = -1;
                 if (named) {
-                    for (int b : *named) have = have || isOwned(b);
+                    for (int b : *named) {
+                        if (primaryBp < 0) primaryBp = b;
+                        have = have || isOwned(b);
+                        wantItem = wantItem || isWanted(b);
+                    }
                 }
                 if (have) continue;
                 const std::wstring shown = toW(name);
                 const bool hit = !needle.empty() && foldForSearch(shown).find(needle) != std::wstring::npos;
-                (hit ? hits : stillMissing).push_back(shown);
+                GrindTag tagItem{shown, primaryBp, wantItem};
+                (hit || wantItem ? hits : stillMissing).push_back(std::move(tagItem));
             }
             // ...and where this set can be earned: the places its missions run in,
             // each once - a contract in two of Pyro's regions names both ("Pyro IV,
@@ -15382,12 +16068,12 @@ void MinerGUI::paintGrindList(Gdiplus::Graphics& g, int cw, int ch) {
             const std::wstring held = toW(REP_RANKS[lad.first + mine.rank].name);
             if (mine.rank >= lad.count - 1) {
                 rankFrom = held + L", the top of the ladder";
-                rankAmount = L"about " + roughly(mine.reputation) + L" " + unit;
+                rankAmount = (mine.live ? L"live " : L"about ") + (mine.live ? grouped(mine.reputation) : roughly(mine.reputation)) + L" " + unit;
             } else {
                 const long long low = REP_RANKS[lad.first + mine.rank].min;
                 const long long high = REP_RANKS[lad.first + mine.rank + 1].min;
                 rankFrom = held + L"  \u2192  " + toW(REP_RANKS[lad.first + mine.rank + 1].name);
-                rankAmount = L"about " + roughly(mine.reputation) + L" of " + grouped(high) + L" " + unit;
+                rankAmount = (mine.live ? L"live " : L"about ") + (mine.live ? grouped(mine.reputation) : roughly(mine.reputation)) + L" of " + grouped(high) + L" " + unit;
                 rankFrac = high > low ? (float)(mine.reputation - low) / (float)(high - low) : 0.0f;
                 // the run of this set's that brings the next rank soonest
                 int best = -1;
@@ -15408,7 +16094,9 @@ void MinerGUI::paintGrindList(Gdiplus::Graphics& g, int cw, int ch) {
                 ranksFrom_ == Reputation::LIVE_WIPE ? L"since the reset with " + version : L"in the logs of " + version;
             const std::wstring since =
                 mine.completions > 0 ? L", +" + grouped(mine.gained) + L" " + unit + L" since" : std::wstring();
-            if (mine.anchorRank >= 0) {
+            if (mine.live) {
+                rankSource = L"Verified live from CIG ReputationService (" + grouped(mine.reputation) + L" " + unit + L").";
+            } else if (mine.anchorRank >= 0) {
                 const std::wstring at = toW(REP_RANKS[lad.first + mine.anchorRank].name);
                 rankSource = L"From your logs: " + at + L" since " + dayOf(mine.anchorStamp) + L" (you took a " + at +
                              L" mission)" + since + L".";
@@ -15423,7 +16111,9 @@ void MinerGUI::paintGrindList(Gdiplus::Graphics& g, int cw, int ch) {
             } else {
                 rankSource = L"Your logs show nothing of this outfit " + counted + L".";
             }
-            rankSource += mine.set ? L" Pick another rank above to change it." : L" Not right? Pick your rank above.";
+            if (!mine.live) {
+                rankSource += mine.set ? L" Pick another rank above to change it." : L" Not right? Pick your rank above.";
+            }
         }
         // Every rank of the ladder as a pill to pick, the one held lit, and
         // with a rank set by hand one more that goes back to the logs. One
@@ -15572,14 +16262,15 @@ void MinerGUI::paintGrindList(Gdiplus::Graphics& g, int cw, int ch) {
                          open ? &accentBrush : &textBrush);
         }
         {
-            std::wstring note = unnamed ? std::wstring(L"the files do not name this one")
-                                        : toW(src.faction);
-            // Every separator below leads with the thing before it, so an
-            // empty outfit must not leave a dot hanging at the front
+            std::wstring note;
             auto add = [&](const std::wstring& text) {
                 if (!note.empty()) note += L"  \u00B7  ";
                 note += text;
             };
+            if (set.wanted > 0) {
+                add(L"\u2605 " + std::to_wstring(set.wanted) + L" wanted");
+            }
+            add(unnamed ? std::wstring(L"the files do not name this one") : toW(src.faction));
             if (set.rungs.size() > 1) {
                 // What the set is: a ladder, and how far it reaches - not a count of
                 // table rows (missions times blueprints), which means nothing to a player.
@@ -15598,8 +16289,25 @@ void MinerGUI::paintGrindList(Gdiplus::Graphics& g, int cw, int ch) {
             if (set.open >= 0 && !set.rungs.empty()) {
                 const int n = (int)set.rungs.size();
                 bool later = false;   // one of them asks for more than the player has yet
-                for (int r : set.rungs) later = later || rungOpen(r) == -1;
-                if (n == 1) {
+                long long minNeed = -1;
+                std::wstring needUnit, needRankName;
+                for (int r : set.rungs) {
+                    if (rungOpen(r) == -1) {
+                        later = true;
+                        const CraftSource& rs = CRAFT_SOURCES[r];
+                        if (rs.repFaction >= 0 && rs.repLadder >= 0 && rs.repLadder < REP_LADDER_COUNT && rs.repRank >= 0) {
+                            const long long need = Reputation::rankMin(rs.repLadder, rs.repRank) - standingOn(rs.repFaction, rs.repLadder).reputation;
+                            if (need > 0 && (minNeed < 0 || need < minNeed)) {
+                                minNeed = need;
+                                needUnit = toW(REP_LADDERS[rs.repLadder].name);
+                                needRankName = toW(REP_RANKS[REP_LADDERS[rs.repLadder].first + rs.repRank].name);
+                            }
+                        }
+                    }
+                }
+                if (set.open == 0 && minNeed > 0) {
+                    add(L"needs +" + grouped(minNeed) + L" " + needUnit + L" (" + needRankName + L")");
+                } else if (n == 1) {
                     add(set.open ? L"open to you" : later ? L"not open to you yet" : L"no longer offered to you");
                 } else if (set.open == n) {
                     add(L"all " + std::to_wstring(n) + L" open to you");
@@ -15662,7 +16370,7 @@ void MinerGUI::paintGrindList(Gdiplus::Graphics& g, int cw, int ch) {
                 uy += labelH;
             };
             if (missH > 0) {
-                heading(L"STILL MISSING");
+                heading(L"STILL MISSING  \u00B7  CLICK A BLUEPRINT TO STAR \u2605");
                 // (two pixels down in their own room: a tag is a box, and a
                 // box right under its heading crowds it the way words do not)
                 tags(hits, stillMissing, left, uy + scaleF(2), true);
@@ -15976,6 +16684,12 @@ LRESULT MinerGUI::handleGrindMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
                     grindOpenOnly_ = !grindOpenOnly_;
                     grindScroll_ = 0;
                     grindOpen_ = -1;
+                } else if (hit.kind == 10) {
+                    grindWantedOnly_ = !grindWantedOnly_;
+                    grindScroll_ = 0;
+                    grindOpen_ = -1;
+                } else if (hit.kind == 11) {
+                    toggleBlueprintWanted(hit.value);
                 } else if (hit.kind == 9) {
                     // an outfit in the rank line: the list narrowed to its sets
                     if (hit.value >= 0 && hit.value < REP_FACTION_COUNT) {
@@ -17107,6 +17821,90 @@ std::wstring MinerGUI::outOfScopeNote(const AnalysisResult& result) const {
     });
     if (placeInSpace_ && ground) return L"not in open space";
     return placeOre_.empty() ? L"not listed in " + toW(currentSystem_) : L"not listed at " + placeOre_;
+}
+
+std::wstring MinerGUI::groundSubLine(const AnalysisResult& result, Gdiplus::Color& outColor) const {
+    const bool fps = (result.category == SignalCategory::FPSMining) ||
+                     result.name.find("FPS Minable") != std::string::npos;
+    const bool roc = (result.category == SignalCategory::ROCMining) ||
+                     result.name.find("ROC Deposit") != std::string::npos;
+    if (!fps && !roc) return L"";
+    const MiningFamily family = fps ? MiningFamily::FPS : MiningFamily::ROC;
+    const std::string place = SynthScan::utf8(placeOre_);
+    const std::vector<OreLocation> rows = !place.empty() ? oresAt(place, family) : std::vector<OreLocation>{};
+
+    struct Entry { std::string name; double chance; bool cyan; bool red; bool watch; };
+    std::vector<Entry> entries;
+    if (!rows.empty()) {
+        for (const auto& r : rows) {
+            entries.push_back({r.mineral, r.chance, isSynthCyan(r.mineral), isSynthRed(r.mineral),
+                               lookingForOre(r.mineral)});
+        }
+    } else {
+        std::vector<std::string> seen;
+        for (const auto& r : ORE_LOCATIONS) {
+            if (r.family != family) continue;
+            if (!currentSystem_.empty() && _stricmp(r.system, currentSystem_.c_str()) != 0) continue;
+            if (std::find(seen.begin(), seen.end(), r.mineral) != seen.end()) continue;
+            seen.push_back(r.mineral);
+            entries.push_back({r.mineral, -1.0, isSynthCyan(r.mineral), isSynthRed(r.mineral),
+                               lookingForOre(r.mineral)});
+        }
+        if (entries.empty()) {
+            for (const auto& r : ORE_LOCATIONS) {
+                if (r.family != family) continue;
+                if (std::find(seen.begin(), seen.end(), r.mineral) != seen.end()) continue;
+                seen.push_back(r.mineral);
+                entries.push_back({r.mineral, -1.0, isSynthCyan(r.mineral), isSynthRed(r.mineral),
+                                   lookingForOre(r.mineral)});
+            }
+        }
+    }
+    if (entries.empty()) return L"";
+
+    std::stable_sort(entries.begin(), entries.end(), [](const Entry& a, const Entry& b) {
+        const int pa = a.cyan ? 3 : (a.red ? 2 : (a.watch ? 1 : 0));
+        const int pb = b.cyan ? 3 : (b.red ? 2 : (b.watch ? 1 : 0));
+        return pa > pb;
+    });
+
+    bool anyCyan = false, anyRed = false, anyWatch = false;
+    for (const auto& e : entries) {
+        anyCyan |= e.cyan;
+        anyRed |= e.red;
+        anyWatch |= e.watch;
+    }
+
+    std::string missingTarget;
+    if (!rows.empty()) {
+        const auto& allFamily = (family == MiningFamily::FPS) ? FPS_MINERALS : ROC_MINERALS;
+        for (const auto& gem : allFamily) {
+            if (!isSynthCyan(gem) && !isSynthRed(gem) && !lookingForOre(gem)) continue;
+            const bool here = std::any_of(entries.begin(), entries.end(),
+                                          [&](const Entry& e) { return _stricmp(e.name.c_str(), gem.c_str()) == 0; });
+            if (!here) { missingTarget = gem; break; }
+        }
+    }
+
+    if (anyCyan) outColor = COL_CYAN;
+    else if (anyRed) outColor = COL_RED;
+    else if (anyWatch) outColor = COL_ACCENT;
+    else outColor = missingTarget.empty() ? COL_TEXT_DIM : COL_TEXT_FAINT;
+
+    std::wstringstream out;
+    const size_t limit = missingTarget.empty() ? 3 : 2;
+    for (size_t i = 0; i < entries.size() && i < limit; i++) {
+        if (i > 0) out << L" \u00B7 ";
+        out << toW(entries[i].name);
+        if (entries[i].chance > 0.0) {
+            out << L" " << std::fixed << std::setprecision(entries[i].chance < 10.0 ? 1 : 0)
+                << entries[i].chance << L"%";
+        }
+    }
+    if (!missingTarget.empty()) {
+        out << L" (no " << toW(missingTarget) << L")";
+    }
+    return out.str();
 }
 
 void MinerGUI::setShip(const std::string& label, bool inSeat, const std::string& hull) {

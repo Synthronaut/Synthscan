@@ -191,6 +191,17 @@ class BlueprintLibraryPage(ctk.CTkFrame):
         if bp['slots']:
             ctk.CTkButton(self.detail, text='Plan a mining trip for these ingredients →', fg_color='#303847',
                           command=lambda: self.app.open_material_picker([s['material'] for s in bp['slots']])).pack(fill='x', padx=14, pady=8)
+            from mining_labels import load_targets
+            cur_targets = load_targets()
+            is_targeted = cur_targets.get('blueprint') == bp['name']
+            target_btn_text = 'Clear craft target (SynthStrings)' if is_targeted else 'Target craft in SynthStrings (Cyan) →'
+            ctk.CTkButton(self.detail, text=target_btn_text,
+                          fg_color='#204c5a' if not is_targeted else '#4a262c',
+                          command=lambda: self.toggle_craft_target(bp)).pack(fill='x', padx=14, pady=(0, 8))
+            if is_targeted:
+                amts = cur_targets.get('amounts') or {}
+                summary = ', '.join(f"{v} {k}" for k, v in amts.items()) or 'All ingredients'
+                self.label(self.detail, f"Craft target active (Cyan in-game): {summary}", 12, ACCENT)
         if bp.get('seconds'):
             self.label(self.detail, f"Fabrication time  {int(bp['seconds']//60)}m {bp['seconds']%60:02g}s", color=MUTED)
         self.label(self.detail, 'MATERIALS & QUALITY EFFECTS', 12, GOLD, (18, 6), True)
@@ -314,6 +325,30 @@ class BlueprintLibraryPage(ctk.CTkFrame):
     def show_sources(self):
         from pathlib import Path
         self.text_dialog('Licenses & data sources', (Path(__file__).parent/'LICENSES.md').read_text(encoding='utf-8'))
+
+    def toggle_craft_target(self, bp):
+        from mining_labels import load_targets, save_targets, apply_targets_to_global_ini
+        cur = load_targets()
+        if cur.get('blueprint') == bp['name']:
+            save_targets(cyan=[], red=cur.get('red', []), amounts={}, blueprint=None)
+            self.notice.configure(text=f"Cleared craft target ({bp['name']}); SynthStrings reverted to base colors.")
+        else:
+            coverage = material_coverage(bp, load_inventory())
+            cyan = []
+            amounts = {}
+            for slot in coverage:
+                mat = slot['material']
+                need = slot.get('missing') if slot.get('unit') == 'SCU' else slot.get('amount')
+                if need and need > 0:
+                    if mat not in cyan:
+                        cyan.append(mat)
+                    amounts[mat] = f"{need:g} {slot['unit']}"
+            if not cyan:
+                cyan = list(dict.fromkeys(s['material'] for s in bp['slots']))
+            save_targets(cyan=cyan, red=cur.get('red', []), amounts=amounts, blueprint=bp['name'])
+            self.notice.configure(text=f"Craft target set: {bp['name']} ({', '.join(cyan)} highlighted Cyan in-game; restart game to reload text).")
+        apply_targets_to_global_ini()
+        self.select(bp)
 
     def favorite(self, bp):
         self.app.bp_manager.toggle_favorite(bp['name'] if self.catalog.resolve(bp['name']) or bp['id'].startswith('legacy:') else 'catalog:' + bp['id'])

@@ -33,7 +33,7 @@ struct Canvas {
     }
     float heading(const std::string& label,float y){line(label,left()+2*scale,y,inner(),10,Accent,true);return y+24*scale;}
     float note(const std::string& label,float y){return y+text(label,left()+4*scale,y,inner()-8*scale,10,Muted)+8*scale;}
-    float wikeloTurnin(const Json& row,float y){
+    float wikeloTurnin(const Json& row,float y,const std::function<double(const std::string&)>& ownedQty={}){
         const auto& wikelo=field(row,"wikelo_turnin");
         y=heading("WIKELO TURN-IN TASK REQUIREMENTS",y);
         box(left(),y,inner(),64*scale);
@@ -48,13 +48,19 @@ struct Canvas {
         int count=int(wikelo.numberOr("favors",0));
         if(count>0){
             box(left(),y,inner(),64*scale);
-            line("PRIMARY BARTER CURRENCY",left()+10*scale,y+6*scale,inner()-20*scale,9,Muted,true);
+            line("PRIMARY BARTER CURRENCY",left()+10*scale,y+6*scale,inner()-170*scale,9,Muted,true);
             std::string favorsLabel=wikelo.textOr("favors_label");
             if(favorsLabel.empty()){
                 favorsLabel=std::to_string(count)+" × Wikelo Favors";
             }
-            line(favorsLabel,left()+10*scale,y+22*scale,inner()-20*scale,18,Accent,true);
+            line(favorsLabel,left()+10*scale,y+22*scale,inner()-170*scale,18,Accent,true);
             line("Earn: 50x MG/Council Scrip, 50x Carinite, or 12x Valakkar Pearls (AA)",left()+10*scale,y+46*scale,inner()-20*scale,9,Ink);
+            double haveFavors=ownedQty?ownedQty("Wikelo Favor"):-1;
+            if(haveFavors>=0){
+                bool enough=haveFavors>=count;
+                std::string haveStr=money(haveFavors)+" / "+std::to_string(count)+" OWNED";
+                line(haveStr,left()+inner()-160*scale,y+18*scale,150*scale,12,enough?Green:(haveFavors>0?Accent:Muted),true);
+            }
             y+=72*scale;
         } else {
             box(left(),y,inner(),50*scale);
@@ -66,9 +72,18 @@ struct Canvas {
         const auto& reqItems=field(wikelo,"items").items;
         for(const auto& req:reqItems){
             box(left(),y,inner(),46*scale);
-            line(req.textOr("label",req.textOr("name")),left()+10*scale,y+5*scale,inner()-120*scale,12,Ink,true);
-            line(req.textOr("detail","Required turn-in component"),left()+10*scale,y+26*scale,inner()-120*scale,9,Muted);
-            line("REQUIRED",left()+inner()-110*scale,y+14*scale,100*scale,11,Accent,true);
+            std::string reqName=req.textOr("name");
+            double need=req.numberOr("amount",0);
+            double have=ownedQty&&!reqName.empty()?ownedQty(reqName):-1;
+            line(req.textOr("label",reqName),left()+10*scale,y+5*scale,inner()-155*scale,12,Ink,true);
+            line(req.textOr("detail","Required turn-in component"),left()+10*scale,y+26*scale,inner()-155*scale,9,Muted);
+            if(have>=0){
+                bool enough=have>=std::max(1.0,need);
+                std::string badge=need>0?(money(have)+" / "+money(need)+" OWNED"):(money(have)+"× OWNED");
+                line(badge,left()+inner()-145*scale,y+14*scale,135*scale,11,enough?Green:(have>0?Accent:Muted),true);
+            }else{
+                line("REQUIRED",left()+inner()-110*scale,y+14*scale,100*scale,11,Accent,true);
+            }
             y+=54*scale;
         }
 
@@ -176,6 +191,36 @@ struct Canvas {
             }
         }return y;
     }
+    float playerInventory(const Json& row,float y){
+        const double total=row.numberOr("inventory_total",0);
+        const auto& stacks=field(row,"inventory_stacks").items;
+        const std::string tags=row.textOr("inventory_tags");
+        y=heading("SPARE STORAGE SUMMARY",y);
+        box(left(),y,inner(),tags.empty()?58*scale:72*scale);
+        std::string qtyStr=money(total)+"×";
+        line(qtyStr,left()+12*scale,y+6*scale,inner()-180*scale,21,Green,true);
+        std::string locCountStr=std::to_string(int(stacks.size()))+(stacks.size()==1?" location":" locations");
+        line(locCountStr,left()+inner()-168*scale,y+10*scale,156*scale,13,Accent,true);
+        line("Unmounted spare items · ship & starter suits excluded",left()+12*scale,y+35*scale,inner()-24*scale,10,Muted);
+        if(!tags.empty())line("Tags: "+tags,left()+12*scale,y+52*scale,inner()-24*scale,10,Accent,true);
+        y+=(tags.empty()?68:82)*scale;
+
+        y=heading("STORAGE LOCATIONS",y);
+        if(stacks.empty())return note("No spare stacks currently recorded in station or hangar storage.",y);
+        for(const auto& st:stacks){
+            float x=left(),w=inner(),right=x+w-150*scale;
+            box(x,y,w,60*scale);
+            std::string place=st.textOr("location_name","Unknown Location");
+            std::string sys=st.textOr("system");
+            if(!sys.empty())place+="  ·  "+sys;
+            line(place,x+12*scale,y+8*scale,w-164*scale,13,Ink,true);
+            line(st.textOr("container","Local Storage"),x+12*scale,y+32*scale,w-164*scale,11,Accent);
+            line(money(st.numberOr("quantity",1))+"×",right,y+8*scale,138*scale,20,Green,true);
+            line("SPARE",right+2*scale,y+35*scale,136*scale,9,Muted,true);
+            y+=68*scale;
+        }
+        return note("Synced from live Star Citizen EntityGraph · ship attachments hidden",y);
+    }
 };
 // Raster-only QA: exercises the production painters without creating windows or
 // injecting input, so it is safe to run while the player has the game open.
@@ -202,6 +247,10 @@ inline bool selfTest(const std::filesystem::path& preview={}){
         auto materials=arr();materials.items.push_back(obj({{"material",str("Copper")},{"amount",num(2.5)},{"unit",str("SCU")},{"min_quality",num(900)}}));materials.items.push_back(obj({{"material",str("Iron")},{"amount",num(.75)},{"unit",str("SCU")}}));
         auto missions=arr();missions.items.push_back(obj({{"title",str("Example reward mission")},{"faction",str("Example faction")},{"system",str("Stanton")},{"standing",str("Neutral")}}));auto blueprints=arr();blueprints.items.push_back(obj({{"name",str("Example component · synthetic recipe")},{"materials",materials},{"missions",missions},{"recipe_verified",SynthScan::boolean(true)},{"unlock_source",str("Synthetic preview")}}));auto item=obj({{"kind",str("Component")},{"finder_blueprints",blueprints}});
         Gdiplus::Bitmap recipeBitmap(544,480,PixelFormat32bppPARGB);Gdiplus::Graphics rg(&recipeBitmap);rg.Clear(Gdiplus::Color(255,15,16,19));rg.SetTextRenderingHint(Gdiplus::TextRenderingHintAntiAliasGridFit);Canvas rc{rg,544,1};auto recipeBottom=rc.blueprints(item,10,[](int,const std::string&){return 0;});ok=ok&&recipeBottom>200&&recipeBottom<480&&save(recipeBitmap,L"finder_hud_blueprints.png");
+        auto invStacks=arr();invStacks.items.push_back(obj({{"location_name",str("Orbituary")},{"system",str("Pyro")},{"container",str("Local Storage")},{"quantity",num(278)}}));
+        invStacks.items.push_back(obj({{"location_name",str("New Babbage")},{"system",str("Stanton")},{"container",str("Persistent Hangar")},{"quantity",num(12)}}));
+        auto invRow=obj({{"name",str("MG Scrip")},{"kind",str("Player Inventory")},{"inventory_total",num(290)},{"inventory_tags",str("Wikelo")},{"inventory_stacks",invStacks}});
+        Gdiplus::Bitmap invBitmap(544,420,PixelFormat32bppPARGB);Gdiplus::Graphics ig(&invBitmap);ig.Clear(Gdiplus::Color(255,15,16,19));ig.SetTextRenderingHint(Gdiplus::TextRenderingHintAntiAliasGridFit);Canvas ic{ig,544,1};auto invBottom=ic.playerInventory(invRow,10);ok=ok&&invBottom>180&&invBottom<420&&save(invBitmap,L"finder_hud_inventory.png");
     }
     Gdiplus::GdiplusShutdown(token);return ok;
 }

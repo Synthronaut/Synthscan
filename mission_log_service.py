@@ -34,11 +34,17 @@ def load_catalog():
         raise ValueError('Reward definitions are for a different game build')
     store = GameRecords(paths['records'], paths['localization'])
     catalog = {}
-    names = {}
+    try:
+        from reputation_ranks import load_reputation_catalog
+        names = dict(load_reputation_catalog().get('factions_by_urn') or {})
+    except Exception:
+        names = {}
     for path in (store.root/'libs/foundry/records/factions/factionreputation').rglob('*.json'):
         faction = store.read(path)['_RecordValue_']
         if faction.get('GEID'):
-            names[f"urn:sc:reputations:{'npc' if faction.get('isNPC') else 'org'}:geid:{faction['GEID']}"] = store.text(faction.get('displayName'))
+            txt = store.text(faction.get('displayName'))
+            if txt and not txt.startswith('@'):
+                names[f"urn:sc:reputations:{'npc' if faction.get('isNPC') else 'org'}:geid:{faction['GEID']}"] = txt
     catalog['_names'] = names
     for mission in audit['missions']:
         rewards = [o['rewards'] for o in mission['outcomes'] if any((r.get('configured_amount') or 0) > 0 for r in o['rewards'])]
@@ -93,6 +99,12 @@ class Logger:
         self.directory = Path(directory)
         self.book = MissionLog(directory)
         self.catalog = self.book.meta('catalog', {})
+        if not self.catalog.get('_names'):
+            try:
+                from reputation_ranks import load_reputation_catalog
+                self.catalog = dict(self.catalog, _names=dict(load_reputation_catalog().get('factions_by_urn') or {}))
+            except Exception:
+                pass
         self.game_log = Path(game_log) if game_log else None
         self.character = ''
         self.session = ''
@@ -424,7 +436,11 @@ class Logger:
                                 self.book.set_meta('catalog', self.catalog)
                                 self.book.set_meta('catalog_fingerprint', fingerprint)
                     except Exception as error:
-                        self.catalog = {}
+                        try:
+                            from reputation_ranks import load_reputation_catalog
+                            self.catalog = {'_names': dict(load_reputation_catalog().get('factions_by_urn') or {})}
+                        except Exception:
+                            self.catalog = {}
                         self.error = 'Reward catalog unavailable ('+type(error).__name__+')'
             except (OSError, ValueError, KeyError, TypeError, sqlite3.Error) as error:
                 self.error = 'Mission capture delayed ('+type(error).__name__+')'

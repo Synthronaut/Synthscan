@@ -38,10 +38,12 @@ READS={('social','SocialService','ListGroups'),('social','SocialService','ListPe
        ('identity','IdentityService','GetPlayersNames'),
        ('contacts','ContactsService','SearchAccount'),('contacts','ContactsService','ListContacts'),
        ('contacts','ContactsService','ListPendingFriendRequests'),
-       ('chat','ChatService','ListMessages')}
+       ('chat','ChatService','ListMessages'),
+       ('mission_service','MissionService','QueryActiveMissions')}
 WRITES={('contacts','ContactsService','SendFriendRequest'),('social','SocialService','InviteToParty'),
         ('social','SocialService','KickGroupMember'),('social','SocialService','TransferGroupLeadership'),
-        ('social','SocialService','LeaveGroup'),('chat','ChatService','SendMessage')}
+        ('social','SocialService','LeaveGroup'),('chat','ChatService','SendMessage'),
+        ('mission_service','MissionService','ShareMission')}
 
 class PlayerLeftShard(ValueError):pass
 
@@ -577,6 +579,48 @@ class PlayerClient:
         self.call('chat','ChatService','SendMessage',req,confirmed=True)
         return dict(sent=True,group_id=group_id,content=outgoing,at=time.time())
 
+    def share_party_contracts(self,context,confirmed=False):
+        import random
+        if confirmed is not True:
+            raise ValueError('Confirm sharing active contracts with the party.')
+        self.scope(context)
+        relations=self.relationships(context)
+        party_ids=[uid for uid in relations.get('party',[]) if uid and uid!=self.account.subject]
+        if not party_ids:
+            raise ValueError('Join a party with other players before sharing contracts.')
+        q=self.message('mission_service','QueryActiveMissionsRequest')()
+        q.queries.add().urn=self.account.subject
+        active_resp=self.call('mission_service','MissionService','QueryActiveMissions',q)
+        mission_ids=[row.mission_id for row in getattr(active_resp,'mission_ids',[]) if getattr(row,'mission_id','')]
+        if not mission_ids:
+            return dict(active=0,shared=0,skipped=0,members=len(party_ids),at=time.time(),
+                        status='No active contracts to share with your party.')
+        shared=0;skipped=0
+        for idx,mid in enumerate(mission_ids):
+            if idx>0:
+                time.sleep(random.uniform(0.12,0.35))
+            req=self.message('mission_service','ShareMissionRequest')()
+            req.mission_id=mid
+            req.owner_urn=self.account.subject
+            req.player_urns.extend(party_ids)
+            try:
+                self.scope(context)
+                self.call('mission_service','MissionService','ShareMission',req,confirmed=True)
+                shared+=1
+            except Exception as exc:
+                code_name=''
+                try:code_name=exc.code().name
+                except Exception:pass
+                if code_name in ('FAILED_PRECONDITION','ALREADY_EXISTS','PERMISSION_DENIED','INVALID_ARGUMENT','NOT_FOUND'):
+                    skipped+=1
+                    continue
+                raise
+        if shared:
+            msg=f"Shared {shared} of {len(mission_ids)} active contract(s) with {len(party_ids)} party member(s)."
+        else:
+            msg=f"No new contracts shared ({len(mission_ids)} active already shared or ineligible)."
+        return dict(active=len(mission_ids),shared=shared,skipped=skipped,members=len(party_ids),at=time.time(),status=msg)
+
 
 def social_job(kind,context,**options):
     client=None
@@ -589,6 +633,8 @@ def social_job(kind,context,**options):
         if kind in ('friend','party'):return client.send(kind,options['person'],context,options.get('confirmed'))
         if kind in ('kick_party_member','transfer_party_leader','leave_party'):
             return client.party_manage(kind,options.get('player_id',''),context,options.get('confirmed'),options.get('handle',''))
+        if kind=='share_party_contracts':
+            return client.share_party_contracts(context,options.get('confirmed'))
         if kind=='chat_snapshot':
             return client.chat_snapshot(context,options.get('known'),options.get('translator'),options.get('auto_translate',True))
         if kind=='send_chat':

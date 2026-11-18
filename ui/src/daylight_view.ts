@@ -487,7 +487,7 @@ export class DaylightViewController {
     const nav = this.container.querySelector('.ss-daylight-systems-nav');
     if (!nav) return;
     const systems = this.getAvailableSystems();
-    nav.innerHTML = systems
+    const activeButtons = systems
       .map(
         (sys) => `
         <button type="button" class="ss-system-pill ${sys === this.selectedSystem ? 'is-active' : ''}" data-sys="${sys}">
@@ -497,6 +497,15 @@ export class DaylightViewController {
       `,
       )
       .join('');
+    const nyxPlaceholder = systems.includes('Nyx')
+      ? ''
+      : `
+        <button type="button" class="ss-system-pill is-placeholder" disabled aria-disabled="true" title="Nyx planets &amp; day/night cycles coming soon">
+          <span class="ss-sys-dot"></span>
+          Nyx <span class="ss-sys-soon">Soon</span>
+        </button>
+      `;
+    nav.innerHTML = activeButtons + nyxPlaceholder;
   }
 
   private populateBodySelect(): void {

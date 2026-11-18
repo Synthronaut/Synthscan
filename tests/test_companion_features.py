@@ -359,4 +359,61 @@ class ToastGateTests(unittest.TestCase):
         self.assertEqual(gate.consume(snapshot,42,None,True,102),[])
 
 
+class PartyContractShareTests(unittest.TestCase):
+    def test_share_party_contracts_requires_confirmation_and_party_members(self):
+        client=object.__new__(PlayerClient);client.account=SimpleNamespace(subject=PLAYER_PREFIX+'1');client.scope=Mock()
+        client.relationships=Mock(return_value=dict(party=[PLAYER_PREFIX+'1']))
+        with self.assertRaises(ValueError):client.share_party_contracts(CONTEXT,confirmed=False)
+        with self.assertRaisesRegex(ValueError,'Join a party'):client.share_party_contracts(CONTEXT,confirmed=True)
+
+    def test_share_party_contracts_shares_each_active_mission(self):
+        class Bodies(list):
+            def add(self):
+                v=SimpleNamespace();self.append(v);return v
+        class UrnList(list):
+            def extend(self,vals):
+                super().extend(vals)
+        client=object.__new__(PlayerClient);client.account=SimpleNamespace(subject=PLAYER_PREFIX+'1');client.scope=Mock()
+        client.relationships=Mock(return_value=dict(party=[PLAYER_PREFIX+'1',PLAYER_PREFIX+'2',PLAYER_PREFIX+'3']))
+        def msg_factory(domain,name):
+            if name=='QueryActiveMissionsRequest':return lambda:SimpleNamespace(queries=Bodies())
+            return lambda:SimpleNamespace(mission_id='',owner_urn='',player_urns=UrnList())
+        client.message=msg_factory
+        calls=[]
+        def fake_call(domain,service,method,req,confirmed=False):
+            calls.append((method,confirmed,getattr(req,'mission_id','')))
+            if method=='QueryActiveMissions':return SimpleNamespace(mission_ids=[SimpleNamespace(mission_id='m-1'),SimpleNamespace(mission_id='m-2')])
+            return SimpleNamespace()
+        client.call=fake_call
+        with patch('time.sleep'):
+            res=client.share_party_contracts(CONTEXT,confirmed=True)
+        self.assertEqual(res['active'],2);self.assertEqual(res['shared'],2);self.assertEqual(res['members'],2)
+        self.assertEqual(calls,[('QueryActiveMissions',False,''),('ShareMission',True,'m-1'),('ShareMission',True,'m-2')])
+
+    def test_auto_share_toggle_schedules_jittered_interval_and_runs_in_tick(self):
+        with tempfile.TemporaryDirectory() as d:
+            def fake_social(kind,*args,**kwargs):
+                if kind=='relationships':
+                    return dict(self_id=PLAYER_PREFIX+'1',party=[PLAYER_PREFIX+'1',PLAYER_PREFIX+'2'],party_at=1584)
+                return dict(status='Shared 1 of 1 active contract(s) with 1 party member(s).',shared=1,active=1,members=1,at=1600)
+            social=Mock(side_effect=fake_social)
+            service=CompanionService(d,42,social=social,pool=ImmediatePool())
+            try:
+                service.session='sess-1';service.context=dict(CONTEXT,session_token='sess-1')
+                service.relationships=dict(self_id=PLAYER_PREFIX+'1',party=[PLAYER_PREFIX+'1',PLAYER_PREFIX+'2'],party_at=1000)
+                with patch('random.uniform',return_value=585.0):
+                    service.command(dict(id='cmd-auto',owner_pid=42,at=1000,session_token='sess-1',action='set_auto_share_contracts',enabled=True),1000)
+                self.assertTrue(service.party_auto_share)
+                self.assertAlmostEqual(service.party_auto_share_due,1585.0)
+                service.relationships_due=2000
+                service.relationships['party_at']=1580
+                service.tick(dict(CONTEXT,session_token='sess-1'),False,1584)
+                self.assertFalse(any(c.args[0]=='share_party_contracts' for c in social.call_args_list))
+                with patch('random.uniform',return_value=612.0):
+                    service.tick(dict(CONTEXT,session_token='sess-1'),False,1586)
+                self.assertTrue(any(c.args[0]=='share_party_contracts' for c in social.call_args_list))
+                self.assertAlmostEqual(service.party_auto_share_due,1586+612.0)
+            finally:service.close()
+
+
 if __name__=='__main__':unittest.main()

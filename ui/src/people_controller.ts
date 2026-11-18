@@ -16,6 +16,7 @@ import { personColor, splitTags, tagColor } from './colors';
 import { DaylightViewController } from './daylight_view';
 import { PiracyViewController } from './piracy_view';
 import { MissionViewController } from './mission_view';
+import { KnickKnacksViewController } from './knick_knacks_view';
 
 export const ROW_HEIGHT_PX = 40;
 
@@ -32,7 +33,7 @@ export class DesktopAppController {
   private unsubscribe: (() => void) | null = null;
 
   private snapshot: PeopleSnapshot | null = null;
-  private activeMode: 'people' | 'buyer_alerts' | 'home' | 'settings' | 'daylight' | 'hud_piracy' | 'mission_log' = 'people';
+  private activeMode: 'people' | 'buyer_alerts' | 'home' | 'settings' | 'daylight' | 'hud_piracy' | 'mission_log' | 'knick_knacks' = 'people';
   private sourceIndex = 0; // 0: Shard, 1: Search, 2: Tagged, 3: Friends
   private taggedOnly = false;
   private searchQuery = '';
@@ -135,6 +136,8 @@ export class DesktopAppController {
   private piracyController: PiracyViewController | null = null;
   private missionSectionEl!: HTMLElement;
   private missionController: MissionViewController | null = null;
+  private knickKnacksSectionEl!: HTMLElement;
+  private knickKnacksController: KnickKnacksViewController | null = null;
   private modalBackdropEl!: HTMLElement;
   private modalTitleEl!: HTMLElement;
   private modalSummaryEl!: HTMLElement;
@@ -178,6 +181,9 @@ export class DesktopAppController {
   private partyHeaderEl!: HTMLElement;
   private partyListEl!: HTMLElement;
   private leavePartyBtn!: HTMLButtonElement;
+  private sharePartyContractsBtn!: HTMLButtonElement;
+  private partyAutoShareCheckboxEl!: HTMLInputElement;
+  private partyShareStatusEl!: HTMLElement;
   private chatChannelTabsEl!: HTMLElement;
   private chatAutoTranslateCheckboxEl!: HTMLInputElement;
   private chatShowRawCheckboxEl!: HTMLInputElement;
@@ -217,6 +223,10 @@ export class DesktopAppController {
     if (this.missionController) {
       this.missionController.destroy();
       this.missionController = null;
+    }
+    if (this.knickKnacksController) {
+      this.knickKnacksController.destroy();
+      this.knickKnacksController = null;
     }
   }
 
@@ -401,9 +411,17 @@ export class DesktopAppController {
             <div class="ss-pane-meta">
               <span id="people-party-header" class="ss-status-line">Party · Solo</span>
               <div class="ss-toolbar-row">
-                <span class="ss-hint-line">Right-click member or click Actions to make leader or remove</span>
+                <label class="ss-checkbox-label" title="Automatically re-share all active contracts every 9m30s–10m30s (randomized interval)">
+                  <input id="party-auto-share-checkbox" type="checkbox" />
+                  <span>Auto-share (9:30–10:30)</span>
+                </label>
+                <button id="share-party-contracts-btn" type="button" class="ss-btn ss-btn-xs ss-btn-accent" disabled>Share All Contracts</button>
                 <button id="leave-party-btn" type="button" class="ss-btn ss-btn-xs" hidden>Leave</button>
               </div>
+            </div>
+            <div class="ss-toolbar-row" style="justify-content: space-between; margin-bottom: 6px;">
+              <span class="ss-hint-line">Right-click member or click Actions to make leader or remove</span>
+              <span id="party-share-status-line" class="ss-hint-line"></span>
             </div>
             <div id="people-party-list" class="ss-party-list ss-party-list-full" role="region" aria-label="Current party members"></div>
           </div>
@@ -615,6 +633,7 @@ export class DesktopAppController {
         <section id="ss-view-daylight" class="ss-view" hidden></section>
         <section id="ss-view-piracy" class="ss-view" hidden></section>
         <section id="ss-view-mission" class="ss-view" hidden></section>
+        <section id="ss-view-knick-knacks" class="ss-view" hidden></section>
 
         <footer class="ss-footer">
           <div id="companion-footer-status" class="ss-footer-text">Ready</div>
@@ -713,6 +732,12 @@ export class DesktopAppController {
         if (this.footerStatusEl) this.footerStatusEl.textContent = msg;
       },
     });
+    this.knickKnacksSectionEl = this.root.querySelector('#ss-view-knick-knacks')!;
+    this.knickKnacksController = new KnickKnacksViewController(this.knickKnacksSectionEl, this.bridge, {
+      onNotice: (msg) => {
+        if (this.footerStatusEl) this.footerStatusEl.textContent = msg;
+      },
+    });
 
     this.modalBackdropEl = this.root.querySelector('#ss-modal-backdrop')!;
     this.modalTitleEl = this.root.querySelector('#ss-modal-title')!;
@@ -746,6 +771,9 @@ export class DesktopAppController {
     this.partyHeaderEl = this.root.querySelector('#people-party-header')!;
     this.partyListEl = this.root.querySelector('#people-party-list')!;
     this.leavePartyBtn = this.root.querySelector('#leave-party-btn')!;
+    this.sharePartyContractsBtn = this.root.querySelector('#share-party-contracts-btn')!;
+    this.partyAutoShareCheckboxEl = this.root.querySelector('#party-auto-share-checkbox')!;
+    this.partyShareStatusEl = this.root.querySelector('#party-share-status-line')!;
     this.chatChannelTabsEl = this.root.querySelector('#chat-channel-tabs')!;
     this.chatAutoTranslateCheckboxEl = this.root.querySelector('#chat-auto-translate-checkbox')!;
     this.chatShowRawCheckboxEl = this.root.querySelector('#chat-show-raw-checkbox')!;
@@ -1178,6 +1206,20 @@ export class DesktopAppController {
       void this.bridge.sendCommand({
         action: 'leave_party',
         confirmed: true,
+      });
+    });
+
+    this.sharePartyContractsBtn.addEventListener('click', () => {
+      void this.bridge.sendCommand({
+        action: 'share_party_contracts',
+        confirmed: true,
+      });
+    });
+
+    this.partyAutoShareCheckboxEl.addEventListener('change', () => {
+      void this.bridge.sendCommand({
+        action: 'set_auto_share_contracts',
+        enabled: this.partyAutoShareCheckboxEl.checked,
       });
     });
 
@@ -1627,7 +1669,7 @@ export class DesktopAppController {
     menu.style.top = `${posY}px`;
   }
 
-  public setMode(mode: 'people' | 'buyer_alerts' | 'home' | 'settings' | 'daylight' | 'hud_piracy' | 'mission_log'): void {
+  public setMode(mode: 'people' | 'buyer_alerts' | 'home' | 'settings' | 'daylight' | 'hud_piracy' | 'mission_log' | 'knick_knacks'): void {
     this.activeMode = mode;
     this.peopleSectionEl.hidden = mode !== 'people';
     this.marketSectionEl.hidden = mode !== 'buyer_alerts';
@@ -1636,6 +1678,7 @@ export class DesktopAppController {
     this.daylightSectionEl.hidden = mode !== 'daylight';
     this.piracySectionEl.hidden = mode !== 'hud_piracy';
     this.missionSectionEl.hidden = mode !== 'mission_log';
+    this.knickKnacksSectionEl.hidden = mode !== 'knick_knacks';
     if (mode === 'mission_log') {
       this.missionController?.activate();
     }
@@ -1662,6 +1705,9 @@ export class DesktopAppController {
       } else if (mode === 'mission_log') {
         titleEl.textContent = 'Mission & Wallet Log';
         subEl.textContent = 'Every contract, reputation shift and aUEC movement, grouped by play session.';
+      } else if (mode === 'knick_knacks') {
+        titleEl.textContent = 'Knick-Knacks';
+        subEl.textContent = 'Spare ship components, crafting materials, Wikelo items, and Comp Boards across your Verse storage.';
       } else if (mode === 'home') {
         titleEl.textContent = 'Home';
         subEl.textContent = "Find your next upgrade. See what you've accomplished.";
@@ -1689,6 +1735,9 @@ export class DesktopAppController {
     }
     if (this.missionController) {
       this.missionController.updateFromState(snap.mission);
+    }
+    if (this.knickKnacksController) {
+      this.knickKnacksController.updateFromSnapshot(snap);
     }
     if (this.modalOpen && this.modalMode === 'queue_report') {
       this.renderQueueReportRows();
@@ -1887,10 +1936,25 @@ export class DesktopAppController {
     if (count <= 1) {
       this.partyHeaderEl.textContent = 'Party · Solo / none';
       this.leavePartyBtn.hidden = true;
+      this.sharePartyContractsBtn.disabled = true;
     } else {
       this.partyHeaderEl.textContent = `Party · ${count} members${isLeader ? ' (You are Leader)' : ''}`;
       this.leavePartyBtn.hidden = false;
+      this.sharePartyContractsBtn.disabled = Boolean(snap.party_share_busy);
     }
+    this.sharePartyContractsBtn.textContent = snap.party_share_busy ? 'Sharing…' : 'Share All Contracts';
+    this.partyAutoShareCheckboxEl.checked = Boolean(snap.party_auto_share);
+    const shareParts: string[] = [];
+    if (snap.party_auto_share_status) {
+      shareParts.push(snap.party_auto_share_status);
+    }
+    if (snap.party_auto_share && snap.party_auto_share_due) {
+      const rem = Math.max(0, Math.round(snap.party_auto_share_due - Date.now() / 1000));
+      const m = Math.floor(rem / 60);
+      const s = rem % 60;
+      shareParts.push(`Next in ${m}m ${String(s).padStart(2, '0')}s`);
+    }
+    this.partyShareStatusEl.textContent = shareParts.join(' · ');
 
     const partySig = `${snap.session}|${snap.revision ?? 0}|${leaderId}|${isLeader ? '1' : '0'}|${rawParty.map((p) => `${p.id}:${p.handle}:${p.is_leader ? '1' : '0'}:${p.tag ?? ''}`).join(',')}`;
     if (partySig === this.lastPartySignature) {
@@ -2425,7 +2489,8 @@ export class DesktopAppController {
           entry.kind === 'party_sent' ||
           entry.kind === 'party_accepted' ||
           entry.kind === 'party_rejected' ||
-          entry.kind === 'party_manage'
+          entry.kind === 'party_manage' ||
+          entry.kind === 'party_share'
         );
       }
       if (this.actionLogFilter === 'responses') {
@@ -2472,6 +2537,8 @@ export class DesktopAppController {
           return { label: 'Party Declined', cls: 'is-declined' };
         case 'party_manage':
           return { label: `Party · ${entry.outcome || 'Action'}`, cls: 'is-tag' };
+        case 'party_share':
+          return { label: `Contracts Shared`, cls: 'is-sent' };
         default:
           return { label: entry.outcome || 'Action', cls: 'is-tag' };
       }

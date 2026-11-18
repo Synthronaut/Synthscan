@@ -37,6 +37,9 @@ class MiningPlannerPage(ctk.CTkFrame):
         row3.pack(fill='x', padx=12, pady=(0, 10))
         self.quality = self.menu(row3, ['All quality scales', 'Full quality scale'], 160)
         self.sort = self.menu(row3, ['Primary prevalence', 'Configured material upper bound'], 220)
+        ctk.CTkButton(row3, text='Target Cyan', width=105, fg_color='#204c5a', command=lambda: self.toggle_color('cyan')).pack(side='left', padx=(8, 4))
+        ctk.CTkButton(row3, text='Mark Red', width=95, fg_color='#5a232b', command=lambda: self.toggle_color('red')).pack(side='left', padx=4)
+        ctk.CTkButton(row3, text='Clear Colors', width=95, fg_color='#303847', command=self.clear_colors).pack(side='left', padx=4)
         self.note = self.label(self, 'Preset weights compare configured deposits within an equipment family. They are not a live spawn rate or guaranteed haul.', 12, MUTED)
         body = ctk.CTkFrame(self, fg_color='transparent')
         body.pack(fill='both', expand=True, pady=8)
@@ -72,6 +75,29 @@ class MiningPlannerPage(ctk.CTkFrame):
         self.additional.insert(0, ', '.join(resolved[1:]))
         self.mode.set('Include secondaries')
         self.refresh()
+
+    def toggle_color(self, color):
+        from mining_labels import load_targets, save_targets, apply_targets_to_global_ini
+        mat = self.target.get().strip()
+        if not mat:
+            return
+        cur = load_targets()
+        cyan = [x for x in cur.get('cyan', []) if x.lower() != mat.lower()]
+        red = [x for x in cur.get('red', []) if x.lower() != mat.lower()]
+        other = cur.get('cyan', []) if color == 'cyan' else cur.get('red', [])
+        was_set = any(x.lower() == mat.lower() for x in other)
+        if not was_set:
+            (cyan if color == 'cyan' else red).append(mat)
+        save_targets(cyan=cyan, red=red, amounts=cur.get('amounts'), blueprint=cur.get('blueprint'))
+        apply_targets_to_global_ini()
+        state = 'cleared' if was_set else f'marked {color.upper()}'
+        self.note.configure(text=f"SynthStrings: {mat} {state} in-game (cyan: {', '.join(cyan) or 'none'} · red: {', '.join(red) or 'none'}). Restart game to reload.")
+
+    def clear_colors(self):
+        from mining_labels import save_targets, apply_targets_to_global_ini
+        save_targets(cyan=[], red=[], amounts={}, blueprint=None)
+        apply_targets_to_global_ini()
+        self.note.configure(text='SynthStrings: cleared all Cyan/Red material targets (reverted to base colors).')
 
     def refresh(self):
         targets = [self.target.get()] + [s.strip() for s in self.additional.get().split(',') if s.strip()]

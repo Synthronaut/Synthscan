@@ -164,7 +164,6 @@ def sync_blueprints_to_global_ini(ini_path=DEFAULT_INI_PATH, owned_blueprints=No
     seen_custom = set()
 
     for line in lines:
-        line, _ = compact_mining_labels(line)
         if "=" in line:
             k_part, v_part = line.split("=", 1)
             k_clean = k_part.lstrip("\ufeff").strip()
@@ -173,12 +172,9 @@ def sync_blueprints_to_global_ini(ini_path=DEFAULT_INI_PATH, owned_blueprints=No
                 ending = "\r\n" if line.endswith("\r\n") else "\n" if line.endswith("\n") else ""
                 bom = "\ufeff" if k_part.startswith("\ufeff") else ""
                 line = f"{bom}{k_clean}={custom_overrides[k_clean]}{ending}"
-        # Enforce compressed commodity and HUD scanning tags
-        if line.startswith("items_commodities_amiantpod="):
-            line = "items_commodities_amiantpod=<EM3>Pod</EM3>\n"
-        elif line.startswith("items_commodities_flareweedstalk="):
-            line = "items_commodities_flareweedstalk=<EM3>Stock</EM3>\n"
-        elif line.startswith("hud_scanning_cat_harvestables="):
+        line, _ = compact_mining_labels(line)
+        # Enforce compressed HUD scanning category tag
+        if line.startswith("hud_scanning_cat_harvestables="):
             line = "hud_scanning_cat_harvestables=Harv\n"
 
         if "Potential Harvestables:" in line:

@@ -835,6 +835,11 @@ void Application::runWithGUI(HINSTANCE hInstance) {
         gameTextsDueAt_ = std::chrono::steady_clock::now() + std::chrono::seconds(3);
     });
 
+    gui_->setWantedToggleCallback([this](int blueprint, bool wanted) {
+        library_.setWanted(blueprint, wanted);
+        pushLibrary();
+    });
+
     // A backup put back in the Your data card. What it wrote is the truth
     // from here on: the library is read again at once - left alone, its next
     // save would put the one in memory back over it - and the settings file
@@ -4443,7 +4448,7 @@ void Application::pollLibrary() {
     // ...and the ranks out of the same logs: once they have all been read,
     // and again with every contract taken or finished
     {
-        const bool known = !library_.gameLog().empty() && !library_.historyPending();
+        const bool known = (!library_.gameLog().empty() && !library_.historyPending()) || library_.hasLiveRanks();
         const bool moved = library_.ranksChanged();
         if (known != ranksKnown_ || (known && moved) || !ranksPushed_) pushRanks();
         // ...and the contracts of the moment: one taken, one over. A game
@@ -5256,7 +5261,11 @@ void Application::pushLibrary() {
     if (library_.assumedCount() > 0) {
         note += "  -  " + std::to_string(library_.assumedCount()) + " from contracts that paid none";
     }
+    if (library_.syncedCount() > 0) {
+        note += "  -  " + std::to_string(library_.syncedCount()) + " synced from CIG account";
+    }
     gui_->setOwnedBlueprints(library_.stamps(), note);
+    gui_->setWantedBlueprints(library_.wantedFlags());
     libraryPushed_ = true;
 }
 

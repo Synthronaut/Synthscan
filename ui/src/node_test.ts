@@ -3,6 +3,7 @@ import { runDaylightParity, type ParityFixture } from './daylight_parity';
 import { runDaylightRegressionSuite } from './daylight_suite';
 import { runPiracyRegressionSuite } from './piracy_suite';
 import { runMissionRegressionSuite } from './mission_suite';
+import { runKnickKnacksRegressionSuite } from './knick_knacks_suite';
 
 type Listener = (ev: FakeEvent) => void;
 
@@ -421,6 +422,8 @@ async function main(): Promise<void> {
   console.log(JSON.stringify(piracyResult, null, 2));
   const missionResult = await runMissionRegressionSuite(doc.createElement('div') as unknown as HTMLElement);
   console.log(JSON.stringify(missionResult, null, 2));
+  const knickKnacksResult = await runKnickKnacksRegressionSuite(doc.createElement('div') as unknown as HTMLElement);
+  console.log(JSON.stringify(knickKnacksResult, null, 2));
 
   if (
     !result.passed ||
@@ -428,7 +431,8 @@ async function main(): Promise<void> {
     parity.daylight_cases === 0 ||
     !daylightResult.passed ||
     !piracyResult.passed ||
-    !missionResult.passed
+    !missionResult.passed ||
+    !knickKnacksResult.passed
   ) {
     const proc = (globalThis as { process?: { exit?: (code: number) => void } }).process;
     if (proc?.exit) proc.exit(1);

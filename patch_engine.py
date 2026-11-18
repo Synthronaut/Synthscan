@@ -132,7 +132,7 @@ def apply_all_rules_and_adapt(ini_path=DEFAULT_INI_PATH, sc_dir=DEFAULT_SC_DIR, 
     # 1. Clean Line-by-Line Rules
     seen_custom = set()
     for line in lines:
-        mod_line, _ = compact_mining_labels(line)
+        mod_line = line
         if "=" in mod_line:
             k_part, _ = mod_line.split("=", 1)
             k_clean = k_part.lstrip("\ufeff")
@@ -153,25 +153,18 @@ def apply_all_rules_and_adapt(ini_path=DEFAULT_INI_PATH, sc_dir=DEFAULT_SC_DIR, 
             mod_line, n = re.subn(r'\s*\([rR][aA][wW]\)', '', mod_line)
             raw_cleaned += n
 
-        # C. Quasigrazers -> <EM4>QzG</EM4>
+        # C. Quasigrazers -> <EM3>QzG</EM3> (unless overridden by user target)
         if "quasigrazer" in mod_line.lower() or "quazigrazer" in mod_line.lower():
-            if mod_line.startswith("items_commodities_quasigrazer=") or mod_line.startswith("actor_species_creature_quaziGrazer"):
-                mod_line = re.sub(r'=.*', '=<EM4>QzG</EM4>\n', mod_line)
-                quazi_cleaned += 1
-            elif "Potential Creatures:" in mod_line:
+            if "Potential Creatures:" in mod_line:
                 mod_line = re.sub(r'Quasigrazer|Quazigrazer', 'QzG', mod_line, flags=re.IGNORECASE)
                 quazi_cleaned += 1
 
         # D. Harvestables compression
-        if mod_line.startswith("items_commodities_amiantpod="):
-            mod_line = "items_commodities_amiantpod=<EM3>Pod</EM3>\n"
-            harv_cleaned += 1
-        elif mod_line.startswith("items_commodities_flareweedstalk="):
-            mod_line = "items_commodities_flareweedstalk=<EM3>Stock</EM3>\n"
-            harv_cleaned += 1
-        elif mod_line.startswith("hud_scanning_cat_harvestables="):
+        if mod_line.startswith("hud_scanning_cat_harvestables="):
             mod_line = "hud_scanning_cat_harvestables=Harv\n"
             harv_cleaned += 1
+
+        mod_line, _ = compact_mining_labels(mod_line)
 
         if "Potential Harvestables:" in mod_line:
             mod_line = mod_line.replace("Potential Harvestables:", "Potential Harv:")

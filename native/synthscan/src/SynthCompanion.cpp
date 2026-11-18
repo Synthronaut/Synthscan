@@ -224,6 +224,8 @@ void queue(Json command){
 }
 void handleWebViewCommand(const Json& command){
     const std::string action=command.textOr("action");
+    if(action=="nav_back"){SynthHome::navigateBack();return;}
+    if(action=="nav_forward"){SynthHome::navigateForward();return;}
     if(action=="navigate"){
         std::string dest=command.textOr("page");
         if(dest.empty())dest=command.textOr("target");
@@ -246,6 +248,17 @@ void handleWebViewCommand(const Json& command){
         cmd.members.push_back({"at",num(now())});
         std::error_code error;std::filesystem::create_directories(folder/L"daylight_commands",error);
         write(folder/L"daylight_commands"/(std::wstring(id,id+strlen(id))+L".json"),cmd);
+        return;
+    }
+    if(action.rfind("knick_knacks_",0)==0){
+        if(folder.empty())folder=SCMiner::AppPaths::data();
+        static unsigned kkSeq=0;char id[90];sprintf_s(id,"%020llu-%010lu-%08u",GetTickCount64(),GetCurrentProcessId(),++kkSeq);
+        Json cmd=command;
+        cmd.members.push_back({"request_id",str(id)});
+        cmd.members.push_back({"owner_pid",num(GetCurrentProcessId())});
+        cmd.members.push_back({"at",num(now())});
+        std::error_code error;std::filesystem::create_directories(folder/L"knick_knacks_commands",error);
+        write(folder/L"knick_knacks_commands"/(std::wstring(id,id+strlen(id))+L".json"),cmd);
         return;
     }
     if(action.rfind("mission_",0)==0){
@@ -536,11 +549,12 @@ void refresh(bool force=false){
         const std::string pageName = SynthHome::selectedPage();
         const std::string snapMode = (!pageName.empty() && pageName != "home" && pageName != "people" && pageName != "buyer_alerts") ? pageName : mode;
         Json missionState=snapMode=="mission_log"?read(folder/L"mission_log_view.json",32*1024*1024):obj({});
-        const std::string extraSig = snapMode + "|" + encode(homeOverview) + "|" + encode(daylightState) + "|" + encode(piracyPayload) + "|" + encode(missionState);
+        Json knickKnacksState=snapMode=="knick_knacks"?read(folder/L"knick_knacks_state.json",16*1024*1024):obj({});
+        const std::string extraSig = snapMode + "|" + encode(homeOverview) + "|" + encode(daylightState) + "|" + encode(piracyPayload) + "|" + encode(missionState) + "|" + encode(knickKnacksState);
         if(changed || force || extraSig != lastWebExtra){
             lastWebExtra = extraSig;
             Json marketItems=arr();for(const auto& item:items)marketItems.items.push_back(item);
-            SynthWebView::pushSnapshot(snapMode, model, marketItems, homeOverview, daylightState, piracyPayload, missionState);
+            SynthWebView::pushSnapshot(snapMode, model, marketItems, homeOverview, daylightState, piracyPayload, missionState, knickKnacksState);
         }
     }
 }

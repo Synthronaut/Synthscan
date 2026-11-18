@@ -264,7 +264,8 @@ bool allowedAction(const std::string& action) {
         "open_uex_ad", "navigate", "strings_settings", "strings_details",
         "daylight_preferences", "daylight_observe", "daylight_refresh", "daylight_copy_forecast",
         "piracy_toggle_wait", "piracy_reset_wait", "piracy_log_pull", "piracy_delete_pull",
-        "mission_view", "mission_classify", "mission_export"
+        "mission_view", "mission_classify", "mission_export",
+        "knick_knacks_refresh"
     };
     return allowed.count(action) > 0;
 }
@@ -312,6 +313,7 @@ Json g_pendingHome;
 Json g_pendingDaylight;
 Json g_pendingPiracy;
 Json g_pendingMission;
+Json g_pendingKnickKnacks;
 Json g_suiteResult;
 bool g_hasSuiteResult = false;
 std::wstring g_initialUrl = L"https://synthscan.local/index.html";
@@ -327,7 +329,8 @@ void sendSnapshotMessage() {
         {"home", g_pendingHome},
         {"daylight", g_pendingDaylight},
         {"piracy", g_pendingPiracy},
-        {"mission", g_pendingMission}
+        {"mission", g_pendingMission},
+        {"knick_knacks", g_pendingKnickKnacks}
     });
     auto payload = wide(encode(envelope));
     g_webview->PostWebMessageAsJson(payload.c_str());
@@ -572,7 +575,7 @@ bool attach(HWND parent, const std::filesystem::path& dataFolder, const std::str
     return true;
 }
 
-void pushSnapshot(const std::string& mode, const Json& state, const Json& marketItems, const Json& homeOverview, const Json& daylight, const Json& piracy, const Json& mission) {
+void pushSnapshot(const std::string& mode, const Json& state, const Json& marketItems, const Json& homeOverview, const Json& daylight, const Json& piracy, const Json& mission, const Json& knickKnacks) {
     g_pendingMode = mode;
     g_pendingState = state;
     g_pendingMarketItems = marketItems;
@@ -580,6 +583,7 @@ void pushSnapshot(const std::string& mode, const Json& state, const Json& market
     g_pendingDaylight = daylight;
     g_pendingPiracy = piracy;
     g_pendingMission = mission;
+    g_pendingKnickKnacks = knickKnacks;
     sendSnapshotMessage();
 }
 

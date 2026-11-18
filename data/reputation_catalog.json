@@ -1,0 +1,2672 @@
+{
+  "schema": 1,
+  "build_id": "d6fec516-2d22-45eb-aeb2-29b9d769bd1d",
+  "factions_by_geid": {
+    "199998949487": "Aciedo Communications",
+    "199998949488": "ArcCorp",
+    "199999007029": "Recco Battaglia",
+    "199998949490": "Civilian Defense Force",
+    "199998949506": "Clovus Darneely",
+    "199998949472": "Crusader Industries",
+    "199998949492": "Hurston Dynamics",
+    "199999007081": "IASI",
+    "199998949493": "Klescher Rehabilitation Facilities",
+    "199998949502": "Adagio Holdings",
+    "199998949489": "Bounty Hunters Guild",
+    "199998949482": "Citizens For Prosperity",
+    "199998949491": "Covalex",
+    "199998949505": "Eckhart Security",
+    "199998982640": "Foxwell Enforcement",
+    "199999005906": "FTL Courier",
+    "199998982633": "Highpoint Wilderness Specialists",
+    "199998982729": "Hockrow Agency",
+    "199999005907": "InterSec Defense Solutions",
+    "199998982730": "Interstellar Cartography Centre",
+    "199998949494": "Ling Family Hauling",
+    "199998949497": "Northrock Service Group",
+    "199998982735": "Rayari Incorporated",
+    "199998949499": "Red Wind Linehaul",
+    "199998949500": "Shubin Interstellar",
+    "199998982738": "United Wayfarers Club",
+    "199998949498": "Wildstar Racing",
+    "199998949496": "microTech",
+    "199998949510": "Ruto",
+    "199998949501": "Unified Distribution Management",
+    "199998949480": "Bit Zeros",
+    "199999005905": "Dead Saints",
+    "199998949483": "Headhunters",
+    "199998949481": "Tar Pits",
+    "199998949507": "Tecia \"Twitch\" Pacheco",
+    "199998949485": "Vaughn",
+    "199998949508": "Wallace Klim",
+    "199999006406": "Wikelo Emporium",
+    "199998949486": "XenoThreat"
+  },
+  "factions_by_urn": {
+    "urn:sc:reputations:org:geid:199998949487": "Aciedo Communications",
+    "urn:sc:reputations:org:geid:199998949488": "ArcCorp",
+    "urn:sc:reputations:org:geid:199999007029": "Recco Battaglia",
+    "urn:sc:reputations:org:geid:199998949490": "Civilian Defense Force",
+    "urn:sc:reputations:org:geid:199998949506": "Clovus Darneely",
+    "urn:sc:reputations:org:geid:199998949472": "Crusader Industries",
+    "urn:sc:reputations:org:geid:199998949492": "Hurston Dynamics",
+    "urn:sc:reputations:org:geid:199999007081": "IASI",
+    "urn:sc:reputations:org:geid:199998949493": "Klescher Rehabilitation Facilities",
+    "urn:sc:reputations:org:geid:199998949502": "Adagio Holdings",
+    "urn:sc:reputations:org:geid:199998949489": "Bounty Hunters Guild",
+    "urn:sc:reputations:org:geid:199998949482": "Citizens For Prosperity",
+    "urn:sc:reputations:org:geid:199998949491": "Covalex",
+    "urn:sc:reputations:org:geid:199998949505": "Eckhart Security",
+    "urn:sc:reputations:org:geid:199998982640": "Foxwell Enforcement",
+    "urn:sc:reputations:org:geid:199999005906": "FTL Courier",
+    "urn:sc:reputations:org:geid:199998982633": "Highpoint Wilderness Specialists",
+    "urn:sc:reputations:org:geid:199998982729": "Hockrow Agency",
+    "urn:sc:reputations:org:geid:199999005907": "InterSec Defense Solutions",
+    "urn:sc:reputations:org:geid:199998982730": "Interstellar Cartography Centre",
+    "urn:sc:reputations:org:geid:199998949494": "Ling Family Hauling",
+    "urn:sc:reputations:org:geid:199998949497": "Northrock Service Group",
+    "urn:sc:reputations:org:geid:199998982735": "Rayari Incorporated",
+    "urn:sc:reputations:org:geid:199998949499": "Red Wind Linehaul",
+    "urn:sc:reputations:org:geid:199998949500": "Shubin Interstellar",
+    "urn:sc:reputations:org:geid:199998982738": "United Wayfarers Club",
+    "urn:sc:reputations:org:geid:199998949498": "Wildstar Racing",
+    "urn:sc:reputations:org:geid:199998949496": "microTech",
+    "urn:sc:reputations:org:geid:199998949510": "Ruto",
+    "urn:sc:reputations:org:geid:199998949501": "Unified Distribution Management",
+    "urn:sc:reputations:org:geid:199998949480": "Bit Zeros",
+    "urn:sc:reputations:org:geid:199999005905": "Dead Saints",
+    "urn:sc:reputations:org:geid:199998949483": "Headhunters",
+    "urn:sc:reputations:org:geid:199998949481": "Tar Pits",
+    "urn:sc:reputations:org:geid:199998949507": "Tecia \"Twitch\" Pacheco",
+    "urn:sc:reputations:org:geid:199998949485": "Vaughn",
+    "urn:sc:reputations:org:geid:199998949508": "Wallace Klim",
+    "urn:sc:reputations:org:geid:199999006406": "Wikelo Emporium",
+    "urn:sc:reputations:org:geid:199998949486": "XenoThreat"
+  },
+  "scopes": {
+    "FactionReputation": {
+      "name": "FactionReputation",
+      "display_name": "Standing",
+      "localization_key": "@mobiGlas_Reputation_Standing",
+      "standings": [
+        {
+          "name": "Neutral",
+          "minimum": 0,
+          "gated": true,
+          "localization_key": "@mobiGlas_Reputation_Stance_Neutral"
+        },
+        {
+          "name": "Jr. Contractor",
+          "minimum": 800,
+          "gated": false,
+          "localization_key": "@RepScope_Contractor_Rank1"
+        },
+        {
+          "name": "Contractor",
+          "minimum": 2200,
+          "gated": false,
+          "localization_key": "@RepScope_Contractor_Rank2"
+        },
+        {
+          "name": "Sr. Contractor",
+          "minimum": 5800,
+          "gated": false,
+          "localization_key": "@RepScope_Contractor_Rank3"
+        },
+        {
+          "name": "Veteran Contractor",
+          "minimum": 15000,
+          "gated": false,
+          "localization_key": "@RepScope_Contractor_Rank4"
+        },
+        {
+          "name": "Head Contractor",
+          "minimum": 38000,
+          "gated": false,
+          "localization_key": "@RepScope_Contractor_Rank5"
+        },
+        {
+          "name": "Elite Contractor",
+          "minimum": 95250,
+          "gated": false,
+          "localization_key": "@RepScope_Contractor_Rank6"
+        }
+      ]
+    },
+    "MissionProviderReputation_Battaglia": {
+      "name": "MissionProviderReputation_Battaglia",
+      "display_name": "Standing",
+      "localization_key": "@mobiGlas_Reputation_Standing",
+      "standings": [
+        {
+          "name": "Prospective Associate",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@mg_battaglia_RepScope_Rank0"
+        },
+        {
+          "name": "Associate",
+          "minimum": 2400,
+          "gated": false,
+          "localization_key": "@mg_battaglia_RepScope_Rank1"
+        },
+        {
+          "name": "Trusted Associate",
+          "minimum": 6000,
+          "gated": false,
+          "localization_key": "@mg_battaglia_RepScope_Rank2"
+        },
+        {
+          "name": "Prestige 1",
+          "minimum": 10800,
+          "gated": false,
+          "localization_key": "@mg_battaglia_RepScope_Rank3"
+        },
+        {
+          "name": "Prestige 2",
+          "minimum": 30000,
+          "gated": false,
+          "localization_key": "@mg_battaglia_RepScope_Rank4"
+        },
+        {
+          "name": "Prestige 3",
+          "minimum": 69600,
+          "gated": false,
+          "localization_key": "@mg_battaglia_RepScope_Rank5"
+        }
+      ]
+    },
+    "Faction_Band_0": {
+      "name": "Faction_Band_0",
+      "display_name": "Standing",
+      "localization_key": "@LOC_PLACEHOLDER",
+      "standings": [
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": true,
+          "localization_key": "@LOC_PLACEHOLDER"
+        }
+      ]
+    },
+    "Faction_Band_1": {
+      "name": "Faction_Band_1",
+      "display_name": "Standing",
+      "localization_key": "@LOC_PLACEHOLDER",
+      "standings": [
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": true,
+          "localization_key": "@LOC_PLACEHOLDER"
+        }
+      ]
+    },
+    "Faction_Band_2": {
+      "name": "Faction_Band_2",
+      "display_name": "Standing",
+      "localization_key": "@LOC_PLACEHOLDER",
+      "standings": [
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": true,
+          "localization_key": "@LOC_PLACEHOLDER"
+        }
+      ]
+    },
+    "Faction_Band_3": {
+      "name": "Faction_Band_3",
+      "display_name": "Standing",
+      "localization_key": "@LOC_PLACEHOLDER",
+      "standings": [
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": true,
+          "localization_key": "@LOC_PLACEHOLDER"
+        }
+      ]
+    },
+    "Faction_Band_4": {
+      "name": "Faction_Band_4",
+      "display_name": "Standing",
+      "localization_key": "@LOC_PLACEHOLDER",
+      "standings": [
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": true,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": true,
+          "localization_key": "@LOC_PLACEHOLDER"
+        }
+      ]
+    },
+    "Guild": {
+      "name": "Guild",
+      "display_name": "Guild Standing",
+      "localization_key": "@LOC_PLACEHOLDER",
+      "standings": [
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": true,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 513,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 2051,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 4615,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 8205,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 12820,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 18461,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 25127,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 32819,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 41537,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 51280,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 62049,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 73843,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 86663,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 100509,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 115380,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 131277,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 148199,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 166147,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 185121,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 205120,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 226145,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 248195,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 271271,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 295373,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 320500,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 346653,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 373831,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 402035,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 431265,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 461520,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 492801,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 525107,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 558439,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 592797,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 628180,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 664589,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 702023,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 740483,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 779969,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 820480,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 862017,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 904579,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 948167,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 992781,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 1038420,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 1085085,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 1132775,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 1181491,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 1231233,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 1282000,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        }
+      ]
+    },
+    "Affinity": {
+      "name": "Affinity",
+      "display_name": "Affinity",
+      "localization_key": "@RepScope_MissionGiver_Default_Name",
+      "standings": [
+        {
+          "name": "Hated",
+          "minimum": -10000,
+          "gated": false,
+          "localization_key": "@RepStanding_MissionGiver_Default_Hated_Name"
+        },
+        {
+          "name": "",
+          "minimum": -9500,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": -9000,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": -8500,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": -8000,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": -7500,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": -7000,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": -6500,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": -6000,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": -5500,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "Disliked",
+          "minimum": -5000,
+          "gated": false,
+          "localization_key": "@RepStanding_MissionGiver_Default_Disliked_Name"
+        },
+        {
+          "name": "",
+          "minimum": -4500,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": -4000,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": -3500,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": -3000,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": -2500,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": -2000,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": -1500,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": -1000,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": -500,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "Neutral",
+          "minimum": 0,
+          "gated": true,
+          "localization_key": "@RepStanding_MissionGiver_Default_Neutral_Name"
+        },
+        {
+          "name": "",
+          "minimum": 500,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 1000,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 1500,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 2000,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "Liked",
+          "minimum": 2500,
+          "gated": false,
+          "localization_key": "@RepStanding_MissionGiver_Default_Liked_Name"
+        },
+        {
+          "name": "",
+          "minimum": 3000,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 3500,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 4000,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 4500,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 5000,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 5500,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 6500,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 6500,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 7000,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 7500,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 8000,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 8500,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 9000,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 9500,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "Exalted",
+          "minimum": 10000,
+          "gated": false,
+          "localization_key": "@RepStanding_MissionGiver_Default_Exalted_Name"
+        }
+      ]
+    },
+    "Assassination": {
+      "name": "Assassination",
+      "display_name": "Assassination",
+      "localization_key": "@RepScope_Assassination_Name",
+      "standings": [
+        {
+          "name": "Not Eligible",
+          "minimum": -1000,
+          "gated": false,
+          "localization_key": "@RepStanding_NotEligible"
+        },
+        {
+          "name": "Under Review",
+          "minimum": 0,
+          "gated": true,
+          "localization_key": "@RepStanding_Assassination_Rank0"
+        },
+        {
+          "name": "Assassin In Training",
+          "minimum": 1,
+          "gated": false,
+          "localization_key": "@RepStanding_Assassination_Rank1"
+        },
+        {
+          "name": "Low Level Assassin",
+          "minimum": 3000,
+          "gated": false,
+          "localization_key": "@RepStanding_Assassination_Rank2"
+        },
+        {
+          "name": "Assassin",
+          "minimum": 8000,
+          "gated": false,
+          "localization_key": "@RepStanding_Assassination_Rank3"
+        },
+        {
+          "name": "High Value Assassin",
+          "minimum": 24000,
+          "gated": false,
+          "localization_key": "@RepStanding_Assassination_Rank4"
+        },
+        {
+          "name": "Elite Assassin",
+          "minimum": 56000,
+          "gated": false,
+          "localization_key": "@RepStanding_Assassination_Rank5"
+        },
+        {
+          "name": "Master Assassin",
+          "minimum": 112000,
+          "gated": false,
+          "localization_key": "@RepStanding_Assassination_Rank6"
+        }
+      ]
+    },
+    "BountyHunter": {
+      "name": "BountyHunter",
+      "display_name": "Bounty Hunting",
+      "localization_key": "@RepScope_Bounty_Name",
+      "standings": [
+        {
+          "name": "Not Eligible",
+          "minimum": -1000,
+          "gated": false,
+          "localization_key": "@RepStanding_NotEligible"
+        },
+        {
+          "name": "Applicant",
+          "minimum": 0,
+          "gated": true,
+          "localization_key": "@RepStanding_Bounty_Rank0"
+        },
+        {
+          "name": "Tracker Trainee",
+          "minimum": 1,
+          "gated": false,
+          "localization_key": "@RepStanding_Bounty_Rank1"
+        },
+        {
+          "name": "Associate Tracker",
+          "minimum": 5000,
+          "gated": false,
+          "localization_key": "@RepStanding_Bounty_Rank2"
+        },
+        {
+          "name": "Tracker",
+          "minimum": 30000,
+          "gated": false,
+          "localization_key": "@RepStanding_Bounty_Rank3"
+        },
+        {
+          "name": "Advanced Tracker",
+          "minimum": 120000,
+          "gated": false,
+          "localization_key": "@RepStanding_Bounty_Rank4"
+        },
+        {
+          "name": "Senior Tracker",
+          "minimum": 480000,
+          "gated": false,
+          "localization_key": "@RepStanding_Bounty_Rank5"
+        },
+        {
+          "name": "Master Tracker",
+          "minimum": 1600000,
+          "gated": false,
+          "localization_key": "@RepStanding_Bounty_Rank6"
+        }
+      ]
+    },
+    "BountyHunter_BountyHuntersGuild": {
+      "name": "BountyHunter_BountyHuntersGuild",
+      "display_name": "Bounty Hunting",
+      "localization_key": "@RepScope_Bounty_Name",
+      "standings": [
+        {
+          "name": "Not Eligible",
+          "minimum": -1000,
+          "gated": false,
+          "localization_key": "@RepStanding_NotEligible"
+        },
+        {
+          "name": "Applicant",
+          "minimum": 0,
+          "gated": true,
+          "localization_key": "@RepStanding_Bounty_Applicant_Name"
+        },
+        {
+          "name": "Probationary Guild Member",
+          "minimum": 1,
+          "gated": false,
+          "localization_key": "@RepStanding_Bounty_Probation_Name"
+        },
+        {
+          "name": "Junior Guild Member",
+          "minimum": 3000,
+          "gated": false,
+          "localization_key": "@RepStanding_Bounty_Junior_Name"
+        },
+        {
+          "name": "Guild Member",
+          "minimum": 10000,
+          "gated": false,
+          "localization_key": "@RepStanding_Bounty_MidLevel_Name"
+        },
+        {
+          "name": "Senior Guild Member",
+          "minimum": 40000,
+          "gated": false,
+          "localization_key": "@RepStanding_Bounty_Senior_Name"
+        },
+        {
+          "name": "Veteran Guild Member",
+          "minimum": 200000,
+          "gated": false,
+          "localization_key": "@RepStanding_Bounty_MasterBountyHunter_Name"
+        },
+        {
+          "name": "Guild Steward",
+          "minimum": 480000,
+          "gated": false,
+          "localization_key": "@RepStanding_Bounty_LegendaryBountyHunter_Name"
+        }
+      ]
+    },
+    "Courier": {
+      "name": "Courier",
+      "display_name": "Courier",
+      "localization_key": "@RepScope_Courier_Name",
+      "standings": [
+        {
+          "name": "Not Eligible",
+          "minimum": -1000,
+          "gated": false,
+          "localization_key": "@RepStanding_NotEligible"
+        },
+        {
+          "name": "Applicant",
+          "minimum": 0,
+          "gated": true,
+          "localization_key": "@RepStanding_Courier_Rank0"
+        },
+        {
+          "name": "Jr. Runner",
+          "minimum": 1,
+          "gated": true,
+          "localization_key": "@RepStanding_Courier_Rank1"
+        },
+        {
+          "name": "Runner",
+          "minimum": 2500,
+          "gated": false,
+          "localization_key": "@RepStanding_Courier_Rank2"
+        }
+      ]
+    },
+    "Courier_TransportGuild": {
+      "name": "Courier_TransportGuild",
+      "display_name": "Courier",
+      "localization_key": "@RepScope_Courier_Name",
+      "standings": [
+        {
+          "name": "Not Eligible",
+          "minimum": -1000,
+          "gated": false,
+          "localization_key": "@RepStanding_NotEligible"
+        },
+        {
+          "name": "Applicant",
+          "minimum": 0,
+          "gated": true,
+          "localization_key": "@RepStanding_Courier_Rank0"
+        },
+        {
+          "name": "Jr. Runner",
+          "minimum": 1,
+          "gated": true,
+          "localization_key": "@RepStanding_Courier_Rank1"
+        },
+        {
+          "name": "Runner",
+          "minimum": 2500,
+          "gated": false,
+          "localization_key": "@RepStanding_Courier_Rank2"
+        }
+      ]
+    },
+    "Delivery_CitizensForPyro": {
+      "name": "Delivery_CitizensForPyro",
+      "display_name": "Courier",
+      "localization_key": "@RepScope_Courier_Name",
+      "standings": [
+        {
+          "name": "Not Eligible",
+          "minimum": -1000,
+          "gated": false,
+          "localization_key": "@RepStanding_NotEligible"
+        },
+        {
+          "name": "Trainee",
+          "minimum": 0,
+          "gated": true,
+          "localization_key": "@RepStanding_TransportGuild_Rank0"
+        },
+        {
+          "name": "Rookie",
+          "minimum": 50,
+          "gated": false,
+          "localization_key": "@RepStanding_TransportGuild_Rank1"
+        },
+        {
+          "name": "Junior",
+          "minimum": 250,
+          "gated": false,
+          "localization_key": "@RepStanding_TransportGuild_Rank2"
+        },
+        {
+          "name": "Member",
+          "minimum": 5250,
+          "gated": false,
+          "localization_key": "@RepStanding_TransportGuild_Rank3"
+        },
+        {
+          "name": "Experienced",
+          "minimum": 27750,
+          "gated": false,
+          "localization_key": "@RepStanding_TransportGuild_Rank4"
+        },
+        {
+          "name": "Senior",
+          "minimum": 77750,
+          "gated": false,
+          "localization_key": "@RepStanding_TransportGuild_Rank5"
+        },
+        {
+          "name": "Master",
+          "minimum": 237750,
+          "gated": false,
+          "localization_key": "@RepStanding_TransportGuild_Rank6"
+        }
+      ]
+    },
+    "Delivery_RoughAndReady": {
+      "name": "Delivery_RoughAndReady",
+      "display_name": "Courier",
+      "localization_key": "@RepScope_Courier_Name",
+      "standings": [
+        {
+          "name": "Not Eligible",
+          "minimum": -1000,
+          "gated": false,
+          "localization_key": "@RepStanding_NotEligible"
+        },
+        {
+          "name": "Trainee",
+          "minimum": 0,
+          "gated": true,
+          "localization_key": "@RepStanding_TransportGuild_Rank0"
+        },
+        {
+          "name": "Rookie",
+          "minimum": 50,
+          "gated": false,
+          "localization_key": "@RepStanding_TransportGuild_Rank1"
+        },
+        {
+          "name": "Junior",
+          "minimum": 250,
+          "gated": false,
+          "localization_key": "@RepStanding_TransportGuild_Rank2"
+        },
+        {
+          "name": "Member",
+          "minimum": 5250,
+          "gated": false,
+          "localization_key": "@RepStanding_TransportGuild_Rank3"
+        },
+        {
+          "name": "Experienced",
+          "minimum": 27750,
+          "gated": false,
+          "localization_key": "@RepStanding_TransportGuild_Rank4"
+        },
+        {
+          "name": "Senior",
+          "minimum": 77750,
+          "gated": false,
+          "localization_key": "@RepStanding_TransportGuild_Rank5"
+        },
+        {
+          "name": "Master",
+          "minimum": 237750,
+          "gated": false,
+          "localization_key": "@RepStanding_TransportGuild_Rank6"
+        }
+      ]
+    },
+    "Emergency": {
+      "name": "Emergency",
+      "display_name": "Emergency Support",
+      "localization_key": "@RepScope_Emergency_Name",
+      "standings": [
+        {
+          "name": "Not Eligible",
+          "minimum": -320000,
+          "gated": false,
+          "localization_key": "@RepStanding_NotEligible"
+        },
+        {
+          "name": "Applicant",
+          "minimum": 0,
+          "gated": true,
+          "localization_key": "@RepStanding_Emergency_Rank0"
+        },
+        {
+          "name": "First Responder Trainee",
+          "minimum": 5000,
+          "gated": false,
+          "localization_key": "@RepStanding_Emergency_Rank1"
+        },
+        {
+          "name": "First Responder",
+          "minimum": 20000,
+          "gated": false,
+          "localization_key": "@RepStanding_Emergency_Rank2"
+        },
+        {
+          "name": "Veteran First Responder",
+          "minimum": 80000,
+          "gated": false,
+          "localization_key": "@RepStanding_Emergency_Rank3"
+        }
+      ]
+    },
+    "FPS_Combat": {
+      "name": "FPS_Combat",
+      "display_name": "FPS Combat",
+      "localization_key": "@RepScope_FPSCombat_Name",
+      "standings": [
+        {
+          "name": "Not Eligible",
+          "minimum": -1000,
+          "gated": false,
+          "localization_key": "@RepStanding_NotEligible"
+        },
+        {
+          "name": "Applicant",
+          "minimum": 0,
+          "gated": true,
+          "localization_key": "@RepStanding_Rank0"
+        },
+        {
+          "name": "Rank I",
+          "minimum": 1000,
+          "gated": false,
+          "localization_key": "@RepStanding_Rank1"
+        }
+      ]
+    },
+    "FPS_Combat_CitizensForPyro": {
+      "name": "FPS_Combat_CitizensForPyro",
+      "display_name": "Mercenary",
+      "localization_key": "@mobiglas_ui_Mercenary",
+      "standings": [
+        {
+          "name": "Not Eligible",
+          "minimum": -1000,
+          "gated": false,
+          "localization_key": "@RepStanding_NotEligible"
+        },
+        {
+          "name": "Applicant",
+          "minimum": 0,
+          "gated": true,
+          "localization_key": "@RepStanding_Rank0"
+        },
+        {
+          "name": "Rank I",
+          "minimum": 1000,
+          "gated": false,
+          "localization_key": "@RepStanding_Rank1"
+        }
+      ]
+    },
+    "FPS_Combat_HeadHunter": {
+      "name": "FPS_Combat_HeadHunter",
+      "display_name": "Mercenary",
+      "localization_key": "@mobiglas_ui_Mercenary",
+      "standings": [
+        {
+          "name": "Not Eligible",
+          "minimum": -1000,
+          "gated": false,
+          "localization_key": "@RepStanding_NotEligible"
+        },
+        {
+          "name": "Applicant",
+          "minimum": 0,
+          "gated": true,
+          "localization_key": "@RepStanding_Rank0"
+        },
+        {
+          "name": "Rank I",
+          "minimum": 1000,
+          "gated": false,
+          "localization_key": "@RepStanding_Rank1"
+        }
+      ]
+    },
+    "FPS_Combat_RoughAndReady": {
+      "name": "FPS_Combat_RoughAndReady",
+      "display_name": "Mercenary",
+      "localization_key": "@mobiglas_ui_Mercenary",
+      "standings": [
+        {
+          "name": "Not Eligible",
+          "minimum": -1000,
+          "gated": false,
+          "localization_key": "@RepStanding_NotEligible"
+        },
+        {
+          "name": "Applicant",
+          "minimum": 0,
+          "gated": true,
+          "localization_key": "@RepStanding_Rank0"
+        },
+        {
+          "name": "Rank I",
+          "minimum": 1000,
+          "gated": false,
+          "localization_key": "@RepStanding_Rank1"
+        }
+      ]
+    },
+    "FPS_Combat_XenoThreat": {
+      "name": "FPS_Combat_XenoThreat",
+      "display_name": "Mercenary",
+      "localization_key": "@mobiglas_ui_Mercenary",
+      "standings": [
+        {
+          "name": "Not Eligible",
+          "minimum": -1000,
+          "gated": false,
+          "localization_key": "@RepStanding_NotEligible"
+        },
+        {
+          "name": "Applicant",
+          "minimum": 0,
+          "gated": true,
+          "localization_key": "@RepStanding_Rank0"
+        },
+        {
+          "name": "Rank I",
+          "minimum": 1000,
+          "gated": false,
+          "localization_key": "@RepStanding_Rank1"
+        }
+      ]
+    },
+    "HandyMan": {
+      "name": "HandyMan",
+      "display_name": "Salvage",
+      "localization_key": "@mobiglas_ui_Salvage",
+      "standings": [
+        {
+          "name": "Not Eligible",
+          "minimum": -1000,
+          "gated": false,
+          "localization_key": "@RepStanding_NotEligible"
+        },
+        {
+          "name": "Applicant",
+          "minimum": 0,
+          "gated": true,
+          "localization_key": "@RepStanding_Rank0"
+        },
+        {
+          "name": "Rank I",
+          "minimum": 1000,
+          "gated": false,
+          "localization_key": "@RepStanding_Rank1"
+        }
+      ]
+    },
+    "HandyMan_CitizensForPyro": {
+      "name": "HandyMan_CitizensForPyro",
+      "display_name": "Hired Muscle",
+      "localization_key": "@RepScope_HiredMuscle_Name",
+      "standings": [
+        {
+          "name": "Not Eligible",
+          "minimum": -1000,
+          "gated": false,
+          "localization_key": "@RepStanding_NotEligible"
+        },
+        {
+          "name": "Applicant",
+          "minimum": 0,
+          "gated": true,
+          "localization_key": "@RepStanding_Rank0"
+        },
+        {
+          "name": "Rank I",
+          "minimum": 1000,
+          "gated": false,
+          "localization_key": "@RepStanding_Rank1"
+        }
+      ]
+    },
+    "Hauling": {
+      "name": "Hauling",
+      "display_name": "Hauling",
+      "localization_key": "@RepScope_TransportGuild_Name",
+      "standings": [
+        {
+          "name": "Not Eligible",
+          "minimum": -1000,
+          "gated": false,
+          "localization_key": "@RepStanding_NotEligible"
+        },
+        {
+          "name": "Trainee",
+          "minimum": 0,
+          "gated": true,
+          "localization_key": "@RepStanding_TransportGuild_Rank0"
+        },
+        {
+          "name": "Rookie",
+          "minimum": 50,
+          "gated": false,
+          "localization_key": "@RepStanding_TransportGuild_Rank1"
+        },
+        {
+          "name": "Junior",
+          "minimum": 250,
+          "gated": false,
+          "localization_key": "@RepStanding_TransportGuild_Rank2"
+        },
+        {
+          "name": "Member",
+          "minimum": 5250,
+          "gated": false,
+          "localization_key": "@RepStanding_TransportGuild_Rank3"
+        },
+        {
+          "name": "Experienced",
+          "minimum": 27750,
+          "gated": false,
+          "localization_key": "@RepStanding_TransportGuild_Rank4"
+        },
+        {
+          "name": "Senior",
+          "minimum": 77750,
+          "gated": false,
+          "localization_key": "@RepStanding_TransportGuild_Rank5"
+        },
+        {
+          "name": "Master",
+          "minimum": 237750,
+          "gated": false,
+          "localization_key": "@RepStanding_TransportGuild_Rank6"
+        }
+      ]
+    },
+    "HiredMuscle": {
+      "name": "HiredMuscle",
+      "display_name": "Hired Muscle",
+      "localization_key": "@RepScope_HiredMuscle_Name",
+      "standings": [
+        {
+          "name": "Not Eligible",
+          "minimum": -1000,
+          "gated": false,
+          "localization_key": "@RepStanding_NotEligible"
+        },
+        {
+          "name": "Applicant",
+          "minimum": 0,
+          "gated": true,
+          "localization_key": "@RepStanding_Rank0"
+        },
+        {
+          "name": "Rank I",
+          "minimum": 1,
+          "gated": true,
+          "localization_key": "@RepStanding_Rank1"
+        },
+        {
+          "name": "Rank II",
+          "minimum": 5000,
+          "gated": false,
+          "localization_key": "@RepStanding_Rank2"
+        },
+        {
+          "name": "Rank III",
+          "minimum": 30000,
+          "gated": false,
+          "localization_key": "@RepStanding_Rank3"
+        },
+        {
+          "name": "Rank IV",
+          "minimum": 120000,
+          "gated": false,
+          "localization_key": "@RepStanding_Rank4"
+        },
+        {
+          "name": "Rank V",
+          "minimum": 480000,
+          "gated": false,
+          "localization_key": "@RepStanding_Rank5"
+        },
+        {
+          "name": "Rank VI",
+          "minimum": 1600000,
+          "gated": false,
+          "localization_key": "@RepStanding_Rank6"
+        }
+      ]
+    },
+    "Maintenance": {
+      "name": "Maintenance",
+      "display_name": "Maintenance",
+      "localization_key": "@RepScope_Maintenance_Name",
+      "standings": [
+        {
+          "name": "Not Eligible",
+          "minimum": -1000,
+          "gated": false,
+          "localization_key": "@RepStanding_NotEligible"
+        },
+        {
+          "name": "Apprentice",
+          "minimum": 0,
+          "gated": true,
+          "localization_key": "@RepScope_Maintenance_Rank0"
+        },
+        {
+          "name": "Mechanic-in-Training",
+          "minimum": 1,
+          "gated": false,
+          "localization_key": "@RepScope_Maintenance_Rank1"
+        },
+        {
+          "name": "Jr. Mechanic",
+          "minimum": 3000,
+          "gated": false,
+          "localization_key": "@RepScope_Maintenance_Rank2"
+        },
+        {
+          "name": "Mechanic",
+          "minimum": 10000,
+          "gated": false,
+          "localization_key": "@RepScope_Maintenance_Rank3"
+        },
+        {
+          "name": "Sr. Mechanic",
+          "minimum": 40000,
+          "gated": false,
+          "localization_key": "@RepScope_Maintenance_Rank4"
+        },
+        {
+          "name": "Master Mechanic",
+          "minimum": 200000,
+          "gated": false,
+          "localization_key": "@RepScope_Maintenance_Rank5"
+        }
+      ]
+    },
+    "NPC_Fired": {
+      "name": "NPC_Fired",
+      "display_name": "Contract Status",
+      "localization_key": "@LOC_PLACEHOLDER",
+      "standings": [
+        {
+          "name": "",
+          "minimum": -150,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": -100,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": -50,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        }
+      ]
+    },
+    "NPC_Reliability": {
+      "name": "NPC_Reliability",
+      "display_name": "Confidence",
+      "localization_key": "@mobiGlas_Reputation_ScopeTitle_Reliability",
+      "standings": [
+        {
+          "name": "Disliked",
+          "minimum": -10000,
+          "gated": false,
+          "localization_key": "@RepStanding_MissionGiver_Default_Disliked_Name"
+        },
+        {
+          "name": "Disliked",
+          "minimum": -9000,
+          "gated": false,
+          "localization_key": "@RepStanding_MissionGiver_Default_Disliked_Name"
+        },
+        {
+          "name": "Neutral",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@RepStanding_MissionGiver_Default_Neutral_Name"
+        },
+        {
+          "name": "Exalted",
+          "minimum": 10000,
+          "gated": false,
+          "localization_key": "@RepStanding_MissionGiver_Default_Exalted_Name"
+        }
+      ]
+    },
+    "HoverTimeTrial": {
+      "name": "HoverTimeTrial",
+      "display_name": "Hover Time Trial",
+      "localization_key": "@Racing_Hover_DisplayName",
+      "standings": [
+        {
+          "name": "Not Eligible",
+          "minimum": -1000,
+          "gated": false,
+          "localization_key": "@RepStanding_NotEligible"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": true,
+          "localization_key": "@RacingRep_GravLev_Rank0"
+        },
+        {
+          "name": "",
+          "minimum": 1,
+          "gated": false,
+          "localization_key": "@RacingRep_GravLev_Rank1"
+        },
+        {
+          "name": "",
+          "minimum": 1000,
+          "gated": false,
+          "localization_key": "@RacingRep_GravLev_Rank2"
+        },
+        {
+          "name": "",
+          "minimum": 2000,
+          "gated": false,
+          "localization_key": "@RacingRep_GravLev_Rank3"
+        },
+        {
+          "name": "",
+          "minimum": 4000,
+          "gated": false,
+          "localization_key": "@RacingRep_GravLev_Rank4"
+        },
+        {
+          "name": "",
+          "minimum": 8000,
+          "gated": false,
+          "localization_key": "@RacingRep_GravLev_Rank5"
+        },
+        {
+          "name": "",
+          "minimum": 16000,
+          "gated": false,
+          "localization_key": "@RacingRep_GravLev_Rank6"
+        },
+        {
+          "name": "",
+          "minimum": 32000,
+          "gated": false,
+          "localization_key": "@RacingRep_GravLev_Rank6"
+        }
+      ]
+    },
+    "Racing_HeadHunter": {
+      "name": "Racing_HeadHunter",
+      "display_name": "Racing",
+      "localization_key": "@RepScope_Racing_HeadHunters_Name",
+      "standings": [
+        {
+          "name": "Not Eligible",
+          "minimum": -1000,
+          "gated": false,
+          "localization_key": "@RepStanding_NotEligible"
+        },
+        {
+          "name": "Applicant",
+          "minimum": 0,
+          "gated": true,
+          "localization_key": "@RepStanding_Rank0"
+        },
+        {
+          "name": "Rank I",
+          "minimum": 1000,
+          "gated": false,
+          "localization_key": "@RepStanding_Rank1"
+        }
+      ]
+    },
+    "RacingShip": {
+      "name": "RacingShip",
+      "display_name": "Spaceship",
+      "localization_key": "@Racing_Ship_DisplayName",
+      "standings": [
+        {
+          "name": "Not Eligible",
+          "minimum": -1000,
+          "gated": false,
+          "localization_key": "@RepStanding_NotEligible"
+        },
+        {
+          "name": "Racing Enthusiast",
+          "minimum": 0,
+          "gated": true,
+          "localization_key": "@RacingRep_Ship_Rank0"
+        },
+        {
+          "name": "Novice Racer",
+          "minimum": 1,
+          "gated": false,
+          "localization_key": "@RacingRep_Ship_Rank1"
+        },
+        {
+          "name": "Rookie Racer",
+          "minimum": 1000,
+          "gated": false,
+          "localization_key": "@RacingRep_Ship_Rank2"
+        },
+        {
+          "name": "Racer",
+          "minimum": 2000,
+          "gated": false,
+          "localization_key": "@RacingRep_Ship_Rank3"
+        },
+        {
+          "name": "Practiced Racer",
+          "minimum": 4000,
+          "gated": false,
+          "localization_key": "@RacingRep_Ship_Rank4"
+        },
+        {
+          "name": "Dedicated Racer",
+          "minimum": 8000,
+          "gated": false,
+          "localization_key": "@RacingRep_Ship_Rank5"
+        },
+        {
+          "name": "Experienced Racer",
+          "minimum": 16000,
+          "gated": false,
+          "localization_key": "@RacingRep_Ship_Rank6"
+        },
+        {
+          "name": "Skilled Racer",
+          "minimum": 32000,
+          "gated": false,
+          "localization_key": "@RacingRep_Ship_Rank7"
+        }
+      ]
+    },
+    "WheeledTimeTrial": {
+      "name": "WheeledTimeTrial",
+      "display_name": "Wheeled Time Trial",
+      "localization_key": "@Racing_Wheeled_DisplayName",
+      "standings": [
+        {
+          "name": "",
+          "minimum": -1000,
+          "gated": false,
+          "localization_key": "@LOC_PLACEHOLDER"
+        },
+        {
+          "name": "",
+          "minimum": 0,
+          "gated": true,
+          "localization_key": "@RacingRep_Ground_Rank0"
+        },
+        {
+          "name": "",
+          "minimum": 1,
+          "gated": false,
+          "localization_key": "@RacingRep_Ground_Rank1"
+        },
+        {
+          "name": "",
+          "minimum": 1000,
+          "gated": false,
+          "localization_key": "@RacingRep_Ground_Rank2"
+        },
+        {
+          "name": "",
+          "minimum": 2000,
+          "gated": false,
+          "localization_key": "@RacingRep_Ground_Rank3"
+        },
+        {
+          "name": "",
+          "minimum": 4000,
+          "gated": false,
+          "localization_key": "@RacingRep_Ground_Rank4"
+        },
+        {
+          "name": "",
+          "minimum": 8000,
+          "gated": false,
+          "localization_key": "@RacingRep_Ground_Rank5"
+        },
+        {
+          "name": "",
+          "minimum": 16000,
+          "gated": false,
+          "localization_key": "@RacingRep_Ground_Rank6"
+        },
+        {
+          "name": "",
+          "minimum": 32000,
+          "gated": false,
+          "localization_key": "@RacingRep_Ground_Rank6"
+        }
+      ]
+    },
+    "Salvaging": {
+      "name": "Salvaging",
+      "display_name": "Salvaging",
+      "localization_key": "@RepScope_Salvaging_Name",
+      "standings": [
+        {
+          "name": "Applicant",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@RepStanding_Salvaging_Rank0"
+        },
+        {
+          "name": "Apprentice Salvager",
+          "minimum": 1,
+          "gated": false,
+          "localization_key": "@RepStanding_Salvaging_Rank1"
+        },
+        {
+          "name": "Associate Salvager",
+          "minimum": 100,
+          "gated": false,
+          "localization_key": "@RepStanding_Salvaging_Rank2"
+        },
+        {
+          "name": "Salvager",
+          "minimum": 500,
+          "gated": false,
+          "localization_key": "@RepStanding_Salvaging_Rank3"
+        },
+        {
+          "name": "Senior Salvager",
+          "minimum": 1500,
+          "gated": false,
+          "localization_key": "@RepStanding_Salvaging_Rank4"
+        },
+        {
+          "name": "Master Salvager",
+          "minimum": 5000,
+          "gated": false,
+          "localization_key": "@RepStanding_Salvaging_Rank5"
+        }
+      ]
+    },
+    "Security": {
+      "name": "Security",
+      "display_name": "Security",
+      "localization_key": "@RepScope_Security_Name",
+      "standings": [
+        {
+          "name": "Not Eligible",
+          "minimum": -1000,
+          "gated": false,
+          "localization_key": "@RepStanding_NotEligible"
+        },
+        {
+          "name": "Applicant",
+          "minimum": 0,
+          "gated": true,
+          "localization_key": "@RepStanding_Security_Rank0"
+        },
+        {
+          "name": "Security Trainee",
+          "minimum": 1,
+          "gated": true,
+          "localization_key": "@RepStanding_Security_Rank1"
+        },
+        {
+          "name": "Jr. Security Contractor",
+          "minimum": 5000,
+          "gated": false,
+          "localization_key": "@RepStanding_Security_Rank2"
+        },
+        {
+          "name": "Security Contractor",
+          "minimum": 30000,
+          "gated": false,
+          "localization_key": "@RepStanding_Security_Rank3"
+        },
+        {
+          "name": "Sr. Security Contractor",
+          "minimum": 120000,
+          "gated": false,
+          "localization_key": "@RepStanding_Security_Rank4"
+        },
+        {
+          "name": "Lead Security Contractor",
+          "minimum": 480000,
+          "gated": false,
+          "localization_key": "@RepStanding_Security_Rank5"
+        },
+        {
+          "name": "Elite Security Contractor",
+          "minimum": 1600000,
+          "gated": false,
+          "localization_key": "@RepStanding_Security_Rank6"
+        }
+      ]
+    },
+    "Security_MercenaryGuild": {
+      "name": "Security_MercenaryGuild",
+      "display_name": "Security",
+      "localization_key": "@RepScope_Security_Name",
+      "standings": [
+        {
+          "name": "Not Eligible",
+          "minimum": -1000,
+          "gated": false,
+          "localization_key": "@RepStanding_NotEligible"
+        },
+        {
+          "name": "Applicant",
+          "minimum": 0,
+          "gated": true,
+          "localization_key": "@RepStanding_Security_Rank0"
+        },
+        {
+          "name": "Security Trainee",
+          "minimum": 1,
+          "gated": true,
+          "localization_key": "@RepStanding_Security_Rank1"
+        },
+        {
+          "name": "Jr. Security Contractor",
+          "minimum": 5000,
+          "gated": false,
+          "localization_key": "@RepStanding_Security_Rank2"
+        },
+        {
+          "name": "Security Contractor",
+          "minimum": 30000,
+          "gated": false,
+          "localization_key": "@RepStanding_Security_Rank3"
+        },
+        {
+          "name": "Sr. Security Contractor",
+          "minimum": 120000,
+          "gated": false,
+          "localization_key": "@RepStanding_Security_Rank4"
+        },
+        {
+          "name": "Lead Security Contractor",
+          "minimum": 480000,
+          "gated": false,
+          "localization_key": "@RepStanding_Security_Rank5"
+        },
+        {
+          "name": "Elite Security Contractor",
+          "minimum": 1600000,
+          "gated": false,
+          "localization_key": "@RepStanding_Security_Rank6"
+        }
+      ]
+    },
+    "ShipCombat": {
+      "name": "ShipCombat",
+      "display_name": "Ship Combat",
+      "localization_key": "@RepScope_ShipCombat_Name",
+      "standings": [
+        {
+          "name": "Not Eligible",
+          "minimum": -1000,
+          "gated": false,
+          "localization_key": "@RepStanding_NotEligible"
+        },
+        {
+          "name": "Applicant",
+          "minimum": 0,
+          "gated": true,
+          "localization_key": "@RepStanding_Rank0"
+        },
+        {
+          "name": "Rank I",
+          "minimum": 1,
+          "gated": false,
+          "localization_key": "@RepStanding_Rank1"
+        },
+        {
+          "name": "Rank II",
+          "minimum": 5000,
+          "gated": false,
+          "localization_key": "@RepStanding_Rank2"
+        },
+        {
+          "name": "Rank III",
+          "minimum": 30000,
+          "gated": false,
+          "localization_key": "@RepStanding_Rank3"
+        },
+        {
+          "name": "Rank IV",
+          "minimum": 120000,
+          "gated": false,
+          "localization_key": "@RepStanding_Rank4"
+        },
+        {
+          "name": "Rank V",
+          "minimum": 480000,
+          "gated": false,
+          "localization_key": "@RepStanding_Rank5"
+        },
+        {
+          "name": "Rank VI",
+          "minimum": 1600000,
+          "gated": false,
+          "localization_key": "@RepStanding_Rank6"
+        }
+      ]
+    },
+    "ShipCombat_HeadHunters": {
+      "name": "ShipCombat_HeadHunters",
+      "display_name": "Ship Combat",
+      "localization_key": "@RepScope_ShipCombat_HeadHunters_Name",
+      "standings": [
+        {
+          "name": "Not Eligible",
+          "minimum": -1000,
+          "gated": false,
+          "localization_key": "@RepStanding_NotEligible"
+        },
+        {
+          "name": "Applicant",
+          "minimum": 0,
+          "gated": true,
+          "localization_key": "@RepStanding_Rank0"
+        },
+        {
+          "name": "Rank I",
+          "minimum": 1,
+          "gated": false,
+          "localization_key": "@RepStanding_Rank1"
+        },
+        {
+          "name": "Rank II",
+          "minimum": 3000,
+          "gated": false,
+          "localization_key": "@RepStanding_Rank2"
+        },
+        {
+          "name": "Rank III",
+          "minimum": 10000,
+          "gated": false,
+          "localization_key": "@RepStanding_Rank3"
+        },
+        {
+          "name": "Rank IV",
+          "minimum": 40000,
+          "gated": false,
+          "localization_key": "@RepStanding_Rank4"
+        },
+        {
+          "name": "Rank V",
+          "minimum": 200000,
+          "gated": false,
+          "localization_key": "@RepStanding_Rank5"
+        },
+        {
+          "name": "Rank VI",
+          "minimum": 480000,
+          "gated": false,
+          "localization_key": "@RepStanding_Rank6"
+        }
+      ]
+    },
+    "ShipCombat_RoughAndReady": {
+      "name": "ShipCombat_RoughAndReady",
+      "display_name": "Ship Combat",
+      "localization_key": "@RepScope_ShipCombat_RoughAndReady_Name",
+      "standings": [
+        {
+          "name": "Not Eligible",
+          "minimum": -1000,
+          "gated": false,
+          "localization_key": "@RepStanding_NotEligible"
+        },
+        {
+          "name": "Applicant",
+          "minimum": 0,
+          "gated": true,
+          "localization_key": "@RepStanding_Rank0"
+        },
+        {
+          "name": "Rank I",
+          "minimum": 1,
+          "gated": false,
+          "localization_key": "@RepStanding_Rank1"
+        },
+        {
+          "name": "Rank II",
+          "minimum": 5000,
+          "gated": false,
+          "localization_key": "@RepStanding_Rank2"
+        },
+        {
+          "name": "Rank III",
+          "minimum": 30000,
+          "gated": false,
+          "localization_key": "@RepStanding_Rank3"
+        },
+        {
+          "name": "Rank IV",
+          "minimum": 120000,
+          "gated": false,
+          "localization_key": "@RepStanding_Rank4"
+        },
+        {
+          "name": "Rank V",
+          "minimum": 480000,
+          "gated": false,
+          "localization_key": "@RepStanding_Rank5"
+        },
+        {
+          "name": "Rank VI",
+          "minimum": 1600000,
+          "gated": false,
+          "localization_key": "@RepStanding_Rank6"
+        }
+      ]
+    },
+    "ShipCombat_XenoThreat": {
+      "name": "ShipCombat_XenoThreat",
+      "display_name": "Ship Combat",
+      "localization_key": "@RepScope_ShipCombat_XenoThreat_Name",
+      "standings": [
+        {
+          "name": "Not Eligible",
+          "minimum": -1000,
+          "gated": false,
+          "localization_key": "@RepStanding_NotEligible"
+        },
+        {
+          "name": "Applicant",
+          "minimum": 0,
+          "gated": true,
+          "localization_key": "@RepStanding_Rank0"
+        },
+        {
+          "name": "Rank I",
+          "minimum": 1,
+          "gated": false,
+          "localization_key": "@RepStanding_Rank1"
+        },
+        {
+          "name": "Rank II",
+          "minimum": 5000,
+          "gated": false,
+          "localization_key": "@RepStanding_Rank2"
+        },
+        {
+          "name": "Rank III",
+          "minimum": 30000,
+          "gated": false,
+          "localization_key": "@RepStanding_Rank3"
+        },
+        {
+          "name": "Rank IV",
+          "minimum": 120000,
+          "gated": false,
+          "localization_key": "@RepStanding_Rank4"
+        },
+        {
+          "name": "Rank V",
+          "minimum": 480000,
+          "gated": false,
+          "localization_key": "@RepStanding_Rank5"
+        },
+        {
+          "name": "Rank VI",
+          "minimum": 1600000,
+          "gated": false,
+          "localization_key": "@RepStanding_Rank6"
+        }
+      ]
+    },
+    "Smuggling": {
+      "name": "Smuggling",
+      "display_name": "Hired Muscle",
+      "localization_key": "@RepScope_HiredMuscle_Name",
+      "standings": [
+        {
+          "name": "Not Eligible",
+          "minimum": -1000,
+          "gated": false,
+          "localization_key": "@RepStanding_NotEligible"
+        },
+        {
+          "name": "Applicant",
+          "minimum": 0,
+          "gated": true,
+          "localization_key": "@RepStanding_Rank0"
+        },
+        {
+          "name": "Rank I",
+          "minimum": 1000,
+          "gated": false,
+          "localization_key": "@RepStanding_Rank1"
+        },
+        {
+          "name": "Rank II",
+          "minimum": 2000,
+          "gated": false,
+          "localization_key": "@RepStanding_Rank2"
+        },
+        {
+          "name": "Rank III",
+          "minimum": 3000,
+          "gated": false,
+          "localization_key": "@RepStanding_Rank3"
+        },
+        {
+          "name": "Rank IV",
+          "minimum": 4000,
+          "gated": false,
+          "localization_key": "@RepStanding_Rank4"
+        }
+      ]
+    },
+    "Technician": {
+      "name": "Technician",
+      "display_name": "Technician",
+      "localization_key": "@RepScope_Technician_Name",
+      "standings": [
+        {
+          "name": "Not Eligible",
+          "minimum": -1000,
+          "gated": false,
+          "localization_key": "@RepStanding_NotEligible"
+        },
+        {
+          "name": "Applicant",
+          "minimum": 0,
+          "gated": true,
+          "localization_key": "@RepScope_Technician_Rank0"
+        },
+        {
+          "name": "Technician-in-Training",
+          "minimum": 1,
+          "gated": false,
+          "localization_key": "@RepScope_Technician_Rank1"
+        },
+        {
+          "name": "Jr. Technician",
+          "minimum": 3000,
+          "gated": false,
+          "localization_key": "@RepScope_Technician_Rank2"
+        },
+        {
+          "name": "Technician",
+          "minimum": 9000,
+          "gated": false,
+          "localization_key": "@RepScope_Technician_Rank3"
+        },
+        {
+          "name": "Sr. Technician",
+          "minimum": 27000,
+          "gated": false,
+          "localization_key": "@RepScope_Technician_Rank4"
+        },
+        {
+          "name": "Master Technician",
+          "minimum": 81000,
+          "gated": false,
+          "localization_key": "@RepScope_Technician_Rank5"
+        }
+      ]
+    },
+    "Theft": {
+      "name": "Theft",
+      "display_name": "Theft",
+      "localization_key": "@RepScope_Theft_Name",
+      "standings": [
+        {
+          "name": "Not Eligible",
+          "minimum": -1000,
+          "gated": false,
+          "localization_key": "@RepStanding_NotEligible"
+        },
+        {
+          "name": "Applicant",
+          "minimum": 0,
+          "gated": true,
+          "localization_key": "@RepStanding_Rank0"
+        },
+        {
+          "name": "Rank I",
+          "minimum": 3000,
+          "gated": false,
+          "localization_key": "@RepStanding_Rank1"
+        },
+        {
+          "name": "Rank II",
+          "minimum": 17000,
+          "gated": false,
+          "localization_key": "@RepStanding_Rank2"
+        },
+        {
+          "name": "Rank III",
+          "minimum": 40000,
+          "gated": false,
+          "localization_key": "@RepStanding_Rank3"
+        },
+        {
+          "name": "Rank IV",
+          "minimum": 100000,
+          "gated": false,
+          "localization_key": "@RepStanding_Rank4"
+        }
+      ]
+    },
+    "Wikelo": {
+      "name": "Wikelo",
+      "display_name": "Barter & Trade",
+      "localization_key": "@RepScope_Barter_Name",
+      "standings": [
+        {
+          "name": "New Customer",
+          "minimum": 0,
+          "gated": false,
+          "localization_key": "@RepStanding_Barter_Rank0_Name"
+        },
+        {
+          "name": "Very Good Customer",
+          "minimum": 340,
+          "gated": false,
+          "localization_key": "@RepStanding_Barter_Rank1_Name"
+        },
+        {
+          "name": "Very Best Customer",
+          "minimum": 999,
+          "gated": false,
+          "localization_key": "@RepStanding_Barter_Rank2_Name"
+        }
+      ]
+    },
+    "Worker": {
+      "name": "Worker",
+      "display_name": "Labor & Trade",
+      "localization_key": "@RepScope_Worker_Name",
+      "standings": [
+        {
+          "name": "Not Eligible",
+          "minimum": -1000,
+          "gated": false,
+          "localization_key": "@RepStanding_NotEligible"
+        },
+        {
+          "name": "Applicant",
+          "minimum": 0,
+          "gated": true,
+          "localization_key": "@RepStanding_Rank0"
+        },
+        {
+          "name": "Rank I",
+          "minimum": 1000,
+          "gated": false,
+          "localization_key": "@RepStanding_Rank1"
+        }
+      ]
+    },
+    "Worker_RoughAndReady": {
+      "name": "Worker_RoughAndReady",
+      "display_name": "Hired Muscle",
+      "localization_key": "@RepScope_HiredMuscle_Name",
+      "standings": [
+        {
+          "name": "Not Eligible",
+          "minimum": -1000,
+          "gated": false,
+          "localization_key": "@RepStanding_NotEligible"
+        },
+        {
+          "name": "Applicant",
+          "minimum": 0,
+          "gated": true,
+          "localization_key": "@RepStanding_Rank0"
+        },
+        {
+          "name": "Rank I",
+          "minimum": 1000,
+          "gated": false,
+          "localization_key": "@RepStanding_Rank1"
+        }
+      ]
+    }
+  }
+}
